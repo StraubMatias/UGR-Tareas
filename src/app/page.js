@@ -14,7 +14,8 @@ import {
   eliminarMateriaAction,
   crearTareaAction,
   editarTareaAction,
-  eliminarTareaAction
+  eliminarTareaAction,
+  cambiarPasswordAction // Importamos la nueva función
 } from './actions';
 
 export default function Home() {
@@ -25,13 +26,20 @@ export default function Home() {
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
 
-  // Acordeón para compañeros (todos cerrados por defecto)
+  // Acordeón para compañeros
   const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
 
-  // Forms Login
+  // Form Login
   const [inputUser, setInputUser] = useState('');
   const [inputPass, setInputPass] = useState('');
   const [errorLogin, setErrorLogin] = useState('');
+
+  // Form Cambiar Password
+  const [modalPasswordOpen, setModalPasswordOpen] = useState(false);
+  const [userPassChange, setUserPassChange] = useState('');
+  const [currentPassChange, setCurrentPassChange] = useState('');
+  const [newPassChange, setNewPassChange] = useState('');
+  const [msgPassChange, setMsgPassChange] = useState({ tipo: '', texto: '' });
 
   // Forms Admin
   const [nuevoAlumnoNombre, setNuevoAlumnoNombre] = useState('');
@@ -42,19 +50,18 @@ export default function Home() {
   const [fechaFin, setFechaFin] = useState('');
   const [detallesTarea, setDetallesTarea] = useState('');
 
-  // Modales
+  // Modales edición
   const [tareaEnEdicion, setTareaEnEdicion] = useState(null);
   const [materiaEnEdicion, setMateriaEnEdicion] = useState(null);
   const [alumnoEnEdicion, setAlumnoEnEdicion] = useState(null);
 
   const esAdmin = usuarioActual === "Matute";
 
-  // Título de la pestaña
   useEffect(() => {
     document.title = "UGR - Tareas a Realizar";
   }, []);
 
-  // LEER SESIÓN AL INSTANTE (EVITA QUE TE DESLOGUEE AL DAR F5)
+  // PERSISTENCIA DE SESIÓN
   useEffect(() => {
     const sesionGuardada = localStorage.getItem('sesion_ugr');
     if (sesionGuardada) {
@@ -93,10 +100,8 @@ export default function Home() {
     if (!fechaStr || fechaStr === 'Sin fecha') return 'Sin fecha';
     if (fechaStr.includes('-')) {
       const partes = fechaStr.split('-');
-      if (partes.length === 3) {
-        if (partes[0].length === 4) {
-          return `${partes[2]}-${partes[1]}-${partes[0]}`;
-        }
+      if (partes.length === 3 && partes[0].length === 4) {
+        return `${partes[2]}-${partes[1]}-${partes[0]}`;
       }
     }
     return fechaStr;
@@ -187,6 +192,26 @@ export default function Home() {
       setInputPass('');
     } else {
       setErrorLogin(res.mensaje);
+    }
+  };
+
+  const handleCambiarPassword = async (e) => {
+    e.preventDefault();
+    setMsgPassChange({ tipo: '', texto: '' });
+
+    const res = await cambiarPasswordAction(userPassChange, currentPassChange, newPassChange);
+
+    if (res.exito) {
+      setMsgPassChange({ tipo: 'exito', texto: res.mensaje });
+      setTimeout(() => {
+        setModalPasswordOpen(false);
+        setUserPassChange('');
+        setCurrentPassChange('');
+        setNewPassChange('');
+        setMsgPassChange({ tipo: '', texto: '' });
+      }, 1500);
+    } else {
+      setMsgPassChange({ tipo: 'error', texto: res.mensaje });
     }
   };
 
@@ -292,7 +317,6 @@ export default function Home() {
     );
   }
 
-  // Filtrado: Tu usuario primero, compañeros abajo
   const restoDeAlumnos = alumnos.filter((a) => a !== usuarioActual);
 
   return (
@@ -320,17 +344,28 @@ export default function Home() {
         </div>
 
         {usuarioActual && (
-          <button
-            onClick={cerrarSesionLocal}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer"
-          >
-            <span>🚪</span> Salir
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setUserPassChange(usuarioActual);
+                setModalPasswordOpen(true);
+              }}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+            >
+              🔑 Cambiar Clave
+            </button>
+            <button
+              onClick={cerrarSesionLocal}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <span>🚪</span> Salir
+            </button>
+          </div>
         )}
       </header>
 
       {!usuarioActual ? (
-        /* LOGIN */
+        /* CARD LOGIN */
         <div className="max-w-md mx-auto mt-12 bg-[#161c26] border border-slate-800 rounded-2xl p-8 shadow-xl">
           <div className="text-center mb-6">
             <div className="inline-block p-3 bg-slate-800/80 rounded-2xl mb-2 text-3xl">
@@ -375,6 +410,17 @@ export default function Home() {
               Entrar
             </button>
           </form>
+
+          {/* BOTÓN CAMBIAR CONTRASEÑA EN EL LOGIN */}
+          <div className="mt-6 text-center border-t border-slate-800/80 pt-4">
+            <button
+              type="button"
+              onClick={() => setModalPasswordOpen(true)}
+              className="text-xs text-blue-400 hover:text-blue-300 underline font-medium cursor-pointer"
+            >
+              🔐 Modificar o cambiar mi contraseña
+            </button>
+          </div>
         </div>
       ) : (
         <div className="max-w-6xl mx-auto">
@@ -422,11 +468,9 @@ export default function Home() {
             </div>
           ) : (
             <>
-              {/* VISTA 1: POR ALUMNOS */}
               {pestana === 'alumnos' && (
                 <div className="space-y-8">
-                  
-                  {/* SECCIÓN 1: TU USUARIO DESTACADO Y ABIERTO */}
+                  {/* TU TARJETA DESTACADA */}
                   <div className="bg-[#161c26] border-2 border-blue-500/80 rounded-2xl p-6 shadow-xl ring-1 ring-blue-500/20">
                     <div className="flex justify-between items-center mb-5 border-b border-slate-800 pb-3">
                       <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
@@ -505,7 +549,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* SECCIÓN 2: COMPAÑEROS COLAPSADOS POR DEFECTO */}
+                  {/* RESTO DE COMPAÑEROS COLAPSADOS */}
                   <div className="space-y-4 pt-2">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider px-1">
                       Compañeros de Cursada ({restoDeAlumnos.length})
@@ -599,7 +643,7 @@ export default function Home() {
                 </div>
               )}
 
-              {/* VISTA 2: MATERIAS Y DETALLE */}
+              {/* VISTA 2: MATERIAS */}
               {pestana === 'materias' && (
                 <div className="space-y-6">
                   {materias.length === 0 ? (
@@ -620,13 +664,13 @@ export default function Home() {
                               <div className="flex gap-2">
                                 <button
                                   onClick={() => setMateriaEnEdicion({ id: m.id, nombre: m.nombre })}
-                                  className="text-xs text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg transition-all font-semibold cursor-pointer"
+                                  className="text-xs text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
                                 >
                                   Editar
                                 </button>
                                 <button
                                   onClick={() => handleEliminarMateria(m.id, m.nombre)}
-                                  className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg transition-all font-semibold cursor-pointer"
+                                  className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
                                 >
                                   Eliminar
                                 </button>
@@ -878,7 +922,88 @@ export default function Home() {
         </div>
       )}
 
-      {/* MODALES */}
+      {/* MODAL CAMBIAR CONTRASEÑA */}
+      {modalPasswordOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl">
+            <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
+              <span>🔐</span> Modificar Contraseña
+            </h3>
+            <p className="text-xs text-slate-400 mb-5">Ingresá tu clave actual para autorizar el cambio.</p>
+
+            <form onSubmit={handleCambiarPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Usuario</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Tu nombre de usuario"
+                  value={userPassChange}
+                  onChange={(e) => setUserPassChange(e.target.value)}
+                  className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Contraseña Actual</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={currentPassChange}
+                  onChange={(e) => setCurrentPassChange(e.target.value)}
+                  className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Nueva Contraseña</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Mínimo 6 caracteres"
+                  value={newPassChange}
+                  onChange={(e) => setNewPassChange(e.target.value)}
+                  className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none"
+                />
+              </div>
+
+              {msgPassChange.texto && (
+                <p
+                  className={`text-xs text-center p-3 rounded-lg border ${
+                    msgPassChange.tipo === 'exito'
+                      ? 'bg-emerald-950/40 text-emerald-300 border-emerald-900/50'
+                      : 'bg-red-950/40 text-red-300 border-red-900/50'
+                  }`}
+                >
+                  {msgPassChange.texto}
+                </p>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalPasswordOpen(false);
+                    setMsgPassChange({ tipo: '', texto: '' });
+                  }}
+                  className="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="w-1/2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer"
+                >
+                  Guardar Nueva
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* OTROS MODALES */}
       {alumnoEnEdicion && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl">
