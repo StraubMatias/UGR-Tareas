@@ -64,7 +64,6 @@ export default function Home() {
 
         if (ahora - timestamp < diezMinutosMs) {
           setUsuarioActual(usuario);
-          // Renovamos la sesión por 10 minutos más al recargar
           localStorage.setItem('sesion_ugr', JSON.stringify({ usuario, timestamp: ahora }));
         } else {
           localStorage.removeItem('sesion_ugr');
@@ -164,9 +163,9 @@ export default function Home() {
       obtenerDatos(),
       obtenerAlumnosAction()
     ]);
-    setMaterias(dataMaterias);
-    setAlumnos(dataAlumnos);
-    if (dataMaterias.length > 0 && !materiaSel) {
+    setMaterias(dataMaterias || []);
+    setAlumnos(dataAlumnos || []);
+    if (dataMaterias && dataMaterias.length > 0 && !materiaSel) {
       setMateriaSel(dataMaterias[0].id);
     }
     setCargando(false);
@@ -283,13 +282,10 @@ export default function Home() {
     }
   };
 
-  // Separación: Tu usuario primero y los demás después
   const restoDeAlumnos = alumnos.filter((a) => a !== usuarioActual);
 
   return (
     <main className="min-h-screen bg-[#0f141c] text-slate-200 p-4 sm:p-6 md:p-10 font-sans selection:bg-blue-500 selection:text-white">
-      
-      {/* HEADER PRINCIPAL */}
       <header className="max-w-6xl mx-auto mb-8 bg-[#161c26] border border-slate-800 p-6 sm:p-8 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -323,7 +319,6 @@ export default function Home() {
       </header>
 
       {!usuarioActual ? (
-        /* LOGIN */
         <div className="max-w-md mx-auto mt-12 bg-[#161c26] border border-slate-800 rounded-2xl p-8 shadow-xl">
           <div className="text-center mb-6">
             <div className="inline-block p-3 bg-slate-800/80 rounded-2xl mb-2 text-3xl">
@@ -371,7 +366,6 @@ export default function Home() {
         </div>
       ) : (
         <div className="max-w-6xl mx-auto">
-          {/* NAVEGACIÓN */}
           <div className="flex flex-wrap gap-3 mb-8">
             <button
               onClick={() => setPestana('alumnos')}
@@ -415,10 +409,8 @@ export default function Home() {
             </div>
           ) : (
             <>
-              {/* VISTA 1: POR ALUMNOS */}
               {pestana === 'alumnos' && (
                 <div className="space-y-8">
-                  {/* MI TARJETA DE ALUMNO (PRIMERO Y SIEMPRE VISIBLE) */}
                   <div className="bg-[#161c26] border-2 border-blue-500/80 rounded-2xl p-6 shadow-xl ring-1 ring-blue-500/20">
                     <div className="flex justify-between items-center mb-5 border-b border-slate-800 pb-3">
                       <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
@@ -497,7 +489,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* RESTO DE ALUMNOS (ACORDEÓN DESPLEGABLE) */}
                   <div className="space-y-4">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider px-1">
                       Compañeros de Cursada ({restoDeAlumnos.length})
@@ -515,7 +506,6 @@ export default function Home() {
                           key={alumno}
                           className="bg-[#161c26] border border-slate-800/80 rounded-2xl overflow-hidden transition-all"
                         >
-                          {/* BOTÓN DESPLEGABLE */}
                           <button
                             onClick={() => toggleDesplegarAlumno(alumno)}
                             className="w-full p-4 sm:p-5 flex justify-between items-center text-left hover:bg-slate-800/40 transition-all cursor-pointer"
@@ -544,7 +534,6 @@ export default function Home() {
                             </div>
                           </button>
 
-                          {/* CONTENIDO DESPLEGABLE */}
                           {estaDesplegado && (
                             <div className="p-5 border-t border-slate-800/80 bg-[#0f141c]/50 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               {pendientesTotal === 0 ? (
@@ -593,7 +582,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* VISTA 2: POR MATERIAS Y DETALLE */}
               {pestana === 'materias' && (
                 <div className="space-y-6">
                   {materias.length === 0 ? (
@@ -726,10 +714,8 @@ export default function Home() {
                 </div>
               )}
 
-              {/* VISTA 3: ADMIN PANEL */}
               {pestana === 'admin' && esAdmin && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* GESTIÓN DE ALUMNOS */}
                   <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm h-fit">
                     <h2 className="text-base font-bold text-white mb-4 pb-2 border-b border-slate-800 flex items-center gap-2">
                       <span>👤</span> Agregar Alumnos
@@ -777,7 +763,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* CREAR MATERIA */}
                   <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm h-fit">
                     <h2 className="text-base font-bold text-white mb-4 pb-2 border-b border-slate-800 flex items-center gap-2">
                       <span>📚</span> Nueva Materia
@@ -800,7 +785,6 @@ export default function Home() {
                     </form>
                   </div>
 
-                  {/* CARGAR TAREA */}
                   <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
                     <h2 className="text-base font-bold text-white mb-4 pb-2 border-b border-slate-800 flex items-center gap-2">
                       <span>➕</span> Nueva Consigna
@@ -875,7 +859,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* MODAL EDITAR ALUMNO */}
       {alumnoEnEdicion && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl">
@@ -917,7 +900,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* MODAL EDICIÓN MATERIA */}
       {materiaEnEdicion && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl">
@@ -959,7 +941,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* MODAL EDICIÓN TAREA */}
       {tareaEnEdicion && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-xl w-full shadow-2xl">
