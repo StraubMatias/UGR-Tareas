@@ -24,6 +24,9 @@ export default function Home() {
   const [pestana, setPestana] = useState('alumnos');
   const [cargando, setCargando] = useState(true);
 
+  // Estado para acordeón de alumnos desplegados
+  const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
+
   // Form Login
   const [inputUser, setInputUser] = useState('');
   const [inputPass, setInputPass] = useState('');
@@ -45,6 +48,46 @@ export default function Home() {
 
   const esAdmin = usuarioActual === "Matute";
 
+  // Cambiar el título de la pestaña del navegador
+  useEffect(() => {
+    document.title = "UGR - Tareas a Realizar";
+  }, []);
+
+  // Manejo de Sesión de 10 minutos (Persiste al dar F5)
+  useEffect(() => {
+    const sesionGuardada = localStorage.getItem('sesion_ugr');
+    if (sesionGuardada) {
+      try {
+        const { usuario, timestamp } = JSON.parse(sesionGuardada);
+        const diezMinutosMs = 10 * 60 * 1000;
+        const ahora = Date.now();
+
+        if (ahora - timestamp < diezMinutosMs) {
+          setUsuarioActual(usuario);
+          // Renovamos la sesión por 10 minutos más al recargar
+          localStorage.setItem('sesion_ugr', JSON.stringify({ usuario, timestamp: ahora }));
+        } else {
+          localStorage.removeItem('sesion_ugr');
+        }
+      } catch (e) {
+        localStorage.removeItem('sesion_ugr');
+      }
+    }
+  }, []);
+
+  const iniciarSesionLocal = (usuario) => {
+    setUsuarioActual(usuario);
+    localStorage.setItem(
+      'sesion_ugr',
+      JSON.stringify({ usuario, timestamp: Date.now() })
+    );
+  };
+
+  const cerrarSesionLocal = () => {
+    setUsuarioActual(null);
+    localStorage.removeItem('sesion_ugr');
+  };
+
   // Función para formatear fechas a DD-MM-AAAA
   const formatearFechaDDMMAAAA = (fechaStr) => {
     if (!fechaStr || fechaStr === 'Sin fecha') return 'Sin fecha';
@@ -52,7 +95,6 @@ export default function Home() {
       const partes = fechaStr.split('-');
       if (partes.length === 3) {
         if (partes[0].length === 4) {
-          // Si viene como YYYY-MM-DD
           return `${partes[2]}-${partes[1]}-${partes[0]}`;
         }
       }
@@ -60,24 +102,20 @@ export default function Home() {
     return fechaStr;
   };
 
-  // Función para ordenar tareas: vencimiento próximo -> inicio próximo -> alfabético
+  // Ordenar tareas por vencimiento
   const ordenarTareas = (listaTareas) => {
     return [...listaTareas].sort((a, b) => {
       const tieneFinA = a.fin && a.fin !== 'Sin fecha';
       const tieneFinB = b.fin && b.fin !== 'Sin fecha';
 
-      if (tieneFinA && tieneFinB) {
-        return a.fin.localeCompare(b.fin);
-      }
+      if (tieneFinA && tieneFinB) return a.fin.localeCompare(b.fin);
       if (tieneFinA) return -1;
       if (tieneFinB) return 1;
 
       const tieneInicioA = a.inicio && a.inicio !== 'Sin fecha';
       const tieneInicioB = b.inicio && b.inicio !== 'Sin fecha';
 
-      if (tieneInicioA && tieneInicioB) {
-        return a.inicio.localeCompare(b.inicio);
-      }
+      if (tieneInicioA && tieneInicioB) return a.inicio.localeCompare(b.inicio);
       if (tieneInicioA) return -1;
       if (tieneInicioB) return 1;
 
@@ -85,7 +123,7 @@ export default function Home() {
     });
   };
 
-  // Función para calcular los días restantes y asignar el color del semáforo
+  // Semáforo de vencimiento
   const calcularEstadoSemaforo = (fechaFinStr) => {
     if (!fechaFinStr || fechaFinStr === 'Sin fecha') {
       return { texto: 'Sin fecha límite', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
@@ -98,43 +136,25 @@ export default function Home() {
     const partes = fechaFinStr.split('-');
 
     if (partes[0].length === 4) {
-      // YYYY-MM-DD
       [year, month, day] = partes.map(Number);
     } else {
-      // DD-MM-YYYY
       [day, month, year] = partes.map(Number);
     }
 
     const fechaLimite = new Date(year, month - 1, day);
-
     const diferenciaMs = fechaLimite.getTime() - hoy.getTime();
     const diasRestantes = Math.ceil(diferenciaMs / (1000 * 60 * 60 * 24));
 
     if (diasRestantes < 0) {
-      return {
-        texto: 'Vencida',
-        estilo: 'bg-red-950/80 text-red-400 border-red-800/80 font-bold'
-      };
+      return { texto: 'Vencida', estilo: 'bg-red-950/80 text-red-400 border-red-800/80 font-bold' };
     } else if (diasRestantes === 0) {
-      return {
-        texto: '⚠️ Cierra Hoy',
-        estilo: 'bg-red-500/20 text-red-300 border-red-500/40 font-bold animate-pulse'
-      };
+      return { texto: '⚠️ Cierra Hoy', estilo: 'bg-red-500/20 text-red-300 border-red-500/40 font-bold animate-pulse' };
     } else if (diasRestantes <= 2) {
-      return {
-        texto: `🔴 Quedan ${diasRestantes} ${diasRestantes === 1 ? 'día' : 'días'}`,
-        estilo: 'bg-red-500/15 text-red-300 border-red-500/30 font-semibold'
-      };
+      return { texto: `🔴 Quedan ${diasRestantes} ${diasRestantes === 1 ? 'día' : 'días'}`, estilo: 'bg-red-500/15 text-red-300 border-red-500/30 font-semibold' };
     } else if (diasRestantes <= 7) {
-      return {
-        texto: `🟠 Quedan ${diasRestantes} días`,
-        estilo: 'bg-amber-500/15 text-amber-300 border-amber-500/30 font-semibold'
-      };
+      return { texto: `🟠 Quedan ${diasRestantes} días`, estilo: 'bg-amber-500/15 text-amber-300 border-amber-500/30 font-semibold' };
     } else {
-      return {
-        texto: `🟢 Quedan ${diasRestantes} días`,
-        estilo: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-semibold'
-      };
+      return { texto: `🟢 Quedan ${diasRestantes} días`, estilo: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-semibold' };
     }
   };
 
@@ -163,13 +183,20 @@ export default function Home() {
     const res = await validarLoginAction(inputUser, inputPass);
 
     if (res.exito) {
-      setUsuarioActual(res.usuario);
+      iniciarSesionLocal(res.usuario);
       setErrorLogin('');
       setInputUser('');
       setInputPass('');
     } else {
       setErrorLogin(res.mensaje);
     }
+  };
+
+  const toggleDesplegarAlumno = (nombreAlumno) => {
+    setAlumnosDesplegados((prev) => ({
+      ...prev,
+      [nombreAlumno]: !prev[nombreAlumno]
+    }));
   };
 
   const handleCrearAlumno = async (e) => {
@@ -256,6 +283,9 @@ export default function Home() {
     }
   };
 
+  // Separación: Tu usuario primero y los demás después
+  const restoDeAlumnos = alumnos.filter((a) => a !== usuarioActual);
+
   return (
     <main className="min-h-screen bg-[#0f141c] text-slate-200 p-4 sm:p-6 md:p-10 font-sans selection:bg-blue-500 selection:text-white">
       
@@ -265,7 +295,7 @@ export default function Home() {
           <div className="flex items-center gap-3 mb-1">
             <span className="text-2xl">🎓</span>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              Tareas a Realizar
+              UGR - Tareas a Realizar
             </h1>
           </div>
           <p className="text-sm sm:text-base text-slate-400 flex items-center gap-2 mt-1">
@@ -277,15 +307,15 @@ export default function Home() {
                 </strong>
               </>
             ) : (
-              'Organizador de cursada y entregas grupales'
+              'Portal de entregas y cursada universitaria'
             )}
           </p>
         </div>
 
         {usuarioActual && (
           <button
-            onClick={() => setUsuarioActual(null)}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2"
+            onClick={cerrarSesionLocal}
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer"
           >
             <span>🚪</span> Salir
           </button>
@@ -293,13 +323,13 @@ export default function Home() {
       </header>
 
       {!usuarioActual ? (
-        /* TARJETA DE LOGIN */
+        /* LOGIN */
         <div className="max-w-md mx-auto mt-12 bg-[#161c26] border border-slate-800 rounded-2xl p-8 shadow-xl">
           <div className="text-center mb-6">
             <div className="inline-block p-3 bg-slate-800/80 rounded-2xl mb-2 text-3xl">
               🔑
             </div>
-            <h2 className="text-xl font-bold text-white">Ingreso al Portal</h2>
+            <h2 className="text-xl font-bold text-white">Ingreso al Portal UGR</h2>
             <p className="text-sm text-slate-400 mt-1">Identificate para ver tus pendientes</p>
           </div>
           
@@ -333,7 +363,7 @@ export default function Home() {
             
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl text-sm uppercase tracking-wider transition-all duration-200 shadow-md"
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl text-sm uppercase tracking-wider transition-all duration-200 shadow-md cursor-pointer"
             >
               Entrar
             </button>
@@ -341,11 +371,11 @@ export default function Home() {
         </div>
       ) : (
         <div className="max-w-6xl mx-auto">
-          {/* NAVEGACIÓN PRINCIPAL */}
+          {/* NAVEGACIÓN */}
           <div className="flex flex-wrap gap-3 mb-8">
             <button
               onClick={() => setPestana('alumnos')}
-              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border ${
+              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
                 pestana === 'alumnos'
                   ? 'bg-blue-600/20 text-blue-300 border-blue-500/40 shadow-sm'
                   : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
@@ -355,7 +385,7 @@ export default function Home() {
             </button>
             <button
               onClick={() => setPestana('materias')}
-              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border ${
+              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
                 pestana === 'materias'
                   ? 'bg-blue-600/20 text-blue-300 border-blue-500/40 shadow-sm'
                   : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
@@ -367,7 +397,7 @@ export default function Home() {
             {esAdmin && (
               <button
                 onClick={() => setPestana('admin')}
-                className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border ml-auto ${
+                className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border ml-auto cursor-pointer ${
                   pestana === 'admin'
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
                     : 'bg-[#161c26] text-amber-400/80 border-slate-800 hover:bg-slate-800/60'
@@ -387,14 +417,94 @@ export default function Home() {
             <>
               {/* VISTA 1: POR ALUMNOS */}
               {pestana === 'alumnos' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {alumnos.length === 0 ? (
-                    <div className="col-span-full text-center py-16 bg-[#161c26] border border-slate-800 rounded-2xl text-slate-400 text-sm">
-                      No hay alumnos registrados en la lista.
+                <div className="space-y-8">
+                  {/* MI TARJETA DE ALUMNO (PRIMERO Y SIEMPRE VISIBLE) */}
+                  <div className="bg-[#161c26] border-2 border-blue-500/80 rounded-2xl p-6 shadow-xl ring-1 ring-blue-500/20">
+                    <div className="flex justify-between items-center mb-5 border-b border-slate-800 pb-3">
+                      <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
+                        <span>👤</span> {usuarioActual} <span className="text-xs text-blue-400 font-semibold bg-blue-500/10 px-2 py-0.5 rounded">(Mis Tareas)</span>
+                      </h2>
+                      {(() => {
+                        const misPendientes = materias.flatMap((m) =>
+                          m.tareas.filter((t) => !t.completadoPor.includes(usuarioActual))
+                        ).length;
+                        return (
+                          <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
+                            misPendientes === 0
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                              : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                          }`}>
+                            {misPendientes === 0 ? '✓ Al día' : `${misPendientes} por hacer`}
+                          </span>
+                        );
+                      })()}
                     </div>
-                  ) : (
-                    alumnos.map((alumno) => {
-                      const esYo = alumno === usuarioActual;
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {(() => {
+                        const misMateriasConPendientes = materias.filter((m) =>
+                          m.tareas.some((t) => !t.completadoPor.includes(usuarioActual))
+                        );
+
+                        if (misMateriasConPendientes.length === 0) {
+                          return (
+                            <div className="col-span-full text-center py-6 bg-emerald-950/20 border border-emerald-900/30 rounded-xl text-emerald-400 font-medium">
+                              🎉 ¡Excelente! No tenés entregas pendientes.
+                            </div>
+                          );
+                        }
+
+                        return misMateriasConPendientes.map((m) => {
+                          const tareasPendientes = m.tareas.filter(
+                            (t) => !t.completadoPor.includes(usuarioActual)
+                          );
+                          const tareasOrdenadas = ordenarTareas(tareasPendientes);
+
+                          return (
+                            <div key={m.id} className="bg-[#0f141c] p-4 rounded-xl border border-slate-800/80">
+                              <h3 className="text-sm font-bold text-amber-400/90 mb-3 flex items-center gap-1.5">
+                                <span>📌</span> {m.nombre}
+                              </h3>
+                              <ul className="space-y-3">
+                                {tareasOrdenadas.map((t) => {
+                                  const semaforo = calcularEstadoSemaforo(t.fin);
+                                  return (
+                                    <li key={t.id} className="flex flex-col gap-1.5 bg-[#161c26]/80 p-3 rounded-lg border border-slate-800/60">
+                                      <div className="flex items-start gap-2.5">
+                                        <input
+                                          type="checkbox"
+                                          checked={false}
+                                          onChange={() => handleToggleTarea(t.id, usuarioActual)}
+                                          className="mt-0.5 h-5 w-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                                        />
+                                        <span className="text-sm sm:text-base text-slate-100 font-semibold leading-snug">
+                                          {t.nombre}
+                                        </span>
+                                      </div>
+                                      <div className="pl-7 flex items-center justify-between">
+                                        <span className={`text-xs px-2.5 py-0.5 rounded-md border ${semaforo.estilo}`}>
+                                          {semaforo.texto}
+                                        </span>
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* RESTO DE ALUMNOS (ACORDEÓN DESPLEGABLE) */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider px-1">
+                      Compañeros de Cursada ({restoDeAlumnos.length})
+                    </h3>
+
+                    {restoDeAlumnos.map((alumno) => {
+                      const estaDesplegado = !!alumnosDesplegados[alumno];
 
                       const pendientesTotal = materias.flatMap((m) =>
                         m.tareas.filter((t) => !t.completadoPor.includes(alumno))
@@ -403,83 +513,83 @@ export default function Home() {
                       return (
                         <div
                           key={alumno}
-                          className={`bg-[#161c26] border rounded-2xl p-6 shadow-sm transition-all ${
-                            esYo
-                              ? 'border-blue-500/60 ring-1 ring-blue-500/20'
-                              : 'border-slate-800/80 hover:border-slate-700'
-                          }`}
+                          className="bg-[#161c26] border border-slate-800/80 rounded-2xl overflow-hidden transition-all"
                         >
-                          <div className="flex justify-between items-center mb-5 border-b border-slate-800 pb-3">
-                            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                              <span>👤</span> {alumno} {esYo && <span className="text-xs text-blue-400 font-normal">(Vos)</span>}
-                            </h2>
-                            <span
-                              className={`text-xs font-semibold px-3 py-1 rounded-full border ${
-                                pendientesTotal === 0
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                  : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                              }`}
-                            >
-                              {pendientesTotal === 0 ? '✓ Al día' : `${pendientesTotal} por hacer`}
-                            </span>
-                          </div>
+                          {/* BOTÓN DESPLEGABLE */}
+                          <button
+                            onClick={() => toggleDesplegarAlumno(alumno)}
+                            className="w-full p-4 sm:p-5 flex justify-between items-center text-left hover:bg-slate-800/40 transition-all cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg">👤</span>
+                              <span className="text-base font-bold text-white">{alumno}</span>
+                              <span className="text-xs text-slate-500 font-normal">
+                                {estaDesplegado ? '(Ocultar tareas)' : '(Tocar para ver tareas)'}
+                              </span>
+                            </div>
 
-                          <div className="space-y-4">
-                            {pendientesTotal === 0 ? (
-                              <p className="text-sm text-emerald-400/90 italic py-4 text-center bg-emerald-950/20 border border-emerald-900/30 rounded-xl">
-                                🎉 ¡Genial! No tenés entregas pendientes.
-                              </p>
-                            ) : (
-                              materias.map((m) => {
-                                const tareasPendientes = m.tareas.filter(
-                                  (t) => !t.completadoPor.includes(alumno)
-                                );
+                            <div className="flex items-center gap-3">
+                              <span
+                                className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+                                  pendientesTotal === 0
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                }`}
+                              >
+                                {pendientesTotal === 0 ? '✓ Al día' : `${pendientesTotal} por hacer`}
+                              </span>
+                              <span className="text-slate-400 text-sm font-bold">
+                                {estaDesplegado ? '▲' : '▼'}
+                              </span>
+                            </div>
+                          </button>
 
-                                if (tareasPendientes.length === 0) return null;
+                          {/* CONTENIDO DESPLEGABLE */}
+                          {estaDesplegado && (
+                            <div className="p-5 border-t border-slate-800/80 bg-[#0f141c]/50 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {pendientesTotal === 0 ? (
+                                <p className="col-span-full text-sm text-emerald-400/90 italic py-2 text-center">
+                                  🎉 ¡Al día! Sin tareas pendientes.
+                                </p>
+                              ) : (
+                                materias.map((m) => {
+                                  const tareasPendientes = m.tareas.filter(
+                                    (t) => !t.completadoPor.includes(alumno)
+                                  );
 
-                                const tareasOrdenadas = ordenarTareas(tareasPendientes);
+                                  if (tareasPendientes.length === 0) return null;
+                                  const tareasOrdenadas = ordenarTareas(tareasPendientes);
 
-                                return (
-                                  <div key={m.id} className="bg-[#0f141c] p-4 rounded-xl border border-slate-800/60">
-                                    <h3 className="text-sm font-bold text-amber-400/90 mb-3 flex items-center gap-1.5">
-                                      <span>📌</span> {m.nombre}
-                                    </h3>
-                                    <ul className="space-y-3">
-                                      {tareasOrdenadas.map((t) => {
-                                        const semaforo = calcularEstadoSemaforo(t.fin);
-                                        return (
-                                          <li key={t.id} className="flex flex-col gap-1.5 bg-[#161c26]/70 p-3 rounded-lg border border-slate-800/60">
-                                            <div className="flex items-start gap-2.5">
-                                              <input
-                                                type="checkbox"
-                                                checked={false}
-                                                disabled={!esYo}
-                                                onChange={() => handleToggleTarea(t.id, alumno)}
-                                                className="mt-0.5 h-5 w-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer disabled:cursor-not-allowed"
-                                              />
-                                              <span className="text-sm sm:text-base text-slate-200 font-semibold leading-snug">
-                                                {t.nombre}
+                                  return (
+                                    <div key={m.id} className="bg-[#0f141c] p-4 rounded-xl border border-slate-800/60">
+                                      <h4 className="text-xs font-bold text-amber-400 mb-2 flex items-center gap-1.5">
+                                        <span>📌</span> {m.nombre}
+                                      </h4>
+                                      <ul className="space-y-2">
+                                        {tareasOrdenadas.map((t) => {
+                                          const semaforo = calcularEstadoSemaforo(t.fin);
+                                          return (
+                                            <li key={t.id} className="bg-[#161c26]/60 p-2.5 rounded-lg border border-slate-800/50 flex flex-col gap-1">
+                                              <span className="text-xs text-slate-300 font-medium">
+                                                • {t.nombre}
                                               </span>
-                                            </div>
-
-                                            <div className="pl-7 flex items-center justify-between">
-                                              <span className={`text-xs px-2.5 py-0.5 rounded-md border ${semaforo.estilo}`}>
+                                              <span className={`text-[10px] w-fit px-2 py-0.5 rounded border ${semaforo.estilo}`}>
                                                 {semaforo.texto}
                                               </span>
-                                            </div>
-                                          </li>
-                                        );
-                                      })}
-                                    </ul>
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
-                    })
-                  )}
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -504,13 +614,13 @@ export default function Home() {
                               <div className="flex gap-2">
                                 <button
                                   onClick={() => setMateriaEnEdicion({ id: m.id, nombre: m.nombre })}
-                                  className="text-xs text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg transition-all font-semibold"
+                                  className="text-xs text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg transition-all font-semibold cursor-pointer"
                                 >
                                   Editar
                                 </button>
                                 <button
                                   onClick={() => handleEliminarMateria(m.id, m.nombre)}
-                                  className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg transition-all font-semibold"
+                                  className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg transition-all font-semibold cursor-pointer"
                                 >
                                   Eliminar
                                 </button>
@@ -527,7 +637,6 @@ export default function Home() {
 
                                 return (
                                   <div key={t.id} className="bg-[#0f141c] p-6 rounded-xl border border-slate-800/80 flex flex-col lg:flex-row justify-between gap-6">
-                                    
                                     <div className="space-y-3 flex-1">
                                       <div className="flex items-center gap-3 flex-wrap">
                                         <h3 className="font-bold text-blue-400 text-base sm:text-lg flex items-center gap-2">
@@ -542,13 +651,13 @@ export default function Home() {
                                           <div className="flex gap-1.5 ml-auto sm:ml-2">
                                             <button
                                               onClick={() => setTareaEnEdicion({ materiaId: m.id, tarea: { ...t } })}
-                                              className="text-xs text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 rounded font-semibold"
+                                              className="text-xs text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 rounded font-semibold cursor-pointer"
                                             >
                                               Editar
                                             </button>
                                             <button
                                               onClick={() => handleEliminarTarea(t.id)}
-                                              className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-2.5 py-1 rounded font-semibold"
+                                              className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-2.5 py-1 rounded font-semibold cursor-pointer"
                                             >
                                               Borrar
                                             </button>
@@ -565,7 +674,6 @@ export default function Home() {
                                         </p>
                                       </div>
 
-                                      {/* FECHAS MOSTRADAS EN FORMATO DD-MM-AAAA */}
                                       <div className="flex flex-wrap gap-5 text-xs sm:text-sm text-slate-400 pt-1 font-medium">
                                         <span className="flex items-center gap-1.5">
                                           📅 Abre: <strong className="text-slate-100">{formatearFechaDDMMAAAA(t.inicio)}</strong>
@@ -592,7 +700,7 @@ export default function Home() {
                                                   {puedoQuitar && (
                                                     <button
                                                       onClick={() => handleToggleTarea(t.id, u)}
-                                                      className="hover:text-red-400 font-bold ml-1 text-xs"
+                                                      className="hover:text-red-400 font-bold ml-1 text-xs cursor-pointer"
                                                     >
                                                       ✕
                                                     </button>
@@ -638,7 +746,7 @@ export default function Home() {
                           className="w-full bg-[#0f141c] border border-slate-800 focus:border-amber-400 rounded-xl p-3 text-sm text-white focus:outline-none transition-all"
                         />
                       </div>
-                      <button type="submit" className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all">
+                      <button type="submit" className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
                         Guardar Alumno
                       </button>
                     </form>
@@ -652,13 +760,13 @@ export default function Home() {
                             <div className="flex gap-2">
                               <button
                                 onClick={() => setAlumnoEnEdicion({ antiguoNombre: a, nuevoNombre: a })}
-                                className="text-amber-400 hover:text-amber-300 font-semibold"
+                                className="text-amber-400 hover:text-amber-300 font-semibold cursor-pointer"
                               >
                                 ✏️
                               </button>
                               <button
                                 onClick={() => handleEliminarAlumno(a)}
-                                className="text-red-400 hover:text-red-300 font-bold"
+                                className="text-red-400 hover:text-red-300 font-bold cursor-pointer"
                               >
                                 ✕
                               </button>
@@ -686,7 +794,7 @@ export default function Home() {
                           className="w-full bg-[#0f141c] border border-slate-800 focus:border-amber-400 rounded-xl p-3 text-sm text-white focus:outline-none transition-all"
                         />
                       </div>
-                      <button type="submit" className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all">
+                      <button type="submit" className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
                         Guardar Materia
                       </button>
                     </form>
@@ -703,7 +811,7 @@ export default function Home() {
                         <select
                           value={materiaSel}
                           onChange={(e) => setMateriaSel(e.target.value)}
-                          className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-3 text-sm text-white focus:outline-none font-medium"
+                          className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-3 text-sm text-white focus:outline-none font-medium cursor-pointer"
                         >
                           {materias.map((m) => (
                             <option key={m.id} value={m.id}>{m.nombre}</option>
@@ -730,7 +838,7 @@ export default function Home() {
                             type="date"
                             value={fechaInicio}
                             onChange={(e) => setFechaInicio(e.target.value)}
-                            className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-2.5 text-xs text-white focus:outline-none"
+                            className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-2.5 text-xs text-white focus:outline-none cursor-pointer"
                           />
                         </div>
                         <div>
@@ -739,7 +847,7 @@ export default function Home() {
                             type="date"
                             value={fechaFin}
                             onChange={(e) => setFechaFin(e.target.value)}
-                            className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-2.5 text-xs text-white focus:outline-none"
+                            className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-2.5 text-xs text-white focus:outline-none cursor-pointer"
                           />
                         </div>
                       </div>
@@ -755,7 +863,7 @@ export default function Home() {
                         ></textarea>
                       </div>
 
-                      <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all">
+                      <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
                         Publicar Tarea
                       </button>
                     </form>
@@ -793,13 +901,13 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setAlumnoEnEdicion(null)}
-                  className="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs"
+                  className="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="w-1/2 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl text-xs"
+                  className="w-1/2 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer"
                 >
                   Guardar
                 </button>
@@ -835,13 +943,13 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setMateriaEnEdicion(null)}
-                  className="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs"
+                  className="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="w-1/2 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl text-xs"
+                  className="w-1/2 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer"
                 >
                   Guardar
                 </button>
@@ -885,7 +993,7 @@ export default function Home() {
                         tarea: { ...tareaEnEdicion.tarea, inicio: e.target.value }
                       })
                     }
-                    className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none"
+                    className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none cursor-pointer"
                   />
                 </div>
                 <div>
@@ -899,7 +1007,7 @@ export default function Home() {
                         tarea: { ...tareaEnEdicion.tarea, fin: e.target.value }
                       })
                     }
-                    className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none"
+                    className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none cursor-pointer"
                   />
                 </div>
               </div>
@@ -923,13 +1031,13 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setTareaEnEdicion(null)}
-                  className="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs"
+                  className="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="w-1/2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl text-xs"
+                  className="w-1/2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer"
                 >
                   Guardar Cambios
                 </button>
