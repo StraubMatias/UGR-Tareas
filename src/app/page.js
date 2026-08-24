@@ -24,7 +24,7 @@ export default function Home() {
   const [pestana, setPestana] = useState('alumnos');
   const [cargando, setCargando] = useState(true);
 
-  // Estado para acordeón de alumnos desplegados
+  // Acordeón para alumnos (todos cerrados por defecto)
   const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
 
   // Form Login
@@ -48,30 +48,34 @@ export default function Home() {
 
   const esAdmin = usuarioActual === "Matute";
 
-  // Cambiar el título de la pestaña del navegador
   useEffect(() => {
     document.title = "UGR - Tareas a Realizar";
   }, []);
 
-  // Manejo de Sesión de 10 minutos (Persiste al dar F5)
+  // PERSISTENCIA DE SESIÓN (Solución al F5)
   useEffect(() => {
-    const sesionGuardada = localStorage.getItem('sesion_ugr');
-    if (sesionGuardada) {
-      try {
-        const { usuario, timestamp } = JSON.parse(sesionGuardada);
-        const diezMinutosMs = 10 * 60 * 1000;
-        const ahora = Date.now();
+    const recuperarSesion = () => {
+      const sesionGuardada = localStorage.getItem('sesion_ugr');
+      if (sesionGuardada) {
+        try {
+          const { usuario, timestamp } = JSON.parse(sesionGuardada);
+          const diezMinutosMs = 10 * 60 * 1000;
+          const ahora = Date.now();
 
-        if (ahora - timestamp < diezMinutosMs) {
-          setUsuarioActual(usuario);
-          localStorage.setItem('sesion_ugr', JSON.stringify({ usuario, timestamp: ahora }));
-        } else {
+          if (ahora - timestamp < diezMinutosMs) {
+            setUsuarioActual(usuario);
+            // Actualizamos la marca de tiempo para extender 10 minutos más
+            localStorage.setItem('sesion_ugr', JSON.stringify({ usuario, timestamp: ahora }));
+          } else {
+            localStorage.removeItem('sesion_ugr');
+          }
+        } catch (e) {
           localStorage.removeItem('sesion_ugr');
         }
-      } catch (e) {
-        localStorage.removeItem('sesion_ugr');
       }
-    }
+    };
+
+    recuperarSesion();
   }, []);
 
   const iniciarSesionLocal = (usuario) => {
@@ -87,7 +91,6 @@ export default function Home() {
     localStorage.removeItem('sesion_ugr');
   };
 
-  // Función para formatear fechas a DD-MM-AAAA
   const formatearFechaDDMMAAAA = (fechaStr) => {
     if (!fechaStr || fechaStr === 'Sin fecha') return 'Sin fecha';
     if (fechaStr.includes('-')) {
@@ -101,7 +104,6 @@ export default function Home() {
     return fechaStr;
   };
 
-  // Ordenar tareas por vencimiento
   const ordenarTareas = (listaTareas) => {
     return [...listaTareas].sort((a, b) => {
       const tieneFinA = a.fin && a.fin !== 'Sin fecha';
@@ -122,7 +124,6 @@ export default function Home() {
     });
   };
 
-  // Semáforo de vencimiento
   const calcularEstadoSemaforo = (fechaFinStr) => {
     if (!fechaFinStr || fechaFinStr === 'Sin fecha') {
       return { texto: 'Sin fecha límite', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
@@ -282,6 +283,7 @@ export default function Home() {
     }
   };
 
+  // Filtrado estricto: Tus tareas primero y compañeros abajo
   const restoDeAlumnos = alumnos.filter((a) => a !== usuarioActual);
 
   return (
@@ -319,6 +321,7 @@ export default function Home() {
       </header>
 
       {!usuarioActual ? (
+        /* LOGIN */
         <div className="max-w-md mx-auto mt-12 bg-[#161c26] border border-slate-800 rounded-2xl p-8 shadow-xl">
           <div className="text-center mb-6">
             <div className="inline-block p-3 bg-slate-800/80 rounded-2xl mb-2 text-3xl">
@@ -366,6 +369,7 @@ export default function Home() {
         </div>
       ) : (
         <div className="max-w-6xl mx-auto">
+          {/* BOTONES NAVEGACIÓN */}
           <div className="flex flex-wrap gap-3 mb-8">
             <button
               onClick={() => setPestana('alumnos')}
@@ -409,12 +413,15 @@ export default function Home() {
             </div>
           ) : (
             <>
+              {/* VISTA 1: POR ALUMNOS */}
               {pestana === 'alumnos' && (
                 <div className="space-y-8">
+                  
+                  {/* SECCIÓN 1: MIS TAREAS (TU USUARIO SIEMPRE ARRIBA) */}
                   <div className="bg-[#161c26] border-2 border-blue-500/80 rounded-2xl p-6 shadow-xl ring-1 ring-blue-500/20">
                     <div className="flex justify-between items-center mb-5 border-b border-slate-800 pb-3">
                       <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
-                        <span>👤</span> {usuarioActual} <span className="text-xs text-blue-400 font-semibold bg-blue-500/10 px-2 py-0.5 rounded">(Mis Tareas)</span>
+                        <span>👤</span> {usuarioActual} <span className="text-xs text-blue-400 font-semibold bg-blue-500/10 border border-blue-500/30 px-2 py-0.5 rounded">(Mis Tareas Pendientes)</span>
                       </h2>
                       {(() => {
                         const misPendientes = materias.flatMap((m) =>
@@ -440,8 +447,8 @@ export default function Home() {
 
                         if (misMateriasConPendientes.length === 0) {
                           return (
-                            <div className="col-span-full text-center py-6 bg-emerald-950/20 border border-emerald-900/30 rounded-xl text-emerald-400 font-medium">
-                              🎉 ¡Excelente! No tenés entregas pendientes.
+                            <div className="col-span-full text-center py-8 bg-emerald-950/20 border border-emerald-900/30 rounded-xl text-emerald-400 font-medium">
+                              🎉 ¡Excelente! No tenés ninguna entrega pendiente.
                             </div>
                           );
                         }
@@ -489,7 +496,8 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                  {/* SECCIÓN 2: OTROS ALUMNOS (OCULTOS / DESPLEGABLES) */}
+                  <div className="space-y-4 pt-2">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider px-1">
                       Compañeros de Cursada ({restoDeAlumnos.length})
                     </h3>
@@ -506,6 +514,7 @@ export default function Home() {
                           key={alumno}
                           className="bg-[#161c26] border border-slate-800/80 rounded-2xl overflow-hidden transition-all"
                         >
+                          {/* BOTÓN BARRA COMPAÑERO */}
                           <button
                             onClick={() => toggleDesplegarAlumno(alumno)}
                             className="w-full p-4 sm:p-5 flex justify-between items-center text-left hover:bg-slate-800/40 transition-all cursor-pointer"
@@ -513,8 +522,8 @@ export default function Home() {
                             <div className="flex items-center gap-3">
                               <span className="text-lg">👤</span>
                               <span className="text-base font-bold text-white">{alumno}</span>
-                              <span className="text-xs text-slate-500 font-normal">
-                                {estaDesplegado ? '(Ocultar tareas)' : '(Tocar para ver tareas)'}
+                              <span className="text-xs text-slate-500 font-normal hidden sm:inline">
+                                {estaDesplegado ? '(Tocar para ocultar)' : '(Tocar para ver detalle)'}
                               </span>
                             </div>
 
@@ -534,11 +543,12 @@ export default function Home() {
                             </div>
                           </button>
 
+                          {/* TAREAS DEL COMPAÑERO (SOLO SI SE DESPLIEGA) */}
                           {estaDesplegado && (
-                            <div className="p-5 border-t border-slate-800/80 bg-[#0f141c]/50 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="p-5 border-t border-slate-800/80 bg-[#0f141c]/60 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               {pendientesTotal === 0 ? (
-                                <p className="col-span-full text-sm text-emerald-400/90 italic py-2 text-center">
-                                  🎉 ¡Al día! Sin tareas pendientes.
+                                <p className="col-span-full text-sm text-emerald-400/90 italic py-3 text-center">
+                                  🎉 ¡Al día! Este alumno no tiene tareas pendientes.
                                 </p>
                               ) : (
                                 materias.map((m) => {
@@ -559,7 +569,7 @@ export default function Home() {
                                           const semaforo = calcularEstadoSemaforo(t.fin);
                                           return (
                                             <li key={t.id} className="bg-[#161c26]/60 p-2.5 rounded-lg border border-slate-800/50 flex flex-col gap-1">
-                                              <span className="text-xs text-slate-300 font-medium">
+                                              <span className="text-xs text-slate-200 font-semibold">
                                                 • {t.nombre}
                                               </span>
                                               <span className={`text-[10px] w-fit px-2 py-0.5 rounded border ${semaforo.estilo}`}>
@@ -582,6 +592,7 @@ export default function Home() {
                 </div>
               )}
 
+              {/* VISTA 2: MATERIAS Y DETALLE */}
               {pestana === 'materias' && (
                 <div className="space-y-6">
                   {materias.length === 0 ? (
@@ -714,6 +725,7 @@ export default function Home() {
                 </div>
               )}
 
+              {/* VISTA 3: ADMIN PANEL */}
               {pestana === 'admin' && esAdmin && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm h-fit">
@@ -859,6 +871,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* MODALES */}
       {alumnoEnEdicion && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl">
