@@ -37,6 +37,7 @@ export default function Home() {
 
   // Acordeón para compañeros
   const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
+  const [materiasDesplegadas, setMateriasDesplegadas] = useState({});
 
   // Form Login
   const [inputUser, setInputUser] = useState('');
@@ -249,6 +250,13 @@ export default function Home() {
     setAlumnosDesplegados((prev) => ({
       ...prev,
       [nombreAlumno]: !prev[nombreAlumno]
+    }));
+  };
+
+  const toggleDesplegarMateria = (materiaId) => {
+    setMateriasDesplegadas((prev) => ({
+      ...prev,
+      [materiaId]: !prev[materiaId]
     }));
   };
 
@@ -731,7 +739,16 @@ export default function Home() {
                     </div>
                   ) : (
                     materias.map((m) => {
-                      const tareasOrdenadas = ordenarTareas(m.tareas);
+                      const mostrarCompletadas = !!materiasDesplegadas[m.id];
+                      const tareasPendientes = m.tareas.filter(
+                        (t) => !t.completadoPor.includes(usuarioActual)
+                      );
+                      const tareasCompletadas = m.tareas.filter(
+                        (t) => t.completadoPor.includes(usuarioActual)
+                      );
+                      const tareasOrdenadas = ordenarTareas(
+                        mostrarCompletadas ? m.tareas : tareasPendientes
+                      );
 
                       return (
                         <div key={m.id} className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
@@ -739,8 +756,19 @@ export default function Home() {
                             <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
                               <span>📘</span> {m.nombre}
                             </h2>
-                            {esAdmin && (
-                              <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2 sm:justify-end">
+                              {tareasCompletadas.length > 0 && (
+                                <button
+                                  onClick={() => toggleDesplegarMateria(m.id)}
+                                  className="text-xs text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
+                                >
+                                  {mostrarCompletadas
+                                    ? 'Ocultar completadas'
+                                    : `Mostrar ${tareasCompletadas.length} completada${tareasCompletadas.length === 1 ? '' : 's'}`}
+                                </button>
+                              )}
+                              {esAdmin && (
+                                <div className="flex gap-2">
                                 <button
                                   onClick={() => setMateriaEnEdicion({ id: m.id, nombre: m.nombre })}
                                   className="text-xs text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
@@ -753,13 +781,18 @@ export default function Home() {
                                 >
                                   Eliminar
                                 </button>
-                              </div>
-                            )}
+                                </div>
+                              )}
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-1 gap-5">
                             {tareasOrdenadas.length === 0 ? (
-                              <p className="text-sm text-slate-500 italic">Sin consignas cargadas en esta materia.</p>
+                              <p className="text-sm text-slate-500 italic">
+                                {m.tareas.length === 0
+                                  ? 'Sin consignas cargadas en esta materia.'
+                                  : 'Ya completaste todas las tareas de esta materia.'}
+                              </p>
                             ) : (
                               tareasOrdenadas.map((t) => {
                                 const semaforo = calcularEstadoSemaforo(t.fin);
