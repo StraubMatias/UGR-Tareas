@@ -23,11 +23,12 @@ export default function Home() {
   const [usuarioActual, setUsuarioActual] = useState(null);
   const [pestana, setPestana] = useState('alumnos');
   const [cargando, setCargando] = useState(true);
+  const [iniciado, setIniciado] = useState(false);
 
-  // Acordeón para alumnos (todos cerrados por defecto)
+  // Acordeón para compañeros (todos cerrados por defecto)
   const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
 
-  // Form Login
+  // Forms Login
   const [inputUser, setInputUser] = useState('');
   const [inputPass, setInputPass] = useState('');
   const [errorLogin, setErrorLogin] = useState('');
@@ -48,34 +49,31 @@ export default function Home() {
 
   const esAdmin = usuarioActual === "Matute";
 
+  // Título de la pestaña
   useEffect(() => {
     document.title = "UGR - Tareas a Realizar";
   }, []);
 
-  // PERSISTENCIA DE SESIÓN (Solución al F5)
+  // LEER SESIÓN AL INSTANTE (EVITA QUE TE DESLOGUEE AL DAR F5)
   useEffect(() => {
-    const recuperarSesion = () => {
-      const sesionGuardada = localStorage.getItem('sesion_ugr');
-      if (sesionGuardada) {
-        try {
-          const { usuario, timestamp } = JSON.parse(sesionGuardada);
-          const diezMinutosMs = 10 * 60 * 1000;
-          const ahora = Date.now();
+    const sesionGuardada = localStorage.getItem('sesion_ugr');
+    if (sesionGuardada) {
+      try {
+        const { usuario, timestamp } = JSON.parse(sesionGuardada);
+        const diezMinutosMs = 10 * 60 * 1000;
+        const ahora = Date.now();
 
-          if (ahora - timestamp < diezMinutosMs) {
-            setUsuarioActual(usuario);
-            // Actualizamos la marca de tiempo para extender 10 minutos más
-            localStorage.setItem('sesion_ugr', JSON.stringify({ usuario, timestamp: ahora }));
-          } else {
-            localStorage.removeItem('sesion_ugr');
-          }
-        } catch (e) {
+        if (ahora - timestamp < diezMinutosMs) {
+          setUsuarioActual(usuario);
+          localStorage.setItem('sesion_ugr', JSON.stringify({ usuario, timestamp: ahora }));
+        } else {
           localStorage.removeItem('sesion_ugr');
         }
+      } catch (e) {
+        localStorage.removeItem('sesion_ugr');
       }
-    };
-
-    recuperarSesion();
+    }
+    setIniciado(true);
   }, []);
 
   const iniciarSesionLocal = (usuario) => {
@@ -283,7 +281,18 @@ export default function Home() {
     }
   };
 
-  // Filtrado estricto: Tus tareas primero y compañeros abajo
+  if (!iniciado) {
+    return (
+      <main className="min-h-screen bg-[#0f141c] text-slate-200 flex items-center justify-center">
+        <div className="text-center font-medium text-slate-400">
+          <span className="text-3xl animate-spin block mb-2">⌛</span>
+          Iniciando portal UGR...
+        </div>
+      </main>
+    );
+  }
+
+  // Filtrado: Tu usuario primero, compañeros abajo
   const restoDeAlumnos = alumnos.filter((a) => a !== usuarioActual);
 
   return (
@@ -369,7 +378,7 @@ export default function Home() {
         </div>
       ) : (
         <div className="max-w-6xl mx-auto">
-          {/* BOTONES NAVEGACIÓN */}
+          {/* NAVEGACIÓN */}
           <div className="flex flex-wrap gap-3 mb-8">
             <button
               onClick={() => setPestana('alumnos')}
@@ -417,7 +426,7 @@ export default function Home() {
               {pestana === 'alumnos' && (
                 <div className="space-y-8">
                   
-                  {/* SECCIÓN 1: MIS TAREAS (TU USUARIO SIEMPRE ARRIBA) */}
+                  {/* SECCIÓN 1: TU USUARIO DESTACADO Y ABIERTO */}
                   <div className="bg-[#161c26] border-2 border-blue-500/80 rounded-2xl p-6 shadow-xl ring-1 ring-blue-500/20">
                     <div className="flex justify-between items-center mb-5 border-b border-slate-800 pb-3">
                       <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
@@ -496,7 +505,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* SECCIÓN 2: OTROS ALUMNOS (OCULTOS / DESPLEGABLES) */}
+                  {/* SECCIÓN 2: COMPAÑEROS COLAPSADOS POR DEFECTO */}
                   <div className="space-y-4 pt-2">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider px-1">
                       Compañeros de Cursada ({restoDeAlumnos.length})
@@ -514,7 +523,6 @@ export default function Home() {
                           key={alumno}
                           className="bg-[#161c26] border border-slate-800/80 rounded-2xl overflow-hidden transition-all"
                         >
-                          {/* BOTÓN BARRA COMPAÑERO */}
                           <button
                             onClick={() => toggleDesplegarAlumno(alumno)}
                             className="w-full p-4 sm:p-5 flex justify-between items-center text-left hover:bg-slate-800/40 transition-all cursor-pointer"
@@ -543,7 +551,6 @@ export default function Home() {
                             </div>
                           </button>
 
-                          {/* TAREAS DEL COMPAÑERO (SOLO SI SE DESPLIEGA) */}
                           {estaDesplegado && (
                             <div className="p-5 border-t border-slate-800/80 bg-[#0f141c]/60 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               {pendientesTotal === 0 ? (
