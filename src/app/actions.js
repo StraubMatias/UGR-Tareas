@@ -8,17 +8,14 @@ export async function cambiarPasswordAction(usuario, passActual, passNueva) {
       return { exito: false, mensaje: 'La nueva contraseña debe tener al menos 6 caracteres.' };
     }
 
-    // 1. Validamos que la contraseña actual sea la correcta
+    // Validar credenciales actuales
     const loginValido = await validarLoginAction(usuario, passActual);
     if (!loginValido.exito) {
       return { exito: false, mensaje: 'La contraseña actual es incorrecta.' };
     }
 
-    // 2. Aquí actualizás la contraseña en tu base de datos.
-    // Ejemplo si usás la BD que definiste para usuarios/alumnos:
-    // await db.collection('usuarios').updateOne({ usuario }, { $set: { password: passNueva } });
-    
-    // (Ajustá esta línea según cómo estés guardando los usuarios/alumnos en tu Server Action)
+    // AQUÍ ACTUALIZÁS EN TU BASE DE DATOS SEGÚN TU LÓGICA
+    // Ejemplo: await db.collection('usuarios').updateOne({ usuario }, { $set: { password: passNueva } });
 
     return { exito: true, mensaje: '¡Contraseña actualizada con éxito!' };
   } catch (error) {
