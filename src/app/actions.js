@@ -260,3 +260,78 @@ export async function eliminarTareaAction(id) {
     console.error('Error en eliminarTareaAction:', error);
   }
 }
+
+// --- PARCIALES Y NOTAS ---
+
+export async function obtenerParcialesAction() {
+  try {
+    const resParciales = await db.execute('SELECT * FROM parciales ORDER BY fecha ASC');
+    const resNotas = await db.execute('SELECT * FROM notas_parciales');
+
+    return {
+      parciales: resParciales.rows,
+      notas: resNotas.rows
+    };
+  } catch (error) {
+    console.error('Error al obtener parciales:', error);
+    return { parciales: [], notas: [] };
+  }
+}
+
+export async function crearParcialAction({ materiaId, nombre, fecha, detalles }) {
+  try {
+    const id = 'parcial_' + Date.now();
+    await db.execute({
+      sql: 'INSERT INTO parciales (id, materia_id, nombre, fecha, detalles) VALUES (?, ?, ?, ?, ?)',
+      args: [id, materiaId, nombre, fecha || 'Sin fecha', detalles || 'Sin observaciones']
+    });
+  } catch (error) {
+    console.error('Error en crearParcialAction:', error);
+  }
+}
+
+export async function eliminarParcialAction(id) {
+  try {
+    await db.execute({ sql: 'DELETE FROM parciales WHERE id = ?', args: [id] });
+    await db.execute({ sql: 'DELETE FROM notas_parciales WHERE parcial_id = ?', args: [id] });
+  } catch (error) {
+    console.error('Error en eliminarParcialAction:', error);
+  }
+}
+
+export async function guardarNotaParcialAction(parcialId, alumno, nota) {
+  try {
+    const notaLimpia = nota.trim();
+    
+    // Verificamos si ya existe nota cargada para este alumno en este parcial
+    const existe = await db.execute({
+      sql: 'SELECT id FROM notas_parciales WHERE parcial_id = ? AND alumno = ?',
+      args: [parcialId, alumno]
+    });
+
+    if (existe.rows.length > 0) {
+      if (notaLimpia === '') {
+        // Si borra el input, eliminamos la nota registrada
+        await db.execute({
+          sql: 'DELETE FROM notas_parciales WHERE parcial_id = ? AND alumno = ?',
+          args: [parcialId, alumno]
+        });
+      } else {
+        // Actualizamos la nota
+        await db.execute({
+          sql: 'UPDATE notas_parciales SET nota = ? WHERE parcial_id = ? AND alumno = ?',
+          args: [notaLimpia, parcialId, alumno]
+        });
+      }
+    } else if (notaLimpia !== '') {
+      // Insertamos nueva nota
+      const id = 'nota_' + Date.now();
+      await db.execute({
+        sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno, nota) VALUES (?, ?, ?, ?)',
+        args: [id, parcialId, alumno, notaLimpia]
+      });
+    }
+  } catch (error) {
+    console.error('Error en guardarNotaParcialAction:', error);
+  }
+}

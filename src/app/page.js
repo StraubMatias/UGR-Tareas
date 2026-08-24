@@ -15,7 +15,11 @@ import {
   crearTareaAction,
   editarTareaAction,
   eliminarTareaAction,
-  cambiarPasswordAction // Importamos la nueva función
+  cambiarPasswordAction,
+  obtenerParcialesAction,
+  crearParcialAction,
+  eliminarParcialAction,
+  guardarNotaParcialAction
 } from './actions';
 
 export default function Home() {
@@ -25,6 +29,11 @@ export default function Home() {
   const [pestana, setPestana] = useState('alumnos');
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
+
+  // Estado para Parciales y Notas
+  const [parciales, setParciales] = useState([]);
+  const [notas, setNotas] = useState([]);
+  const [notasInputs, setNotasInputs] = useState({});
 
   // Acordeón para compañeros
   const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
@@ -41,7 +50,7 @@ export default function Home() {
   const [newPassChange, setNewPassChange] = useState('');
   const [msgPassChange, setMsgPassChange] = useState({ tipo: '', texto: '' });
 
-  // Forms Admin
+  // Forms Admin (Tareas/Materias/Alumnos)
   const [nuevoAlumnoNombre, setNuevoAlumnoNombre] = useState('');
   const [nuevaMateriaNombre, setNuevaMateriaNombre] = useState('');
   const [materiaSel, setMateriaSel] = useState('');
@@ -49,6 +58,12 @@ export default function Home() {
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [detallesTarea, setDetallesTarea] = useState('');
+
+  // Form Admin (Parciales)
+  const [materiaParcialSel, setMateriaParcialSel] = useState('');
+  const [nombreParcial, setNombreParcial] = useState('');
+  const [fechaParcial, setFechaParcial] = useState('');
+  const [detallesParcial, setDetallesParcial] = useState('');
 
   // Modales edición
   const [tareaEnEdicion, setTareaEnEdicion] = useState(null);
@@ -58,7 +73,7 @@ export default function Home() {
   const esAdmin = usuarioActual === "Matute";
 
   useEffect(() => {
-    document.title = "UGR - Tareas a Realizar";
+    document.title = "UGR - Tareas y Parciales";
   }, []);
 
   // PERSISTENCIA DE SESIÓN
@@ -163,14 +178,29 @@ export default function Home() {
 
   const cargarBD = async () => {
     setCargando(true);
-    const [dataMaterias, dataAlumnos] = await Promise.all([
+    const [dataMaterias, dataAlumnos, dataParciales] = await Promise.all([
       obtenerDatos(),
-      obtenerAlumnosAction()
+      obtenerAlumnosAction(),
+      obtenerParcialesAction()
     ]);
+    
     setMaterias(dataMaterias || []);
     setAlumnos(dataAlumnos || []);
-    if (dataMaterias && dataMaterias.length > 0 && !materiaSel) {
-      setMateriaSel(dataMaterias[0].id);
+    setParciales(dataParciales.parciales || []);
+    setNotas(dataParciales.notas || []);
+
+    // Inicializar inputs de notas locales
+    const mapaNotas = {};
+    if (dataParciales.notas) {
+      dataParciales.notas.forEach((n) => {
+        mapaNotas[`${n.parcial_id}_${n.alumno}`] = n.nota;
+      });
+    }
+    setNotasInputs(mapaNotas);
+
+    if (dataMaterias && dataMaterias.length > 0) {
+      if (!materiaSel) setMateriaSel(dataMaterias[0].id);
+      if (!materiaParcialSel) setMateriaParcialSel(dataMaterias[0].id);
     }
     setCargando(false);
   };
@@ -306,6 +336,43 @@ export default function Home() {
     }
   };
 
+  // HANDLERS PARCIALES Y NOTAS
+  const handleCrearParcial = async (e) => {
+    e.preventDefault();
+    if (!nombreParcial.trim() || !materiaParcialSel) return;
+    await crearParcialAction({
+      materiaId: materiaParcialSel,
+      nombre: nombreParcial,
+      fecha: fechaParcial,
+      detalles: detallesParcial
+    });
+    setNombreParcial('');
+    setFechaParcial('');
+    setDetallesParcial('');
+    await cargarBD();
+    setPestana('parciales');
+  };
+
+  const handleEliminarParcial = async (id) => {
+    if (confirm('¿Seguro que querés borrar este parcial y sus notas cargadas?')) {
+      await eliminarParcialAction(id);
+      await cargarBD();
+    }
+  };
+
+  const handleNotaChangeLocal = (parcialId, alumno, valor) => {
+    setNotasInputs((prev) => ({
+      ...prev,
+      [`${parcialId}_${alumno}`]: valor
+    }));
+  };
+
+  const handleGuardarNotaOnBlur = async (parcialId, alumno) => {
+    const clave = `${parcialId}_${alumno}`;
+    const valor = notasInputs[clave] || '';
+    await guardarNotaParcialAction(parcialId, alumno, valor);
+  };
+
   if (!iniciado) {
     return (
       <main className="min-h-screen bg-[#0f141c] text-slate-200 flex items-center justify-center">
@@ -326,7 +393,7 @@ export default function Home() {
           <div className="flex items-center gap-3 mb-1">
             <span className="text-2xl">🎓</span>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              UGR - Tareas a Realizar
+              UGR - Tareas y Parciales
             </h1>
           </div>
           <p className="text-sm sm:text-base text-slate-400 flex items-center gap-2 mt-1">
@@ -447,6 +514,18 @@ export default function Home() {
               <span>📚</span> Materias y Consignas
             </button>
 
+            {/* NUEVO BOTÓN PARCIALES */}
+            <button
+              onClick={() => setPestana('parciales')}
+              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
+                pestana === 'parciales'
+                  ? 'bg-purple-600/20 text-purple-300 border-purple-500/40 shadow-sm'
+                  : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>📋</span> Parciales y Notas
+            </button>
+
             {esAdmin && (
               <button
                 onClick={() => setPestana('admin')}
@@ -464,7 +543,7 @@ export default function Home() {
           {cargando ? (
             <div className="text-center py-20 text-slate-400 text-sm font-medium flex flex-col items-center gap-3">
               <span className="text-3xl animate-spin">⌛</span>
-              Cargando materias y pendientes...
+              Cargando datos de la cursada...
             </div>
           ) : (
             <>
@@ -776,9 +855,105 @@ export default function Home() {
                 </div>
               )}
 
-              {/* VISTA 3: ADMIN PANEL */}
+              {/* VISTA NUEVA: PARCIALES Y NOTAS */}
+              {pestana === 'parciales' && (
+                <div className="space-y-6">
+                  {parciales.length === 0 ? (
+                    <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
+                      Aún no se han programado parciales.
+                    </div>
+                  ) : (
+                    parciales.map((p) => {
+                      const materiaAsoc = materias.find((m) => m.id === p.materia_id);
+                      const nombreMateria = materiaAsoc ? materiaAsoc.nombre : 'MATERIA';
+
+                      return (
+                        <div key={p.id} className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 border-b border-slate-800 pb-3 gap-3">
+                            <div>
+                              <span className="text-xs font-extrabold text-purple-400 uppercase tracking-wider block mb-1">
+                                📘 {nombreMateria}
+                              </span>
+                              <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+                                <span>📋</span> {p.nombre}
+                              </h2>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs sm:text-sm bg-purple-500/10 text-purple-300 border border-purple-500/30 px-3.5 py-1.5 rounded-xl font-semibold">
+                                📅 {formatearFechaDDMMAAAA(p.fecha)}
+                              </span>
+                              {esAdmin && (
+                                <button
+                                  onClick={() => handleEliminarParcial(p.id)}
+                                  className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
+                                >
+                                  Borrar
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {p.detalles && (
+                            <p className="text-sm text-slate-300 mb-6 bg-[#0f141c] p-3.5 rounded-xl border border-slate-800/80">
+                              ℹ️ {p.detalles}
+                            </p>
+                          )}
+
+                          {/* SECCIÓN CARGA DE NOTAS */}
+                          <div className="border-t border-slate-800/80 pt-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
+                              Notas por Alumno (Modificá la tuya)
+                            </h3>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                              {alumnos.map((alum) => {
+                                const esMiFila = alum === usuarioActual;
+                                const claveInput = `${p.id}_${alum}`;
+                                const valorNota = notasInputs[claveInput] || '';
+
+                                return (
+                                  <div
+                                    key={alum}
+                                    className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${
+                                      esMiFila
+                                        ? 'bg-purple-950/20 border-purple-500/40'
+                                        : 'bg-[#0f141c] border-slate-800/80'
+                                    }`}
+                                  >
+                                    <span className="text-sm font-semibold text-slate-200 flex items-center gap-2 truncate">
+                                      <span>👤</span> {alum}
+                                    </span>
+
+                                    <input
+                                      type="text"
+                                      placeholder="-"
+                                      disabled={!esMiFila && !esAdmin}
+                                      value={valorNota}
+                                      onChange={(e) => handleNotaChangeLocal(p.id, alum, e.target.value)}
+                                      onBlur={() => handleGuardarNotaOnBlur(p.id, alum)}
+                                      className={`w-16 text-center font-bold text-sm py-1 px-2 rounded-lg border focus:outline-none transition-all ${
+                                        esMiFila || esAdmin
+                                          ? 'bg-[#161c26] text-purple-300 border-purple-500/50 focus:border-purple-400'
+                                          : 'bg-transparent text-slate-400 border-transparent cursor-not-allowed'
+                                      }`}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {/* VISTA 4: ADMIN PANEL */}
               {pestana === 'admin' && esAdmin && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {/* ALUMNOS */}
                   <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm h-fit">
                     <h2 className="text-base font-bold text-white mb-4 pb-2 border-b border-slate-800 flex items-center gap-2">
                       <span>👤</span> Agregar Alumnos
@@ -826,6 +1001,7 @@ export default function Home() {
                     </div>
                   </div>
 
+                  {/* MATERIAS */}
                   <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm h-fit">
                     <h2 className="text-base font-bold text-white mb-4 pb-2 border-b border-slate-800 flex items-center gap-2">
                       <span>📚</span> Nueva Materia
@@ -848,9 +1024,10 @@ export default function Home() {
                     </form>
                   </div>
 
+                  {/* TAREAS */}
                   <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
                     <h2 className="text-base font-bold text-white mb-4 pb-2 border-b border-slate-800 flex items-center gap-2">
-                      <span>➕</span> Nueva Consigna
+                      <span>➕</span> Nueva Tarea
                     </h2>
                     <form onSubmit={handleCrearTarea} className="space-y-4">
                       <div>
@@ -912,6 +1089,64 @@ export default function Home() {
 
                       <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
                         Publicar Tarea
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* NUEVO: CARGAR PARCIAL */}
+                  <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
+                    <h2 className="text-base font-bold text-white mb-4 pb-2 border-b border-slate-800 flex items-center gap-2">
+                      <span>📋</span> Nuevo Parcial
+                    </h2>
+                    <form onSubmit={handleCrearParcial} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Materia</label>
+                        <select
+                          value={materiaParcialSel}
+                          onChange={(e) => setMateriaParcialSel(e.target.value)}
+                          className="w-full bg-[#0f141c] border border-slate-800 focus:border-purple-500 rounded-xl p-3 text-sm text-white focus:outline-none font-medium cursor-pointer"
+                        >
+                          {materias.map((m) => (
+                            <option key={m.id} value={m.id}>{m.nombre}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Título / Instancia</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ej: Primer Parcial"
+                          value={nombreParcial}
+                          onChange={(e) => setNombreParcial(e.target.value)}
+                          className="w-full bg-[#0f141c] border border-slate-800 focus:border-purple-500 rounded-xl p-3 text-sm text-white focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Fecha del Examen</label>
+                        <input
+                          type="date"
+                          value={fechaParcial}
+                          onChange={(e) => setFechaParcial(e.target.value)}
+                          className="w-full bg-[#0f141c] border border-slate-800 focus:border-purple-500 rounded-xl p-2.5 text-xs text-white focus:outline-none cursor-pointer"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Temas / Aclaraciones</label>
+                        <textarea
+                          rows="3"
+                          placeholder="Unidades que entran, aula, etc..."
+                          value={detallesParcial}
+                          onChange={(e) => setDetallesParcial(e.target.value)}
+                          className="w-full bg-[#0f141c] border border-slate-800 focus:border-purple-500 rounded-xl p-3 text-sm text-white focus:outline-none"
+                        ></textarea>
+                      </div>
+
+                      <button type="submit" className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
+                        Publicar Parcial
                       </button>
                     </form>
                   </div>
