@@ -413,7 +413,7 @@ export default function Home() {
                 </strong>
               </>
             ) : (
-              'Portal de entregas y cursada universitaria'
+              ''
             )}
           </p>
         </div>
@@ -446,8 +446,8 @@ export default function Home() {
             <div className="inline-block p-3 bg-slate-800/80 rounded-2xl mb-2 text-3xl">
               🔑
             </div>
-            <h2 className="text-xl font-bold text-white">Ingreso al Portal UGR</h2>
-            <p className="text-sm text-slate-400 mt-1">Identificate para ver tus pendientes</p>
+            <h2 className="text-xl font-bold text-white">Iniciar Sesión</h2>
+            <p className="text-sm text-slate-400 mt-1"></p>
           </div>
           
           <form onSubmit={handleLogin} className="space-y-4">
