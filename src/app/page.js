@@ -20,7 +20,10 @@ import {
   crearParcialAction,
   editarParcialAction,
   eliminarParcialAction,
-  guardarNotaParcialAction
+  guardarNotaParcialAction,
+  obtenerHorariosAction,
+  crearHorarioAction,
+  eliminarHorarioAction
 } from './actions';
 
 export default function Home() {
@@ -36,6 +39,7 @@ export default function Home() {
   const [notas, setNotas] = useState([]);
   const [notasInputs, setNotasInputs] = useState({});
   const [notasDesplegadas, setNotasDesplegadas] = useState({});
+  const [horarios, setHorarios] = useState([]);
 
   // Acordeón para compañeros
   const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
@@ -68,6 +72,11 @@ export default function Home() {
   const [fechaParcial, setFechaParcial] = useState('');
   const [detallesParcial, setDetallesParcial] = useState('');
   const [parcialEnEdicion, setParcialEnEdicion] = useState(null);
+  const [materiaHorarioSel, setMateriaHorarioSel] = useState('');
+  const [diaHorario, setDiaHorario] = useState('1');
+  const [horaInicioHorario, setHoraInicioHorario] = useState('');
+  const [horaFinHorario, setHoraFinHorario] = useState('');
+  const [aulaHorario, setAulaHorario] = useState('');
 
   // Modales edición
   const [tareaEnEdicion, setTareaEnEdicion] = useState(null);
@@ -213,16 +222,18 @@ export default function Home() {
 
   const cargarBD = async () => {
     setCargando(true);
-    const [dataMaterias, dataAlumnos, dataParciales] = await Promise.all([
+    const [dataMaterias, dataAlumnos, dataParciales, dataHorarios] = await Promise.all([
       obtenerDatos(),
       obtenerAlumnosAction(),
-      obtenerParcialesAction()
+      obtenerParcialesAction(),
+      obtenerHorariosAction()
     ]);
     
     setMaterias(dataMaterias || []);
     setAlumnos(dataAlumnos || []);
     setParciales(dataParciales.parciales || []);
     setNotas(dataParciales.notas || []);
+    setHorarios(dataHorarios || []);
 
     // Inicializar inputs de notas locales
     const mapaNotas = {};
@@ -236,6 +247,7 @@ export default function Home() {
     if (dataMaterias && dataMaterias.length > 0) {
       if (!materiaSel) setMateriaSel(dataMaterias[0].id);
       if (!materiaParcialSel) setMateriaParcialSel(dataMaterias[0].id);
+      if (!materiaHorarioSel) setMateriaHorarioSel(dataMaterias[0].id);
     }
     setCargando(false);
   };
@@ -376,6 +388,44 @@ export default function Home() {
       await eliminarTareaAction(id);
       await cargarBD();
     }
+  };
+
+  const handleCrearHorario = async (e) => {
+    e.preventDefault();
+    if (!materiaHorarioSel || !horaInicioHorario || !horaFinHorario) return;
+    if (horaInicioHorario >= horaFinHorario) {
+      alert('La hora de inicio debe ser anterior a la hora de finalización.');
+      return;
+    }
+
+    const resultado = await crearHorarioAction({
+      materiaId: materiaHorarioSel,
+      dia: diaHorario,
+      horaInicio: horaInicioHorario,
+      horaFin: horaFinHorario,
+      aula: aulaHorario,
+      usuario: usuarioActual
+    });
+    if (!resultado?.exito) {
+      alert(resultado?.mensaje || 'No se pudo guardar el horario.');
+      return;
+    }
+
+    setHoraInicioHorario('');
+    setHoraFinHorario('');
+    setAulaHorario('');
+    await cargarBD();
+    setPestana('horarios');
+  };
+
+  const handleEliminarHorario = async (id) => {
+    if (!confirm('¿Seguro que querés borrar este horario?')) return;
+    const resultado = await eliminarHorarioAction(id, usuarioActual);
+    if (!resultado?.exito) {
+      alert(resultado?.mensaje || 'No se pudo borrar el horario.');
+      return;
+    }
+    await cargarBD();
   };
 
   // HANDLERS PARCIALES Y NOTAS
@@ -673,6 +723,17 @@ export default function Home() {
               }`}
             >
               <span>🏆</span> Ranking
+            </button>
+
+            <button
+              onClick={() => setPestana('horarios')}
+              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
+                pestana === 'horarios'
+                  ? 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40 shadow-sm'
+                  : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>🗓️</span> Horarios de cursada
             </button>
 
             {esAdmin && (
@@ -1279,6 +1340,65 @@ export default function Home() {
                 </div>
               )}
 
+              {pestana === 'horarios' && (
+                <div className="space-y-6">
+                  {horarios.length === 0 ? (
+                    <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
+                      Todavía no hay horarios de cursada cargados.
+                    </div>
+                  ) : (
+                    ['1', '2', '3', '4', '5', '6', '7'].map((dia) => {
+                      const horariosDelDia = horarios
+                        .filter((horario) => String(horario.dia) === dia)
+                        .sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+                      if (horariosDelDia.length === 0) return null;
+                      const nombresDias = {
+                        '1': 'Lunes',
+                        '2': 'Martes',
+                        '3': 'Miércoles',
+                        '4': 'Jueves',
+                        '5': 'Viernes',
+                        '6': 'Sábado',
+                        '7': 'Domingo'
+                      };
+
+                      return (
+                        <section key={dia} className="space-y-3">
+                          <h2 className="text-lg sm:text-xl font-extrabold text-white border-b border-slate-800 pb-2">
+                            {nombresDias[dia]}
+                          </h2>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {horariosDelDia.map((horario) => {
+                              const materia = materias.find((item) => item.id === horario.materia_id);
+                              return (
+                                <div key={horario.id} className="bg-[#161c26] border border-slate-800 rounded-xl p-4 flex items-center gap-4">
+                                  <div className="text-cyan-300 font-bold text-sm whitespace-nowrap">
+                                    {horario.hora_inicio} - {horario.hora_fin}
+                                  </div>
+                                  <div className="border-l border-slate-700 pl-4 min-w-0">
+                                    <p className="font-bold text-white truncate">{materia?.nombre || 'Materia no disponible'}</p>
+                                    {horario.aula && <p className="text-xs text-slate-400 mt-1">Aula: {horario.aula}</p>}
+                                  </div>
+                                  {esAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEliminarHorario(horario.id)}
+                                      className="ml-auto text-xs text-red-400 hover:text-red-300 font-semibold cursor-pointer"
+                                    >
+                                      Borrar
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </section>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
               {/* VISTA 4: ADMIN PANEL */}
               {pestana === 'admin' && esAdmin && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1491,6 +1611,78 @@ export default function Home() {
                           Cancelar edición
                         </button>
                       )}
+                    </form>
+                  </div>
+
+                  {/* HORARIOS */}
+                  <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
+                    <h2 className="text-base font-bold text-white mb-4 pb-2 border-b border-slate-800 flex items-center gap-2">
+                      <span>🗓️</span> Nuevo Horario
+                    </h2>
+                    <form onSubmit={handleCrearHorario} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Materia</label>
+                        <select
+                          value={materiaHorarioSel}
+                          onChange={(e) => setMateriaHorarioSel(e.target.value)}
+                          className="w-full bg-[#0f141c] border border-slate-800 focus:border-cyan-500 rounded-xl p-3 text-sm text-white focus:outline-none font-medium cursor-pointer"
+                        >
+                          {materias.map((m) => (
+                            <option key={m.id} value={m.id}>{m.nombre}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Día</label>
+                        <select
+                          value={diaHorario}
+                          onChange={(e) => setDiaHorario(e.target.value)}
+                          className="w-full bg-[#0f141c] border border-slate-800 focus:border-cyan-500 rounded-xl p-3 text-sm text-white focus:outline-none cursor-pointer"
+                        >
+                          <option value="1">Lunes</option>
+                          <option value="2">Martes</option>
+                          <option value="3">Miércoles</option>
+                          <option value="4">Jueves</option>
+                          <option value="5">Viernes</option>
+                          <option value="6">Sábado</option>
+                          <option value="7">Domingo</option>
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">Desde</label>
+                          <input
+                            type="time"
+                            required
+                            value={horaInicioHorario}
+                            onChange={(e) => setHoraInicioHorario(e.target.value)}
+                            className="w-full bg-[#0f141c] border border-slate-800 focus:border-cyan-500 rounded-xl p-2.5 text-xs text-white focus:outline-none cursor-pointer"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">Hasta</label>
+                          <input
+                            type="time"
+                            required
+                            value={horaFinHorario}
+                            onChange={(e) => setHoraFinHorario(e.target.value)}
+                            className="w-full bg-[#0f141c] border border-slate-800 focus:border-cyan-500 rounded-xl p-2.5 text-xs text-white focus:outline-none cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Aula (opcional)</label>
+                        <input
+                          type="text"
+                          placeholder="Ej: Aula 12"
+                          value={aulaHorario}
+                          onChange={(e) => setAulaHorario(e.target.value)}
+                          className="w-full bg-[#0f141c] border border-slate-800 focus:border-cyan-500 rounded-xl p-3 text-sm text-white focus:outline-none"
+                        />
+                      </div>
+                      <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
+                        Publicar Horario
+                      </button>
                     </form>
                   </div>
                 </div>

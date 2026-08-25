@@ -288,6 +288,50 @@ export async function eliminarTareaAction(id) {
   }
 }
 
+// --- HORARIOS DE CURSADA ---
+
+export async function obtenerHorariosAction() {
+  try {
+    const res = await db.execute('SELECT * FROM horarios ORDER BY dia ASC, hora_inicio ASC');
+    return res.rows;
+  } catch (error) {
+    console.error('Error al obtener horarios:', error);
+    return [];
+  }
+}
+
+export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, aula, usuario }) {
+  try {
+    if (!esAdministrador(usuario)) {
+      return { exito: false, mensaje: 'Solo el administrador puede crear horarios.' };
+    }
+
+    const id = 'horario_' + Date.now();
+    await db.execute({
+      sql: 'INSERT INTO horarios (id, materia_id, dia, hora_inicio, hora_fin, aula) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [id, materiaId, dia, horaInicio, horaFin, aula?.trim() || '']
+    });
+    return { exito: true };
+  } catch (error) {
+    console.error('Error al crear horario:', error);
+    return { exito: false, mensaje: 'No se pudo crear el horario.' };
+  }
+}
+
+export async function eliminarHorarioAction(id, usuario) {
+  try {
+    if (!esAdministrador(usuario)) {
+      return { exito: false, mensaje: 'Solo el administrador puede borrar horarios.' };
+    }
+
+    await db.execute({ sql: 'DELETE FROM horarios WHERE id = ?', args: [id] });
+    return { exito: true };
+  } catch (error) {
+    console.error('Error al eliminar horario:', error);
+    return { exito: false, mensaje: 'No se pudo borrar el horario.' };
+  }
+}
+
 // --- PARCIALES Y NOTAS ---
 
 export async function obtenerParcialesAction() {
