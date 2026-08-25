@@ -1,3 +1,15 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import {
+  validarLoginAction,
+  obtenerDatos,
+  obtenerAlumnosAction,
+  crearAlumnoAction,
+  editarAlumnoAction,
+  eliminarAlumnoAction,
+  toggleTareaAction,
+  crearMateriaAction,
   renombrarMateriaAction,
   eliminarMateriaAction,
   crearTareaAction,
