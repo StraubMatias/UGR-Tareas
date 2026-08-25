@@ -35,6 +35,7 @@ export default function Home() {
   const [parciales, setParciales] = useState([]);
   const [notas, setNotas] = useState([]);
   const [notasInputs, setNotasInputs] = useState({});
+  const [notasDesplegadas, setNotasDesplegadas] = useState({});
 
   // Acordeón para compañeros
   const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
@@ -418,6 +419,13 @@ export default function Home() {
     hoy.setHours(0, 0, 0, 0);
     const fechaParcial = new Date(`${fecha}T00:00:00`);
     return !Number.isNaN(fechaParcial.getTime()) && fechaParcial <= hoy;
+  };
+
+  const toggleNotasParcial = (parcialId) => {
+    setNotasDesplegadas((prev) => ({
+      ...prev,
+      [parcialId]: !prev[parcialId]
+    }));
   };
 
   if (!iniciado) {
@@ -983,52 +991,88 @@ export default function Home() {
 
                           {/* SECCIÓN CARGA DE NOTAS */}
                           <div className="border-t border-slate-800/80 pt-4">
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
-                              Notas por Alumno
-                            </h3>
-
-                            {!parcialDisponible && (
-                              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4">
-                                Las notas se habilitan a partir de la fecha del parcial.
-                              </p>
-                            )}
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                              {alumnos.map((alum) => {
-                                const esMiFila = alum === usuarioActual;
-                                const claveInput = `${p.id}_${alum}`;
-                                const valorNota = notasInputs[claveInput] || '';
-
-                                return (
-                                  <div
-                                    key={alum}
-                                    className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${
-                                      esMiFila
-                                        ? 'bg-purple-950/20 border-purple-500/40'
-                                        : 'bg-[#0f141c] border-slate-800/80'
-                                    }`}
-                                  >
-                                    <span className="text-sm font-semibold text-slate-200 flex items-center gap-2 truncate">
-                                      <span>👤</span> {alum}
-                                    </span>
-
-                                    <input
-                                      type="text"
-                                      placeholder="-"
-                                      disabled={!esAdmin || !parcialDisponible}
-                                      value={valorNota}
-                                      onChange={(e) => handleNotaChangeLocal(p.id, alum, e.target.value)}
-                                      onBlur={() => handleGuardarNotaOnBlur(p.id, alum)}
-                                      className={`w-16 text-center font-bold text-sm py-1 px-2 rounded-lg border focus:outline-none transition-all ${
-                                        esAdmin && parcialDisponible
-                                          ? 'bg-[#161c26] text-purple-300 border-purple-500/50 focus:border-purple-400'
-                                          : 'bg-transparent text-slate-400 border-transparent cursor-not-allowed'
-                                      }`}
-                                    />
-                                  </div>
-                                );
-                              })}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                              <div>
+                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                  {esAdmin ? 'Cargar notas' : 'Tu nota'}
+                                </h3>
+                                {!parcialDisponible && (
+                                  <p className="text-xs text-amber-300 mt-1">
+                                    La carga se habilita a partir de la fecha del parcial.
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleNotasParcial(p.id)}
+                                className="text-xs text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-lg font-semibold cursor-pointer"
+                              >
+                                {notasDesplegadas[p.id]
+                                  ? 'Ocultar notas'
+                                  : esAdmin && parcialDisponible
+                                    ? 'Cargar notas'
+                                    : 'Ver notas'}
+                              </button>
                             </div>
+
+                            {usuarioActual && (() => {
+                              const claveMiNota = `${p.id}_${usuarioActual}`;
+                              const valorMiNota = notasInputs[claveMiNota] || '';
+
+                              return (
+                                <div className="bg-purple-950/20 border border-purple-500/40 p-3 rounded-xl flex items-center justify-between gap-3">
+                                  <span className="text-sm font-semibold text-slate-200 flex items-center gap-2 truncate">
+                                    <span>👤</span> Tu nota ({usuarioActual})
+                                  </span>
+                                  <input
+                                    type="text"
+                                    placeholder="-"
+                                    disabled={!esAdmin || !parcialDisponible}
+                                    value={valorMiNota}
+                                    onChange={(e) => handleNotaChangeLocal(p.id, usuarioActual, e.target.value)}
+                                    onBlur={() => handleGuardarNotaOnBlur(p.id, usuarioActual)}
+                                    className={`w-16 text-center font-bold text-sm py-1 px-2 rounded-lg border focus:outline-none transition-all ${
+                                      esAdmin && parcialDisponible
+                                        ? 'bg-[#161c26] text-purple-300 border-purple-500/50 focus:border-purple-400'
+                                        : 'bg-transparent text-slate-400 border-transparent cursor-not-allowed'
+                                    }`}
+                                  />
+                                </div>
+                              );
+                            })()}
+
+                            {notasDesplegadas[p.id] && (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
+                                {alumnos.filter((alum) => alum !== usuarioActual).map((alum) => {
+                                  const claveInput = `${p.id}_${alum}`;
+                                  const valorNota = notasInputs[claveInput] || '';
+
+                                  return (
+                                    <div
+                                      key={alum}
+                                      className="p-3 rounded-xl border flex items-center justify-between gap-3 bg-[#0f141c] border-slate-800/80"
+                                    >
+                                      <span className="text-sm font-semibold text-slate-200 flex items-center gap-2 truncate">
+                                        <span>👤</span> {alum}
+                                      </span>
+                                      <input
+                                        type="text"
+                                        placeholder="-"
+                                        disabled={!esAdmin || !parcialDisponible}
+                                        value={valorNota}
+                                        onChange={(e) => handleNotaChangeLocal(p.id, alum, e.target.value)}
+                                        onBlur={() => handleGuardarNotaOnBlur(p.id, alum)}
+                                        className={`w-16 text-center font-bold text-sm py-1 px-2 rounded-lg border focus:outline-none transition-all ${
+                                          esAdmin && parcialDisponible
+                                            ? 'bg-[#161c26] text-purple-300 border-purple-500/50 focus:border-purple-400'
+                                            : 'bg-transparent text-slate-400 border-transparent cursor-not-allowed'
+                                        }`}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
