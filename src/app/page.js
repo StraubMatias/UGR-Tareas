@@ -126,6 +126,35 @@ export default function Home() {
     return fechaStr;
   };
 
+  const obtenerFechaParcialEnMs = (fechaStr) => {
+    if (!fechaStr || fechaStr === 'Sin fecha') return null;
+    const partes = fechaStr.split('-').map(Number);
+    if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
+
+    const [year, month, day] = partes;
+    const fecha = new Date(year, month - 1, day);
+    return Number.isNaN(fecha.getTime()) ? null : fecha.getTime();
+  };
+
+  const ordenarParciales = (listaParciales) => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const hoyEnMs = hoy.getTime();
+
+    return [...listaParciales].sort((a, b) => {
+      const fechaA = obtenerFechaParcialEnMs(a.fecha);
+      const fechaB = obtenerFechaParcialEnMs(b.fecha);
+
+      if (fechaA === null) return fechaB === null ? a.nombre.localeCompare(b.nombre) : 1;
+      if (fechaB === null) return -1;
+
+      const futuroA = fechaA >= hoyEnMs;
+      const futuroB = fechaB >= hoyEnMs;
+      if (futuroA !== futuroB) return futuroA ? -1 : 1;
+      return futuroA ? fechaA - fechaB : fechaB - fechaA;
+    });
+  };
+
   const ordenarTareas = (listaTareas) => {
     return [...listaTareas].sort((a, b) => {
       const tieneFinA = a.fin && a.fin !== 'Sin fecha';
@@ -440,6 +469,30 @@ export default function Home() {
   }
 
   const restoDeAlumnos = alumnos.filter((a) => a !== usuarioActual);
+  const parcialesOrdenados = ordenarParciales(parciales);
+  const proximoParcial = parcialesOrdenados.find(
+    (parcial) => obtenerFechaParcialEnMs(parcial.fecha) >= new Date().setHours(0, 0, 0, 0)
+  );
+  const materiaProximoParcial = proximoParcial
+    ? materias.find((materia) => materia.id === proximoParcial.materia_id)
+    : null;
+  const parcialesAgrupados = parcialesOrdenados.reduce((grupos, parcial) => {
+    const materia = materias.find((item) => item.id === parcial.materia_id);
+    const claveMateria = parcial.materia_id || 'sin-materia';
+    const grupoExistente = grupos.find((grupo) => grupo.id === claveMateria);
+
+    if (grupoExistente) {
+      grupoExistente.parciales.push(parcial);
+    } else {
+      grupos.push({
+        id: claveMateria,
+        nombre: materia ? materia.nombre : 'MATERIA NO DISPONIBLE',
+        parciales: [parcial]
+      });
+    }
+
+    return grupos;
+  }, []);
 
   return (
     <main className="min-h-screen bg-[#0f141c] text-slate-200 p-4 sm:p-6 md:p-10 font-sans selection:bg-blue-500 selection:text-white">
@@ -626,6 +679,16 @@ export default function Home() {
                       })()}
                     </div>
 
+                    {proximoParcial && (
+                      <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 bg-purple-950/20 border border-purple-500/30 rounded-xl px-4 py-3">
+                        <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">Próximo examen</span>
+                        <span className="text-sm font-semibold text-white">{proximoParcial.nombre}</span>
+                        <span className="text-xs text-purple-200">
+                          {materiaProximoParcial?.nombre || 'Materia'} · {formatearFechaDDMMAAAA(proximoParcial.fecha)}
+                        </span>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {(() => {
                         const misMateriasConPendientes = materias.filter((m) =>
@@ -707,7 +770,14 @@ export default function Home() {
                           >
                             <div className="flex items-center gap-3">
                               <span className="text-lg">👤</span>
-                              <span className="text-base font-bold text-white">{alumno}</span>
+                              <div className="flex flex-col items-start gap-1 min-w-0">
+                                <span className="text-base font-bold text-white">{alumno}</span>
+                                {proximoParcial && (
+                                  <span className="text-[11px] text-purple-300 truncate max-w-[220px]">
+                                    Próximo: {proximoParcial.nombre} · {formatearFechaDDMMAAAA(proximoParcial.fecha)}
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-xs text-slate-500 font-normal hidden sm:inline">
                                 {estaDesplegado ? '(Tocar para ocultar)' : '(Tocar para ver detalle)'}
                               </span>
@@ -943,18 +1013,21 @@ export default function Home() {
                       Aún no se han programado parciales.
                     </div>
                   ) : (
-                    parciales.map((p) => {
-                      const materiaAsoc = materias.find((m) => m.id === p.materia_id);
-                      const nombreMateria = materiaAsoc ? materiaAsoc.nombre : 'MATERIA';
+                    parcialesAgrupados.map((grupo) => (
+                      <section key={grupo.id} className="space-y-4">
+                        <div className="flex items-center gap-3 border-b border-slate-800 pb-2">
+                          <span className="text-lg">📘</span>
+                          <h2 className="text-lg sm:text-xl font-extrabold text-white">{grupo.nombre}</h2>
+                        </div>
+
+                        <div className="space-y-4">
+                          {grupo.parciales.map((p) => {
                       const parcialDisponible = parcialEstaHabilitado(p.fecha);
 
                       return (
                         <div key={p.id} className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 border-b border-slate-800 pb-3 gap-3">
                             <div>
-                              <span className="text-xs font-extrabold text-purple-400 uppercase tracking-wider block mb-1">
-                                📘 {nombreMateria}
-                              </span>
                               <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
                                 <span>📋</span> {p.nombre}
                               </h2>
@@ -1076,7 +1149,10 @@ export default function Home() {
                           </div>
                         </div>
                       );
-                    })
+                          })}
+                        </div>
+                      </section>
+                    ))
                   )}
                 </div>
               )}
