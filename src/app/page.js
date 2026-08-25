@@ -1,15 +1,3 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import {
-  validarLoginAction,
-  obtenerDatos,
-  obtenerAlumnosAction,
-  crearAlumnoAction,
-  editarAlumnoAction,
-  eliminarAlumnoAction,
-  toggleTareaAction,
-  crearMateriaAction,
   renombrarMateriaAction,
   eliminarMateriaAction,
   crearTareaAction,
@@ -609,6 +597,14 @@ export default function Home() {
             >
               🔑 Cambiar Clave
             </button>
+            {esAdmin && (
+              <button
+                onClick={() => setPestana('admin')}
+                className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+              >
+                ⚙️ Panel de Carga
+              </button>
+            )}
             <button
               onClick={cerrarSesionLocal}
               className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer"
@@ -1341,60 +1337,69 @@ export default function Home() {
               )}
 
               {pestana === 'horarios' && (
-                <div className="space-y-6">
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-800 pb-4">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">Semana de cursada</p>
+                      <h2 className="mt-1 text-2xl font-extrabold text-white">Horarios</h2>
+                    </div>
+                    <p className="text-xs text-slate-500">{horarios.length} {horarios.length === 1 ? 'clase cargada' : 'clases cargadas'}</p>
+                  </div>
                   {horarios.length === 0 ? (
                     <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
                       Todavía no hay horarios de cursada cargados.
                     </div>
                   ) : (
-                    ['1', '2', '3', '4', '5', '6', '7'].map((dia) => {
-                      const horariosDelDia = horarios
-                        .filter((horario) => String(horario.dia) === dia)
-                        .sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
-                      if (horariosDelDia.length === 0) return null;
-                      const nombresDias = {
-                        '1': 'Lunes',
-                        '2': 'Martes',
-                        '3': 'Miércoles',
-                        '4': 'Jueves',
-                        '5': 'Viernes',
-                        '6': 'Sábado',
-                        '7': 'Domingo'
-                      };
+                    <div className="schedule-scroll rounded-2xl border border-slate-800 bg-[#111821] p-3 sm:p-4">
+                      <div className="grid min-w-[980px] grid-cols-7 gap-3">
+                        {[
+                          ['1', 'Lun', 'text-cyan-300', 'bg-cyan-400'],
+                          ['2', 'Mar', 'text-blue-300', 'bg-blue-400'],
+                          ['3', 'Mié', 'text-violet-300', 'bg-violet-400'],
+                          ['4', 'Jue', 'text-fuchsia-300', 'bg-fuchsia-400'],
+                          ['5', 'Vie', 'text-amber-300', 'bg-amber-400'],
+                          ['6', 'Sáb', 'text-emerald-300', 'bg-emerald-400'],
+                          ['7', 'Dom', 'text-rose-300', 'bg-rose-400']
+                        ].map(([dia, nombreDia, colorTexto, colorBarra]) => {
+                          const horariosDelDia = horarios
+                            .filter((horario) => String(horario.dia) === dia)
+                            .sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
 
-                      return (
-                        <section key={dia} className="space-y-3">
-                          <h2 className="text-lg sm:text-xl font-extrabold text-white border-b border-slate-800 pb-2">
-                            {nombresDias[dia]}
-                          </h2>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {horariosDelDia.map((horario) => {
-                              const materia = materias.find((item) => item.id === horario.materia_id);
-                              return (
-                                <div key={horario.id} className="bg-[#161c26] border border-slate-800 rounded-xl p-4 flex items-center gap-4">
-                                  <div className="text-cyan-300 font-bold text-sm whitespace-nowrap">
-                                    {horario.hora_inicio} - {horario.hora_fin}
-                                  </div>
-                                  <div className="border-l border-slate-700 pl-4 min-w-0">
-                                    <p className="font-bold text-white truncate">{materia?.nombre || 'Materia no disponible'}</p>
-                                    {horario.aula && <p className="text-xs text-slate-400 mt-1">Aula: {horario.aula}</p>}
-                                  </div>
-                                  {esAdmin && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleEliminarHorario(horario.id)}
-                                      className="ml-auto text-xs text-red-400 hover:text-red-300 font-semibold cursor-pointer"
-                                    >
-                                      Borrar
-                                    </button>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </section>
-                      );
-                    })
+                          return (
+                            <section key={dia} className="schedule-day min-h-64 rounded-xl border border-slate-800/80 bg-[#161c26] p-2.5">
+                              <header className="mb-3 border-b border-slate-800 pb-2">
+                                <p className={`text-[11px] font-extrabold uppercase tracking-widest ${colorTexto}`}>{nombreDia}</p>
+                                <p className="mt-1 text-[10px] text-slate-500">{horariosDelDia.length} {horariosDelDia.length === 1 ? 'clase' : 'clases'}</p>
+                              </header>
+                              <div className="space-y-2">
+                                {horariosDelDia.length === 0 ? (
+                                  <p className="px-1 py-4 text-center text-[11px] text-slate-600">Libre</p>
+                                ) : horariosDelDia.map((horario) => {
+                                  const materia = materias.find((item) => item.id === horario.materia_id);
+                                  return (
+                                    <article key={horario.id} className="schedule-card relative overflow-hidden rounded-lg border border-slate-700/80 bg-[#0f141c] p-2.5 shadow-sm">
+                                      <span className={`absolute inset-x-0 top-0 h-0.5 ${colorBarra}`} />
+                                      <p className="text-[11px] font-bold text-white">{horario.hora_inicio} - {horario.hora_fin}</p>
+                                      <p className="mt-2 line-clamp-2 text-xs font-semibold leading-tight text-slate-200">{materia?.nombre || 'Materia no disponible'}</p>
+                                      {horario.aula && <p className="mt-2 text-[10px] text-slate-500">Aula {horario.aula}</p>}
+                                      {esAdmin && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleEliminarHorario(horario.id)}
+                                          className="mt-2 text-[10px] font-semibold text-red-400 hover:text-red-300 cursor-pointer"
+                                        >
+                                          Borrar
+                                        </button>
+                                      )}
+                                    </article>
+                                  );
+                                })}
+                              </div>
+                            </section>
+                          );
+                        })}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
