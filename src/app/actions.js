@@ -2,6 +2,21 @@
 
 import { db } from './turso';
 
+const ADMINISTRADOR = 'Matute';
+
+function esAdministrador(usuario) {
+  return typeof usuario === 'string' && usuario.trim().toLowerCase() === ADMINISTRADOR.toLowerCase();
+}
+
+function parcialHabilitado(fecha) {
+  if (!fecha || fecha === 'Sin fecha') return false;
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const fechaParcial = new Date(`${fecha}T00:00:00`);
+  return !Number.isNaN(fechaParcial.getTime()) && fechaParcial <= hoy;
+}
+
 // --- AUTENTICACIÓN Y ALUMNOS ---
 
 // Valida credenciales consultando directamente a la tabla alumnos en Turso
@@ -109,6 +124,11 @@ export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
       sql: 'UPDATE completadas SET alumno = ? WHERE alumno = ?',
       args: [nuevoFormateado, nombreAntiguo]
     });
+
+    await db.execute({
+      sql: 'UPDATE notas_parciales SET alumno = ? WHERE alumno = ?',
+      args: [nuevoFormateado, nombreAntiguo]
+    });
   } catch (error) {
     console.error('Error en editarAlumnoAction:', error);
   }
@@ -123,6 +143,10 @@ export async function eliminarAlumnoAction(nombre) {
     });
     await db.execute({
       sql: 'DELETE FROM completadas WHERE alumno = ?',
+      args: [nombre]
+    });
+    await db.execute({
+      sql: 'DELETE FROM notas_parciales WHERE alumno = ?',
       args: [nombre]
     });
   } catch (error) {
@@ -278,30 +302,76 @@ export async function obtenerParcialesAction() {
   }
 }
 
-export async function crearParcialAction({ materiaId, nombre, fecha, detalles }) {
+export async function crearParcialAction({ materiaId, nombre, fecha, detalles, usuario }) {
   try {
+    if (!esAdministrador(usuario)) {
+      return { exito: false, mensaje: 'Solo el administrador puede crear parciales.' };
+    }
+
     const id = 'parcial_' + Date.now();
     await db.execute({
       sql: 'INSERT INTO parciales (id, materia_id, nombre, fecha, detalles) VALUES (?, ?, ?, ?, ?)',
       args: [id, materiaId, nombre, fecha || 'Sin fecha', detalles || 'Sin observaciones']
     });
+    return { exito: true };
   } catch (error) {
     console.error('Error en crearParcialAction:', error);
+    return { exito: false, mensaje: 'No se pudo crear el parcial.' };
   }
 }
 
-export async function eliminarParcialAction(id) {
+export async function editarParcialAction({ id, materiaId, nombre, fecha, detalles, usuario }) {
   try {
+    if (!esAdministrador(usuario)) {
+      return { exito: false, mensaje: 'Solo el administrador puede editar parciales.' };
+    }
+
+    await db.execute({
+      sql: 'UPDATE parciales SET materia_id = ?, nombre = ?, fecha = ?, detalles = ? WHERE id = ?',
+      args: [materiaId, nombre, fecha || 'Sin fecha', detalles || 'Sin observaciones', id]
+    });
+    return { exito: true };
+  } catch (error) {
+    console.error('Error en editarParcialAction:', error);
+    return { exito: false, mensaje: 'No se pudo editar el parcial.' };
+  }
+}
+
+export async function eliminarParcialAction(id, usuario) {
+  try {
+    if (!esAdministrador(usuario)) {
+      return { exito: false, mensaje: 'Solo el administrador puede borrar parciales.' };
+    }
+
     await db.execute({ sql: 'DELETE FROM parciales WHERE id = ?', args: [id] });
     await db.execute({ sql: 'DELETE FROM notas_parciales WHERE parcial_id = ?', args: [id] });
+    return { exito: true };
   } catch (error) {
     console.error('Error en eliminarParcialAction:', error);
+    return { exito: false, mensaje: 'No se pudo borrar el parcial.' };
   }
 }
 
-export async function guardarNotaParcialAction(parcialId, alumno, nota) {
+export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario) {
   try {
-    const notaLimpia = nota.trim();
+    if (!esAdministrador(usuario)) {
+      return { exito: false, mensaje: 'Solo el administrador puede cargar o editar notas.' };
+    }
+
+    const parcial = await db.execute({
+      sql: 'SELECT fecha FROM parciales WHERE id = ?',
+      args: [parcialId]
+    });
+
+    if (parcial.rows.length === 0) {
+      return { exito: false, mensaje: 'El parcial no existe.' };
+    }
+
+    if (!parcialHabilitado(parcial.rows[0].fecha)) {
+      return { exito: false, mensaje: 'La nota se puede cargar a partir de la fecha del parcial.' };
+    }
+
+    const notaLimpia = typeof nota === 'string' ? nota.trim() : '';
     
     // Verificamos si ya existe nota cargada para este alumno en este parcial
     const existe = await db.execute({
@@ -331,7 +401,9 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota) {
         args: [id, parcialId, alumno, notaLimpia]
       });
     }
+    return { exito: true };
   } catch (error) {
     console.error('Error en guardarNotaParcialAction:', error);
+    return { exito: false, mensaje: 'No se pudo guardar la nota.' };
   }
 }

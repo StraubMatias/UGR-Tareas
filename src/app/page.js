@@ -18,6 +18,7 @@ import {
   cambiarPasswordAction,
   obtenerParcialesAction,
   crearParcialAction,
+  editarParcialAction,
   eliminarParcialAction,
   guardarNotaParcialAction
 } from './actions';
@@ -65,6 +66,7 @@ export default function Home() {
   const [nombreParcial, setNombreParcial] = useState('');
   const [fechaParcial, setFechaParcial] = useState('');
   const [detallesParcial, setDetallesParcial] = useState('');
+  const [parcialEnEdicion, setParcialEnEdicion] = useState(null);
 
   // Modales edición
   const [tareaEnEdicion, setTareaEnEdicion] = useState(null);
@@ -348,22 +350,46 @@ export default function Home() {
   const handleCrearParcial = async (e) => {
     e.preventDefault();
     if (!nombreParcial.trim() || !materiaParcialSel) return;
-    await crearParcialAction({
+    const datosParcial = {
       materiaId: materiaParcialSel,
       nombre: nombreParcial,
       fecha: fechaParcial,
-      detalles: detallesParcial
-    });
+      detalles: detallesParcial,
+      usuario: usuarioActual
+    };
+    const resultado = parcialEnEdicion
+      ? await editarParcialAction({ id: parcialEnEdicion.id, ...datosParcial })
+      : await crearParcialAction(datosParcial);
+
+    if (!resultado?.exito) {
+      alert(resultado?.mensaje || 'No se pudo guardar el parcial.');
+      return;
+    }
+
     setNombreParcial('');
     setFechaParcial('');
     setDetallesParcial('');
+    setParcialEnEdicion(null);
     await cargarBD();
     setPestana('parciales');
   };
 
+  const iniciarEdicionParcial = (parcial) => {
+    setParcialEnEdicion(parcial);
+    setMateriaParcialSel(parcial.materia_id);
+    setNombreParcial(parcial.nombre);
+    setFechaParcial(parcial.fecha === 'Sin fecha' ? '' : parcial.fecha);
+    setDetallesParcial(parcial.detalles === 'Sin observaciones' ? '' : parcial.detalles || '');
+    setPestana('admin');
+  };
+
   const handleEliminarParcial = async (id) => {
     if (confirm('¿Seguro que querés borrar este parcial y sus notas cargadas?')) {
-      await eliminarParcialAction(id);
+      const resultado = await eliminarParcialAction(id, usuarioActual);
+      if (!resultado?.exito) {
+        alert(resultado?.mensaje || 'No se pudo borrar el parcial.');
+        return;
+      }
       await cargarBD();
     }
   };
@@ -376,9 +402,22 @@ export default function Home() {
   };
 
   const handleGuardarNotaOnBlur = async (parcialId, alumno) => {
+    if (!esAdmin) return;
     const clave = `${parcialId}_${alumno}`;
     const valor = notasInputs[clave] || '';
-    await guardarNotaParcialAction(parcialId, alumno, valor);
+    const resultado = await guardarNotaParcialAction(parcialId, alumno, valor, usuarioActual);
+    if (!resultado?.exito) {
+      alert(resultado?.mensaje || 'No se pudo guardar la nota.');
+      await cargarBD();
+    }
+  };
+
+  const parcialEstaHabilitado = (fecha) => {
+    if (!fecha || fecha === 'Sin fecha') return false;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaParcial = new Date(`${fecha}T00:00:00`);
+    return !Number.isNaN(fechaParcial.getTime()) && fechaParcial <= hoy;
   };
 
   if (!iniciado) {
@@ -899,6 +938,7 @@ export default function Home() {
                     parciales.map((p) => {
                       const materiaAsoc = materias.find((m) => m.id === p.materia_id);
                       const nombreMateria = materiaAsoc ? materiaAsoc.nombre : 'MATERIA';
+                      const parcialDisponible = parcialEstaHabilitado(p.fecha);
 
                       return (
                         <div key={p.id} className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
@@ -917,12 +957,20 @@ export default function Home() {
                                 📅 {formatearFechaDDMMAAAA(p.fecha)}
                               </span>
                               {esAdmin && (
-                                <button
-                                  onClick={() => handleEliminarParcial(p.id)}
-                                  className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
-                                >
-                                  Borrar
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => iniciarEdicionParcial(p)}
+                                    className="text-xs text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    onClick={() => handleEliminarParcial(p.id)}
+                                    className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
+                                  >
+                                    Borrar
+                                  </button>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -936,8 +984,14 @@ export default function Home() {
                           {/* SECCIÓN CARGA DE NOTAS */}
                           <div className="border-t border-slate-800/80 pt-4">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
-                              Notas por Alumno (Modificá la tuya)
+                              Notas por Alumno
                             </h3>
+
+                            {!parcialDisponible && (
+                              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4">
+                                Las notas se habilitan a partir de la fecha del parcial.
+                              </p>
+                            )}
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                               {alumnos.map((alum) => {
@@ -961,12 +1015,12 @@ export default function Home() {
                                     <input
                                       type="text"
                                       placeholder="-"
-                                      disabled={!esMiFila && !esAdmin}
+                                      disabled={!esAdmin || !parcialDisponible}
                                       value={valorNota}
                                       onChange={(e) => handleNotaChangeLocal(p.id, alum, e.target.value)}
                                       onBlur={() => handleGuardarNotaOnBlur(p.id, alum)}
                                       className={`w-16 text-center font-bold text-sm py-1 px-2 rounded-lg border focus:outline-none transition-all ${
-                                        esMiFila || esAdmin
+                                        esAdmin && parcialDisponible
                                           ? 'bg-[#161c26] text-purple-300 border-purple-500/50 focus:border-purple-400'
                                           : 'bg-transparent text-slate-400 border-transparent cursor-not-allowed'
                                       }`}
@@ -1129,7 +1183,7 @@ export default function Home() {
                   {/* NUEVO: CARGAR PARCIAL */}
                   <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
                     <h2 className="text-base font-bold text-white mb-4 pb-2 border-b border-slate-800 flex items-center gap-2">
-                      <span>📋</span> Nuevo Parcial
+                      <span>📋</span> {parcialEnEdicion ? 'Editar Parcial' : 'Nuevo Parcial'}
                     </h2>
                     <form onSubmit={handleCrearParcial} className="space-y-4">
                       <div>
@@ -1179,8 +1233,22 @@ export default function Home() {
                       </div>
 
                       <button type="submit" className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
-                        Publicar Parcial
+                        {parcialEnEdicion ? 'Guardar Cambios' : 'Publicar Parcial'}
                       </button>
+                      {parcialEnEdicion && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setParcialEnEdicion(null);
+                            setNombreParcial('');
+                            setFechaParcial('');
+                            setDetallesParcial('');
+                          }}
+                          className="w-full text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 font-semibold py-2.5 rounded-xl text-xs transition-all cursor-pointer"
+                        >
+                          Cancelar edición
+                        </button>
+                      )}
                     </form>
                   </div>
                 </div>
