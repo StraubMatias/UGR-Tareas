@@ -175,6 +175,8 @@ export default function Home() {
     });
   };
 
+  const esForo = (nombreTarea) => /\(\s*foro\s*\)/i.test(nombreTarea || '');
+
   const calcularEstadoSemaforo = (fechaFinStr) => {
     if (!fechaFinStr || fechaFinStr === 'Sin fecha') {
       return { texto: 'Sin fecha límite', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
@@ -476,6 +478,21 @@ export default function Home() {
   const materiaProximoParcial = proximoParcial
     ? materias.find((materia) => materia.id === proximoParcial.materia_id)
     : null;
+  const ranking = alumnos
+    .map((alumno) => {
+      const tareasCompletadas = materias.flatMap((materia) => materia.tareas)
+        .filter((tarea) => tarea.completadoPor.includes(alumno));
+      const foros = tareasCompletadas.filter((tarea) => esForo(tarea.nombre)).length;
+      const actividades = tareasCompletadas.length - foros;
+
+      return {
+        alumno,
+        puntos: foros + actividades * 2,
+        foros,
+        actividades
+      };
+    })
+    .sort((a, b) => b.puntos - a.puntos || b.actividades - a.actividades || a.alumno.localeCompare(b.alumno));
   const parcialesAgrupados = parcialesOrdenados.reduce((grupos, parcial) => {
     const materia = materias.find((item) => item.id === parcial.materia_id);
     const claveMateria = parcial.materia_id || 'sin-materia';
@@ -632,6 +649,17 @@ export default function Home() {
               }`}
             >
               <span>📋</span> Parciales y Notas
+            </button>
+
+            <button
+              onClick={() => setPestana('ranking')}
+              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
+                pestana === 'ranking'
+                  ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                  : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>🏆</span> Ranking
             </button>
 
             {esAdmin && (
@@ -1154,6 +1182,51 @@ export default function Home() {
                       </section>
                     ))
                   )}
+                </div>
+              )}
+
+              {pestana === 'ranking' && (
+                <div className="space-y-6">
+                  <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6 border-b border-slate-800 pb-4">
+                      <div>
+                        <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+                          <span>🏆</span> Ranking de la cursada
+                        </h2>
+                        <p className="text-sm text-slate-400 mt-1">Las actividades valen 2 puntos y los foros valen 1.</p>
+                      </div>
+                      <span className="text-xs text-slate-500">Se actualiza al marcar tareas</span>
+                    </div>
+
+                    {ranking.length === 0 ? (
+                      <p className="text-sm text-slate-500 italic">Todavía no hay alumnos cargados.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {ranking.map((item, indice) => (
+                          <div
+                            key={item.alumno}
+                            className={`flex items-center gap-3 sm:gap-4 p-4 rounded-xl border ${
+                              item.alumno === usuarioActual
+                                ? 'bg-emerald-500/10 border-emerald-500/40'
+                                : 'bg-[#0f141c] border-slate-800/80'
+                            }`}
+                          >
+                            <span className="w-8 text-center text-lg font-extrabold text-amber-400">#{indice + 1}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-white truncate">{item.alumno}</p>
+                              <p className="text-xs text-slate-400 mt-1">
+                                {item.actividades} {item.actividades === 1 ? 'actividad' : 'actividades'} · {item.foros} {item.foros === 1 ? 'foro' : 'foros'}
+                              </p>
+                            </div>
+                            <span className="text-right">
+                              <strong className="block text-xl font-extrabold text-emerald-300">{item.puntos}</strong>
+                              <small className="text-[10px] uppercase tracking-wider text-slate-500">puntos</small>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
