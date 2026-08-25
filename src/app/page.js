@@ -74,7 +74,7 @@ export default function Home() {
   const esAdmin = usuarioActual === "Matute";
 
   useEffect(() => {
-    document.title = "UGR - Tareas y Parciales";
+    document.title = "UGR - Tareas";
   }, []);
 
   // PERSISTENCIA DE SESIÓN
