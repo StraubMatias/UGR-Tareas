@@ -166,9 +166,11 @@ export async function obtenerDatos() {
       const tareasMateria = resTareas.rows.filter((t) => t.materia_id === m.id);
 
       const tareasConCompletados = tareasMateria.map((t) => {
-        const completadoPor = resCompletadas.rows
-          .filter((c) => c.tarea_id === t.id)
-          .map((c) => c.alumno);
+        const completadas = resCompletadas.rows.filter((c) => c.tarea_id === t.id);
+        const completadoPor = completadas.map((c) => c.alumno);
+        const completadoEn = Object.fromEntries(
+          completadas.map((c) => [c.alumno, c.completada_en])
+        );
 
         return {
           id: t.id,
@@ -176,7 +178,8 @@ export async function obtenerDatos() {
           inicio: t.inicio,
           fin: t.fin,
           detalles: t.detalles,
-          completadoPor
+          completadoPor,
+          completadoEn
         };
       });
 
@@ -208,7 +211,7 @@ export async function toggleTareaAction(tareaId, alumno) {
       });
     } else {
       await db.execute({
-        sql: 'INSERT INTO completadas (tarea_id, alumno) VALUES (?, ?)',
+        sql: "INSERT INTO completadas (tarea_id, alumno, completada_en) VALUES (?, ?, datetime('now'))",
         args: [tareaId, alumno]
       });
     }

@@ -484,15 +484,28 @@ export default function Home() {
         .filter((tarea) => tarea.completadoPor.includes(alumno));
       const foros = tareasCompletadas.filter((tarea) => esForo(tarea.nombre)).length;
       const actividades = tareasCompletadas.length - foros;
+      const notasAlumno = notas
+        .filter((nota) => nota.alumno === alumno)
+        .map((nota) => Number.parseFloat(String(nota.nota).replace(',', '.')))
+        .filter((nota) => Number.isFinite(nota) && nota >= 0 && nota <= 10);
+      const ultimaCompletadaEn = tareasCompletadas
+        .map((tarea) => tarea.completadoEn?.[alumno])
+        .filter(Boolean)
+        .map((fecha) => Date.parse(fecha.replace(' ', 'T') + 'Z'))
+        .filter((fecha) => Number.isFinite(fecha))
+        .sort((a, b) => b - a)[0] || Number.MAX_SAFE_INTEGER;
 
       return {
         alumno,
-        puntos: foros + actividades * 2,
+        puntos: foros + actividades * 2 + notasAlumno.reduce((total, nota) => total + nota / 10, 0),
         foros,
-        actividades
+        actividades,
+        ultimaCompletadaEn
       };
     })
-    .sort((a, b) => b.puntos - a.puntos || b.actividades - a.actividades || a.alumno.localeCompare(b.alumno));
+    .sort((a, b) => b.puntos - a.puntos || a.ultimaCompletadaEn - b.ultimaCompletadaEn || b.actividades - a.actividades || a.alumno.localeCompare(b.alumno));
+  const rankingPodio = ranking.slice(0, 3);
+  const restoRanking = ranking.slice(3);
   const parcialesAgrupados = parcialesOrdenados.reduce((grupos, parcial) => {
     const materia = materias.find((item) => item.id === parcial.materia_id);
     const claveMateria = parcial.materia_id || 'sin-materia';
@@ -1201,30 +1214,66 @@ export default function Home() {
                     {ranking.length === 0 ? (
                       <p className="text-sm text-slate-500 italic">Todavía no hay alumnos cargados.</p>
                     ) : (
-                      <div className="space-y-3">
-                        {ranking.map((item, indice) => (
-                          <div
-                            key={item.alumno}
-                            className={`flex items-center gap-3 sm:gap-4 p-4 rounded-xl border ${
-                              item.alumno === usuarioActual
-                                ? 'bg-emerald-500/10 border-emerald-500/40'
-                                : 'bg-[#0f141c] border-slate-800/80'
-                            }`}
-                          >
-                            <span className="w-8 text-center text-lg font-extrabold text-amber-400">#{indice + 1}</span>
-                            <div className="min-w-0 flex-1">
-                              <p className="font-bold text-white truncate">{item.alumno}</p>
-                              <p className="text-xs text-slate-400 mt-1">
-                                {item.actividades} {item.actividades === 1 ? 'actividad' : 'actividades'} · {item.foros} {item.foros === 1 ? 'foro' : 'foros'}
-                              </p>
-                            </div>
-                            <span className="text-right">
-                              <strong className="block text-xl font-extrabold text-emerald-300">{item.puntos}</strong>
-                              <small className="text-[10px] uppercase tracking-wider text-slate-500">puntos</small>
-                            </span>
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {rankingPodio.map((item, indice) => {
+                            const iconosPodio = ['🥇', '🥈', '🥉'];
+                            const estilosPodio = [
+                              'border-amber-400/60 bg-amber-500/10',
+                              'border-slate-400/60 bg-slate-400/10',
+                              'border-orange-700/60 bg-orange-700/10'
+                            ];
+
+                            return (
+                              <div
+                                key={item.alumno}
+                                className={`flex flex-col items-center text-center gap-2 p-5 rounded-2xl border ${
+                                  item.alumno === usuarioActual
+                                    ? 'ring-2 ring-emerald-400/60'
+                                    : ''
+                                } ${estilosPodio[indice]}`}
+                              >
+                                <span className="text-4xl">{iconosPodio[indice]}</span>
+                                <span className="text-xs font-extrabold uppercase tracking-wider text-slate-300">{indice + 1}° puesto</span>
+                                <p className="font-extrabold text-white text-lg truncate max-w-full">{item.alumno}</p>
+                                <strong className="text-2xl font-extrabold text-emerald-300">{item.puntos.toFixed(1)}</strong>
+                                <span className="text-[10px] uppercase tracking-wider text-slate-400">puntos</span>
+                                <span className="text-xs text-slate-400">
+                                  {item.actividades} actividades · {item.foros} foros
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {restoRanking.length > 0 && (
+                          <div className="mt-6 space-y-3">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Resto de la cursada</h3>
+                            {restoRanking.map((item, indice) => (
+                              <div
+                                key={item.alumno}
+                                className={`flex items-center gap-3 sm:gap-4 p-4 rounded-xl border ${
+                                  item.alumno === usuarioActual
+                                    ? 'bg-emerald-500/10 border-emerald-500/40'
+                                    : 'bg-[#0f141c] border-slate-800/80'
+                                }`}
+                              >
+                                <span className="w-8 text-center text-lg font-extrabold text-slate-400">#{indice + 4}</span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-bold text-white truncate">{item.alumno}</p>
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    {item.actividades} actividades · {item.foros} foros
+                                  </p>
+                                </div>
+                                <span className="text-right">
+                                  <strong className="block text-xl font-extrabold text-emerald-300">{item.puntos.toFixed(1)}</strong>
+                                  <small className="text-[10px] uppercase tracking-wider text-slate-500">puntos</small>
+                                </span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
