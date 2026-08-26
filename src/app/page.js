@@ -744,18 +744,6 @@ export default function Home() {
               <span>🗓️</span> Horarios de cursada
             </button>
 
-            {esAdmin && (
-              <button
-                onClick={() => setPestana('admin')}
-                className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border ml-auto cursor-pointer ${
-                  pestana === 'admin'
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
-                    : 'bg-[#161c26] text-amber-400/80 border-slate-800 hover:bg-slate-800/60'
-                }`}
-              >
-                <span>⚙️</span> Panel de Carga
-              </button>
-            )}
           </div>
 
           {cargando ? (
@@ -1363,42 +1351,40 @@ export default function Home() {
                     </div>
                   ) : (
                     <div className="schedule-scroll rounded-2xl border border-slate-800 bg-[#111821] p-3 sm:p-4">
-                      <div className="grid min-w-[980px] grid-cols-7 gap-3">
+                      <div className="grid min-w-[900px] grid-cols-5 gap-4">
                         {[
-                          ['1', 'Lun', 'text-cyan-300', 'bg-cyan-400'],
-                          ['2', 'Mar', 'text-blue-300', 'bg-blue-400'],
-                          ['3', 'Mié', 'text-violet-300', 'bg-violet-400'],
-                          ['4', 'Jue', 'text-fuchsia-300', 'bg-fuchsia-400'],
-                          ['5', 'Vie', 'text-amber-300', 'bg-amber-400'],
-                          ['6', 'Sáb', 'text-emerald-300', 'bg-emerald-400'],
-                          ['7', 'Dom', 'text-rose-300', 'bg-rose-400']
+                          ['1', 'Lunes', 'text-cyan-300', 'bg-cyan-400'],
+                          ['2', 'Martes', 'text-blue-300', 'bg-blue-400'],
+                          ['3', 'Miércoles', 'text-violet-300', 'bg-violet-400'],
+                          ['4', 'Jueves', 'text-fuchsia-300', 'bg-fuchsia-400'],
+                          ['5', 'Viernes', 'text-amber-300', 'bg-amber-400']
                         ].map(([dia, nombreDia, colorTexto, colorBarra]) => {
                           const horariosDelDia = horarios
                             .filter((horario) => String(horario.dia) === dia)
                             .sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
 
                           return (
-                            <section key={dia} className="schedule-day min-h-64 rounded-xl border border-slate-800/80 bg-[#161c26] p-2.5">
-                              <header className="mb-3 border-b border-slate-800 pb-2">
-                                <p className={`text-[11px] font-extrabold uppercase tracking-widest ${colorTexto}`}>{nombreDia}</p>
-                                <p className="mt-1 text-[10px] text-slate-500">{horariosDelDia.length} {horariosDelDia.length === 1 ? 'clase' : 'clases'}</p>
+                            <section key={dia} className="schedule-day min-h-80 rounded-xl border border-slate-800/80 bg-[#161c26] p-4">
+                              <header className="mb-4 border-b border-slate-800 pb-3">
+                                <p className={`text-sm font-extrabold uppercase tracking-widest ${colorTexto}`}>{nombreDia}</p>
+                                <p className="mt-1 text-xs text-slate-500">{horariosDelDia.length} {horariosDelDia.length === 1 ? 'clase' : 'clases'}</p>
                               </header>
-                              <div className="space-y-2">
+                              <div className="space-y-3">
                                 {horariosDelDia.length === 0 ? (
-                                  <p className="px-1 py-4 text-center text-[11px] text-slate-600">Libre</p>
+                                  <p className="px-1 py-6 text-center text-xs text-slate-600">Libre</p>
                                 ) : horariosDelDia.map((horario) => {
                                   const materia = materias.find((item) => item.id === horario.materia_id);
                                   return (
-                                    <article key={horario.id} className="schedule-card relative overflow-hidden rounded-lg border border-slate-700/80 bg-[#0f141c] p-2.5 shadow-sm">
+                                    <article key={horario.id} className="schedule-card relative overflow-hidden rounded-lg border border-slate-700/80 bg-[#0f141c] p-4 shadow-sm">
                                       <span className={`absolute inset-x-0 top-0 h-0.5 ${colorBarra}`} />
-                                      <p className="text-[11px] font-bold text-white">{horario.hora_inicio} - {horario.hora_fin}</p>
-                                      <p className="mt-2 line-clamp-2 text-xs font-semibold leading-tight text-slate-200">{materia?.nombre || 'Materia no disponible'}</p>
-                                      {horario.aula && <p className="mt-2 text-[10px] text-slate-500">Aula {horario.aula}</p>}
+                                      <p className="text-sm font-bold text-white">{horario.hora_inicio} - {horario.hora_fin}</p>
+                                      <p className="mt-3 line-clamp-2 text-sm font-semibold leading-tight text-slate-200">{materia?.nombre || 'Materia no disponible'}</p>
+                                      {horario.aula && <p className="mt-3 text-xs text-slate-500">Aula {horario.aula}</p>}
                                       {esAdmin && (
                                         <button
                                           type="button"
                                           onClick={() => handleEliminarHorario(horario.id)}
-                                          className="mt-2 text-[10px] font-semibold text-red-400 hover:text-red-300 cursor-pointer"
+                                          className="mt-3 text-xs font-semibold text-red-400 hover:text-red-300 cursor-pointer"
                                         >
                                           Borrar
                                         </button>
@@ -1661,8 +1647,6 @@ export default function Home() {
                           <option value="3">Miércoles</option>
                           <option value="4">Jueves</option>
                           <option value="5">Viernes</option>
-                          <option value="6">Sábado</option>
-                          <option value="7">Domingo</option>
                         </select>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
