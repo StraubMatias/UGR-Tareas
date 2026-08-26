@@ -17,6 +17,30 @@ function parcialHabilitado(fecha) {
   return !Number.isNaN(fechaParcial.getTime()) && fechaParcial <= hoy;
 }
 
+async function asegurarEsquemaNotasTareas() {
+  await db.execute(
+    'CREATE TABLE IF NOT EXISTS notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT NOT NULL, alumno TEXT NOT NULL, nota TEXT NOT NULL, UNIQUE(tarea_id, alumno))'
+  );
+
+  try {
+    await db.execute('ALTER TABLE tareas ADD COLUMN con_nota INTEGER NOT NULL DEFAULT 0');
+  } catch (error) {
+    // La columna ya existe en instalaciones que recibieron la migración.
+  }
+}
+
+function validarNota(nota) {
+  const notaLimpia = typeof nota === 'string' ? nota.trim().replace(',', '.') : String(nota ?? '').trim();
+  if (!notaLimpia) return { valida: false, vacia: true, valor: '' };
+
+  const valor = Number(notaLimpia);
+  return {
+    valida: Number.isFinite(valor) && valor >= 1 && valor <= 10,
+    vacia: false,
+    valor: notaLimpia
+  };
+}
+
 // --- AUTENTICACIÓN Y ALUMNOS ---
 
 // Valida credenciales consultando directamente a la tabla alumnos en Turso
@@ -112,6 +136,7 @@ export async function crearAlumnoAction(nombre) {
 // Renombrar alumno
 export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
   try {
+    await asegurarEsquemaNotasTareas();
     const nuevoFormateado = nuevoNombre.trim();
     if (!nuevoFormateado) return;
 
@@ -129,6 +154,10 @@ export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
       sql: 'UPDATE notas_parciales SET alumno = ? WHERE alumno = ?',
       args: [nuevoFormateado, nombreAntiguo]
     });
+    await db.execute({
+      sql: 'UPDATE notas_tareas SET alumno = ? WHERE alumno = ?',
+      args: [nuevoFormateado, nombreAntiguo]
+    });
   } catch (error) {
     console.error('Error en editarAlumnoAction:', error);
   }
@@ -137,6 +166,7 @@ export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
 // Eliminar alumno de la BD
 export async function eliminarAlumnoAction(nombre) {
   try {
+    await asegurarEsquemaNotasTareas();
     await db.execute({
       sql: 'DELETE FROM alumnos WHERE nombre = ?',
       args: [nombre]
@@ -149,6 +179,10 @@ export async function eliminarAlumnoAction(nombre) {
       sql: 'DELETE FROM notas_parciales WHERE alumno = ?',
       args: [nombre]
     });
+    await db.execute({
+      sql: 'DELETE FROM notas_tareas WHERE alumno = ?',
+      args: [nombre]
+    });
   } catch (error) {
     console.error('Error en eliminarAlumnoAction:', error);
   }
@@ -158,6 +192,7 @@ export async function eliminarAlumnoAction(nombre) {
 
 export async function obtenerDatos() {
   try {
+    await asegurarEsquemaNotasTareas();
     const [resMaterias, resTareas, resCompletadas] = await Promise.all([
       db.execute('SELECT * FROM materias ORDER BY nombre ASC'),
       db.execute('SELECT * FROM tareas'),
@@ -178,11 +213,20 @@ export async function obtenerDatos() {
       completadasPorTarea.set(completada.tarea_id, completadasTarea);
     });
 
+    const resNotasTareas = await db.execute('SELECT tarea_id, alumno, nota FROM notas_tareas');
+    const notasPorTarea = new Map();
+    resNotasTareas.rows.forEach((nota) => {
+      const notasTarea = notasPorTarea.get(nota.tarea_id) || {};
+      notasTarea[nota.alumno] = nota.nota;
+      notasPorTarea.set(nota.tarea_id, notasTarea);
+    });
+
     const materias = resMaterias.rows.map((m) => {
       const tareasMateria = tareasPorMateria.get(m.id) || [];
 
       const tareasConCompletados = tareasMateria.map((t) => {
         const completadas = completadasPorTarea.get(t.id) || [];
+        const notas = notasPorTarea.get(t.id) || {};
         const completadoPor = completadas.map((c) => c.alumno);
         const completadoEn = Object.fromEntries(
           completadas.map((c) => [c.alumno, c.completada_en])
@@ -195,8 +239,10 @@ export async function obtenerDatos() {
           fin: t.fin,
           detalles: t.detalles,
           unidad: t.unidad || '',
+          conNota: Number(t.con_nota) === 1,
           completadoPor,
-          completadoEn
+          completadoEn,
+          notas
         };
       });
 
@@ -292,18 +338,19 @@ export async function eliminarMateriaAction(id) {
   }
 }
 
-export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles, unidad }) {
+export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles, unidad, conNota }) {
   try {
     const unidadLimpia = unidad?.trim() || '';
     if (unidadLimpia && (!/^\d+$/.test(unidadLimpia) || Number(unidadLimpia) < 1)) {
       return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
     }
     const unidadNumerica = unidadLimpia ? Number(unidadLimpia) : null;
+    const conNotaNumerico = conNota ? 1 : 0;
 
     const id = 't_' + Date.now();
     await db.execute({
-      sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      args: [id, materiaId, nombre, inicio || 'Sin fecha', fin || 'Sin fecha', detalles || 'Sin observaciones', unidadNumerica]
+      sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      args: [id, materiaId, nombre, inicio || 'Sin fecha', fin || 'Sin fecha', detalles || 'Sin observaciones', unidadNumerica, conNotaNumerico]
     });
     return { exito: true };
   } catch (error) {
@@ -312,17 +359,18 @@ export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalle
   }
 }
 
-export async function editarTareaAction({ id, nombre, inicio, fin, detalles, unidad }) {
+export async function editarTareaAction({ id, nombre, inicio, fin, detalles, unidad, conNota }) {
   try {
     const unidadLimpia = unidad?.trim() || '';
     if (unidadLimpia && (!/^\d+$/.test(unidadLimpia) || Number(unidadLimpia) < 1)) {
       return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
     }
     const unidadNumerica = unidadLimpia ? Number(unidadLimpia) : null;
+    const conNotaNumerico = conNota ? 1 : 0;
 
     await db.execute({
-      sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ? WHERE id = ?',
-      args: [nombre, inicio, fin, detalles, unidadNumerica, id]
+      sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ?, con_nota = ? WHERE id = ?',
+      args: [nombre, inicio, fin, detalles, unidadNumerica, conNotaNumerico, id]
     });
     return { exito: true };
   } catch (error) {
@@ -333,6 +381,8 @@ export async function editarTareaAction({ id, nombre, inicio, fin, detalles, uni
 
 export async function eliminarTareaAction(id) {
   try {
+    await asegurarEsquemaNotasTareas();
+    await db.execute({ sql: 'DELETE FROM notas_tareas WHERE tarea_id = ?', args: [id] });
     await db.execute({
       sql: 'DELETE FROM tareas WHERE id = ?',
       args: [id]
@@ -480,6 +530,10 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
     }
 
     const notaLimpia = typeof nota === 'string' ? nota.trim() : '';
+    const validacion = validarNota(nota);
+    if (!validacion.vacia && !validacion.valida) {
+      return { exito: false, mensaje: 'La nota debe ser un número entre 1 y 10.' };
+    }
     
     // Verificamos si ya existe nota cargada para este alumno en este parcial
     const existe = await db.execute({
@@ -498,7 +552,7 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
         // Actualizamos la nota
         await db.execute({
           sql: 'UPDATE notas_parciales SET nota = ? WHERE parcial_id = ? AND alumno = ?',
-          args: [notaLimpia, parcialId, alumno]
+          args: [validacion.valor, parcialId, alumno]
         });
       }
     } else if (notaLimpia !== '') {
@@ -513,5 +567,45 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
   } catch (error) {
     console.error('Error en guardarNotaParcialAction:', error);
     return { exito: false, mensaje: 'No se pudo guardar la nota.' };
+  }
+}
+
+export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
+  try {
+    await asegurarEsquemaNotasTareas();
+
+    if (!alumno || (alumno !== usuario && !esAdministrador(usuario))) {
+      return { exito: false, mensaje: 'Solo podés cargar tu propia nota.' };
+    }
+
+    const tarea = await db.execute({
+      sql: 'SELECT con_nota FROM tareas WHERE id = ?',
+      args: [tareaId]
+    });
+    if (tarea.rows.length === 0 || Number(tarea.rows[0].con_nota) !== 1) {
+      return { exito: false, mensaje: 'La tarea no está configurada para llevar nota.' };
+    }
+
+    const validacion = validarNota(nota);
+    if (!validacion.vacia && !validacion.valida) {
+      return { exito: false, mensaje: 'La nota debe ser un número entre 1 y 10.' };
+    }
+
+    if (validacion.vacia) {
+      await db.execute({
+        sql: 'DELETE FROM notas_tareas WHERE tarea_id = ? AND alumno = ?',
+        args: [tareaId, alumno]
+      });
+    } else {
+      await db.execute({
+        sql: 'INSERT INTO notas_tareas (id, tarea_id, alumno, nota) VALUES (?, ?, ?, ?) ON CONFLICT(tarea_id, alumno) DO UPDATE SET nota = excluded.nota',
+        args: [`nota_tarea_${Date.now()}`, tareaId, alumno, validacion.valor]
+      });
+    }
+
+    return { exito: true };
+  } catch (error) {
+    console.error('Error en guardarNotaTareaAction:', error);
+    return { exito: false, mensaje: 'No se pudo guardar la nota de la tarea.' };
   }
 }

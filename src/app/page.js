@@ -15,6 +15,7 @@ import {
   crearTareaAction,
   editarTareaAction,
   eliminarTareaAction,
+  guardarNotaTareaAction,
   cambiarPasswordAction,
   obtenerParcialesAction,
   crearParcialAction,
@@ -38,6 +39,7 @@ export default function Home() {
   const [parciales, setParciales] = useState([]);
   const [notas, setNotas] = useState([]);
   const [notasInputs, setNotasInputs] = useState({});
+  const [notasTareasInputs, setNotasTareasInputs] = useState({});
   const [notasDesplegadas, setNotasDesplegadas] = useState({});
   const [horarios, setHorarios] = useState([]);
 
@@ -68,6 +70,7 @@ export default function Home() {
   const [fechaFin, setFechaFin] = useState('');
   const [detallesTarea, setDetallesTarea] = useState('');
   const [unidadTarea, setUnidadTarea] = useState('');
+  const [tareaConNota, setTareaConNota] = useState(false);
 
   // Form Admin (Parciales)
   const [materiaParcialSel, setMateriaParcialSel] = useState('');
@@ -87,6 +90,10 @@ export default function Home() {
   const [alumnoEnEdicion, setAlumnoEnEdicion] = useState(null);
 
   const esAdmin = usuarioActual === "Matute";
+
+  const tareaCompletadaPor = (tarea, alumno) => (
+    tarea.conNota ? Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno) : tarea.completadoPor.includes(alumno)
+  );
 
   useEffect(() => {
     document.title = "UGR - Tareas";
@@ -218,6 +225,11 @@ export default function Home() {
       .map(([unidad, tareas]) => ({ unidad, tareas: ordenarTareas(tareas) }));
   };
 
+  const formatearUnidad = (unidad) => {
+    const valor = Number(unidad);
+    return Number.isFinite(valor) ? String(valor) : String(unidad || '');
+  };
+
   const esForo = (nombreTarea) => /\(\s*foro\s*\)/i.test(nombreTarea || '');
 
   const calcularEstadoSemaforo = (fechaFinStr) => {
@@ -277,6 +289,16 @@ export default function Home() {
       });
     }
     setNotasInputs(mapaNotas);
+
+    const mapaNotasTareas = {};
+    dataMaterias?.forEach((materia) => {
+      materia.tareas.forEach((tarea) => {
+        Object.entries(tarea.notas || {}).forEach(([alumno, nota]) => {
+          mapaNotasTareas[`${tarea.id}_${alumno}`] = nota;
+        });
+      });
+    });
+    setNotasTareasInputs(mapaNotasTareas);
 
     if (dataMaterias && dataMaterias.length > 0) {
       if (!materiaSel) setMateriaSel(dataMaterias[0].id);
@@ -410,7 +432,8 @@ export default function Home() {
       inicio: fechaInicio,
       fin: fechaFin,
       detalles: detallesTarea,
-      unidad: unidadTarea
+      unidad: unidadTarea,
+      conNota: tareaConNota
     });
     if (!resultado?.exito) {
       alert(resultado?.mensaje || 'No se pudo crear la tarea.');
@@ -421,6 +444,7 @@ export default function Home() {
     setFechaFin('');
     setDetallesTarea('');
     setUnidadTarea('');
+    setTareaConNota(false);
     await cargarBD();
     setPestana('materias');
   };
@@ -442,6 +466,24 @@ export default function Home() {
       await eliminarTareaAction(id);
       await cargarBD();
     }
+  };
+
+  const handleNotaTareaChangeLocal = (tareaId, alumno, valor) => {
+    setNotasTareasInputs((prev) => ({
+      ...prev,
+      [`${tareaId}_${alumno}`]: valor
+    }));
+  };
+
+  const handleGuardarNotaTareaOnBlur = async (tareaId, alumno) => {
+    const clave = `${tareaId}_${alumno}`;
+    const resultado = await guardarNotaTareaAction(tareaId, alumno, notasTareasInputs[clave] || '', usuarioActual);
+    if (!resultado?.exito) {
+      alert(resultado?.mensaje || 'No se pudo guardar la nota de la tarea.');
+      await cargarBD();
+      return;
+    }
+    await cargarBD();
   };
 
   const handleCrearHorario = async (e) => {
@@ -597,9 +639,13 @@ export default function Home() {
   const ranking = alumnos
     .map((alumno) => {
       const tareasCompletadas = materias.flatMap((materia) => materia.tareas)
-        .filter((tarea) => tarea.completadoPor.includes(alumno));
-      const foros = tareasCompletadas.filter((tarea) => esForo(tarea.nombre)).length;
-      const actividades = tareasCompletadas.length - foros;
+        .filter((tarea) => tareaCompletadaPor(tarea, alumno));
+      const foros = tareasCompletadas.filter((tarea) => !tarea.conNota && esForo(tarea.nombre)).length;
+      const actividades = tareasCompletadas.filter((tarea) => !tarea.conNota && !esForo(tarea.nombre)).length;
+      const notasTareasAlumno = tareasCompletadas
+        .filter((tarea) => tarea.conNota)
+        .map((tarea) => Number.parseFloat(String(tarea.notas?.[alumno]).replace(',', '.')))
+        .filter((nota) => Number.isFinite(nota) && nota >= 1 && nota <= 10);
       const notasAlumno = notas
         .filter((nota) => nota.alumno === alumno)
         .map((nota) => Number.parseFloat(String(nota.nota).replace(',', '.')))
@@ -613,7 +659,7 @@ export default function Home() {
 
       return {
         alumno,
-        puntos: foros + actividades * 2 + notasAlumno.reduce((total, nota) => total + nota / 10, 0),
+        puntos: foros + actividades * 2 + notasAlumno.reduce((total, nota) => total + nota / 10, 0) + notasTareasAlumno.reduce((total, nota) => total + nota, 0),
         foros,
         actividades,
         ultimaCompletadaEn
@@ -871,7 +917,7 @@ export default function Home() {
                       </h2>
                       {(() => {
                         const misPendientes = materias.flatMap((m) =>
-                          m.tareas.filter((t) => !t.completadoPor.includes(usuarioActual))
+                          m.tareas.filter((t) => !tareaCompletadaPor(t, usuarioActual))
                         ).length;
                         return (
                           <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
@@ -888,7 +934,7 @@ export default function Home() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {(() => {
                         const misMateriasConPendientes = materias.filter((m) =>
-                          m.tareas.some((t) => !t.completadoPor.includes(usuarioActual))
+                          m.tareas.some((t) => !tareaCompletadaPor(t, usuarioActual))
                         );
 
                         if (misMateriasConPendientes.length === 0) {
@@ -901,7 +947,7 @@ export default function Home() {
 
                         return misMateriasConPendientes.map((m) => {
                           const tareasPendientes = m.tareas.filter(
-                            (t) => !t.completadoPor.includes(usuarioActual)
+                            (t) => !tareaCompletadaPor(t, usuarioActual)
                           );
                           const gruposTareas = agruparTareasPorUnidad(tareasPendientes);
 
@@ -912,21 +958,35 @@ export default function Home() {
                               </h3>
                               {gruposTareas.map((grupo) => (
                                 <div key={grupo.unidad || 'sin-unidad'} className="space-y-2.5">
-                                  {grupo.unidad && <p className="text-xs font-bold uppercase tracking-wider text-blue-300">Unidad {grupo.unidad}</p>}
+                                  {grupo.unidad && <p className="text-xs font-bold uppercase tracking-wider text-blue-300">Unidad {formatearUnidad(grupo.unidad)}</p>}
                                   <ul className="space-y-3">
                                     {grupo.tareas.map((t) => {
                                       const semaforo = calcularEstadoSemaforo(t.fin);
                                       return (
                                         <li key={t.id} className="flex flex-col gap-1.5 bg-[#161c26]/80 p-3 rounded-lg border border-slate-800/60">
                                           <div className="flex items-start gap-2.5">
-                                            <input
-                                              type="checkbox"
-                                              checked={false}
-                                              onChange={() => handleToggleTarea(t.id, usuarioActual)}
-                                              className="mt-0.5 h-5 w-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
-                                            />
+                                            {t.conNota ? (
+                                              <input
+                                                type="number"
+                                                min="1"
+                                                max="10"
+                                                step="0.01"
+                                                placeholder="Nota"
+                                                value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
+                                                onChange={(e) => handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
+                                                onBlur={() => handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
+                                                className="w-20 bg-[#0f141c] border border-blue-500/50 rounded-lg p-1.5 text-center text-sm text-white focus:outline-none"
+                                              />
+                                            ) : (
+                                              <input
+                                                type="checkbox"
+                                                checked={false}
+                                                onChange={() => handleToggleTarea(t.id, usuarioActual)}
+                                                className="mt-0.5 h-5 w-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                                              />
+                                            )}
                                             <span className="text-sm sm:text-base text-slate-100 font-semibold leading-snug">
-                                              {t.nombre}
+                                              {t.nombre}{t.conNota && <span className="text-xs text-purple-300 font-normal"> (con nota)</span>}
                                             </span>
                                           </div>
                                           <div className="pl-7 flex items-center justify-between">
@@ -957,7 +1017,7 @@ export default function Home() {
                       const estaDesplegado = !!alumnosDesplegados[alumno];
 
                       const pendientesTotal = materias.flatMap((m) =>
-                        m.tareas.filter((t) => !t.completadoPor.includes(alumno))
+                        m.tareas.filter((t) => !tareaCompletadaPor(t, alumno))
                       ).length;
 
                       return (
@@ -1004,7 +1064,7 @@ export default function Home() {
                               ) : (
                                 materias.map((m) => {
                                   const tareasPendientes = m.tareas.filter(
-                                    (t) => !t.completadoPor.includes(alumno)
+                                    (t) => !tareaCompletadaPor(t, alumno)
                                   );
 
                                   if (tareasPendientes.length === 0) return null;
@@ -1017,7 +1077,7 @@ export default function Home() {
                                       </h4>
                                       {gruposTareas.map((grupo) => (
                                         <div key={grupo.unidad || 'sin-unidad'} className="space-y-2 mb-3 last:mb-0">
-                                          {grupo.unidad && <p className="text-[11px] font-bold uppercase tracking-wider text-blue-300">Unidad {grupo.unidad}</p>}
+                                          {grupo.unidad && <p className="text-[11px] font-bold uppercase tracking-wider text-blue-300">Unidad {formatearUnidad(grupo.unidad)}</p>}
                                           <ul className="space-y-2">
                                             {grupo.tareas.map((t) => {
                                               const semaforo = calcularEstadoSemaforo(t.fin);
@@ -1061,10 +1121,10 @@ export default function Home() {
                     materias.map((m) => {
                       const mostrarCompletadas = !!materiasDesplegadas[m.id];
                       const tareasPendientes = m.tareas.filter(
-                        (t) => !t.completadoPor.includes(usuarioActual)
+                        (t) => !tareaCompletadaPor(t, usuarioActual)
                       );
                       const tareasCompletadas = m.tareas.filter(
-                        (t) => t.completadoPor.includes(usuarioActual)
+                        (t) => tareaCompletadaPor(t, usuarioActual)
                       );
                       const gruposTareas = agruparTareasPorUnidad(
                         mostrarCompletadas ? m.tareas : tareasPendientes
@@ -1118,7 +1178,7 @@ export default function Home() {
                                 <div key={grupo.unidad || 'sin-unidad'} className="space-y-3">
                                   {grupo.unidad && (
                                     <h3 className="border-b border-blue-500/20 pb-2 text-sm font-extrabold uppercase tracking-wider text-blue-300">
-                                      Unidad {grupo.unidad}
+                                      Unidad {formatearUnidad(grupo.unidad)}
                                     </h3>
                                   )}
                                   {grupo.tareas.map((t) => {
@@ -1135,6 +1195,11 @@ export default function Home() {
                                         <span className={`text-xs px-3 py-1 rounded-md border ${semaforo.estilo}`}>
                                           {semaforo.texto}
                                         </span>
+                                        {t.conNota && (
+                                          <span className="text-xs px-3 py-1 rounded-md border bg-purple-500/10 text-purple-300 border-purple-500/30">
+                                            Tarea con nota
+                                          </span>
+                                        )}
 
                                         {esAdmin && (
                                           <div className="flex gap-1.5 ml-auto sm:ml-2">
@@ -1174,6 +1239,24 @@ export default function Home() {
                                     </div>
 
                                     <div className="lg:w-[260px] border-t lg:border-t-0 lg:border-l border-slate-800 pt-4 lg:pt-0 lg:pl-6 flex flex-col justify-between">
+                                      {t.conNota ? (
+                                        <div>
+                                          <label className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">
+                                            Tu nota (1 a 10)
+                                          </label>
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            max="10"
+                                            step="0.01"
+                                            placeholder="-"
+                                            value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
+                                            onChange={(e) => handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
+                                            onBlur={() => handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
+                                            className="w-24 bg-[#161c26] border border-purple-500/50 rounded-lg p-2 text-center font-bold text-purple-300 focus:outline-none"
+                                          />
+                                        </div>
+                                      ) : (
                                       <div>
                                         <span className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">Completada por:</span>
                                         <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">
@@ -1202,6 +1285,7 @@ export default function Home() {
                                           )}
                                         </div>
                                       </div>
+                                      )}
                                     </div>
                                       </div>
                                     );
@@ -1310,7 +1394,10 @@ export default function Home() {
                                     <span>👤</span> Tu nota ({usuarioActual})
                                   </span>
                                   <input
-                                    type="text"
+                                    type="number"
+                                    min="1"
+                                    max="10"
+                                    step="0.01"
                                     placeholder="-"
                                     disabled={!esAdmin || !parcialDisponible}
                                     value={valorMiNota}
@@ -1341,7 +1428,10 @@ export default function Home() {
                                         <span>👤</span> {alum}
                                       </span>
                                       <input
-                                        type="text"
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        step="0.01"
                                         placeholder="-"
                                         disabled={!esAdmin || !parcialDisponible}
                                         value={valorNota}
@@ -1658,6 +1748,16 @@ export default function Home() {
                           className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-3 text-sm text-white focus:outline-none"
                         />
                       </div>
+
+                      <label className="flex items-center gap-3 text-sm font-semibold text-slate-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={tareaConNota}
+                          onChange={(e) => setTareaConNota(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-purple-600 focus:ring-purple-500"
+                        />
+                        Esta tarea se califica con nota
+                      </label>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -2047,6 +2147,21 @@ export default function Home() {
                   className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none"
                 />
               </div>
+
+              <label className="flex items-center gap-3 text-sm font-semibold text-slate-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(tareaEnEdicion.tarea.conNota)}
+                  onChange={(e) =>
+                    setTareaEnEdicion({
+                      ...tareaEnEdicion,
+                      tarea: { ...tareaEnEdicion.tarea, conNota: e.target.checked }
+                    })
+                  }
+                  className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-purple-600 focus:ring-purple-500"
+                />
+                Esta tarea se califica con nota
+              </label>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
