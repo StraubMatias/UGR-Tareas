@@ -931,6 +931,15 @@ export default function Home() {
               <span>🗓️</span> Horarios de cursada
             </button>
 
+            <a
+              href="https://drive.google.com/drive/folders/1DdVDpLcRHGLk19XnbICzCtVxw8xbo9Vg?usp=sharing"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border border-slate-800 bg-[#161c26] text-slate-400 hover:bg-slate-800/60 hover:text-white"
+            >
+              <span>📁</span> Drive
+            </a>
+
           </div>
 
           {cargando ? (
