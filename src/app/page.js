@@ -965,19 +965,7 @@ export default function Home() {
                                       return (
                                         <li key={t.id} className="flex flex-col gap-1.5 bg-[#161c26]/80 p-3 rounded-lg border border-slate-800/60">
                                           <div className="flex items-start gap-2.5">
-                                            {t.conNota ? (
-                                              <input
-                                                type="number"
-                                                min="1"
-                                                max="10"
-                                                step="0.01"
-                                                placeholder="Nota"
-                                                value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
-                                                onChange={(e) => handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
-                                                onBlur={() => handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
-                                                className="w-20 bg-[#0f141c] border border-blue-500/50 rounded-lg p-1.5 text-center text-sm text-white focus:outline-none"
-                                              />
-                                            ) : (
+                                            {!t.conNota && (
                                               <input
                                                 type="checkbox"
                                                 checked={false}
@@ -989,11 +977,44 @@ export default function Home() {
                                               {t.nombre}{t.conNota && <span className="text-xs text-purple-300 font-normal"> (con nota)</span>}
                                             </span>
                                           </div>
-                                          <div className="pl-7 flex items-center justify-between">
+                                          <div className="pl-7 flex items-end justify-between gap-3">
                                             <span className={`text-xs px-2.5 py-0.5 rounded-md border ${semaforo.estilo}`}>
                                               {semaforo.texto}
                                             </span>
+                                            {t.conNota && (
+                                              <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                pattern="[0-9]+([.,][0-9]+)?"
+                                                placeholder="Nota"
+                                                value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
+                                                onChange={(e) => handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
+                                                onBlur={() => handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
+                                                className="w-20 bg-[#0f141c] border border-purple-500/50 rounded-lg p-1.5 text-center text-sm text-white focus:outline-none"
+                                              />
+                                            )}
                                           </div>
+                                          {t.conNota && (
+                                            <details className="pl-7 pt-1">
+                                              <summary className="text-[11px] font-semibold text-blue-300 cursor-pointer select-none">
+                                                Ver notas de los demás
+                                              </summary>
+                                              <div className="mt-2 space-y-1">
+                                                {alumnos.filter((alumno) => alumno !== usuarioActual && t.notas?.[alumno] !== undefined).length > 0 ? (
+                                                  alumnos
+                                                    .filter((alumno) => alumno !== usuarioActual && t.notas?.[alumno] !== undefined)
+                                                    .map((alumno) => (
+                                                      <div key={alumno} className="flex justify-between gap-3 text-[11px] text-slate-300">
+                                                        <span className="truncate">{alumno}</span>
+                                                        <strong className="text-purple-300">{t.notas[alumno]}</strong>
+                                                      </div>
+                                                    ))
+                                                ) : (
+                                                  <span className="text-[11px] text-slate-500 italic">Todavía no hay notas cargadas.</span>
+                                                )}
+                                              </div>
+                                            </details>
+                                          )}
                                         </li>
                                       );
                                     })}
@@ -1245,10 +1266,9 @@ export default function Home() {
                                             Tu nota (1 a 10)
                                           </label>
                                           <input
-                                            type="number"
-                                            min="1"
-                                            max="10"
-                                            step="0.01"
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="[0-9]+([.,][0-9]+)?"
                                             placeholder="-"
                                             value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
                                             onChange={(e) => handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
@@ -1285,6 +1305,27 @@ export default function Home() {
                                           )}
                                         </div>
                                       </div>
+                                      )}
+                                      {t.conNota && (
+                                        <details className="mt-4 border-t border-slate-800 pt-3">
+                                          <summary className="text-xs font-semibold text-blue-300 cursor-pointer select-none">
+                                            Ver notas de los demás
+                                          </summary>
+                                          <div className="mt-2 space-y-1.5">
+                                            {alumnos.filter((alumno) => alumno !== usuarioActual && t.notas?.[alumno] !== undefined).length > 0 ? (
+                                              alumnos
+                                                .filter((alumno) => alumno !== usuarioActual && t.notas?.[alumno] !== undefined)
+                                                .map((alumno) => (
+                                                  <div key={alumno} className="flex justify-between gap-3 text-xs text-slate-300">
+                                                    <span className="truncate">{alumno}</span>
+                                                    <strong className="text-purple-300">{t.notas[alumno]}</strong>
+                                                  </div>
+                                                ))
+                                            ) : (
+                                              <span className="text-xs text-slate-500 italic">Todavía no hay notas cargadas.</span>
+                                            )}
+                                          </div>
+                                        </details>
                                       )}
                                     </div>
                                       </div>
@@ -1394,10 +1435,9 @@ export default function Home() {
                                     <span>👤</span> Tu nota ({usuarioActual})
                                   </span>
                                   <input
-                                    type="number"
-                                    min="1"
-                                    max="10"
-                                    step="0.01"
+                                    type="text"
+                                    inputMode="decimal"
+                                    pattern="[0-9]+([.,][0-9]+)?"
                                     placeholder="-"
                                     disabled={!esAdmin || !parcialDisponible}
                                     value={valorMiNota}
@@ -1428,10 +1468,9 @@ export default function Home() {
                                         <span>👤</span> {alum}
                                       </span>
                                       <input
-                                        type="number"
-                                        min="1"
-                                        max="10"
-                                        step="0.01"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9]+([.,][0-9]+)?"
                                         placeholder="-"
                                         disabled={!esAdmin || !parcialDisponible}
                                         value={valorNota}
