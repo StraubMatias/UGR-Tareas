@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { startTransition, useCallback, useEffect, useState } from 'react';
 import {
   validarLoginAction,
   obtenerDatos,
@@ -102,7 +102,9 @@ export default function Home() {
         const ahora = Date.now();
 
         if (ahora - timestamp < diezMinutosMs) {
-          setUsuarioActual(usuario);
+          startTransition(() => {
+            setUsuarioActual(usuario);
+          });
           localStorage.setItem('sesion_ugr', JSON.stringify({ usuario, timestamp: ahora }));
         } else {
           localStorage.removeItem('sesion_ugr');
@@ -111,7 +113,9 @@ export default function Home() {
         localStorage.removeItem('sesion_ugr');
       }
     }
-    setIniciado(true);
+    startTransition(() => {
+      setIniciado(true);
+    });
   }, []);
 
   const iniciarSesionLocal = (usuario) => {
@@ -250,7 +254,7 @@ export default function Home() {
     }
   };
 
-  const cargarBD = async () => {
+  const cargarBD = useCallback(async () => {
     setCargando(true);
     const [dataMaterias, dataAlumnos, dataParciales, dataHorarios] = await Promise.all([
       obtenerDatos(),
@@ -280,11 +284,13 @@ export default function Home() {
       if (!materiaHorarioSel) setMateriaHorarioSel(dataMaterias[0].id);
     }
     setCargando(false);
-  };
+  }, [materiaSel, materiaParcialSel, materiaHorarioSel]);
 
   useEffect(() => {
+    // La carga inicial sincroniza el estado con la base de datos externa.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     cargarBD();
-  }, []);
+  }, [cargarBD]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
