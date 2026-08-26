@@ -754,7 +754,8 @@ export default function Home() {
           ) : (
             <>
               {pestana === 'alumnos' && (
-                <div className="space-y-8">
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">
+                  <div className="space-y-8">
                   {/* TU TARJETA DESTACADA */}
                   <div className="bg-[#161c26] border-2 border-blue-500/80 rounded-2xl p-6 shadow-xl ring-1 ring-blue-500/20">
                     <div className="flex justify-between items-center mb-5 border-b border-slate-800 pb-3">
@@ -776,16 +777,6 @@ export default function Home() {
                         );
                       })()}
                     </div>
-
-                    {proximoParcial && (
-                      <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 bg-purple-950/20 border border-purple-500/30 rounded-xl px-4 py-3">
-                        <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">Próximo examen</span>
-                        <span className="text-sm font-semibold text-white">{proximoParcial.nombre}</span>
-                        <span className="text-xs text-purple-200">
-                          {materiaProximoParcial?.nombre || 'Materia'} · {formatearFechaDDMMAAAA(proximoParcial.fecha)}
-                        </span>
-                      </div>
-                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {(() => {
@@ -870,11 +861,6 @@ export default function Home() {
                               <span className="text-lg">👤</span>
                               <div className="flex flex-col items-start gap-1 min-w-0">
                                 <span className="text-base font-bold text-white">{alumno}</span>
-                                {proximoParcial && (
-                                  <span className="text-[11px] text-purple-300 truncate max-w-[220px]">
-                                    Próximo: {proximoParcial.nombre} · {formatearFechaDDMMAAAA(proximoParcial.fecha)}
-                                  </span>
-                                )}
                               </div>
                               <span className="text-xs text-slate-500 font-normal hidden sm:inline">
                                 {estaDesplegado ? '(Tocar para ocultar)' : '(Tocar para ver detalle)'}
@@ -942,6 +928,22 @@ export default function Home() {
                       );
                     })}
                   </div>
+                  </div>
+
+                  {proximoParcial && (
+                    <aside className="lg:sticky lg:top-6 bg-purple-950/20 border border-purple-500/30 rounded-2xl p-5 shadow-sm">
+                      <p className="text-xs font-bold text-purple-300 uppercase tracking-wider mb-4">Próximo examen</p>
+                      <div className="space-y-2">
+                        <h2 className="text-lg font-bold text-white leading-snug">{proximoParcial.nombre}</h2>
+                        <p className="text-sm text-purple-200 leading-relaxed">
+                          {materiaProximoParcial?.nombre || 'Materia'}
+                        </p>
+                        <p className="text-xs font-semibold text-purple-300 border-t border-purple-500/20 pt-3">
+                          {formatearFechaDDMMAAAA(proximoParcial.fecha)}
+                        </p>
+                      </div>
+                    </aside>
+                  )}
                 </div>
               )}
 
