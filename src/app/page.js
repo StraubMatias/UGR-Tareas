@@ -650,6 +650,30 @@ export default function Home() {
         .filter((nota) => nota.alumno === alumno)
         .map((nota) => Number.parseFloat(String(nota.nota).replace(',', '.')))
         .filter((nota) => Number.isFinite(nota) && nota >= 0 && nota <= 10);
+      const tareasConPuntaje = materias.flatMap((materia) => materia.tareas
+        .filter((tarea) => tareaCompletadaPor(tarea, alumno))
+        .map((tarea) => ({
+          materia: materia.nombre,
+          nombre: tarea.nombre,
+          puntos: tarea.conNota
+            ? Number.parseFloat(String(tarea.notas?.[alumno]).replace(',', '.'))
+            : esForo(tarea.nombre) ? 1 : 2,
+          tipo: tarea.conNota ? 'Nota de tarea' : esForo(tarea.nombre) ? 'Foro' : 'Actividad'
+        }))
+        .filter((tarea) => tarea.puntos >= (tarea.tipo === 'Nota de tarea' ? 1 : 0) && tarea.puntos <= (tarea.tipo === 'Nota de tarea' ? 10 : 2)));
+      const parcialesConPuntaje = notas
+        .filter((nota) => nota.alumno === alumno)
+        .map((nota) => {
+          const parcial = parciales.find((item) => item.id === nota.parcial_id);
+          const valor = Number.parseFloat(String(nota.nota).replace(',', '.'));
+          return {
+            nombre: parcial?.nombre || 'Parcial',
+            materia: materias.find((materia) => materia.id === parcial?.materia_id)?.nombre || 'Materia',
+            puntos: valor / 10,
+            nota: valor
+          };
+        })
+        .filter((parcial) => Number.isFinite(parcial.nota) && parcial.nota >= 0 && parcial.nota <= 10);
       const ultimaCompletadaEn = tareasCompletadas
         .map((tarea) => tarea.completadoEn?.[alumno])
         .filter(Boolean)
@@ -662,6 +686,8 @@ export default function Home() {
         puntos: foros + actividades * 2 + notasAlumno.reduce((total, nota) => total + nota / 10, 0) + notasTareasAlumno.reduce((total, nota) => total + nota, 0),
         foros,
         actividades,
+        tareasConPuntaje,
+        parcialesConPuntaje,
         ultimaCompletadaEn
       };
     })
@@ -685,6 +711,55 @@ export default function Home() {
 
     return grupos;
   }, []);
+
+  const renderDesgloseRanking = (item) => (
+    <details className="w-full mt-2 border-t border-slate-700/70 pt-3 text-left">
+      <summary className="cursor-pointer select-none text-xs font-semibold text-blue-300">
+        Ver historial y comparar
+      </summary>
+      <div className="mt-3 space-y-3 text-xs">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg bg-[#0f141c] p-2">
+            <span className="block text-slate-500">Actividades</span>
+            <strong className="text-slate-200">{item.actividades} x 2 = {(item.actividades * 2).toFixed(1)} pts</strong>
+          </div>
+          <div className="rounded-lg bg-[#0f141c] p-2">
+            <span className="block text-slate-500">Foros</span>
+            <strong className="text-slate-200">{item.foros} x 1 = {item.foros.toFixed(1)} pts</strong>
+          </div>
+        </div>
+        {item.tareasConPuntaje.length > 0 && (
+          <div>
+            <p className="mb-1 font-bold uppercase tracking-wider text-purple-300">Tareas con nota</p>
+            <div className="space-y-1">
+              {item.tareasConPuntaje.filter((tarea) => tarea.tipo === 'Nota de tarea').map((tarea) => (
+                <div key={`${tarea.materia}-${tarea.nombre}`} className="flex justify-between gap-3 text-slate-300">
+                  <span className="truncate">{tarea.materia}: {tarea.nombre}</span>
+                  <strong className="text-purple-300">{tarea.puntos.toFixed(1)} pts</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {item.parcialesConPuntaje.length > 0 && (
+          <div>
+            <p className="mb-1 font-bold uppercase tracking-wider text-amber-300">Parciales</p>
+            <div className="space-y-1">
+              {item.parcialesConPuntaje.map((parcial) => (
+                <div key={`${parcial.materia}-${parcial.nombre}`} className="flex justify-between gap-3 text-slate-300">
+                  <span className="truncate">{parcial.materia}: {parcial.nombre} ({parcial.nota}/10)</span>
+                  <strong className="text-amber-300">{parcial.puntos.toFixed(1)} pts</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <p className="border-t border-slate-800 pt-2 text-right font-bold text-emerald-300">
+          Total: {item.puntos.toFixed(1)} puntos
+        </p>
+      </div>
+    </details>
+  );
 
   return (
     <main className="min-h-screen bg-[#0f141c] text-slate-200 p-4 sm:p-6 md:p-10 font-sans selection:bg-blue-500 selection:text-white">
@@ -1506,7 +1581,7 @@ export default function Home() {
                         <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
                           <span>🏆</span> Ranking de la cursada
                         </h2>
-                        <p className="text-sm text-slate-400 mt-1">Las actividades valen 2 puntos y los foros valen 1.</p>
+                        <p className="text-sm text-slate-400 mt-1">Abrí el historial de cada alumno para ver de dónde salen sus puntos.</p>
                       </div>
                       <span className="text-xs text-slate-500">Se actualiza al marcar tareas</span>
                     </div>
@@ -1541,6 +1616,7 @@ export default function Home() {
                                 <span className="text-xs text-slate-400">
                                   {item.actividades} actividades · {item.foros} foros
                                 </span>
+                                {renderDesgloseRanking(item)}
                               </div>
                             );
                           })}
@@ -1564,6 +1640,7 @@ export default function Home() {
                                   <p className="text-xs text-slate-400 mt-1">
                                     {item.actividades} actividades · {item.foros} foros
                                   </p>
+                                  {renderDesgloseRanking(item)}
                                 </div>
                                 <span className="text-right">
                                   <strong className="block text-xl font-extrabold text-emerald-300">{item.puntos.toFixed(1)}</strong>
