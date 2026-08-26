@@ -597,7 +597,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#0f141c] text-slate-200 p-4 sm:p-6 md:p-10 font-sans selection:bg-blue-500 selection:text-white">
-      <header className="max-w-7xl mx-auto mb-8 bg-[#161c26] border border-slate-800 p-6 sm:p-8 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <header className="max-w-9xl mx-auto mb-8 bg-[#161c26] border border-slate-800 p-6 sm:p-8 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <span className="text-2xl">🎓</span>
@@ -707,7 +707,7 @@ export default function Home() {
           </div>
         </div>
       ) : (
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-9xl mx-auto">
           {/* NAVEGACIÓN */}
           <div className="flex flex-wrap gap-3 mb-8">
             <button
