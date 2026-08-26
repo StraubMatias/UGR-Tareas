@@ -292,7 +292,7 @@ export async function eliminarTareaAction(id) {
 
 export async function obtenerHorariosAction() {
   try {
-    const res = await db.execute('SELECT * FROM horarios ORDER BY dia ASC, hora_inicio ASC');
+    const res = await db.execute('SELECT * FROM horarios WHERE CAST(dia AS INTEGER) BETWEEN 1 AND 5 ORDER BY dia ASC, hora_inicio ASC');
     return res.rows;
   } catch (error) {
     console.error('Error al obtener horarios:', error);
@@ -306,10 +306,15 @@ export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, 
       return { exito: false, mensaje: 'Solo el administrador puede crear horarios.' };
     }
 
+    const diaNumerico = Number(dia);
+    if (!Number.isInteger(diaNumerico) || diaNumerico < 1 || diaNumerico > 5) {
+      return { exito: false, mensaje: 'Los horarios solo pueden cargarse de lunes a viernes.' };
+    }
+
     const id = 'horario_' + Date.now();
     await db.execute({
       sql: 'INSERT INTO horarios (id, materia_id, dia, hora_inicio, hora_fin, aula) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [id, materiaId, dia, horaInicio, horaFin, aula?.trim() || '']
+      args: [id, materiaId, diaNumerico, horaInicio, horaFin, aula?.trim() || '']
     });
     return { exito: true };
   } catch (error) {
