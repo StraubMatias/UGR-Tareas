@@ -158,15 +158,31 @@ export async function eliminarAlumnoAction(nombre) {
 
 export async function obtenerDatos() {
   try {
-    const resMaterias = await db.execute('SELECT * FROM materias ORDER BY nombre ASC');
-    const resTareas = await db.execute('SELECT * FROM tareas');
-    const resCompletadas = await db.execute('SELECT * FROM completadas');
+    const [resMaterias, resTareas, resCompletadas] = await Promise.all([
+      db.execute('SELECT * FROM materias ORDER BY nombre ASC'),
+      db.execute('SELECT * FROM tareas'),
+      db.execute('SELECT * FROM completadas')
+    ]);
+
+    const tareasPorMateria = new Map();
+    resTareas.rows.forEach((tarea) => {
+      const tareasMateria = tareasPorMateria.get(tarea.materia_id) || [];
+      tareasMateria.push(tarea);
+      tareasPorMateria.set(tarea.materia_id, tareasMateria);
+    });
+
+    const completadasPorTarea = new Map();
+    resCompletadas.rows.forEach((completada) => {
+      const completadasTarea = completadasPorTarea.get(completada.tarea_id) || [];
+      completadasTarea.push(completada);
+      completadasPorTarea.set(completada.tarea_id, completadasTarea);
+    });
 
     const materias = resMaterias.rows.map((m) => {
-      const tareasMateria = resTareas.rows.filter((t) => t.materia_id === m.id);
+      const tareasMateria = tareasPorMateria.get(m.id) || [];
 
       const tareasConCompletados = tareasMateria.map((t) => {
-        const completadas = resCompletadas.rows.filter((c) => c.tarea_id === t.id);
+        const completadas = completadasPorTarea.get(t.id) || [];
         const completadoPor = completadas.map((c) => c.alumno);
         const completadoEn = Object.fromEntries(
           completadas.map((c) => [c.alumno, c.completada_en])
@@ -341,8 +357,10 @@ export async function eliminarHorarioAction(id, usuario) {
 
 export async function obtenerParcialesAction() {
   try {
-    const resParciales = await db.execute('SELECT * FROM parciales ORDER BY fecha ASC');
-    const resNotas = await db.execute('SELECT * FROM notas_parciales');
+    const [resParciales, resNotas] = await Promise.all([
+      db.execute('SELECT * FROM parciales ORDER BY fecha ASC'),
+      db.execute('SELECT * FROM notas_parciales')
+    ]);
 
     return {
       parciales: resParciales.rows,
