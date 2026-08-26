@@ -145,6 +145,15 @@ export default function Home() {
     return Number.isNaN(fecha.getTime()) ? null : fecha.getTime();
   };
 
+  const obtenerDiasHastaParcial = (fechaStr) => {
+    const fechaParcialEnMs = obtenerFechaParcialEnMs(fechaStr);
+    if (fechaParcialEnMs === null) return null;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    return Math.max(0, Math.ceil((fechaParcialEnMs - hoy.getTime()) / (1000 * 60 * 60 * 24)));
+  };
+
   const ordenarParciales = (listaParciales) => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -754,7 +763,30 @@ export default function Home() {
           ) : (
             <>
               {pestana === 'alumnos' && (
-                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6 items-start">
+                  {proximoParcial && (
+                    <aside className="lg:sticky lg:top-6 bg-purple-950/20 border border-purple-500/30 rounded-2xl p-5 shadow-sm">
+                      <p className="text-xs font-bold text-purple-300 uppercase tracking-wider mb-4">Próximo examen</p>
+                      <div className="space-y-2">
+                        <h2 className="text-lg font-bold text-white leading-snug">{proximoParcial.nombre}</h2>
+                        <p className="text-sm text-purple-200 leading-relaxed">
+                          {materiaProximoParcial?.nombre || 'Materia'}
+                        </p>
+                        <p className="text-xs font-semibold text-purple-300 border-t border-purple-500/20 pt-3">
+                          Fecha: {formatearFechaDDMMAAAA(proximoParcial.fecha)}
+                        </p>
+                        {(() => {
+                          const diasHastaParcial = obtenerDiasHastaParcial(proximoParcial.fecha);
+                          return diasHastaParcial === null ? null : (
+                            <p className="text-sm font-bold text-amber-300 pt-2">
+                              {diasHastaParcial === 0 ? 'Es hoy' : `Faltan ${diasHastaParcial} días`}
+                            </p>
+                          );
+                        })()}
+                      </div>
+                    </aside>
+                  )}
+
                   <div className="space-y-8">
                   {/* TU TARJETA DESTACADA */}
                   <div className="bg-[#161c26] border-2 border-blue-500/80 rounded-2xl p-6 shadow-xl ring-1 ring-blue-500/20">
@@ -930,20 +962,6 @@ export default function Home() {
                   </div>
                   </div>
 
-                  {proximoParcial && (
-                    <aside className="lg:sticky lg:top-6 bg-purple-950/20 border border-purple-500/30 rounded-2xl p-5 shadow-sm">
-                      <p className="text-xs font-bold text-purple-300 uppercase tracking-wider mb-4">Próximo examen</p>
-                      <div className="space-y-2">
-                        <h2 className="text-lg font-bold text-white leading-snug">{proximoParcial.nombre}</h2>
-                        <p className="text-sm text-purple-200 leading-relaxed">
-                          {materiaProximoParcial?.nombre || 'Materia'}
-                        </p>
-                        <p className="text-xs font-semibold text-purple-300 border-t border-purple-500/20 pt-3">
-                          {formatearFechaDDMMAAAA(proximoParcial.fecha)}
-                        </p>
-                      </div>
-                    </aside>
-                  )}
                 </div>
               )}
 
