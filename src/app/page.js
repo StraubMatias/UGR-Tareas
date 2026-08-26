@@ -60,11 +60,14 @@ export default function Home() {
   // Forms Admin (Tareas/Materias/Alumnos)
   const [nuevoAlumnoNombre, setNuevoAlumnoNombre] = useState('');
   const [nuevaMateriaNombre, setNuevaMateriaNombre] = useState('');
+  const [nuevoMateriaAnio, setNuevoMateriaAnio] = useState('2026');
+  const [nuevoMateriaCuatrimestre, setNuevoMateriaCuatrimestre] = useState('2');
   const [materiaSel, setMateriaSel] = useState('');
   const [nombreTarea, setNombreTarea] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [detallesTarea, setDetallesTarea] = useState('');
+  const [unidadTarea, setUnidadTarea] = useState('');
 
   // Form Admin (Parciales)
   const [materiaParcialSel, setMateriaParcialSel] = useState('');
@@ -191,6 +194,24 @@ export default function Home() {
 
       return a.nombre.localeCompare(b.nombre);
     });
+  };
+
+  const agruparTareasPorUnidad = (listaTareas) => {
+    const grupos = new Map();
+    listaTareas.forEach((tarea) => {
+      const unidad = tarea.unidad?.trim() || '';
+      const grupo = grupos.get(unidad) || [];
+      grupo.push(tarea);
+      grupos.set(unidad, grupo);
+    });
+
+    return [...grupos.entries()]
+      .sort(([unidadA], [unidadB]) => {
+        if (!unidadA) return -1;
+        if (!unidadB) return 1;
+        return unidadA.localeCompare(unidadB, 'es', { numeric: true });
+      })
+      .map(([unidad, tareas]) => ({ unidad, tareas: ordenarTareas(tareas) }));
   };
 
   const esForo = (nombreTarea) => /\(\s*foro\s*\)/i.test(nombreTarea || '');
@@ -346,7 +367,15 @@ export default function Home() {
   const handleCrearMateria = async (e) => {
     e.preventDefault();
     if (!nuevaMateriaNombre.trim()) return;
-    await crearMateriaAction(nuevaMateriaNombre);
+    const resultado = await crearMateriaAction({
+      nombre: nuevaMateriaNombre,
+      anio: nuevoMateriaAnio,
+      cuatrimestre: nuevoMateriaCuatrimestre
+    });
+    if (!resultado?.exito) {
+      alert(resultado?.mensaje || 'No se pudo crear la materia.');
+      return;
+    }
     setNuevaMateriaNombre('');
     await cargarBD();
   };
@@ -369,17 +398,23 @@ export default function Home() {
   const handleCrearTarea = async (e) => {
     e.preventDefault();
     if (!nombreTarea.trim() || !materiaSel) return;
-    await crearTareaAction({
+    const resultado = await crearTareaAction({
       materiaId: materiaSel,
       nombre: nombreTarea,
       inicio: fechaInicio,
       fin: fechaFin,
-      detalles: detallesTarea
+      detalles: detallesTarea,
+      unidad: unidadTarea
     });
+    if (!resultado?.exito) {
+      alert(resultado?.mensaje || 'No se pudo crear la tarea.');
+      return;
+    }
     setNombreTarea('');
     setFechaInicio('');
     setFechaFin('');
     setDetallesTarea('');
+    setUnidadTarea('');
     await cargarBD();
     setPestana('materias');
   };
@@ -387,7 +422,11 @@ export default function Home() {
   const handleGuardarEdicionTarea = async (e) => {
     e.preventDefault();
     if (!tareaEnEdicion) return;
-    await editarTareaAction(tareaEnEdicion.tarea);
+    const resultado = await editarTareaAction(tareaEnEdicion.tarea);
+    if (!resultado?.exito) {
+      alert(resultado?.mensaje || 'No se pudo editar la tarea.');
+      return;
+    }
     setTareaEnEdicion(null);
     await cargarBD();
   };
@@ -858,38 +897,43 @@ export default function Home() {
                           const tareasPendientes = m.tareas.filter(
                             (t) => !t.completadoPor.includes(usuarioActual)
                           );
-                          const tareasOrdenadas = ordenarTareas(tareasPendientes);
+                          const gruposTareas = agruparTareasPorUnidad(tareasPendientes);
 
                           return (
                             <div key={m.id} className="bg-[#0f141c] p-4 rounded-xl border border-slate-800/80">
                               <h3 className="text-sm font-bold text-amber-400/90 mb-3 flex items-center gap-1.5">
                                 <span>📌</span> {m.nombre}
                               </h3>
-                              <ul className="space-y-3">
-                                {tareasOrdenadas.map((t) => {
-                                  const semaforo = calcularEstadoSemaforo(t.fin);
-                                  return (
-                                    <li key={t.id} className="flex flex-col gap-1.5 bg-[#161c26]/80 p-3 rounded-lg border border-slate-800/60">
-                                      <div className="flex items-start gap-2.5">
-                                        <input
-                                          type="checkbox"
-                                          checked={false}
-                                          onChange={() => handleToggleTarea(t.id, usuarioActual)}
-                                          className="mt-0.5 h-5 w-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
-                                        />
-                                        <span className="text-sm sm:text-base text-slate-100 font-semibold leading-snug">
-                                          {t.nombre}
-                                        </span>
-                                      </div>
-                                      <div className="pl-7 flex items-center justify-between">
-                                        <span className={`text-xs px-2.5 py-0.5 rounded-md border ${semaforo.estilo}`}>
-                                          {semaforo.texto}
-                                        </span>
-                                      </div>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
+                              {gruposTareas.map((grupo) => (
+                                <div key={grupo.unidad || 'sin-unidad'} className="space-y-2.5">
+                                  {grupo.unidad && <p className="text-xs font-bold uppercase tracking-wider text-blue-300">Unidad {grupo.unidad}</p>}
+                                  <ul className="space-y-3">
+                                    {grupo.tareas.map((t) => {
+                                      const semaforo = calcularEstadoSemaforo(t.fin);
+                                      return (
+                                        <li key={t.id} className="flex flex-col gap-1.5 bg-[#161c26]/80 p-3 rounded-lg border border-slate-800/60">
+                                          <div className="flex items-start gap-2.5">
+                                            <input
+                                              type="checkbox"
+                                              checked={false}
+                                              onChange={() => handleToggleTarea(t.id, usuarioActual)}
+                                              className="mt-0.5 h-5 w-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                                            />
+                                            <span className="text-sm sm:text-base text-slate-100 font-semibold leading-snug">
+                                              {t.nombre}
+                                            </span>
+                                          </div>
+                                          <div className="pl-7 flex items-center justify-between">
+                                            <span className={`text-xs px-2.5 py-0.5 rounded-md border ${semaforo.estilo}`}>
+                                              {semaforo.texto}
+                                            </span>
+                                          </div>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                </div>
+                              ))}
                             </div>
                           );
                         });
@@ -958,28 +1002,33 @@ export default function Home() {
                                   );
 
                                   if (tareasPendientes.length === 0) return null;
-                                  const tareasOrdenadas = ordenarTareas(tareasPendientes);
+                                  const gruposTareas = agruparTareasPorUnidad(tareasPendientes);
 
                                   return (
                                     <div key={m.id} className="bg-[#0f141c] p-4 rounded-xl border border-slate-800/60">
                                       <h4 className="text-xs font-bold text-amber-400 mb-2 flex items-center gap-1.5">
                                         <span>📌</span> {m.nombre}
                                       </h4>
-                                      <ul className="space-y-2">
-                                        {tareasOrdenadas.map((t) => {
-                                          const semaforo = calcularEstadoSemaforo(t.fin);
-                                          return (
-                                            <li key={t.id} className="bg-[#161c26]/60 p-2.5 rounded-lg border border-slate-800/50 flex flex-col gap-1">
-                                              <span className="text-xs text-slate-200 font-semibold">
-                                                • {t.nombre}
-                                              </span>
-                                              <span className={`text-[10px] w-fit px-2 py-0.5 rounded border ${semaforo.estilo}`}>
-                                                {semaforo.texto}
-                                              </span>
-                                            </li>
-                                          );
-                                        })}
-                                      </ul>
+                                      {gruposTareas.map((grupo) => (
+                                        <div key={grupo.unidad || 'sin-unidad'} className="space-y-2 mb-3 last:mb-0">
+                                          {grupo.unidad && <p className="text-[11px] font-bold uppercase tracking-wider text-blue-300">Unidad {grupo.unidad}</p>}
+                                          <ul className="space-y-2">
+                                            {grupo.tareas.map((t) => {
+                                              const semaforo = calcularEstadoSemaforo(t.fin);
+                                              return (
+                                                <li key={t.id} className="bg-[#161c26]/60 p-2.5 rounded-lg border border-slate-800/50 flex flex-col gap-1">
+                                                  <span className="text-xs text-slate-200 font-semibold">
+                                                    • {t.nombre}
+                                                  </span>
+                                                  <span className={`text-[10px] w-fit px-2 py-0.5 rounded border ${semaforo.estilo}`}>
+                                                    {semaforo.texto}
+                                                  </span>
+                                                </li>
+                                              );
+                                            })}
+                                          </ul>
+                                        </div>
+                                      ))}
                                     </div>
                                   );
                                 })
@@ -1011,7 +1060,7 @@ export default function Home() {
                       const tareasCompletadas = m.tareas.filter(
                         (t) => t.completadoPor.includes(usuarioActual)
                       );
-                      const tareasOrdenadas = ordenarTareas(
+                      const gruposTareas = agruparTareasPorUnidad(
                         mostrarCompletadas ? m.tareas : tareasPendientes
                       );
 
@@ -1052,18 +1101,25 @@ export default function Home() {
                           </div>
 
                           <div className="grid grid-cols-1 gap-5">
-                            {tareasOrdenadas.length === 0 ? (
+                            {gruposTareas.length === 0 ? (
                               <p className="text-sm text-slate-500 italic">
                                 {m.tareas.length === 0
                                   ? 'Sin consignas cargadas en esta materia.'
                                   : 'Ya completaste todas las tareas de esta materia.'}
                               </p>
                             ) : (
-                              tareasOrdenadas.map((t) => {
-                                const semaforo = calcularEstadoSemaforo(t.fin);
+                              gruposTareas.map((grupo) => (
+                                <div key={grupo.unidad || 'sin-unidad'} className="space-y-3">
+                                  {grupo.unidad && (
+                                    <h3 className="border-b border-blue-500/20 pb-2 text-sm font-extrabold uppercase tracking-wider text-blue-300">
+                                      Unidad {grupo.unidad}
+                                    </h3>
+                                  )}
+                                  {grupo.tareas.map((t) => {
+                                    const semaforo = calcularEstadoSemaforo(t.fin);
 
-                                return (
-                                  <div key={t.id} className="bg-[#0f141c] p-6 rounded-xl border border-slate-800/80 flex flex-col lg:flex-row justify-between gap-6">
+                                    return (
+                                      <div key={t.id} className="bg-[#0f141c] p-6 rounded-xl border border-slate-800/80 flex flex-col lg:flex-row justify-between gap-6">
                                     <div className="space-y-3 flex-1">
                                       <div className="flex items-center gap-3 flex-wrap">
                                         <h3 className="font-bold text-blue-400 text-base sm:text-lg flex items-center gap-2">
@@ -1141,9 +1197,11 @@ export default function Home() {
                                         </div>
                                       </div>
                                     </div>
-                                  </div>
-                                );
-                              })
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ))
                             )}
                           </div>
                         </div>
@@ -1472,6 +1530,31 @@ export default function Home() {
                           className="w-full bg-[#0f141c] border border-slate-800 focus:border-amber-400 rounded-xl p-3 text-sm text-white focus:outline-none transition-all"
                         />
                       </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">Año</label>
+                          <input
+                            type="number"
+                            min="2000"
+                            step="1"
+                            required
+                            value={nuevoMateriaAnio}
+                            onChange={(e) => setNuevoMateriaAnio(e.target.value)}
+                            className="w-full bg-[#0f141c] border border-slate-800 focus:border-amber-400 rounded-xl p-3 text-sm text-white focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">Cuatrimestre</label>
+                          <select
+                            value={nuevoMateriaCuatrimestre}
+                            onChange={(e) => setNuevoMateriaCuatrimestre(e.target.value)}
+                            className="w-full bg-[#0f141c] border border-slate-800 focus:border-amber-400 rounded-xl p-3 text-sm text-white focus:outline-none cursor-pointer"
+                          >
+                            <option value="1">1°</option>
+                            <option value="2">2°</option>
+                          </select>
+                        </div>
+                      </div>
                       <button type="submit" className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
                         Guardar Alumno
                       </button>
@@ -1553,6 +1636,19 @@ export default function Home() {
                           placeholder="Ej: TP N°1 - Análisis de Logs"
                           value={nombreTarea}
                           onChange={(e) => setNombreTarea(e.target.value)}
+                          className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-3 text-sm text-white focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Unidad (opcional)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          placeholder="Ej: 1"
+                          value={unidadTarea}
+                          onChange={(e) => setUnidadTarea(e.target.value)}
                           className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-3 text-sm text-white focus:outline-none"
                         />
                       </div>
@@ -1922,6 +2018,24 @@ export default function Home() {
                     setTareaEnEdicion({
                       ...tareaEnEdicion,
                       tarea: { ...tareaEnEdicion.tarea, nombre: e.target.value }
+                    })
+                  }
+                  className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Unidad (opcional)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="Ej: 1"
+                  value={tareaEnEdicion.tarea.unidad || ''}
+                  onChange={(e) =>
+                    setTareaEnEdicion({
+                      ...tareaEnEdicion,
+                      tarea: { ...tareaEnEdicion.tarea, unidad: e.target.value }
                     })
                   }
                   className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none"

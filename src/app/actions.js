@@ -194,6 +194,7 @@ export async function obtenerDatos() {
           inicio: t.inicio,
           fin: t.fin,
           detalles: t.detalles,
+          unidad: t.unidad || '',
           completadoPor,
           completadoEn
         };
@@ -236,15 +237,36 @@ export async function toggleTareaAction(tareaId, alumno) {
   }
 }
 
-export async function crearMateriaAction(nombre) {
+export async function crearMateriaAction({ nombre, anio, cuatrimestre }) {
   try {
+    const nombreFormateado = nombre?.trim();
+    const anioNumerico = Number(anio);
+    const cuatrimestreNumerico = Number(cuatrimestre);
+
+    if (!nombreFormateado) {
+      return { exito: false, mensaje: 'El nombre de la materia es obligatorio.' };
+    }
+    if (!Number.isInteger(anioNumerico) || anioNumerico < 2000) {
+      return { exito: false, mensaje: 'Ingresá un año válido.' };
+    }
+    if (![1, 2].includes(cuatrimestreNumerico)) {
+      return { exito: false, mensaje: 'El cuatrimestre debe ser 1 o 2.' };
+    }
+
+    const periodoId = `periodo_${anioNumerico}_${cuatrimestreNumerico}`;
     const id = 'm_' + Date.now();
     await db.execute({
-      sql: 'INSERT INTO materias (id, nombre) VALUES (?, ?)',
-      args: [id, nombre.toUpperCase().trim()]
+      sql: 'INSERT OR IGNORE INTO periodos (id, anio, cuatrimestre, nombre, activo) VALUES (?, ?, ?, ?, 1)',
+      args: [periodoId, anioNumerico, cuatrimestreNumerico, `${anioNumerico} - ${cuatrimestreNumerico}° cuatrimestre`]
     });
+    await db.execute({
+      sql: 'INSERT INTO materias (id, nombre, periodo_id) VALUES (?, ?, ?)',
+      args: [id, nombreFormateado.toUpperCase(), periodoId]
+    });
+    return { exito: true };
   } catch (error) {
     console.error('Error en crearMateriaAction:', error);
+    return { exito: false, mensaje: 'No se pudo crear la materia.' };
   }
 }
 
@@ -270,26 +292,42 @@ export async function eliminarMateriaAction(id) {
   }
 }
 
-export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles }) {
+export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles, unidad }) {
   try {
+    const unidadLimpia = unidad?.trim() || '';
+    if (unidadLimpia && (!/^\d+$/.test(unidadLimpia) || Number(unidadLimpia) < 1)) {
+      return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
+    }
+    const unidadNumerica = unidadLimpia ? Number(unidadLimpia) : null;
+
     const id = 't_' + Date.now();
     await db.execute({
-      sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [id, materiaId, nombre, inicio || 'Sin fecha', fin || 'Sin fecha', detalles || 'Sin observaciones']
+      sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: [id, materiaId, nombre, inicio || 'Sin fecha', fin || 'Sin fecha', detalles || 'Sin observaciones', unidadNumerica]
     });
+    return { exito: true };
   } catch (error) {
     console.error('Error en crearTareaAction:', error);
+    return { exito: false, mensaje: 'No se pudo crear la tarea.' };
   }
 }
 
-export async function editarTareaAction({ id, nombre, inicio, fin, detalles }) {
+export async function editarTareaAction({ id, nombre, inicio, fin, detalles, unidad }) {
   try {
+    const unidadLimpia = unidad?.trim() || '';
+    if (unidadLimpia && (!/^\d+$/.test(unidadLimpia) || Number(unidadLimpia) < 1)) {
+      return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
+    }
+    const unidadNumerica = unidadLimpia ? Number(unidadLimpia) : null;
+
     await db.execute({
-      sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ? WHERE id = ?',
-      args: [nombre, inicio, fin, detalles, id]
+      sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ? WHERE id = ?',
+      args: [nombre, inicio, fin, detalles, unidadNumerica, id]
     });
+    return { exito: true };
   } catch (error) {
     console.error('Error en editarTareaAction:', error);
+    return { exito: false, mensaje: 'No se pudo editar la tarea.' };
   }
 }
 
