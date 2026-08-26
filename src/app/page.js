@@ -537,6 +537,18 @@ export default function Home() {
   const materiaProximoParcial = proximoParcial
     ? materias.find((materia) => materia.id === proximoParcial.materia_id)
     : null;
+  const horariosProximoParcial = proximoParcial
+    ? horarios
+      .filter((horario) => horario.materia_id === proximoParcial.materia_id)
+      .sort((a, b) => String(a.dia).localeCompare(String(b.dia)) || a.hora_inicio.localeCompare(b.hora_inicio))
+    : [];
+  const nombresDias = {
+    1: 'Lunes',
+    2: 'Martes',
+    3: 'Miércoles',
+    4: 'Jueves',
+    5: 'Viernes'
+  };
   const ranking = alumnos
     .map((alumno) => {
       const tareasCompletadas = materias.flatMap((materia) => materia.tareas)
@@ -585,7 +597,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#0f141c] text-slate-200 p-4 sm:p-6 md:p-10 font-sans selection:bg-blue-500 selection:text-white">
-      <header className="max-w-6xl mx-auto mb-8 bg-[#161c26] border border-slate-800 p-6 sm:p-8 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <header className="max-w-7xl mx-auto mb-8 bg-[#161c26] border border-slate-800 p-6 sm:p-8 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <span className="text-2xl">🎓</span>
@@ -695,7 +707,7 @@ export default function Home() {
           </div>
         </div>
       ) : (
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           {/* NAVEGACIÓN */}
           <div className="flex flex-wrap gap-3 mb-8">
             <button
@@ -775,6 +787,24 @@ export default function Home() {
                         <p className="text-xs font-semibold text-purple-300 border-t border-purple-500/20 pt-3">
                           Fecha: {formatearFechaDDMMAAAA(proximoParcial.fecha)}
                         </p>
+                        <div className="border-t border-purple-500/20 pt-3">
+                          <p className="text-xs font-bold uppercase tracking-wider text-purple-300 mb-2">Cursada</p>
+                          {horariosProximoParcial.length === 0 ? (
+                            <p className="text-xs text-purple-200/70">Horario no cargado</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {horariosProximoParcial.map((horario) => (
+                                <div key={horario.id} className="text-xs text-purple-100">
+                                  <p className="font-bold">{nombresDias[Number(horario.dia)] || `Día ${horario.dia}`}</p>
+                                  <p className="text-purple-200">
+                                    {horario.hora_inicio} - {horario.hora_fin}
+                                    {horario.aula ? ` · Aula ${horario.aula}` : ''}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         {(() => {
                           const diasHastaParcial = obtenerDiasHastaParcial(proximoParcial.fecha);
                           return diasHastaParcial === null ? null : (
