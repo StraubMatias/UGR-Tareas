@@ -149,6 +149,20 @@ export default function Home() {
     return fechaStr;
   };
 
+  const formatearFechaHora = (fechaStr) => {
+    if (!fechaStr) return 'Fecha no disponible';
+    const fecha = new Date(String(fechaStr).endsWith('Z') ? fechaStr : `${String(fechaStr).replace(' ', 'T')}Z`);
+    if (Number.isNaN(fecha.getTime())) return 'Fecha no disponible';
+    return fecha.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+  };
+
+  const obtenerTimestamp = (fechaStr) => {
+    if (!fechaStr) return null;
+    const fecha = new Date(String(fechaStr).endsWith('Z') ? fechaStr : `${String(fechaStr).replace(' ', 'T')}Z`);
+    const timestamp = fecha.getTime();
+    return Number.isFinite(timestamp) ? timestamp : null;
+  };
+
   const obtenerFechaParcialEnMs = (fechaStr) => {
     if (!fechaStr || fechaStr === 'Sin fecha') return null;
     const partes = fechaStr.split('-').map(Number);
@@ -655,6 +669,7 @@ export default function Home() {
         .map((tarea) => ({
           materia: materia.nombre,
           nombre: tarea.nombre,
+          fechaCarga: tarea.conNota ? tarea.notaCargadaEn?.[alumno] : tarea.completadoEn?.[alumno],
           puntos: tarea.conNota
             ? Number.parseFloat(String(tarea.notas?.[alumno]).replace(',', '.'))
             : esForo(tarea.nombre) ? 1 : 2,
@@ -675,10 +690,9 @@ export default function Home() {
         })
         .filter((parcial) => Number.isFinite(parcial.nota) && parcial.nota >= 0 && parcial.nota <= 10);
       const ultimaCompletadaEn = tareasCompletadas
-        .map((tarea) => tarea.completadoEn?.[alumno])
-        .filter(Boolean)
-        .map((fecha) => Date.parse(fecha.replace(' ', 'T') + 'Z'))
-        .filter((fecha) => Number.isFinite(fecha))
+        .map((tarea) => tarea.conNota ? tarea.notaCargadaEn?.[alumno] : tarea.completadoEn?.[alumno])
+        .map(obtenerTimestamp)
+        .filter((fecha) => fecha !== null)
         .sort((a, b) => b - a)[0] || Number.MAX_SAFE_INTEGER;
 
       return {
@@ -734,8 +748,13 @@ export default function Home() {
             <div className="space-y-1">
               {item.tareasConPuntaje.filter((tarea) => tarea.tipo === 'Nota de tarea').map((tarea) => (
                 <div key={`${tarea.materia}-${tarea.nombre}`} className="flex justify-between gap-3 text-slate-300">
-                  <span className="truncate">{tarea.materia}: {tarea.nombre}</span>
-                  <strong className="text-purple-300">{tarea.puntos.toFixed(1)} pts</strong>
+                  <span className="min-w-0 truncate">
+                    <span className="block truncate">{tarea.materia}: {tarea.nombre}</span>
+                    <small className="block text-[10px] text-slate-500">
+                      Cargada: {formatearFechaHora(tarea.fechaCarga)}
+                    </small>
+                  </span>
+                  <strong className="shrink-0 text-purple-300">{tarea.puntos.toFixed(1)} pts</strong>
                 </div>
               ))}
             </div>

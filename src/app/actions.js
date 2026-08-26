@@ -19,8 +19,14 @@ function parcialHabilitado(fecha) {
 
 async function asegurarEsquemaNotasTareas() {
   await db.execute(
-    'CREATE TABLE IF NOT EXISTS notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT NOT NULL, alumno TEXT NOT NULL, nota TEXT NOT NULL, UNIQUE(tarea_id, alumno))'
+    'CREATE TABLE IF NOT EXISTS notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT NOT NULL, alumno TEXT NOT NULL, nota TEXT NOT NULL, cargada_en TEXT, UNIQUE(tarea_id, alumno))'
   );
+
+  try {
+    await db.execute('ALTER TABLE notas_tareas ADD COLUMN cargada_en TEXT');
+  } catch (error) {
+    // La columna ya existe en instalaciones que recibieron la migración.
+  }
 
   try {
     await db.execute('ALTER TABLE tareas ADD COLUMN con_nota INTEGER NOT NULL DEFAULT 0');
@@ -213,12 +219,17 @@ export async function obtenerDatos() {
       completadasPorTarea.set(completada.tarea_id, completadasTarea);
     });
 
-    const resNotasTareas = await db.execute('SELECT tarea_id, alumno, nota FROM notas_tareas');
+    const resNotasTareas = await db.execute('SELECT tarea_id, alumno, nota, cargada_en FROM notas_tareas');
     const notasPorTarea = new Map();
+    const fechasNotasPorTarea = new Map();
     resNotasTareas.rows.forEach((nota) => {
       const notasTarea = notasPorTarea.get(nota.tarea_id) || {};
       notasTarea[nota.alumno] = nota.nota;
       notasPorTarea.set(nota.tarea_id, notasTarea);
+
+      const fechasNotasTarea = fechasNotasPorTarea.get(nota.tarea_id) || {};
+      fechasNotasTarea[nota.alumno] = nota.cargada_en;
+      fechasNotasPorTarea.set(nota.tarea_id, fechasNotasTarea);
     });
 
     const materias = resMaterias.rows.map((m) => {
@@ -227,6 +238,7 @@ export async function obtenerDatos() {
       const tareasConCompletados = tareasMateria.map((t) => {
         const completadas = completadasPorTarea.get(t.id) || [];
         const notas = notasPorTarea.get(t.id) || {};
+        const notaCargadaEn = fechasNotasPorTarea.get(t.id) || {};
         const completadoPor = completadas.map((c) => c.alumno);
         const completadoEn = Object.fromEntries(
           completadas.map((c) => [c.alumno, c.completada_en])
@@ -242,7 +254,8 @@ export async function obtenerDatos() {
           conNota: Number(t.con_nota) === 1,
           completadoPor,
           completadoEn,
-          notas
+          notas,
+          notaCargadaEn
         };
       });
 
@@ -597,9 +610,10 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
         args: [tareaId, alumno]
       });
     } else {
+      const cargadaEn = new Date().toISOString();
       await db.execute({
-        sql: 'INSERT INTO notas_tareas (id, tarea_id, alumno, nota) VALUES (?, ?, ?, ?) ON CONFLICT(tarea_id, alumno) DO UPDATE SET nota = excluded.nota',
-        args: [`nota_tarea_${Date.now()}`, tareaId, alumno, validacion.valor]
+        sql: 'INSERT INTO notas_tareas (id, tarea_id, alumno, nota, cargada_en) VALUES (?, ?, ?, ?, ?) ON CONFLICT(tarea_id, alumno) DO UPDATE SET nota = excluded.nota, cargada_en = excluded.cargada_en',
+        args: [`nota_tarea_${Date.now()}`, tareaId, alumno, validacion.valor, cargadaEn]
       });
     }
 
