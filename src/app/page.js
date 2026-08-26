@@ -875,7 +875,7 @@ export default function Home() {
       ) : (
         <div className="max-w-9xl mx-auto">
           {/* NAVEGACIÓN */}
-          <div className="flex flex-wrap gap-3 mb-8">
+          <div className="sticky top-0 z-40 -mx-4 px-4 py-3 sm:-mx-6 sm:px-6 md:-mx-10 md:px-10 mb-8 border-b border-slate-800/80 bg-[#0f141c]/95 shadow-lg backdrop-blur-sm flex flex-wrap gap-3">
             <button
               onClick={() => setPestana('alumnos')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
