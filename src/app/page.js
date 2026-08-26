@@ -1613,9 +1613,6 @@ export default function Home() {
                                 <p className="font-extrabold text-white text-lg truncate max-w-full">{item.alumno}</p>
                                 <strong className="text-2xl font-extrabold text-emerald-300">{item.puntos.toFixed(1)}</strong>
                                 <span className="text-[10px] uppercase tracking-wider text-slate-400">puntos</span>
-                                <span className="text-xs text-slate-400">
-                                  {item.actividades} actividades · {item.foros} foros
-                                </span>
                                 {renderDesgloseRanking(item)}
                               </div>
                             );
@@ -1637,9 +1634,6 @@ export default function Home() {
                                 <span className="w-8 text-center text-lg font-extrabold text-slate-400">#{indice + 4}</span>
                                 <div className="min-w-0 flex-1">
                                   <p className="font-bold text-white truncate">{item.alumno}</p>
-                                  <p className="text-xs text-slate-400 mt-1">
-                                    {item.actividades} actividades · {item.foros} foros
-                                  </p>
                                   {renderDesgloseRanking(item)}
                                 </div>
                                 <span className="text-right">
