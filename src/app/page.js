@@ -612,11 +612,55 @@ export default function Home() {
     return !Number.isNaN(fechaParcial.getTime()) && fechaParcial <= hoy;
   };
 
+  const tareaEstaHabilitada = (fecha) => {
+    if (!fecha || fecha === 'Sin fecha') return true;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaInicio = new Date(`${fecha}T00:00:00`);
+    return !Number.isNaN(fechaInicio.getTime()) && fechaInicio <= hoy;
+  };
+
+  const historialPorAlumno = (alumno) => {
+    const tareas = materias.flatMap((materia) => materia.tareas
+      .filter((tarea) => tareaCompletadaPor(tarea, alumno))
+      .map((tarea) => ({
+        id: `tarea-${tarea.id}`,
+        materia: materia.nombre,
+        nombre: tarea.nombre,
+        fecha: tarea.conNota ? tarea.notaCargadaEn?.[alumno] : tarea.completadoEn?.[alumno],
+        nota: tarea.conNota ? tarea.notas?.[alumno] : null,
+        tipo: tarea.conNota ? 'Tarea con nota' : esForo(tarea.nombre) ? 'Foro' : 'Actividad'
+      })));
+    const parcialesDelAlumno = notas
+      .filter((nota) => nota.alumno === alumno)
+      .map((nota) => {
+        const parcial = parciales.find((item) => item.id === nota.parcial_id);
+        return {
+          id: `parcial-${nota.parcial_id}`,
+          materia: materias.find((materia) => materia.id === parcial?.materia_id)?.nombre || 'Materia',
+          nombre: parcial?.nombre || 'Parcial',
+          fecha: nota.cargada_en,
+          nota: nota.nota,
+          tipo: 'Parcial'
+        };
+      });
+
+    return [...tareas, ...parcialesDelAlumno].sort((a, b) => obtenerTimestamp(b.fecha) - obtenerTimestamp(a.fecha));
+  };
+
   const toggleNotasParcial = (parcialId) => {
     setNotasDesplegadas((prev) => ({
       ...prev,
       [parcialId]: !prev[parcialId]
     }));
+  };
+
+  const toggleTareaDesdeCliente = async (tareaId, alumno, fechaInicio) => {
+    if (!tareaEstaHabilitada(fechaInicio)) {
+      alert('La tarea todavía no está habilitada.');
+      return;
+    }
+    await handleToggleTarea(tareaId, alumno);
   };
 
   if (!iniciado) {
@@ -916,6 +960,17 @@ export default function Home() {
               <span>📚</span> Materias y Consignas
             </button>
 
+            <button
+              onClick={() => setPestana('historial')}
+              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
+                pestana === 'historial'
+                  ? 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40 shadow-sm'
+                  : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>🕘</span> Historial
+            </button>
+
             {/* NUEVO BOTÓN PARCIALES */}
             <button
               onClick={() => setPestana('parciales')}
@@ -1072,7 +1127,8 @@ export default function Home() {
                                               <input
                                                 type="checkbox"
                                                 checked={false}
-                                                onChange={() => handleToggleTarea(t.id, usuarioActual)}
+                                                disabled={!tareaEstaHabilitada(t.inicio)}
+                                                onChange={() => toggleTareaDesdeCliente(t.id, usuarioActual, t.inicio)}
                                                 className="mt-0.5 h-5 w-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
                                               />
                                             )}
@@ -1090,6 +1146,7 @@ export default function Home() {
                                                 inputMode="decimal"
                                                 pattern="[0-9]+([.,][0-9]+)?"
                                                 placeholder="Nota"
+                                                disabled={!tareaEstaHabilitada(t.inicio)}
                                                 value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
                                                 onChange={(e) => handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
                                                 onBlur={() => handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
@@ -1373,6 +1430,7 @@ export default function Home() {
                                             inputMode="decimal"
                                             pattern="[0-9]+([.,][0-9]+)?"
                                             placeholder="-"
+                                            disabled={!tareaEstaHabilitada(t.inicio)}
                                             value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
                                             onChange={(e) => handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
                                             onBlur={() => handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
@@ -1442,6 +1500,70 @@ export default function Home() {
                       );
                     })
                   )}
+                </div>
+              )}
+
+              {pestana === 'historial' && (
+                <div className="space-y-4">
+                  <div className="border-b border-slate-800 pb-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+                      <span>🕘</span> Historial de entregas y notas
+                    </h2>
+                    <p className="text-sm text-slate-400 mt-1">Tareas realizadas y calificaciones registradas por alumno.</p>
+                  </div>
+
+                  {alumnos.map((alumno) => {
+                    const estaDesplegado = alumno === usuarioActual || !!alumnosDesplegados[`historial-${alumno}`];
+                    const historial = historialPorAlumno(alumno);
+
+                    return (
+                      <details
+                        key={alumno}
+                        open={estaDesplegado}
+                        onToggle={(evento) => {
+                          if (alumno !== usuarioActual) {
+                            setAlumnosDesplegados((prev) => ({
+                              ...prev,
+                              [`historial-${alumno}`]: evento.currentTarget.open
+                            }));
+                          }
+                        }}
+                        className={`bg-[#161c26] border rounded-2xl overflow-hidden ${
+                          alumno === usuarioActual ? 'border-blue-500/70' : 'border-slate-800/80'
+                        }`}
+                      >
+                        <summary className="cursor-pointer list-none p-4 sm:p-5 flex items-center justify-between gap-3 hover:bg-slate-800/40">
+                          <span className="font-bold text-white flex items-center gap-2">
+                            <span>👤</span> {alumno}
+                            {alumno === usuarioActual && <span className="text-xs font-semibold text-blue-300">(vos)</span>}
+                          </span>
+                          <span className="text-xs text-slate-400">{historial.length} registro{historial.length === 1 ? '' : 's'}</span>
+                        </summary>
+                        <div className="border-t border-slate-800/80 p-4 sm:p-5">
+                          {historial.length === 0 ? (
+                            <p className="text-sm text-slate-500 italic">Todavía no hay tareas realizadas ni notas registradas.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {historial.map((registro) => (
+                                <div key={registro.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-[#0f141c] p-3">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-slate-200 truncate">{registro.nombre}</p>
+                                    <p className="text-xs text-slate-500">{registro.materia} · {registro.tipo}</p>
+                                  </div>
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    {registro.fecha && <span className="text-[11px] text-slate-500">{formatearFechaHora(registro.fecha)}</span>}
+                                    {registro.nota !== null && registro.nota !== undefined && (
+                                      <strong className="text-sm text-purple-300">Nota: {registro.nota}/10</strong>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    );
+                  })}
                 </div>
               )}
 

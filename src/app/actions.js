@@ -17,6 +17,15 @@ function parcialHabilitado(fecha) {
   return !Number.isNaN(fechaParcial.getTime()) && fechaParcial <= hoy;
 }
 
+function tareaHabilitada(fecha) {
+  if (!fecha || fecha === 'Sin fecha') return true;
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const fechaInicio = new Date(`${fecha}T00:00:00`);
+  return !Number.isNaN(fechaInicio.getTime()) && fechaInicio <= hoy;
+}
+
 async function asegurarEsquemaNotasTareas() {
   await db.execute(
     'CREATE TABLE IF NOT EXISTS notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT NOT NULL, alumno TEXT NOT NULL, nota TEXT NOT NULL, cargada_en TEXT, UNIQUE(tarea_id, alumno))'
@@ -275,6 +284,15 @@ export async function obtenerDatos() {
 
 export async function toggleTareaAction(tareaId, alumno) {
   try {
+    const tarea = await db.execute({
+      sql: 'SELECT inicio FROM tareas WHERE id = ?',
+      args: [tareaId]
+    });
+    if (tarea.rows.length === 0) return { exito: false, mensaje: 'La tarea no existe.' };
+    if (!tareaHabilitada(tarea.rows[0].inicio)) {
+      return { exito: false, mensaje: 'La tarea todavía no está habilitada.' };
+    }
+
     const existe = await db.execute({
       sql: 'SELECT * FROM completadas WHERE tarea_id = ? AND alumno = ?',
       args: [tareaId, alumno]
@@ -291,8 +309,10 @@ export async function toggleTareaAction(tareaId, alumno) {
         args: [tareaId, alumno]
       });
     }
+    return { exito: true };
   } catch (error) {
     console.error('Error en toggleTareaAction:', error);
+    return { exito: false, mensaje: 'No se pudo actualizar la tarea.' };
   }
 }
 
@@ -592,11 +612,14 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
     }
 
     const tarea = await db.execute({
-      sql: 'SELECT con_nota FROM tareas WHERE id = ?',
+      sql: 'SELECT con_nota, inicio FROM tareas WHERE id = ?',
       args: [tareaId]
     });
     if (tarea.rows.length === 0 || Number(tarea.rows[0].con_nota) !== 1) {
       return { exito: false, mensaje: 'La tarea no está configurada para llevar nota.' };
+    }
+    if (!tareaHabilitada(tarea.rows[0].inicio)) {
+      return { exito: false, mensaje: 'La tarea todavía no está habilitada para cargar notas.' };
     }
 
     const validacion = validarNota(nota);
