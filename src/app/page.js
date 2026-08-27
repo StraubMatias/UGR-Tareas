@@ -1188,7 +1188,7 @@ export default function Home() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {(() => {
                         const misMateriasConPendientes = materias.filter((m) =>
-                          m.tareas.some((t) => !tareaCompletadaPor(t, usuarioActual) && tareaEstaHabilitada(t.inicio))
+                          m.tareas.some((t) => !tareaCompletadaPor(t, usuarioActual))
                         );
 
                         if (misMateriasConPendientes.length === 0) {
@@ -1231,6 +1231,9 @@ export default function Home() {
                                             <span className="text-sm sm:text-base text-slate-100 font-semibold leading-snug">
                                               {t.nombre}{t.conNota && <span className="text-xs text-purple-300 font-normal"> (con nota)</span>}
                                             </span>
+                                            {!tareaEstaHabilitada(t.inicio) && (
+                                              <span className="text-[11px] text-blue-300">Abre el {formatearFechaDDMMAAAA(t.inicio)}</span>
+                                            )}
                                           </div>
                                           <div className="pl-7 flex items-end justify-between gap-3">
                                             <span className={`text-xs px-2.5 py-0.5 rounded-md border ${semaforo.estilo}`}>
@@ -1368,6 +1371,9 @@ export default function Home() {
                                                   <span className="text-xs text-slate-200 font-semibold">
                                                     • {t.nombre}
                                                   </span>
+                                                  {!tareaEstaHabilitada(t.inicio) && (
+                                                    <span className="text-[10px] text-blue-300">Abre el {formatearFechaDDMMAAAA(t.inicio)}</span>
+                                                  )}
                                                   <span className={`text-[10px] w-fit px-2 py-0.5 rounded border ${semaforo.estilo}`}>
                                                     {semaforo.texto}
                                                   </span>
