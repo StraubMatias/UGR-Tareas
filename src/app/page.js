@@ -651,6 +651,43 @@ export default function Home() {
     return [...tareas, ...parcialesDelAlumno].sort((a, b) => obtenerTimestamp(b.fecha) - obtenerTimestamp(a.fecha));
   };
 
+  const agruparHistorial = (historial) => {
+    const materiasHistorial = new Map();
+
+    historial.forEach((registro) => {
+      const gruposPorUnidad = materiasHistorial.get(registro.materia) || new Map();
+      const claveUnidad = registro.tipo === 'Parcial'
+        ? 'Evaluaciones'
+        : registro.unidad || 'Sin unidad';
+      const registrosUnidad = gruposPorUnidad.get(claveUnidad) || [];
+      registrosUnidad.push(registro);
+      gruposPorUnidad.set(claveUnidad, registrosUnidad);
+      materiasHistorial.set(registro.materia, gruposPorUnidad);
+    });
+
+    return [...materiasHistorial.entries()]
+      .map(([materia, gruposPorUnidad]) => ({
+        materia,
+        grupos: [...gruposPorUnidad.entries()]
+          .map(([unidad, registros]) => ({
+            unidad,
+            registros: registros.sort((a, b) => obtenerTimestamp(b.fecha) - obtenerTimestamp(a.fecha))
+          }))
+          .sort((a, b) => {
+            if (a.unidad === 'Sin unidad') return 1;
+            if (b.unidad === 'Sin unidad') return -1;
+            if (a.unidad === 'Evaluaciones') return -1;
+            if (b.unidad === 'Evaluaciones') return 1;
+            return Number(b.unidad) - Number(a.unidad);
+          })
+      }))
+      .sort((a, b) => {
+        const fechaA = obtenerTimestamp(a.grupos[0]?.registros[0]?.fecha) || 0;
+        const fechaB = obtenerTimestamp(b.grupos[0]?.registros[0]?.fecha) || 0;
+        return fechaB - fechaA;
+      });
+  };
+
   const toggleNotasParcial = (parcialId) => {
     setNotasDesplegadas((prev) => ({
       ...prev,
@@ -1521,6 +1558,7 @@ export default function Home() {
                   {alumnosDelHistorial.map((alumno) => {
                     const estaDesplegado = alumno === usuarioActual || !!alumnosDesplegados[`historial-${alumno}`];
                     const historial = historialPorAlumno(alumno);
+                    const historialAgrupado = agruparHistorial(historial);
 
                     return (
                       <details
@@ -1550,27 +1588,42 @@ export default function Home() {
                           {historial.length === 0 ? (
                             <p className="text-sm text-slate-500 italic">Todavía no hay tareas realizadas ni notas registradas.</p>
                           ) : (
-                            <div className="space-y-2">
-                              {historial.map((registro) => (
-                                <div key={registro.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-[#0f141c] p-3">
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-semibold text-slate-200 truncate">{registro.nombre}</p>
-                                    <p className="text-xs text-slate-500">
-                                      {registro.materia} · {registro.tipo}
-                                      {registro.unidad && ` · Unidad ${formatearUnidad(registro.unidad)}`}
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-3 shrink-0">
-                                    {registro.fechaCompletada && (
-                                      <span className="text-[11px] text-slate-500">
-                                        Completada: {formatearFechaHora(registro.fechaCompletada)}
-                                      </span>
-                                    )}
-                                    {registro.nota !== null && registro.nota !== undefined && (
-                                      <strong className="text-sm text-purple-300">Nota: {registro.nota}/10</strong>
-                                    )}
-                                  </div>
-                                </div>
+                            <div className="space-y-5">
+                              {historialAgrupado.map((grupoMateria) => (
+                                <section key={grupoMateria.materia} className="space-y-3">
+                                  <h3 className="border-b border-cyan-500/30 pb-2 text-sm font-extrabold uppercase tracking-wider text-cyan-300">
+                                    {grupoMateria.materia}
+                                  </h3>
+                                  {grupoMateria.grupos.map((grupoUnidad) => (
+                                    <div key={grupoUnidad.unidad} className="space-y-2">
+                                      <h4 className="text-xs font-bold uppercase tracking-wider text-blue-300">
+                                        {grupoUnidad.unidad === 'Evaluaciones'
+                                          ? grupoUnidad.unidad
+                                          : grupoUnidad.unidad === 'Sin unidad'
+                                            ? grupoUnidad.unidad
+                                            : `Unidad ${formatearUnidad(grupoUnidad.unidad)}`}
+                                      </h4>
+                                      {grupoUnidad.registros.map((registro) => (
+                                        <div key={registro.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-[#0f141c] p-3">
+                                          <div className="min-w-0">
+                                            <p className="text-sm font-semibold text-slate-200 truncate">{registro.nombre}</p>
+                                            <p className="text-xs text-slate-500">{registro.tipo}</p>
+                                          </div>
+                                          <div className="flex items-center gap-3 shrink-0">
+                                            {registro.fechaCompletada && (
+                                              <span className="text-[11px] text-slate-500">
+                                                Completada: {formatearFechaHora(registro.fechaCompletada)}
+                                              </span>
+                                            )}
+                                            {registro.nota !== null && registro.nota !== undefined && (
+                                              <strong className="text-sm text-purple-300">Nota: {registro.nota}/10</strong>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </section>
                               ))}
                             </div>
                           )}
