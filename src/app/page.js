@@ -867,60 +867,6 @@ export default function Home() {
     return grupos;
   }, []);
 
-  const renderDesgloseRanking = (item) => (
-    <details className="w-full mt-2 border-t border-slate-700/70 pt-3 text-left">
-      <summary className="cursor-pointer select-none text-xs font-semibold text-blue-300">
-        Ver historial y comparar
-      </summary>
-      <div className="mt-3 space-y-3 text-xs">
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg bg-[#0f141c] p-2">
-            <span className="block text-slate-500">Actividades</span>
-            <strong className="text-slate-200">{item.actividades} x 2 = {(item.actividades * 2).toFixed(1)} pts</strong>
-          </div>
-          <div className="rounded-lg bg-[#0f141c] p-2">
-            <span className="block text-slate-500">Foros</span>
-            <strong className="text-slate-200">{item.foros} x 1 = {item.foros.toFixed(1)} pts</strong>
-          </div>
-        </div>
-        {item.tareasConPuntaje.length > 0 && (
-          <div>
-            <p className="mb-1 font-bold uppercase tracking-wider text-purple-300">Tareas con nota</p>
-            <div className="space-y-1">
-              {item.tareasConPuntaje.filter((tarea) => tarea.tipo === 'Nota de tarea').map((tarea) => (
-                <div key={`${tarea.materia}-${tarea.nombre}`} className="flex justify-between gap-3 text-slate-300">
-                  <span className="min-w-0 truncate">
-                    <span className="block truncate">{tarea.materia}: {tarea.nombre}</span>
-                    <small className="block text-[10px] text-slate-500">
-                      Cargada: {formatearFechaHora(tarea.fechaCarga)}
-                    </small>
-                  </span>
-                  <strong className="shrink-0 text-purple-300">{tarea.puntos.toFixed(1)} pts</strong>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {item.parcialesConPuntaje.length > 0 && (
-          <div>
-            <p className="mb-1 font-bold uppercase tracking-wider text-amber-300">Parciales</p>
-            <div className="space-y-1">
-              {item.parcialesConPuntaje.map((parcial) => (
-                <div key={`${parcial.materia}-${parcial.nombre}`} className="flex justify-between gap-3 text-slate-300">
-                  <span className="truncate">{parcial.materia}: {parcial.nombre} ({parcial.nota}/10)</span>
-                  <strong className="text-amber-300">{parcial.puntos.toFixed(1)} pts</strong>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        <p className="border-t border-slate-800 pt-2 text-right font-bold text-emerald-300">
-          Total: {item.puntos.toFixed(1)} puntos
-        </p>
-      </div>
-    </details>
-  );
-
   return (
     <main className="min-h-screen bg-[#0f141c] text-slate-200 p-4 sm:p-6 md:p-10 font-sans selection:bg-blue-500 selection:text-white">
       <header className="max-w-9xl mx-auto mb-8 bg-[#161c26] border border-slate-800 p-6 sm:p-8 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1921,7 +1867,7 @@ export default function Home() {
                         <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
                           <span>🏆</span> Ranking de la cursada
                         </h2>
-                        <p className="text-sm text-slate-400 mt-1">Abrí el historial de cada alumno para ver de dónde salen sus puntos.</p>
+                        <p className="text-sm text-slate-400 mt-1">Puntaje acumulado de tareas, foros y parciales.</p>
                       </div>
                       <span className="text-xs text-slate-500">Se actualiza al marcar tareas</span>
                     </div>
@@ -1953,7 +1899,6 @@ export default function Home() {
                                 <p className="font-extrabold text-white text-lg truncate max-w-full">{item.alumno}</p>
                                 <strong className="text-2xl font-extrabold text-emerald-300">{item.puntos.toFixed(1)}</strong>
                                 <span className="text-[10px] uppercase tracking-wider text-slate-400">puntos</span>
-                                {renderDesgloseRanking(item)}
                               </div>
                             );
                           })}
@@ -1974,7 +1919,6 @@ export default function Home() {
                                 <span className="w-8 text-center text-lg font-extrabold text-slate-400">#{indice + 4}</span>
                                 <div className="min-w-0 flex-1">
                                   <p className="font-bold text-white truncate">{item.alumno}</p>
-                                  {renderDesgloseRanking(item)}
                                 </div>
                                 <span className="text-right">
                                   <strong className="block text-xl font-extrabold text-emerald-300">{item.puntos.toFixed(1)}</strong>
