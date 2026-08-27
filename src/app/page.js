@@ -621,6 +621,15 @@ export default function Home() {
     return !Number.isNaN(fechaInicio.getTime()) && fechaInicio <= hoy;
   };
 
+  const obtenerResumenTareasAlumno = (alumno) => {
+    const tareasNoCompletadas = materias.flatMap((materia) => materia.tareas)
+      .filter((tarea) => !tareaCompletadaPor(tarea, alumno));
+    const pendientes = tareasNoCompletadas.filter((tarea) => tareaEstaHabilitada(tarea.inicio));
+    const futuras = tareasNoCompletadas.filter((tarea) => !tareaEstaHabilitada(tarea.inicio));
+
+    return { pendientes, futuras, tareasNoCompletadas };
+  };
+
   const historialPorAlumno = (alumno) => {
     const tareas = materias.flatMap((materia) => materia.tareas
       .filter((tarea) => tareaCompletadaPor(tarea, alumno))
@@ -1162,16 +1171,15 @@ export default function Home() {
                         <span>👤</span> {usuarioActual} <span className="text-xs text-blue-400 font-semibold bg-blue-500/10 border border-blue-500/30 px-2 py-0.5 rounded">(Mis Tareas Pendientes)</span>
                       </h2>
                       {(() => {
-                        const misPendientes = materias.flatMap((m) =>
-                          m.tareas.filter((t) => !tareaCompletadaPor(t, usuarioActual))
-                        ).length;
+                        const resumen = obtenerResumenTareasAlumno(usuarioActual);
                         return (
                           <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
-                            misPendientes === 0
+                            resumen.pendientes.length === 0
                               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                               : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
                           }`}>
-                            {misPendientes === 0 ? '✓ Al día' : `${misPendientes} por hacer`}
+                            {resumen.pendientes.length === 0 ? '✓ Al día' : `${resumen.pendientes.length} por hacer`}
+                            {resumen.futuras.length > 0 && ` · ${resumen.futuras.length} futura${resumen.futuras.length === 1 ? '' : 's'}`}
                           </span>
                         );
                       })()}
@@ -1180,7 +1188,7 @@ export default function Home() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {(() => {
                         const misMateriasConPendientes = materias.filter((m) =>
-                          m.tareas.some((t) => !tareaCompletadaPor(t, usuarioActual))
+                          m.tareas.some((t) => !tareaCompletadaPor(t, usuarioActual) && tareaEstaHabilitada(t.inicio))
                         );
 
                         if (misMateriasConPendientes.length === 0) {
@@ -1285,9 +1293,7 @@ export default function Home() {
                     {restoDeAlumnos.map((alumno) => {
                       const estaDesplegado = !!alumnosDesplegados[alumno];
 
-                      const pendientesTotal = materias.flatMap((m) =>
-                        m.tareas.filter((t) => !tareaCompletadaPor(t, alumno))
-                      ).length;
+                      const resumenAlumno = obtenerResumenTareasAlumno(alumno);
 
                       return (
                         <div
@@ -1311,12 +1317,13 @@ export default function Home() {
                             <div className="flex items-center gap-3">
                               <span
                                 className={`text-xs font-semibold px-3 py-1 rounded-full border ${
-                                  pendientesTotal === 0
+                                  resumenAlumno.pendientes.length === 0
                                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                                     : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
                                 }`}
                               >
-                                {pendientesTotal === 0 ? '✓ Al día' : `${pendientesTotal} por hacer`}
+                                {resumenAlumno.pendientes.length === 0 ? '✓ Al día' : `${resumenAlumno.pendientes.length} por hacer`}
+                                {resumenAlumno.futuras.length > 0 && ` · ${resumenAlumno.futuras.length} futura${resumenAlumno.futuras.length === 1 ? '' : 's'}`}
                               </span>
                               <span className="text-slate-400 text-sm font-bold">
                                 {estaDesplegado ? '▲' : '▼'}
@@ -1326,12 +1333,18 @@ export default function Home() {
 
                           {estaDesplegado && (
                             <div className="p-5 border-t border-slate-800/80 bg-[#0f141c]/60 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              {pendientesTotal === 0 ? (
+                              {resumenAlumno.tareasNoCompletadas.length === 0 ? (
                                 <p className="col-span-full text-sm text-emerald-400/90 italic py-3 text-center">
                                   🎉 ¡Al día! Este alumno no tiene tareas pendientes.
                                 </p>
                               ) : (
-                                materias.map((m) => {
+                                <>
+                                {resumenAlumno.pendientes.length === 0 && resumenAlumno.futuras.length > 0 && (
+                                  <p className="col-span-full text-sm text-blue-300/90 italic py-3 text-center">
+                                    No tiene tareas abiertas pendientes. Tiene {resumenAlumno.futuras.length} tarea{resumenAlumno.futuras.length === 1 ? '' : 's'} futura{resumenAlumno.futuras.length === 1 ? '' : 's'}.
+                                  </p>
+                                )}
+                                {materias.map((m) => {
                                   const tareasPendientes = m.tareas.filter(
                                     (t) => !tareaCompletadaPor(t, alumno)
                                   );
@@ -1366,7 +1379,8 @@ export default function Home() {
                                       ))}
                                     </div>
                                   );
-                                })
+                                })}
+                                </>
                               )}
                             </div>
                           )}
