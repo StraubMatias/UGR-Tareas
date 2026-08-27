@@ -627,7 +627,9 @@ export default function Home() {
         id: `tarea-${tarea.id}`,
         materia: materia.nombre,
         nombre: tarea.nombre,
+        unidad: tarea.unidad,
         fecha: tarea.conNota ? tarea.notaCargadaEn?.[alumno] : tarea.completadoEn?.[alumno],
+        fechaCompletada: tarea.conNota ? tarea.notaCargadaEn?.[alumno] : tarea.completadoEn?.[alumno],
         nota: tarea.conNota ? tarea.notas?.[alumno] : null,
         tipo: tarea.conNota ? 'Tarea con nota' : esForo(tarea.nombre) ? 'Foro' : 'Actividad'
       })));
@@ -640,6 +642,7 @@ export default function Home() {
           materia: materias.find((materia) => materia.id === parcial?.materia_id)?.nombre || 'Materia',
           nombre: parcial?.nombre || 'Parcial',
           fecha: nota.cargada_en,
+          fechaCompletada: nota.cargada_en,
           nota: nota.nota,
           tipo: 'Parcial'
         };
@@ -675,6 +678,9 @@ export default function Home() {
   }
 
   const restoDeAlumnos = alumnos.filter((a) => a !== usuarioActual);
+  const alumnosDelHistorial = usuarioActual
+    ? [usuarioActual, ...restoDeAlumnos]
+    : alumnos;
   const parcialesOrdenados = ordenarParciales(parciales);
   const proximoParcial = parcialesOrdenados.find(
     (parcial) => obtenerFechaParcialEnMs(parcial.fecha) >= new Date().setHours(0, 0, 0, 0)
@@ -1512,7 +1518,7 @@ export default function Home() {
                     <p className="text-sm text-slate-400 mt-1">Tareas realizadas y calificaciones registradas por alumno.</p>
                   </div>
 
-                  {alumnos.map((alumno) => {
+                  {alumnosDelHistorial.map((alumno) => {
                     const estaDesplegado = alumno === usuarioActual || !!alumnosDesplegados[`historial-${alumno}`];
                     const historial = historialPorAlumno(alumno);
 
@@ -1522,9 +1528,10 @@ export default function Home() {
                         open={estaDesplegado}
                         onToggle={(evento) => {
                           if (alumno !== usuarioActual) {
+                            const abierto = evento.currentTarget.open;
                             setAlumnosDesplegados((prev) => ({
                               ...prev,
-                              [`historial-${alumno}`]: evento.currentTarget.open
+                              [`historial-${alumno}`]: abierto
                             }));
                           }
                         }}
@@ -1548,10 +1555,17 @@ export default function Home() {
                                 <div key={registro.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-[#0f141c] p-3">
                                   <div className="min-w-0">
                                     <p className="text-sm font-semibold text-slate-200 truncate">{registro.nombre}</p>
-                                    <p className="text-xs text-slate-500">{registro.materia} · {registro.tipo}</p>
+                                    <p className="text-xs text-slate-500">
+                                      {registro.materia} · {registro.tipo}
+                                      {registro.unidad && ` · Unidad ${formatearUnidad(registro.unidad)}`}
+                                    </p>
                                   </div>
                                   <div className="flex items-center gap-3 shrink-0">
-                                    {registro.fecha && <span className="text-[11px] text-slate-500">{formatearFechaHora(registro.fecha)}</span>}
+                                    {registro.fechaCompletada && (
+                                      <span className="text-[11px] text-slate-500">
+                                        Completada: {formatearFechaHora(registro.fechaCompletada)}
+                                      </span>
+                                    )}
                                     {registro.nota !== null && registro.nota !== undefined && (
                                       <strong className="text-sm text-purple-300">Nota: {registro.nota}/10</strong>
                                     )}
