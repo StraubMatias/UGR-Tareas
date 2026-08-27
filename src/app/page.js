@@ -46,6 +46,7 @@ export default function Home() {
   // Acordeón para compañeros
   const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
   const [materiasDesplegadas, setMateriasDesplegadas] = useState({});
+  const [alumnoComparar, setAlumnoComparar] = useState('');
 
   // Form Login
   const [inputUser, setInputUser] = useState('');
@@ -795,6 +796,50 @@ export default function Home() {
     .sort((a, b) => b.puntos - a.puntos || a.ultimaCompletadaEn - b.ultimaCompletadaEn || b.actividades - a.actividades || a.alumno.localeCompare(b.alumno));
   const rankingPodio = ranking.slice(0, 3);
   const restoRanking = ranking.slice(3);
+  const datosComparacion = alumnoComparar && usuarioActual
+    ? (() => {
+      const usuarioRanking = ranking.find((item) => item.alumno === usuarioActual);
+      const comparadoRanking = ranking.find((item) => item.alumno === alumnoComparar);
+      if (!usuarioRanking || !comparadoRanking) return null;
+
+      const historialUsuario = historialPorAlumno(usuarioActual);
+      const historialComparado = historialPorAlumno(alumnoComparar);
+      const diferenciaPuntos = usuarioRanking.puntos - comparadoRanking.puntos;
+      const puntosEmpatados = Math.abs(diferenciaPuntos) < 0.0001;
+      const ultimaTareaUsuario = historialUsuario.find((registro) => obtenerTimestamp(registro.fecha) !== null);
+      const ultimaTareaComparado = historialComparado.find((registro) => obtenerTimestamp(registro.fecha) !== null);
+      let motivo;
+
+      if (!puntosEmpatados) {
+        const ganador = diferenciaPuntos > 0 ? usuarioActual : alumnoComparar;
+        motivo = `${ganador} está arriba porque tiene más puntos.`;
+      } else if (usuarioRanking.ultimaCompletadaEn !== comparadoRanking.ultimaCompletadaEn) {
+        const ganador = usuarioRanking.ultimaCompletadaEn < comparadoRanking.ultimaCompletadaEn
+          ? usuarioActual
+          : alumnoComparar;
+        const fechaGanador = ganador === usuarioActual
+          ? usuarioRanking.ultimaCompletadaEn
+          : comparadoRanking.ultimaCompletadaEn;
+        motivo = `${ganador} queda primero porque su última tarea registrada fue realizada antes: ${formatearFechaHora(new Date(fechaGanador).toISOString())}.`;
+      } else if (usuarioRanking.actividades !== comparadoRanking.actividades) {
+        const ganador = usuarioRanking.actividades > comparadoRanking.actividades ? usuarioActual : alumnoComparar;
+        motivo = `${ganador} queda primero porque tiene más actividades completas (${Math.max(usuarioRanking.actividades, comparadoRanking.actividades)} contra ${Math.min(usuarioRanking.actividades, comparadoRanking.actividades)}).`;
+      } else {
+        motivo = `Empatan también en el desempate por fecha y cantidad de actividades; el orden actual se define por nombre.`;
+      }
+
+      return {
+        usuarioRanking,
+        comparadoRanking,
+        historialUsuario,
+        historialComparado,
+        ultimaTareaUsuario,
+        ultimaTareaComparado,
+        puntosEmpatados,
+        motivo
+      };
+    })()
+    : null;
   const parcialesAgrupados = parcialesOrdenados.reduce((grupos, parcial) => {
     const materia = materias.find((item) => item.id === parcial.materia_id);
     const claveMateria = parcial.materia_id || 'sin-materia';
@@ -1555,6 +1600,55 @@ export default function Home() {
                     <p className="text-sm text-slate-400 mt-1">Tareas realizadas y calificaciones registradas por alumno.</p>
                   </div>
 
+                  {datosComparacion && (
+                    <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/20 p-4 sm:p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-base font-bold text-white">
+                            Comparación: {usuarioActual} vs. {alumnoComparar}
+                          </h3>
+                          <p className="mt-2 text-sm text-emerald-200">{datosComparacion.motivo}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setAlumnoComparar('')}
+                          className="text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                        >
+                          Cerrar
+                        </button>
+                      </div>
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[datosComparacion.usuarioRanking, datosComparacion.comparadoRanking].map((item) => (
+                          <div key={item.alumno} className="rounded-xl border border-slate-800/80 bg-[#0f141c] p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-bold text-white">{item.alumno}</span>
+                              <strong className="text-emerald-300">{item.puntos.toFixed(1)} pts</strong>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {item.tareasConPuntaje.length + item.parcialesConPuntaje.length} registros con puntaje · {item.actividades} actividades
+                            </p>
+                            {item.alumno === usuarioActual && datosComparacion.ultimaTareaUsuario ? (
+                              <p className="mt-2 text-xs text-slate-400">
+                                Última tarea: {datosComparacion.ultimaTareaUsuario.nombre} · {formatearFechaHora(datosComparacion.ultimaTareaUsuario.fecha)}
+                              </p>
+                            ) : item.alumno === alumnoComparar && datosComparacion.ultimaTareaComparado ? (
+                              <p className="mt-2 text-xs text-slate-400">
+                                Última tarea: {datosComparacion.ultimaTareaComparado.nombre} · {formatearFechaHora(datosComparacion.ultimaTareaComparado.fecha)}
+                              </p>
+                            ) : (
+                              <p className="mt-2 text-xs text-slate-500">Sin tareas con fecha registrada.</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      {datosComparacion.puntosEmpatados && (
+                        <p className="mt-3 text-xs text-slate-400">
+                          Están empatados en puntos. El orden se resolvió comparando la fecha de la última tarea registrada y, si hace falta, la cantidad de actividades.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {alumnosDelHistorial.map((alumno) => {
                     const estaDesplegado = alumno === usuarioActual || !!alumnosDesplegados[`historial-${alumno}`];
                     const historial = historialPorAlumno(alumno);
@@ -1585,6 +1679,15 @@ export default function Home() {
                           <span className="text-xs text-slate-400">{historial.length} registro{historial.length === 1 ? '' : 's'}</span>
                         </summary>
                         <div className="border-t border-slate-800/80 p-4 sm:p-5">
+                          {alumno !== usuarioActual && (
+                            <button
+                              type="button"
+                              onClick={() => setAlumnoComparar(alumno)}
+                              className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 cursor-pointer"
+                            >
+                              Comparar conmigo
+                            </button>
+                          )}
                           {historial.length === 0 ? (
                             <p className="text-sm text-slate-500 italic">Todavía no hay tareas realizadas ni notas registradas.</p>
                           ) : (
