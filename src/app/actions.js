@@ -56,6 +56,15 @@ function validarNota(nota) {
   };
 }
 
+function normalizarUnidad(unidad) {
+  const unidadLimpia = unidad === null || unidad === undefined ? '' : String(unidad).trim();
+  if (!unidadLimpia) return { valida: true, valor: null };
+  if (!/^\d+$/.test(unidadLimpia) || Number(unidadLimpia) < 1) {
+    return { valida: false, valor: null };
+  }
+  return { valida: true, valor: Number(unidadLimpia) };
+}
+
 // --- AUTENTICACIÓN Y ALUMNOS ---
 
 // Valida credenciales consultando directamente a la tabla alumnos en Turso
@@ -373,17 +382,16 @@ export async function eliminarMateriaAction(id) {
 
 export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles, unidad, conNota }) {
   try {
-    const unidadLimpia = unidad?.trim() || '';
-    if (unidadLimpia && (!/^\d+$/.test(unidadLimpia) || Number(unidadLimpia) < 1)) {
+    const unidadNormalizada = normalizarUnidad(unidad);
+    if (!unidadNormalizada.valida) {
       return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
     }
-    const unidadNumerica = unidadLimpia ? Number(unidadLimpia) : null;
     const conNotaNumerico = conNota ? 1 : 0;
 
     const id = 't_' + Date.now();
     await db.execute({
       sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      args: [id, materiaId, nombre, inicio || 'Sin fecha', fin || 'Sin fecha', detalles || 'Sin observaciones', unidadNumerica, conNotaNumerico]
+      args: [id, materiaId, nombre, inicio || 'Sin fecha', fin || 'Sin fecha', detalles || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico]
     });
     return { exito: true };
   } catch (error) {
@@ -394,16 +402,15 @@ export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalle
 
 export async function editarTareaAction({ id, nombre, inicio, fin, detalles, unidad, conNota }) {
   try {
-    const unidadLimpia = unidad?.trim() || '';
-    if (unidadLimpia && (!/^\d+$/.test(unidadLimpia) || Number(unidadLimpia) < 1)) {
+    const unidadNormalizada = normalizarUnidad(unidad);
+    if (!unidadNormalizada.valida) {
       return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
     }
-    const unidadNumerica = unidadLimpia ? Number(unidadLimpia) : null;
     const conNotaNumerico = conNota ? 1 : 0;
 
     await db.execute({
       sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ?, con_nota = ? WHERE id = ?',
-      args: [nombre, inicio, fin, detalles, unidadNumerica, conNotaNumerico, id]
+      args: [nombre, inicio, fin, detalles, unidadNormalizada.valor, conNotaNumerico, id]
     });
     return { exito: true };
   } catch (error) {
