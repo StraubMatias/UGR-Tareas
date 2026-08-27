@@ -34,6 +34,8 @@ export default function Home() {
   const [pestana, setPestana] = useState('alumnos');
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
+  const [notificacionesAbiertas, setNotificacionesAbiertas] = useState(false);
+  const [mostrarAvisoInicio, setMostrarAvisoInicio] = useState(false);
 
   // Estado para Parciales y Notas
   const [parciales, setParciales] = useState([]);
@@ -112,6 +114,7 @@ export default function Home() {
         if (ahora - timestamp < diezMinutosMs) {
           startTransition(() => {
             setUsuarioActual(usuario);
+            setMostrarAvisoInicio(true);
           });
           localStorage.setItem('sesion_ugr', JSON.stringify({ usuario, timestamp: ahora }));
         } else {
@@ -181,6 +184,23 @@ export default function Home() {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
     return Math.max(0, Math.ceil((fechaParcialEnMs - hoy.getTime()) / (1000 * 60 * 60 * 24)));
+  };
+
+  const obtenerDiasHastaTarea = (fechaStr) => {
+    if (!fechaStr || fechaStr === 'Sin fecha') return null;
+    const partes = String(fechaStr).split('-').map(Number);
+    if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
+
+    const [year, month, day] = partes[0] > 31
+      ? partes
+      : [partes[2], partes[1], partes[0]];
+    const fechaLimite = new Date(year, month - 1, day);
+    fechaLimite.setHours(0, 0, 0, 0);
+    if (Number.isNaN(fechaLimite.getTime())) return null;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    return Math.ceil((fechaLimite.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
   };
 
   const ordenarParciales = (listaParciales) => {
@@ -337,6 +357,7 @@ export default function Home() {
 
     if (res.exito) {
       iniciarSesionLocal(res.usuario);
+      setMostrarAvisoInicio(true);
       setErrorLogin('');
       setInputUser('');
       setInputPass('');
@@ -735,6 +756,15 @@ export default function Home() {
   const materiaProximoParcial = proximoParcial
     ? materias.find((materia) => materia.id === proximoParcial.materia_id)
     : null;
+  const notificaciones = usuarioActual && !esAdmin
+    ? materias.flatMap((materia) => materia.tareas
+      .map((tarea) => ({ tarea, materia }))
+      .filter(({ tarea }) => {
+        const dias = obtenerDiasHastaTarea(tarea.fin);
+        return dias !== null && dias >= 0 && dias <= 7 && !tareaCompletadaPor(tarea, usuarioActual);
+      })
+      .sort((a, b) => obtenerDiasHastaTarea(a.tarea.fin) - obtenerDiasHastaTarea(b.tarea.fin)))
+    : [];
   const horariosProximoParcial = proximoParcial
     ? horarios
       .filter((horario) => horario.materia_id === proximoParcial.materia_id)
@@ -893,6 +923,56 @@ export default function Home() {
 
         {usuarioActual && (
           <div className="flex items-center gap-3">
+            <div className="relative">
+              <button
+                type="button"
+                aria-label={`Notificaciones${notificaciones.length ? ` (${notificaciones.length})` : ''}`}
+                aria-expanded={notificacionesAbiertas}
+                onClick={() => setNotificacionesAbiertas((abiertas) => !abiertas)}
+                className="relative bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 p-2.5 rounded-xl text-lg transition-all cursor-pointer"
+              >
+                🔔
+                {notificaciones.length > 0 && (
+                  <span className="absolute -right-1 -top-1 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center border-2 border-[#161c26]">
+                    {notificaciones.length > 9 ? '9+' : notificaciones.length}
+                  </span>
+                )}
+              </button>
+              {notificacionesAbiertas && (
+                <div className="absolute right-0 top-14 z-50 w-[calc(100vw-2rem)] max-w-80 bg-[#161c26] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+                    <p className="text-sm font-bold text-white">Recordatorios</p>
+                    <span className="text-xs text-slate-400">Próximos 7 días</span>
+                  </div>
+                  {notificaciones.length === 0 ? (
+                    <p className="px-4 py-5 text-sm text-slate-400">No tenés tareas próximas a vencer.</p>
+                  ) : (
+                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-800">
+                      {notificaciones.map(({ tarea, materia }) => {
+                        const dias = obtenerDiasHastaTarea(tarea.fin);
+                        return (
+                          <button
+                            type="button"
+                            key={tarea.id}
+                            onClick={() => {
+                              setPestana('materias');
+                              setNotificacionesAbiertas(false);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-slate-800/70 transition-colors cursor-pointer"
+                          >
+                            <p className="text-sm font-semibold text-slate-100 truncate">{tarea.nombre}</p>
+                            <p className="text-xs text-slate-400 mt-1">{materia.nombre}</p>
+                            <p className={`text-xs font-bold mt-2 ${dias <= 2 ? 'text-red-300' : 'text-amber-300'}`}>
+                              {dias === 0 ? 'Vence hoy' : `Vence en ${dias} ${dias === 1 ? 'día' : 'días'}`}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <button
               onClick={() => {
                 setUserPassChange(usuarioActual);
@@ -919,6 +999,23 @@ export default function Home() {
           </div>
         )}
       </header>
+
+      {usuarioActual && !esAdmin && mostrarAvisoInicio && notificaciones.length > 0 && (
+        <div className="max-w-9xl mx-auto mb-6 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <span className="text-lg" aria-hidden="true">🔔</span>
+          <p className="flex-1">
+            Tenés {notificaciones.length} {notificaciones.length === 1 ? 'tarea próxima' : 'tareas próximas'} a vencer. Revisá tus recordatorios.
+          </p>
+          <button
+            type="button"
+            aria-label="Cerrar aviso de tareas próximas a vencer"
+            onClick={() => setMostrarAvisoInicio(false)}
+            className="text-amber-200 hover:text-white text-lg leading-none cursor-pointer"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {!usuarioActual ? (
         /* CARD LOGIN */
