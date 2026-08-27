@@ -757,13 +757,39 @@ export default function Home() {
     ? materias.find((materia) => materia.id === proximoParcial.materia_id)
     : null;
   const notificaciones = usuarioActual && !esAdmin
-    ? materias.flatMap((materia) => materia.tareas
-      .map((tarea) => ({ tarea, materia }))
-      .filter(({ tarea }) => {
-        const dias = obtenerDiasHastaTarea(tarea.fin);
-        return dias !== null && dias >= 0 && dias <= 7 && !tareaCompletadaPor(tarea, usuarioActual);
-      })
-      .sort((a, b) => obtenerDiasHastaTarea(a.tarea.fin) - obtenerDiasHastaTarea(b.tarea.fin)))
+    ? [
+      ...materias.flatMap((materia) => materia.tareas
+        .map((tarea) => ({ tarea, materia }))
+        .filter(({ tarea }) => {
+          const dias = obtenerDiasHastaTarea(tarea.fin);
+          return dias !== null && dias >= 0 && dias <= 7 && !tareaCompletadaPor(tarea, usuarioActual);
+        })
+        .map(({ tarea, materia }) => ({
+          id: `vencimiento-${tarea.id}`,
+          tipo: 'vencimiento',
+          nombre: tarea.nombre,
+          materia: materia.nombre,
+          dias: obtenerDiasHastaTarea(tarea.fin)
+        }))),
+      ...parciales
+        .map((parcial) => ({
+          id: `parcial-${parcial.id}`,
+          tipo: 'parcial',
+          nombre: parcial.nombre,
+          materia: materias.find((materia) => materia.id === parcial.materia_id)?.nombre || 'Materia',
+          dias: obtenerDiasHastaTarea(parcial.fecha)
+        }))
+        .filter(({ dias }) => dias === 1),
+      ...materias.flatMap((materia) => materia.tareas
+        .map((tarea) => ({
+          id: `apertura-${tarea.id}`,
+          tipo: 'apertura',
+          nombre: tarea.nombre,
+          materia: materia.nombre,
+          dias: obtenerDiasHastaTarea(tarea.inicio)
+        }))
+        .filter(({ dias }) => dias === 1))
+    ].sort((a, b) => a.dias - b.dias || a.nombre.localeCompare(b.nombre))
     : [];
   const horariosProximoParcial = proximoParcial
     ? horarios
@@ -942,28 +968,34 @@ export default function Home() {
                 <div className="absolute right-0 top-14 z-50 w-[calc(100vw-2rem)] max-w-80 bg-[#161c26] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
                   <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
                     <p className="text-sm font-bold text-white">Recordatorios</p>
-                    <span className="text-xs text-slate-400">Próximos 7 días</span>
+                    <span className="text-xs text-slate-400">Recordatorios</span>
                   </div>
                   {notificaciones.length === 0 ? (
-                    <p className="px-4 py-5 text-sm text-slate-400">No tenés tareas próximas a vencer.</p>
+                    <p className="px-4 py-5 text-sm text-slate-400">No tenés recordatorios pendientes.</p>
                   ) : (
                     <div className="max-h-72 overflow-y-auto divide-y divide-slate-800">
-                      {notificaciones.map(({ tarea, materia }) => {
-                        const dias = obtenerDiasHastaTarea(tarea.fin);
+                      {notificaciones.map((notificacion) => {
+                        const texto = notificacion.tipo === 'parcial'
+                          ? 'Rendís mañana'
+                          : notificacion.tipo === 'apertura'
+                            ? 'Se habilita mañana'
+                            : notificacion.dias === 0
+                              ? 'Vence hoy'
+                              : `Vence en ${notificacion.dias} ${notificacion.dias === 1 ? 'día' : 'días'}`;
                         return (
                           <button
                             type="button"
-                            key={tarea.id}
+                            key={notificacion.id}
                             onClick={() => {
-                              setPestana('materias');
+                              setPestana(notificacion.tipo === 'parcial' ? 'parciales' : 'materias');
                               setNotificacionesAbiertas(false);
                             }}
                             className="w-full text-left px-4 py-3 hover:bg-slate-800/70 transition-colors cursor-pointer"
                           >
-                            <p className="text-sm font-semibold text-slate-100 truncate">{tarea.nombre}</p>
-                            <p className="text-xs text-slate-400 mt-1">{materia.nombre}</p>
-                            <p className={`text-xs font-bold mt-2 ${dias <= 2 ? 'text-red-300' : 'text-amber-300'}`}>
-                              {dias === 0 ? 'Vence hoy' : `Vence en ${dias} ${dias === 1 ? 'día' : 'días'}`}
+                            <p className="text-sm font-semibold text-slate-100 truncate">{notificacion.nombre}</p>
+                            <p className="text-xs text-slate-400 mt-1">{notificacion.materia}</p>
+                            <p className={`text-xs font-bold mt-2 ${notificacion.tipo === 'vencimiento' && notificacion.dias <= 2 ? 'text-red-300' : 'text-amber-300'}`}>
+                              {texto}
                             </p>
                           </button>
                         );
