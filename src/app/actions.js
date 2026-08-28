@@ -76,6 +76,12 @@ async function asegurarEsquemaNotasTareas() {
     // La columna ya existe en instalaciones que recibieron la migración.
   }
 
+  try {
+    await db.execute("ALTER TABLE materias ADD COLUMN regla_promocion TEXT NOT NULL DEFAULT 'tp_nota'");
+  } catch (error) {
+    // La columna ya existe en instalaciones que recibieron la migración.
+  }
+
   await db.execute({
     sql: "UPDATE materias SET condiciones = ?, nota_minima_regularizar = 4, nota_minima_promocionar = 8 WHERE nombre LIKE ? AND (condiciones IS NULL OR condiciones = '')",
     args: [
@@ -83,6 +89,44 @@ async function asegurarEsquemaNotasTareas() {
       '%SISTEMAS DE GESTIÓN DE SEGURIDAD DE LA INFORMACIÓN%'
     ]
   });
+
+  const reglasIniciales = [
+    {
+      nombre: '%AUDITORÍAS DE SEGURIDAD DE LA INFORMACIÓN%',
+      regla: 'auditorias_tps',
+      condiciones: 'Para regularizar la materia se necesita una nota de cursada de 6 (seis) o más y una nota de 6 (seis) o más en cada trabajo práctico. Promociona quien obtiene como mínimo 8 (ocho) en la cursada y 8 (ocho) o más en cada trabajo práctico.',
+      regularizar: 6,
+      promocionar: 8
+    },
+    {
+      nombre: '%CIBERDELITOS%',
+      regla: 'ciberdelitos_parciales',
+      condiciones: 'Para regularizar y poder rendir el final hay que aprobar los dos parciales con nota mínima de 6 (seis) en cada uno. Promociona quien aprueba cada parcial con nota mínima de 8 (ocho).',
+      regularizar: 6,
+      promocionar: 8
+    },
+    {
+      nombre: '%EVALUACIÓN Y GESTIÓN DE RIESGOS%',
+      regla: 'riesgos_tps',
+      condiciones: 'Para regularizar la materia es necesario haber completado al menos tres actividades prácticas obligatorias. Promociona quien tiene todos los trabajos prácticos aprobados con nota 8 (ocho) o más.',
+      regularizar: 6,
+      promocionar: 8
+    },
+    {
+      nombre: '%GESTIÓN DE ACTIVOS DE LA INFORMACIÓN%',
+      regla: 'activos_porcentaje',
+      condiciones: 'Regulariza quien completa al menos el 75% de todas las actividades de la plataforma: tareas, foros, actividades y trabajos prácticos. Promociona quien completa al menos el 90% de esas actividades al cierre de regularidades.',
+      regularizar: 75,
+      promocionar: 90
+    }
+  ];
+
+  for (const regla of reglasIniciales) {
+    await db.execute({
+      sql: 'UPDATE materias SET condiciones = ?, nota_minima_regularizar = ?, nota_minima_promocionar = ?, regla_promocion = ? WHERE nombre LIKE ? AND (condiciones IS NULL OR condiciones = \'\')',
+      args: [regla.condiciones, regla.regularizar, regla.promocionar, regla.regla, regla.nombre]
+    });
+  }
 }
 
 function validarNota(nota) {
@@ -325,6 +369,7 @@ export async function obtenerDatos() {
         condiciones: m.condiciones || '',
         notaMinimaRegularizar: Number(m.nota_minima_regularizar) || 4,
         notaMinimaPromocionar: Number(m.nota_minima_promocionar) || 8,
+        reglaPromocion: m.regla_promocion || 'tp_nota',
         tareas: tareasConCompletados
       };
     });
@@ -417,15 +462,16 @@ export async function renombrarMateriaAction(id, nuevoNombre) {
   }
 }
 
-export async function editarCondicionesMateriaAction({ id, condiciones, notaMinimaRegularizar, notaMinimaPromocionar, usuario }) {
+export async function editarCondicionesMateriaAction({ id, condiciones, notaMinimaRegularizar, notaMinimaPromocionar, reglaPromocion, usuario }) {
   try {
     const regularizar = Number(notaMinimaRegularizar);
     const promocionar = Number(notaMinimaPromocionar);
+    const maximo = reglaPromocion === 'activos_porcentaje' ? 100 : 10;
     if (!esAdministrador(usuario)) {
       return { exito: false, mensaje: 'Solo el administrador puede editar condiciones.' };
     }
-    if (![regularizar, promocionar].every((nota) => Number.isFinite(nota) && nota >= 1 && nota <= 10)) {
-      return { exito: false, mensaje: 'Las notas mínimas deben estar entre 1 y 10.' };
+    if (![regularizar, promocionar].every((nota) => Number.isFinite(nota) && nota >= 1 && nota <= maximo)) {
+      return { exito: false, mensaje: `Los valores mínimos deben estar entre 1 y ${maximo}.` };
     }
     if (promocionar < regularizar) {
       return { exito: false, mensaje: 'La nota para promocionar no puede ser menor que la de regularización.' };

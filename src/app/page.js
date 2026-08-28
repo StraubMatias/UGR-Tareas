@@ -443,6 +443,7 @@ export default function Home() {
     if (!materiaCondicionesEnEdicion) return;
     const resultado = await editarCondicionesMateriaAction({
       ...materiaCondicionesEnEdicion,
+      reglaPromocion: materiaCondicionesEnEdicion.reglaPromocion || 'tp_nota',
       usuario: usuarioActual
     });
     if (!resultado?.exito) {
@@ -511,22 +512,56 @@ export default function Home() {
   const obtenerEstadoMateria = (materia, alumno) => {
     const trabajosPracticos = materia.tareas.filter((tarea) => tarea.tipo === 'trabajo_practico');
     if (!materia.condiciones && trabajosPracticos.length === 0) return null;
-    if (trabajosPracticos.length === 0) return { texto: 'Sin TPs cargados', estilo: 'text-slate-400 bg-slate-800/60 border-slate-700' };
+    const estado = (texto, estilo) => ({ texto, estilo });
+    const enCurso = estado('En curso', 'text-amber-300 bg-amber-500/10 border-amber-500/30');
+    const desaprueba = estado('Desaprueba', 'text-red-300 bg-red-500/10 border-red-500/30');
+    const regulariza = estado('Regulariza', 'text-blue-300 bg-blue-500/10 border-blue-500/30');
+    const promociona = estado('Promociona', 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30');
+    const notaDe = (registro) => Number.parseFloat(String(registro).replace(',', '.'));
+    const tareaCerrada = (tarea) => tarea.fin && tarea.fin !== 'Sin fecha' && obtenerDiasHastaTarea(tarea.fin) < 0;
+    const todasCerradas = (tareas) => tareas.length > 0 && tareas.every(tareaCerrada);
 
+    if (materia.reglaPromocion === 'ciberdelitos_parciales') {
+      const parcialesMateria = parciales.filter((parcial) => parcial.materia_id === materia.id);
+      const notasParciales = parcialesMateria.map((parcial) => {
+        const registro = notas.find((nota) => nota.parcial_id === parcial.id && nota.alumno === alumno);
+        return registro ? notaDe(registro.nota) : null;
+      });
+      if (notasParciales.length < 2 || notasParciales.some((nota) => nota === null || !Number.isFinite(nota))) {
+        return notasParciales.length === 2 && parcialesMateria.every((parcial) => parcial.fecha !== 'Sin fecha' && obtenerDiasHastaFecha(parcial.fecha) < 0)
+          ? desaprueba
+          : enCurso;
+      }
+      if (notasParciales.some((nota) => nota < materia.notaMinimaRegularizar)) return desaprueba;
+      return notasParciales.every((nota) => nota >= materia.notaMinimaPromocionar) ? promociona : regulariza;
+    }
+
+    if (materia.reglaPromocion === 'activos_porcentaje') {
+      const total = materia.tareas.length;
+      if (total === 0) return estado('Sin actividades', 'text-slate-400 bg-slate-800/60 border-slate-700');
+      const completadas = materia.tareas.filter((tarea) => tareaCompletadaPor(tarea, alumno)).length;
+      const porcentaje = (completadas / total) * 100;
+      if (porcentaje >= materia.notaMinimaPromocionar) return promociona;
+      if (porcentaje >= materia.notaMinimaRegularizar) return regulariza;
+      return materia.tareas.every(tareaCerrada) ? desaprueba : enCurso;
+    }
+
+    if (trabajosPracticos.length === 0) return estado('Sin TPs cargados', 'text-slate-400 bg-slate-800/60 border-slate-700');
     const notas = trabajosPracticos.map((tarea) => {
       const valor = tarea.notas?.[alumno];
-      return valor === undefined ? null : Number.parseFloat(String(valor).replace(',', '.'));
+      return valor === undefined ? null : notaDe(valor);
     });
-    if (notas.some((nota) => nota === null || !Number.isFinite(nota))) {
-      return { texto: 'En curso', estilo: 'text-amber-300 bg-amber-500/10 border-amber-500/30' };
+    const notasCargadas = notas.filter((nota) => nota !== null && Number.isFinite(nota));
+    if (materia.reglaPromocion === 'riesgos_tps') {
+      const completados = trabajosPracticos.filter((tarea) => tareaCompletadaPor(tarea, alumno)).length;
+      if (completados < 3) return todasCerradas(trabajosPracticos) ? desaprueba : enCurso;
+      if (notasCargadas.length === trabajosPracticos.length && notas.every((nota) => nota >= materia.notaMinimaPromocionar)) return promociona;
+      return regulariza;
     }
-    if (notas.some((nota) => nota < materia.notaMinimaRegularizar)) {
-      return { texto: 'Desaprueba', estilo: 'text-red-300 bg-red-500/10 border-red-500/30' };
-    }
-    if (notas.every((nota) => nota >= materia.notaMinimaPromocionar)) {
-      return { texto: 'Promociona', estilo: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30' };
-    }
-    return { texto: 'Regulariza', estilo: 'text-blue-300 bg-blue-500/10 border-blue-500/30' };
+    if (notas.length !== notasCargadas.length) return todasCerradas(trabajosPracticos) ? desaprueba : enCurso;
+    const promedio = notas.reduce((total, nota) => total + nota, 0) / notas.length;
+    if (notas.some((nota) => nota < materia.notaMinimaRegularizar) || promedio < materia.notaMinimaRegularizar) return desaprueba;
+    return notas.every((nota) => nota >= materia.notaMinimaPromocionar) && promedio >= materia.notaMinimaPromocionar ? promociona : regulariza;
   };
 
   const handleEliminarTarea = async (id) => {
@@ -1573,7 +1608,8 @@ export default function Home() {
                                     id: m.id,
                                     condiciones: m.condiciones || '',
                                     notaMinimaRegularizar: m.notaMinimaRegularizar,
-                                    notaMinimaPromocionar: m.notaMinimaPromocionar
+                                    notaMinimaPromocionar: m.notaMinimaPromocionar,
+                                    reglaPromocion: m.reglaPromocion
                                   })}
                                   className="text-xs text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
                                 >
@@ -1768,7 +1804,7 @@ export default function Home() {
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-800 pb-4">
                           <div>
                             <h3 className="text-lg font-bold text-white">{materia.nombre}</h3>
-                            <p className="text-xs text-slate-400 mt-1">Regulariza desde {materia.notaMinimaRegularizar} · Promociona desde {materia.notaMinimaPromocionar}</p>
+                            <p className="text-xs text-slate-400 mt-1">Regulariza desde {materia.notaMinimaRegularizar}{materia.reglaPromocion === 'activos_porcentaje' ? '%' : ''} · Promociona desde {materia.notaMinimaPromocionar}{materia.reglaPromocion === 'activos_porcentaje' ? '%' : ''}</p>
                           </div>
                           {esAdmin && (
                             <button
@@ -1776,7 +1812,8 @@ export default function Home() {
                                 id: materia.id,
                                 condiciones: materia.condiciones || '',
                                 notaMinimaRegularizar: materia.notaMinimaRegularizar,
-                                notaMinimaPromocionar: materia.notaMinimaPromocionar
+                                notaMinimaPromocionar: materia.notaMinimaPromocionar,
+                                reglaPromocion: materia.reglaPromocion
                               })}
                               className="text-xs text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
                             >
@@ -2932,11 +2969,11 @@ export default function Home() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Mínima para regularizar</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{materiaCondicionesEnEdicion.reglaPromocion === 'activos_porcentaje' ? 'Porcentaje para regularizar' : 'Mínima para regularizar'}</label>
                   <input
                     type="number"
                     min="1"
-                    max="10"
+                    max={materiaCondicionesEnEdicion.reglaPromocion === 'activos_porcentaje' ? '100' : '10'}
                     step="0.01"
                     value={materiaCondicionesEnEdicion.notaMinimaRegularizar}
                     onChange={(e) => setMateriaCondicionesEnEdicion({ ...materiaCondicionesEnEdicion, notaMinimaRegularizar: e.target.value })}
@@ -2944,11 +2981,11 @@ export default function Home() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Mínima para promocionar</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{materiaCondicionesEnEdicion.reglaPromocion === 'activos_porcentaje' ? 'Porcentaje para promocionar' : 'Mínima para promocionar'}</label>
                   <input
                     type="number"
                     min="1"
-                    max="10"
+                    max={materiaCondicionesEnEdicion.reglaPromocion === 'activos_porcentaje' ? '100' : '10'}
                     step="0.01"
                     value={materiaCondicionesEnEdicion.notaMinimaPromocionar}
                     onChange={(e) => setMateriaCondicionesEnEdicion({ ...materiaCondicionesEnEdicion, notaMinimaPromocionar: e.target.value })}
