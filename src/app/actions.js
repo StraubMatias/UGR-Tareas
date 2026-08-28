@@ -90,6 +90,11 @@ async function asegurarEsquemaNotasTareas() {
     ]
   });
 
+  await db.execute({
+    sql: "UPDATE materias SET regla_promocion = 'tp_porcentaje_nota', nota_minima_regularizar = 75, nota_minima_promocionar = 8 WHERE nombre LIKE ? AND condiciones LIKE '%75%%' AND condiciones LIKE '%100%%'",
+    args: ['%SISTEMAS DE GESTIÓN DE SEGURIDAD DE LA INFORMACIÓN%']
+  });
+
   const reglasIniciales = [
     {
       nombre: '%AUDITORÍAS DE SEGURIDAD DE LA INFORMACIÓN%',
@@ -466,7 +471,7 @@ export async function editarCondicionesMateriaAction({ id, condiciones, notaMini
   try {
     const regularizar = Number(notaMinimaRegularizar);
     const promocionar = Number(notaMinimaPromocionar);
-    const maximo = reglaPromocion === 'activos_porcentaje' ? 100 : 10;
+    const maximo = ['activos_porcentaje', 'tp_porcentaje_nota'].includes(reglaPromocion) ? 100 : 10;
     if (!esAdministrador(usuario)) {
       return { exito: false, mensaje: 'Solo el administrador puede editar condiciones.' };
     }

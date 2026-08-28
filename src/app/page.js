@@ -519,6 +519,14 @@ export default function Home() {
     const regulariza = estado('Regulariza', 'text-blue-300 bg-blue-500/10 border-blue-500/30');
     const promociona = estado('Promociona', 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30');
     const notaDe = (registro) => Number.parseFloat(String(registro).replace(',', '.'));
+    const notaDeTarea = (tarea) => notaDe(tarea.notas?.[alumno]);
+    const tareaAprobada = (tarea) => {
+      if (tarea.conNota || tarea.tipo === 'trabajo_practico') {
+        const nota = notaDeTarea(tarea);
+        return Number.isFinite(nota) && nota >= 6;
+      }
+      return tareaCompletadaPor(tarea, alumno);
+    };
     const tareaCerrada = (tarea) => tarea.fin && tarea.fin !== 'Sin fecha' && obtenerDiasHastaTarea(tarea.fin) < 0;
     const todasCerradas = (tareas) => tareas.length > 0 && tareas.every(tareaCerrada);
 
@@ -544,11 +552,24 @@ export default function Home() {
     if (materia.reglaPromocion === 'activos_porcentaje') {
       const total = tareasAbiertas.length;
       if (total === 0) return estado('Sin actividades', 'text-slate-400 bg-slate-800/60 border-slate-700');
-      const completadas = tareasAbiertas.filter((tarea) => tareaCompletadaPor(tarea, alumno)).length;
+      const completadas = tareasAbiertas.filter(tareaAprobada).length;
       const porcentaje = (completadas / total) * 100;
       if (porcentaje >= materia.notaMinimaPromocionar) return promociona;
       if (porcentaje >= materia.notaMinimaRegularizar) return regulariza;
       return tareasAbiertas.every(tareaCerrada) ? desaprueba : enCurso;
+    }
+
+    if (materia.reglaPromocion === 'tp_porcentaje_nota') {
+      const total = trabajosPracticos.length;
+      if (total === 0) return estado('Sin TPs abiertos', 'text-slate-400 bg-slate-800/60 border-slate-700');
+      const completados = trabajosPracticos.filter(tareaAprobada).length;
+      const porcentaje = (completados / total) * 100;
+      const notasValidas = trabajosPracticos.map(notaDeTarea).filter((nota) => Number.isFinite(nota));
+      if (porcentaje >= materia.notaMinimaPromocionar && notasValidas.length === total && notasValidas.every((nota) => nota >= materia.notaMinimaPromocionar)) {
+        return promociona;
+      }
+      if (porcentaje >= materia.notaMinimaRegularizar) return regulariza;
+      return trabajosPracticos.every(tareaCerrada) ? desaprueba : enCurso;
     }
 
     if (trabajosPracticos.length === 0) return tareasAbiertas.length === 0
@@ -560,7 +581,7 @@ export default function Home() {
     });
     const notasCargadas = notas.filter((nota) => nota !== null && Number.isFinite(nota));
     if (materia.reglaPromocion === 'riesgos_tps') {
-      const completados = trabajosPracticos.filter((tarea) => tareaCompletadaPor(tarea, alumno)).length;
+      const completados = trabajosPracticos.filter(tareaAprobada).length;
       if (completados < 3) return todasCerradas(trabajosPracticos) ? desaprueba : enCurso;
       if (notasCargadas.length === trabajosPracticos.length && notas.every((nota) => nota >= materia.notaMinimaPromocionar)) return promociona;
       return regulariza;
@@ -1814,7 +1835,9 @@ export default function Home() {
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-800 pb-4">
                           <div>
                             <h3 className="text-lg font-bold text-white">{materia.nombre}</h3>
-                            <p className="text-xs text-slate-400 mt-1">Regulariza desde {materia.notaMinimaRegularizar}{materia.reglaPromocion === 'activos_porcentaje' ? '%' : ''} · Promociona desde {materia.notaMinimaPromocionar}{materia.reglaPromocion === 'activos_porcentaje' ? '%' : ''}</p>
+                            <p className="text-xs text-slate-400 mt-1">
+                              Regulariza desde {materia.notaMinimaRegularizar}{['activos_porcentaje', 'tp_porcentaje_nota'].includes(materia.reglaPromocion) ? '%' : ''} · Promociona desde {materia.notaMinimaPromocionar}{materia.reglaPromocion === 'activos_porcentaje' ? '%' : ''}
+                            </p>
                           </div>
                           {esAdmin && (
                             <button
@@ -2981,11 +3004,11 @@ export default function Home() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">{materiaCondicionesEnEdicion.reglaPromocion === 'activos_porcentaje' ? 'Porcentaje para regularizar' : 'Mínima para regularizar'}</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{['activos_porcentaje', 'tp_porcentaje_nota'].includes(materiaCondicionesEnEdicion.reglaPromocion) ? 'Porcentaje para regularizar' : 'Mínima para regularizar'}</label>
                   <input
                     type="number"
                     min="1"
-                    max={materiaCondicionesEnEdicion.reglaPromocion === 'activos_porcentaje' ? '100' : '10'}
+                    max={['activos_porcentaje', 'tp_porcentaje_nota'].includes(materiaCondicionesEnEdicion.reglaPromocion) ? '100' : '10'}
                     step="0.01"
                     value={materiaCondicionesEnEdicion.notaMinimaRegularizar}
                     onChange={(e) => setMateriaCondicionesEnEdicion({ ...materiaCondicionesEnEdicion, notaMinimaRegularizar: e.target.value })}
