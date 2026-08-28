@@ -12,6 +12,7 @@ import {
   crearMateriaAction,
   renombrarMateriaAction,
   eliminarMateriaAction,
+  editarCondicionesMateriaAction,
   crearTareaAction,
   editarTareaAction,
   eliminarTareaAction,
@@ -74,6 +75,8 @@ export default function Home() {
   const [detallesTarea, setDetallesTarea] = useState('');
   const [unidadTarea, setUnidadTarea] = useState('');
   const [tareaConNota, setTareaConNota] = useState(false);
+  const [tipoTarea, setTipoTarea] = useState('actividad');
+  const [materiaCondicionesEnEdicion, setMateriaCondicionesEnEdicion] = useState(null);
 
   // Form Admin (Parciales)
   const [materiaParcialSel, setMateriaParcialSel] = useState('');
@@ -435,6 +438,21 @@ export default function Home() {
     await cargarBD();
   };
 
+  const handleGuardarCondicionesMateria = async (e) => {
+    e.preventDefault();
+    if (!materiaCondicionesEnEdicion) return;
+    const resultado = await editarCondicionesMateriaAction({
+      ...materiaCondicionesEnEdicion,
+      usuario: usuarioActual
+    });
+    if (!resultado?.exito) {
+      alert(resultado?.mensaje || 'No se pudieron guardar las condiciones.');
+      return;
+    }
+    setMateriaCondicionesEnEdicion(null);
+    await cargarBD();
+  };
+
   const handleGuardarRenombrarMateria = async (e) => {
     e.preventDefault();
     if (!materiaEnEdicion) return;
@@ -460,7 +478,8 @@ export default function Home() {
       fin: fechaFin,
       detalles: detallesTarea,
       unidad: unidadTarea,
-      conNota: tareaConNota
+      conNota: tareaConNota || tipoTarea === 'trabajo_practico',
+      tipo: tipoTarea
     });
     if (!resultado?.exito) {
       alert(resultado?.mensaje || 'No se pudo crear la tarea.');
@@ -472,6 +491,7 @@ export default function Home() {
     setDetallesTarea('');
     setUnidadTarea('');
     setTareaConNota(false);
+    setTipoTarea('actividad');
     await cargarBD();
     setPestana('materias');
   };
@@ -486,6 +506,27 @@ export default function Home() {
     }
     setTareaEnEdicion(null);
     await cargarBD();
+  };
+
+  const obtenerEstadoMateria = (materia, alumno) => {
+    const trabajosPracticos = materia.tareas.filter((tarea) => tarea.tipo === 'trabajo_practico');
+    if (!materia.condiciones && trabajosPracticos.length === 0) return null;
+    if (trabajosPracticos.length === 0) return { texto: 'Sin TPs cargados', estilo: 'text-slate-400 bg-slate-800/60 border-slate-700' };
+
+    const notas = trabajosPracticos.map((tarea) => {
+      const valor = tarea.notas?.[alumno];
+      return valor === undefined ? null : Number.parseFloat(String(valor).replace(',', '.'));
+    });
+    if (notas.some((nota) => nota === null || !Number.isFinite(nota))) {
+      return { texto: 'En curso', estilo: 'text-amber-300 bg-amber-500/10 border-amber-500/30' };
+    }
+    if (notas.some((nota) => nota < materia.notaMinimaRegularizar)) {
+      return { texto: 'Desaprueba', estilo: 'text-red-300 bg-red-500/10 border-red-500/30' };
+    }
+    if (notas.every((nota) => nota >= materia.notaMinimaPromocionar)) {
+      return { texto: 'Promociona', estilo: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30' };
+    }
+    return { texto: 'Regulariza', estilo: 'text-blue-300 bg-blue-500/10 border-blue-500/30' };
   };
 
   const handleEliminarTarea = async (id) => {
@@ -1135,6 +1176,16 @@ export default function Home() {
             >
               <span>📚</span> Materias y Consignas
             </button>
+            <button
+              onClick={() => setPestana('promocion')}
+              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
+                pestana === 'promocion'
+                  ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                  : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>🎯</span> Promoción
+            </button>
 
             <button
               onClick={() => setPestana('historial')}
@@ -1518,6 +1569,17 @@ export default function Home() {
                               {esAdmin && (
                                 <div className="flex gap-2">
                                 <button
+                                  onClick={() => setMateriaCondicionesEnEdicion({
+                                    id: m.id,
+                                    condiciones: m.condiciones || '',
+                                    notaMinimaRegularizar: m.notaMinimaRegularizar,
+                                    notaMinimaPromocionar: m.notaMinimaPromocionar
+                                  })}
+                                  className="text-xs text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
+                                >
+                                  Condiciones
+                                </button>
+                                <button
                                   onClick={() => setMateriaEnEdicion({ id: m.id, nombre: m.nombre })}
                                   className="text-xs text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
                                 >
@@ -1686,6 +1748,62 @@ export default function Home() {
                         </div>
                       );
                     })
+                  )}
+                </div>
+              )}
+
+              {pestana === 'promocion' && (
+                <div className="space-y-6">
+                  <div className="border-b border-slate-800 pb-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+                      <span>🎯</span> Promoción por materia
+                    </h2>
+                    <p className="text-sm text-slate-400 mt-1">Estado calculado con los trabajos prácticos y sus notas.</p>
+                  </div>
+                  {materias.length === 0 ? (
+                    <p className="text-sm text-slate-500 italic">Todavía no hay materias cargadas.</p>
+                  ) : (
+                    materias.map((materia) => (
+                      <section key={materia.id} className="bg-[#161c26] border border-slate-800 rounded-2xl p-5 sm:p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-800 pb-4">
+                          <div>
+                            <h3 className="text-lg font-bold text-white">{materia.nombre}</h3>
+                            <p className="text-xs text-slate-400 mt-1">Regulariza desde {materia.notaMinimaRegularizar} · Promociona desde {materia.notaMinimaPromocionar}</p>
+                          </div>
+                          {esAdmin && (
+                            <button
+                              onClick={() => setMateriaCondicionesEnEdicion({
+                                id: materia.id,
+                                condiciones: materia.condiciones || '',
+                                notaMinimaRegularizar: materia.notaMinimaRegularizar,
+                                notaMinimaPromocionar: materia.notaMinimaPromocionar
+                              })}
+                              className="text-xs text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
+                            >
+                              Editar condiciones
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-300 whitespace-pre-wrap mt-4">
+                          {materia.condiciones || 'Condiciones todavía no cargadas.'}
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-5">
+                          {alumnos.map((alumno) => {
+                            const estado = obtenerEstadoMateria(materia, alumno);
+                            return (
+                              <div key={alumno} className="flex items-center justify-between gap-3 bg-[#0f141c] border border-slate-800 rounded-xl p-3">
+                                <span className="text-sm font-semibold text-slate-200 truncate">{alumno}</span>
+                                {estado ? (
+                                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${estado.estilo}`}>{estado.texto}</span>
+                                ) : (
+                                  <span className="text-xs text-slate-500">Sin regla</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ))
                   )}
                 </div>
               )}
@@ -2276,10 +2394,27 @@ export default function Home() {
                         />
                       </div>
 
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Tipo de tarea</label>
+                        <select
+                          value={tipoTarea}
+                          onChange={(e) => {
+                            setTipoTarea(e.target.value);
+                            if (e.target.value === 'trabajo_practico') setTareaConNota(true);
+                          }}
+                          className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-3 text-sm text-white focus:outline-none cursor-pointer"
+                        >
+                          <option value="actividad">Actividad</option>
+                          <option value="foro">Foro</option>
+                          <option value="trabajo_practico">Trabajo práctico</option>
+                        </select>
+                      </div>
+
                       <label className="flex items-center gap-3 text-sm font-semibold text-slate-200 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={tareaConNota}
+                          checked={tareaConNota || tipoTarea === 'trabajo_practico'}
+                          disabled={tipoTarea === 'trabajo_practico'}
                           onChange={(e) => setTareaConNota(e.target.checked)}
                           className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-purple-600 focus:ring-purple-500"
                         />
@@ -2675,10 +2810,33 @@ export default function Home() {
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Tipo de tarea</label>
+                <select
+                  value={tareaEnEdicion.tarea.tipo || 'actividad'}
+                  onChange={(e) =>
+                    setTareaEnEdicion({
+                      ...tareaEnEdicion,
+                      tarea: {
+                        ...tareaEnEdicion.tarea,
+                        tipo: e.target.value,
+                        conNota: e.target.value === 'trabajo_practico' || tareaEnEdicion.tarea.conNota
+                      }
+                    })
+                  }
+                  className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none cursor-pointer"
+                >
+                  <option value="actividad">Actividad</option>
+                  <option value="foro">Foro</option>
+                  <option value="trabajo_practico">Trabajo práctico</option>
+                </select>
+              </div>
+
               <label className="flex items-center gap-3 text-sm font-semibold text-slate-200 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={Boolean(tareaEnEdicion.tarea.conNota)}
+                  checked={Boolean(tareaEnEdicion.tarea.conNota) || tareaEnEdicion.tarea.tipo === 'trabajo_practico'}
+                  disabled={tareaEnEdicion.tarea.tipo === 'trabajo_practico'}
                   onChange={(e) =>
                     setTareaEnEdicion({
                       ...tareaEnEdicion,
@@ -2750,6 +2908,57 @@ export default function Home() {
                 >
                   Guardar Cambios
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {materiaCondicionesEnEdicion && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-xl w-full shadow-2xl">
+            <h3 className="text-base font-bold text-white mb-1">Condiciones de promoción</h3>
+            <p className="text-xs text-slate-400 mb-5">Las notas se calculan sobre los trabajos prácticos cargados.</p>
+            <form onSubmit={handleGuardarCondicionesMateria} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Condiciones de la materia</label>
+                <textarea
+                  rows="5"
+                  value={materiaCondicionesEnEdicion.condiciones}
+                  onChange={(e) => setMateriaCondicionesEnEdicion({ ...materiaCondicionesEnEdicion, condiciones: e.target.value })}
+                  placeholder="Ej: Para regularizar hay que completar todos los trabajos prácticos..."
+                  className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Mínima para regularizar</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    step="0.01"
+                    value={materiaCondicionesEnEdicion.notaMinimaRegularizar}
+                    onChange={(e) => setMateriaCondicionesEnEdicion({ ...materiaCondicionesEnEdicion, notaMinimaRegularizar: e.target.value })}
+                    className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Mínima para promocionar</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    step="0.01"
+                    value={materiaCondicionesEnEdicion.notaMinimaPromocionar}
+                    onChange={(e) => setMateriaCondicionesEnEdicion({ ...materiaCondicionesEnEdicion, notaMinimaPromocionar: e.target.value })}
+                    className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setMateriaCondicionesEnEdicion(null)} className="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs cursor-pointer">Cancelar</button>
+                <button type="submit" className="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer">Guardar condiciones</button>
               </div>
             </form>
           </div>

@@ -51,6 +51,38 @@ async function asegurarEsquemaNotasTareas() {
   } catch (error) {
     // La columna ya existe en instalaciones que recibieron la migración.
   }
+
+  try {
+    await db.execute("ALTER TABLE tareas ADD COLUMN tipo TEXT NOT NULL DEFAULT 'actividad'");
+  } catch (error) {
+    // La columna ya existe en instalaciones que recibieron la migración.
+  }
+
+  try {
+    await db.execute("ALTER TABLE materias ADD COLUMN condiciones TEXT NOT NULL DEFAULT ''");
+  } catch (error) {
+    // La columna ya existe en instalaciones que recibieron la migración.
+  }
+
+  try {
+    await db.execute('ALTER TABLE materias ADD COLUMN nota_minima_regularizar REAL NOT NULL DEFAULT 4');
+  } catch (error) {
+    // La columna ya existe en instalaciones que recibieron la migración.
+  }
+
+  try {
+    await db.execute('ALTER TABLE materias ADD COLUMN nota_minima_promocionar REAL NOT NULL DEFAULT 8');
+  } catch (error) {
+    // La columna ya existe en instalaciones que recibieron la migración.
+  }
+
+  await db.execute({
+    sql: "UPDATE materias SET condiciones = ?, nota_minima_regularizar = 4, nota_minima_promocionar = 8 WHERE nombre LIKE ? AND (condiciones IS NULL OR condiciones = '')",
+    args: [
+      'Para regularizar la materia es necesario haber completado los trabajos prácticos propuestos. Quienes aprueben los trabajos prácticos con 8 (ocho) o más promueven la materia sin rendir el final.',
+      '%SISTEMAS DE GESTIÓN DE SEGURIDAD DE LA INFORMACIÓN%'
+    ]
+  });
 }
 
 function validarNota(nota) {
@@ -279,6 +311,7 @@ export async function obtenerDatos() {
           detalles: t.detalles,
           unidad: t.unidad || '',
           conNota: Number(t.con_nota) === 1,
+          tipo: t.tipo || 'actividad',
           completadoPor,
           completadoEn,
           notas,
@@ -289,6 +322,9 @@ export async function obtenerDatos() {
       return {
         id: m.id,
         nombre: m.nombre,
+        condiciones: m.condiciones || '',
+        notaMinimaRegularizar: Number(m.nota_minima_regularizar) || 4,
+        notaMinimaPromocionar: Number(m.nota_minima_promocionar) || 8,
         tareas: tareasConCompletados
       };
     });
@@ -381,6 +417,30 @@ export async function renombrarMateriaAction(id, nuevoNombre) {
   }
 }
 
+export async function editarCondicionesMateriaAction({ id, condiciones, notaMinimaRegularizar, notaMinimaPromocionar, usuario }) {
+  try {
+    const regularizar = Number(notaMinimaRegularizar);
+    const promocionar = Number(notaMinimaPromocionar);
+    if (!esAdministrador(usuario)) {
+      return { exito: false, mensaje: 'Solo el administrador puede editar condiciones.' };
+    }
+    if (![regularizar, promocionar].every((nota) => Number.isFinite(nota) && nota >= 1 && nota <= 10)) {
+      return { exito: false, mensaje: 'Las notas mínimas deben estar entre 1 y 10.' };
+    }
+    if (promocionar < regularizar) {
+      return { exito: false, mensaje: 'La nota para promocionar no puede ser menor que la de regularización.' };
+    }
+    await db.execute({
+      sql: 'UPDATE materias SET condiciones = ?, nota_minima_regularizar = ?, nota_minima_promocionar = ? WHERE id = ?',
+      args: [condiciones?.trim() || '', regularizar, promocionar, id]
+    });
+    return { exito: true };
+  } catch (error) {
+    console.error('Error al editar condiciones de materia:', error);
+    return { exito: false, mensaje: 'No se pudieron guardar las condiciones.' };
+  }
+}
+
 export async function eliminarMateriaAction(id) {
   try {
     await db.execute({
@@ -392,18 +452,19 @@ export async function eliminarMateriaAction(id) {
   }
 }
 
-export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles, unidad, conNota }) {
+export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles, unidad, conNota, tipo }) {
   try {
     const unidadNormalizada = normalizarUnidad(unidad);
     if (!unidadNormalizada.valida) {
       return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
     }
     const conNotaNumerico = conNota ? 1 : 0;
+    const tipoNormalizado = ['actividad', 'foro', 'trabajo_practico'].includes(tipo) ? tipo : 'actividad';
 
     const id = 't_' + Date.now();
     await db.execute({
-      sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      args: [id, materiaId, nombre, inicio || 'Sin fecha', fin || 'Sin fecha', detalles || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico]
+      sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      args: [id, materiaId, nombre, inicio || 'Sin fecha', fin || 'Sin fecha', detalles || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado]
     });
     return { exito: true };
   } catch (error) {
@@ -412,17 +473,18 @@ export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalle
   }
 }
 
-export async function editarTareaAction({ id, nombre, inicio, fin, detalles, unidad, conNota }) {
+export async function editarTareaAction({ id, nombre, inicio, fin, detalles, unidad, conNota, tipo }) {
   try {
     const unidadNormalizada = normalizarUnidad(unidad);
     if (!unidadNormalizada.valida) {
       return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
     }
     const conNotaNumerico = conNota ? 1 : 0;
+    const tipoNormalizado = ['actividad', 'foro', 'trabajo_practico'].includes(tipo) ? tipo : 'actividad';
 
     await db.execute({
-      sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ?, con_nota = ? WHERE id = ?',
-      args: [nombre, inicio, fin, detalles, unidadNormalizada.valor, conNotaNumerico, id]
+      sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ?, con_nota = ?, tipo = ? WHERE id = ?',
+      args: [nombre, inicio, fin, detalles, unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, id]
     });
     return { exito: true };
   } catch (error) {
