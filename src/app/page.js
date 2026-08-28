@@ -1083,6 +1083,8 @@ export default function Home() {
   const alumnosOrdenadosPromocion = usuarioActual
     ? [usuarioActual, ...alumnos.filter((alumno) => alumno !== usuarioActual)]
     : alumnos;
+  const fechaCreacionPagina = new Date(2026, 7, 24);
+  const diasPagina = Math.max(0, Math.floor((Date.now() - fechaCreacionPagina.getTime()) / (1000 * 60 * 60 * 24)));
 
   return (
     <main className="min-h-screen bg-[#0f141c] text-slate-200 p-4 sm:p-6 md:p-10 font-sans selection:bg-blue-500 selection:text-white">
@@ -1093,6 +1095,9 @@ export default function Home() {
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
               UGR - Tareas y Parciales
             </h1>
+            <span className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-300">
+              {diasPagina} {diasPagina === 1 ? 'día' : 'días'}
+            </span>
           </div>
           <p className="text-sm sm:text-base text-slate-400 flex items-center gap-2 mt-1">
             {usuarioActual ? (
