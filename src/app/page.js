@@ -510,7 +510,8 @@ export default function Home() {
   };
 
   const obtenerEstadoMateria = (materia, alumno) => {
-    const trabajosPracticos = materia.tareas.filter((tarea) => tarea.tipo === 'trabajo_practico');
+    const tareasAbiertas = materia.tareas.filter((tarea) => tareaEstaHabilitada(tarea.inicio));
+    const trabajosPracticos = tareasAbiertas.filter((tarea) => tarea.tipo === 'trabajo_practico');
     if (!materia.condiciones && trabajosPracticos.length === 0) return null;
     const estado = (texto, estilo) => ({ texto, estilo });
     const enCurso = estado('En curso', 'text-amber-300 bg-amber-500/10 border-amber-500/30');
@@ -522,13 +523,17 @@ export default function Home() {
     const todasCerradas = (tareas) => tareas.length > 0 && tareas.every(tareaCerrada);
 
     if (materia.reglaPromocion === 'ciberdelitos_parciales') {
-      const parcialesMateria = parciales.filter((parcial) => parcial.materia_id === materia.id);
+      const parcialesMateria = parciales.filter((parcial) => (
+        parcial.materia_id === materia.id
+        && parcial.fecha !== 'Sin fecha'
+        && obtenerDiasHastaFecha(parcial.fecha) <= 0
+      ));
       const notasParciales = parcialesMateria.map((parcial) => {
         const registro = notas.find((nota) => nota.parcial_id === parcial.id && nota.alumno === alumno);
         return registro ? notaDe(registro.nota) : null;
       });
       if (notasParciales.length < 2 || notasParciales.some((nota) => nota === null || !Number.isFinite(nota))) {
-        return notasParciales.length === 2 && parcialesMateria.every((parcial) => parcial.fecha !== 'Sin fecha' && obtenerDiasHastaFecha(parcial.fecha) < 0)
+        return notasParciales.length === 2 && parcialesMateria.every((parcial) => obtenerDiasHastaFecha(parcial.fecha) < 0)
           ? desaprueba
           : enCurso;
       }
@@ -537,16 +542,18 @@ export default function Home() {
     }
 
     if (materia.reglaPromocion === 'activos_porcentaje') {
-      const total = materia.tareas.length;
+      const total = tareasAbiertas.length;
       if (total === 0) return estado('Sin actividades', 'text-slate-400 bg-slate-800/60 border-slate-700');
-      const completadas = materia.tareas.filter((tarea) => tareaCompletadaPor(tarea, alumno)).length;
+      const completadas = tareasAbiertas.filter((tarea) => tareaCompletadaPor(tarea, alumno)).length;
       const porcentaje = (completadas / total) * 100;
       if (porcentaje >= materia.notaMinimaPromocionar) return promociona;
       if (porcentaje >= materia.notaMinimaRegularizar) return regulariza;
-      return materia.tareas.every(tareaCerrada) ? desaprueba : enCurso;
+      return tareasAbiertas.every(tareaCerrada) ? desaprueba : enCurso;
     }
 
-    if (trabajosPracticos.length === 0) return estado('Sin TPs cargados', 'text-slate-400 bg-slate-800/60 border-slate-700');
+    if (trabajosPracticos.length === 0) return tareasAbiertas.length === 0
+      ? estado('Sin TPs abiertos', 'text-slate-400 bg-slate-800/60 border-slate-700')
+      : estado('Sin TPs cargados', 'text-slate-400 bg-slate-800/60 border-slate-700');
     const notas = trabajosPracticos.map((tarea) => {
       const valor = tarea.notas?.[alumno];
       return valor === undefined ? null : notaDe(valor);
@@ -1002,6 +1009,9 @@ export default function Home() {
 
     return grupos;
   }, []);
+  const alumnosOrdenadosPromocion = usuarioActual
+    ? [usuarioActual, ...alumnos.filter((alumno) => alumno !== usuarioActual)]
+    : alumnos;
 
   return (
     <main className="min-h-screen bg-[#0f141c] text-slate-200 p-4 sm:p-6 md:p-10 font-sans selection:bg-blue-500 selection:text-white">
@@ -1825,10 +1835,12 @@ export default function Home() {
                           {materia.condiciones || 'Condiciones todavía no cargadas.'}
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-5">
-                          {alumnos.map((alumno) => {
+                          {alumnosOrdenadosPromocion.map((alumno) => {
                             const estado = obtenerEstadoMateria(materia, alumno);
                             return (
-                              <div key={alumno} className="flex items-center justify-between gap-3 bg-[#0f141c] border border-slate-800 rounded-xl p-3">
+                              <div key={alumno} className={`flex items-center justify-between gap-3 bg-[#0f141c] border rounded-xl p-3 ${
+                                alumno === usuarioActual ? 'border-emerald-500/60 ring-1 ring-emerald-500/30' : 'border-slate-800'
+                              }`}>
                                 <span className="text-sm font-semibold text-slate-200 truncate">{alumno}</span>
                                 {estado ? (
                                   <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${estado.estilo}`}>{estado.texto}</span>
