@@ -26,6 +26,15 @@ function tareaHabilitada(fecha) {
   return !Number.isNaN(fechaInicio.getTime()) && fechaInicio <= hoy;
 }
 
+function tareaDentroDelPlazo(fecha) {
+  if (!fecha || fecha === 'Sin fecha') return true;
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const fechaCierre = new Date(`${fecha}T00:00:00`);
+  return !Number.isNaN(fechaCierre.getTime()) && hoy < fechaCierre;
+}
+
 async function asegurarEsquemaNotasTareas() {
   await db.execute(
     'CREATE TABLE IF NOT EXISTS notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT NOT NULL, alumno TEXT NOT NULL, nota TEXT NOT NULL, cargada_en TEXT, UNIQUE(tarea_id, alumno))'
@@ -294,12 +303,15 @@ export async function obtenerDatos() {
 export async function toggleTareaAction(tareaId, alumno) {
   try {
     const tarea = await db.execute({
-      sql: 'SELECT inicio FROM tareas WHERE id = ?',
+      sql: 'SELECT inicio, fin FROM tareas WHERE id = ?',
       args: [tareaId]
     });
     if (tarea.rows.length === 0) return { exito: false, mensaje: 'La tarea no existe.' };
     if (!tareaHabilitada(tarea.rows[0].inicio)) {
       return { exito: false, mensaje: 'La tarea todavía no está habilitada.' };
+    }
+    if (!tareaDentroDelPlazo(tarea.rows[0].fin)) {
+      return { exito: false, mensaje: 'La tarea ya cerró.' };
     }
 
     const existe = await db.execute({
@@ -619,7 +631,7 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
     }
 
     const tarea = await db.execute({
-      sql: 'SELECT con_nota, inicio FROM tareas WHERE id = ?',
+      sql: 'SELECT con_nota, inicio, fin FROM tareas WHERE id = ?',
       args: [tareaId]
     });
     if (tarea.rows.length === 0 || Number(tarea.rows[0].con_nota) !== 1) {
@@ -627,6 +639,9 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
     }
     if (!tareaHabilitada(tarea.rows[0].inicio)) {
       return { exito: false, mensaje: 'La tarea todavía no está habilitada para cargar notas.' };
+    }
+    if (!tareaDentroDelPlazo(tarea.rows[0].fin)) {
+      return { exito: false, mensaje: 'La tarea ya cerró y no admite notas.' };
     }
 
     const validacion = validarNota(nota);

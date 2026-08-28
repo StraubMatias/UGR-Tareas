@@ -186,7 +186,7 @@ export default function Home() {
     return Math.max(0, Math.ceil((fechaParcialEnMs - hoy.getTime()) / (1000 * 60 * 60 * 24)));
   };
 
-  const obtenerDiasHastaTarea = (fechaStr) => {
+  const obtenerDiasHastaFecha = (fechaStr) => {
     if (!fechaStr || fechaStr === 'Sin fecha') return null;
     const partes = String(fechaStr).split('-').map(Number);
     if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
@@ -201,6 +201,11 @@ export default function Home() {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
     return Math.ceil((fechaLimite.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  const obtenerDiasHastaTarea = (fechaStr) => {
+    const diasHastaCierre = obtenerDiasHastaFecha(fechaStr);
+    return diasHastaCierre === null ? null : diasHastaCierre - 1;
   };
 
   const ordenarParciales = (listaParciales) => {
@@ -272,21 +277,7 @@ export default function Home() {
       return { texto: 'Sin fecha límite', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
     }
 
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    let year, month, day;
-    const partes = fechaFinStr.split('-');
-
-    if (partes[0].length === 4) {
-      [year, month, day] = partes.map(Number);
-    } else {
-      [day, month, year] = partes.map(Number);
-    }
-
-    const fechaLimite = new Date(year, month - 1, day);
-    const diferenciaMs = fechaLimite.getTime() - hoy.getTime();
-    const diasRestantes = Math.ceil(diferenciaMs / (1000 * 60 * 60 * 24));
+    const diasRestantes = obtenerDiasHastaTarea(fechaFinStr);
 
     if (diasRestantes < 0) {
       return { texto: 'Vencida', estilo: 'bg-red-950/80 text-red-400 border-red-800/80 font-bold' };
@@ -642,6 +633,15 @@ export default function Home() {
     return !Number.isNaN(fechaInicio.getTime()) && fechaInicio <= hoy;
   };
 
+  const tareaDentroDelPlazo = (fecha) => {
+    if (!fecha || fecha === 'Sin fecha') return true;
+    const diasRestantes = obtenerDiasHastaTarea(fecha);
+    return diasRestantes !== null && diasRestantes >= 0;
+  };
+
+  const tareaPuedeGestionarse = (tarea) =>
+    tareaEstaHabilitada(tarea.inicio) && tareaDentroDelPlazo(tarea.fin);
+
   const obtenerResumenTareasAlumno = (alumno) => {
     const tareasNoCompletadas = materias.flatMap((materia) => materia.tareas)
       .filter((tarea) => !tareaCompletadaPor(tarea, alumno));
@@ -726,9 +726,13 @@ export default function Home() {
     }));
   };
 
-  const toggleTareaDesdeCliente = async (tareaId, alumno, fechaInicio) => {
-    if (!tareaEstaHabilitada(fechaInicio)) {
+  const toggleTareaDesdeCliente = async (tareaId, alumno, tarea) => {
+    if (!tareaEstaHabilitada(tarea.inicio)) {
       alert('La tarea todavía no está habilitada.');
+      return;
+    }
+    if (!tareaDentroDelPlazo(tarea.fin)) {
+      alert('La tarea ya cerró.');
       return;
     }
     await handleToggleTarea(tareaId, alumno);
@@ -777,7 +781,7 @@ export default function Home() {
           tipo: 'parcial',
           nombre: parcial.nombre,
           materia: materias.find((materia) => materia.id === parcial.materia_id)?.nombre || 'Materia',
-          dias: obtenerDiasHastaTarea(parcial.fecha)
+          dias: obtenerDiasHastaFecha(parcial.fecha)
         }))
         .filter(({ dias }) => dias === 1),
       ...materias.flatMap((materia) => materia.tareas
@@ -786,7 +790,7 @@ export default function Home() {
           tipo: 'apertura',
           nombre: tarea.nombre,
           materia: materia.nombre,
-          dias: obtenerDiasHastaTarea(tarea.inicio)
+          dias: obtenerDiasHastaFecha(tarea.inicio)
         }))
         .filter(({ dias }) => dias === 1))
     ].sort((a, b) => a.dias - b.dias || a.nombre.localeCompare(b.nombre))
@@ -1298,8 +1302,8 @@ export default function Home() {
                                               <input
                                                 type="checkbox"
                                                 checked={false}
-                                                disabled={!tareaEstaHabilitada(t.inicio)}
-                                                onChange={() => toggleTareaDesdeCliente(t.id, usuarioActual, t.inicio)}
+                                                disabled={!tareaPuedeGestionarse(t)}
+                                                onChange={() => toggleTareaDesdeCliente(t.id, usuarioActual, t)}
                                                 className="mt-0.5 h-5 w-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
                                               />
                                             )}
@@ -1320,7 +1324,7 @@ export default function Home() {
                                                 inputMode="decimal"
                                                 pattern="[0-9]+([.,][0-9]+)?"
                                                 placeholder="Nota"
-                                                disabled={!tareaEstaHabilitada(t.inicio)}
+                                                disabled={!tareaPuedeGestionarse(t)}
                                                 value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
                                                 onChange={(e) => handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
                                                 onBlur={() => handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
@@ -1613,7 +1617,7 @@ export default function Home() {
                                             inputMode="decimal"
                                             pattern="[0-9]+([.,][0-9]+)?"
                                             placeholder="-"
-                                            disabled={!tareaEstaHabilitada(t.inicio)}
+                                            disabled={!tareaPuedeGestionarse(t)}
                                             value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
                                             onChange={(e) => handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
                                             onBlur={() => handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
