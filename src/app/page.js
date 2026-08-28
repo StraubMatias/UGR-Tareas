@@ -210,6 +210,23 @@ export default function Home() {
     return Number.isFinite(timestamp) ? timestamp : null;
   };
 
+  const multiplicadorPuntosTarea = (tarea, alumno) => {
+    if (!tarea.inicio || tarea.inicio === 'Sin fecha') return 1;
+
+    const apertura = new Date(`${tarea.inicio}T00:00:00`);
+    const fechaCarga = obtenerTimestamp(tarea.conNota
+      ? tarea.notaCargadaEn?.[alumno]
+      : tarea.completadoEn?.[alumno]);
+    if (Number.isNaN(apertura.getTime()) || fechaCarga === null) return 1;
+
+    const diasDesdeApertura = Math.floor((fechaCarga - apertura.getTime()) / (1000 * 60 * 60 * 24));
+    return diasDesdeApertura < 7 ? 1 : 0.5;
+  };
+
+  const puntosBaseTarea = (tarea, alumno) => tarea.conNota
+    ? Number.parseFloat(String(tarea.notas?.[alumno]).replace(',', '.'))
+    : esForo(tarea.nombre) ? 1 : 2;
+
   const obtenerFechaParcialEnMs = (fechaStr) => {
     if (!fechaStr || fechaStr === 'Sin fecha') return null;
     const partes = fechaStr.split('-').map(Number);
@@ -963,8 +980,14 @@ export default function Home() {
       const actividades = tareasCompletadas.filter((tarea) => !tarea.conNota && !esForo(tarea.nombre)).length;
       const notasTareasAlumno = tareasCompletadas
         .filter((tarea) => tarea.conNota)
-        .map((tarea) => Number.parseFloat(String(tarea.notas?.[alumno]).replace(',', '.')))
-        .filter((nota) => Number.isFinite(nota) && nota >= 1 && nota <= 10);
+        .filter((tarea) => {
+          const nota = puntosBaseTarea(tarea, alumno);
+          return Number.isFinite(nota) && nota >= 1 && nota <= 10;
+        })
+        .map((tarea) => puntosBaseTarea(tarea, alumno) * multiplicadorPuntosTarea(tarea, alumno));
+      const puntosActividades = tareasCompletadas
+        .filter((tarea) => !tarea.conNota)
+        .reduce((total, tarea) => total + puntosBaseTarea(tarea, alumno) * multiplicadorPuntosTarea(tarea, alumno), 0);
       const notasAlumno = notas
         .filter((nota) => nota.alumno === alumno)
         .filter((nota) => {
@@ -980,12 +1003,11 @@ export default function Home() {
           materia: materia.nombre,
           nombre: tarea.nombre,
           fechaCarga: tarea.conNota ? tarea.notaCargadaEn?.[alumno] : tarea.completadoEn?.[alumno],
-          puntos: tarea.conNota
-            ? Number.parseFloat(String(tarea.notas?.[alumno]).replace(',', '.'))
-            : esForo(tarea.nombre) ? 1 : 2,
+          puntos: puntosBaseTarea(tarea, alumno) * multiplicadorPuntosTarea(tarea, alumno),
+          puntosBase: puntosBaseTarea(tarea, alumno),
           tipo: tarea.conNota ? 'Nota de tarea' : esForo(tarea.nombre) ? 'Foro' : 'Actividad'
         }))
-        .filter((tarea) => tarea.puntos >= (tarea.tipo === 'Nota de tarea' ? 1 : 0) && tarea.puntos <= (tarea.tipo === 'Nota de tarea' ? 10 : 2)));
+        .filter((tarea) => tarea.puntosBase >= (tarea.tipo === 'Nota de tarea' ? 1 : 0) && tarea.puntosBase <= (tarea.tipo === 'Nota de tarea' ? 10 : 2)));
       const parcialesConPuntaje = notas
         .filter((nota) => nota.alumno === alumno)
         .map((nota) => {
@@ -1008,7 +1030,7 @@ export default function Home() {
 
       return {
         alumno,
-        puntos: foros + actividades * 2 + notasAlumno.reduce((total, nota) => total + nota / 10, 0) + notasTareasAlumno.reduce((total, nota) => total + nota, 0),
+        puntos: puntosActividades + notasAlumno.reduce((total, nota) => total + nota / 10, 0) + notasTareasAlumno.reduce((total, nota) => total + nota, 0),
         foros,
         actividades,
         tareasConPuntaje,
