@@ -50,6 +50,7 @@ export default function Home() {
   const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
   const [materiasDesplegadas, setMateriasDesplegadas] = useState({});
   const [alumnoComparar, setAlumnoComparar] = useState('');
+  const [materiaRanking, setMateriaRanking] = useState('general');
 
   // Form Login
   const [inputUser, setInputUser] = useState('');
@@ -911,9 +912,12 @@ export default function Home() {
     4: 'Jueves',
     5: 'Viernes'
   };
+  const materiasDelRanking = materiaRanking === 'general'
+    ? materias
+    : materias.filter((materia) => materia.id === materiaRanking);
   const ranking = alumnos
     .map((alumno) => {
-      const tareasCompletadas = materias.flatMap((materia) => materia.tareas)
+      const tareasCompletadas = materiasDelRanking.flatMap((materia) => materia.tareas)
         .filter((tarea) => tareaCompletadaPor(tarea, alumno));
       const foros = tareasCompletadas.filter((tarea) => !tarea.conNota && esForo(tarea.nombre)).length;
       const actividades = tareasCompletadas.filter((tarea) => !tarea.conNota && !esForo(tarea.nombre)).length;
@@ -923,9 +927,14 @@ export default function Home() {
         .filter((nota) => Number.isFinite(nota) && nota >= 1 && nota <= 10);
       const notasAlumno = notas
         .filter((nota) => nota.alumno === alumno)
+        .filter((nota) => {
+          if (materiaRanking === 'general') return true;
+          const parcial = parciales.find((item) => item.id === nota.parcial_id);
+          return materiasDelRanking.some((materia) => materia.id === parcial?.materia_id);
+        })
         .map((nota) => Number.parseFloat(String(nota.nota).replace(',', '.')))
         .filter((nota) => Number.isFinite(nota) && nota >= 0 && nota <= 10);
-      const tareasConPuntaje = materias.flatMap((materia) => materia.tareas
+      const tareasConPuntaje = materiasDelRanking.flatMap((materia) => materia.tareas
         .filter((tarea) => tareaCompletadaPor(tarea, alumno))
         .map((tarea) => ({
           materia: materia.nombre,
@@ -949,6 +958,7 @@ export default function Home() {
             nota: valor
           };
         })
+        .filter((parcial) => materiaRanking === 'general' || materiasDelRanking.some((materia) => materia.nombre === parcial.materia))
         .filter((parcial) => Number.isFinite(parcial.nota) && parcial.nota >= 0 && parcial.nota <= 10);
       const ultimaCompletadaEn = tareasCompletadas
         .map((tarea) => tarea.conNota ? tarea.notaCargadaEn?.[alumno] : tarea.completadoEn?.[alumno])
@@ -2192,7 +2202,23 @@ export default function Home() {
                         </h2>
                         <p className="text-sm text-slate-400 mt-1">Puntaje acumulado de tareas, foros y parciales.</p>
                       </div>
-                      <span className="text-xs text-slate-500">Se actualiza al marcar tareas</span>
+                      <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                        <label htmlFor="materia-ranking" className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          Vista del ranking
+                        </label>
+                        <select
+                          id="materia-ranking"
+                          value={materiaRanking}
+                          onChange={(e) => setMateriaRanking(e.target.value)}
+                          className="rounded-xl border border-slate-700 bg-[#0f141c] px-3 py-2 text-sm font-semibold text-white outline-none transition-colors focus:border-emerald-400 cursor-pointer"
+                        >
+                          <option value="general">Todas las materias</option>
+                          {materias.map((materia) => (
+                            <option key={materia.id} value={materia.id}>{materia.nombre}</option>
+                          ))}
+                        </select>
+                        <span className="text-xs text-slate-500">Se actualiza al marcar tareas</span>
+                      </div>
                     </div>
 
                     {ranking.length === 0 ? (
