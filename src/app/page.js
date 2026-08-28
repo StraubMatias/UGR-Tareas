@@ -37,6 +37,7 @@ export default function Home() {
   const [iniciado, setIniciado] = useState(false);
   const [notificacionesAbiertas, setNotificacionesAbiertas] = useState(false);
   const [mostrarAvisoInicio, setMostrarAvisoInicio] = useState(false);
+  const [novedades, setNovedades] = useState([]);
 
   // Estado para Parciales y Notas
   const [parciales, setParciales] = useState([]);
@@ -105,6 +106,44 @@ export default function Home() {
   useEffect(() => {
     document.title = "UGR - Tareas";
   }, []);
+
+  useEffect(() => {
+    if (!usuarioActual || esAdmin || cargando) return;
+
+    const tareasActuales = materias.flatMap((materia) => materia.tareas.map((tarea) => ({
+      id: `tarea-${tarea.id}`,
+      tipo: 'nueva-tarea',
+      nombre: tarea.nombre,
+      materia: materia.nombre
+    })));
+    const parcialesActuales = parciales.map((parcial) => ({
+      id: `nuevo-parcial-${parcial.id}`,
+      tipo: 'nuevo-parcial',
+      nombre: parcial.nombre,
+      materia: materias.find((materia) => materia.id === parcial.materia_id)?.nombre || 'Materia'
+    }));
+    const elementosActuales = [...tareasActuales, ...parcialesActuales];
+    const claveNovedades = `ugr_novedades_conocidas_${encodeURIComponent(usuarioActual)}`;
+    const novedadesGuardadas = localStorage.getItem(claveNovedades);
+
+    if (!novedadesGuardadas) {
+      localStorage.setItem(claveNovedades, JSON.stringify(elementosActuales.map((elemento) => elemento.id)));
+      return;
+    }
+
+    let idsConocidos;
+    try {
+      idsConocidos = JSON.parse(novedadesGuardadas);
+    } catch (error) {
+      idsConocidos = [];
+    }
+
+    const nuevas = elementosActuales.filter((elemento) => !idsConocidos.includes(elemento.id));
+    startTransition(() => {
+      setNovedades(nuevas);
+    });
+    localStorage.setItem(claveNovedades, JSON.stringify(elementosActuales.map((elemento) => elemento.id)));
+  }, [usuarioActual, esAdmin, cargando, materias, parciales]);
 
   // PERSISTENCIA DE SESIÓN
   useEffect(() => {
@@ -867,6 +906,7 @@ export default function Home() {
     : null;
   const notificaciones = usuarioActual && !esAdmin
     ? [
+      ...novedades,
       ...materias.flatMap((materia) => materia.tareas
         .map((tarea) => ({ tarea, materia }))
         .filter(({ tarea }) => {
@@ -1098,6 +1138,10 @@ export default function Home() {
                       {notificaciones.map((notificacion) => {
                         const texto = notificacion.tipo === 'parcial'
                           ? 'Rendís mañana'
+                          : notificacion.tipo === 'nuevo-parcial'
+                            ? 'Nuevo parcial cargado'
+                            : notificacion.tipo === 'nueva-tarea'
+                              ? 'Nueva tarea cargada'
                           : notificacion.tipo === 'apertura'
                             ? 'Se habilita mañana'
                             : notificacion.dias === 0
@@ -1108,7 +1152,7 @@ export default function Home() {
                             type="button"
                             key={notificacion.id}
                             onClick={() => {
-                              setPestana(notificacion.tipo === 'parcial' ? 'parciales' : 'materias');
+                              setPestana(['parcial', 'nuevo-parcial'].includes(notificacion.tipo) ? 'parciales' : 'materias');
                               setNotificacionesAbiertas(false);
                             }}
                             className="w-full text-left px-4 py-3 hover:bg-slate-800/70 transition-colors cursor-pointer"
@@ -1157,7 +1201,9 @@ export default function Home() {
         <div className="max-w-9xl mx-auto mb-6 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           <span className="text-lg" aria-hidden="true">🔔</span>
           <p className="flex-1">
-            Tenés {notificaciones.length} {notificaciones.length === 1 ? 'tarea próxima' : 'tareas próximas'} a vencer. Revisá tus recordatorios.
+            {novedades.length > 0
+              ? `Hay ${novedades.length} ${novedades.length === 1 ? 'novedad nueva' : 'novedades nuevas'}: se cargaron tareas o parciales.`
+              : `Tenés ${notificaciones.length} ${notificaciones.length === 1 ? 'tarea próxima' : 'tareas próximas'} a vencer. Revisá tus recordatorios.`}
           </p>
           <button
             type="button"
