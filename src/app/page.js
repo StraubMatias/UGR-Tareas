@@ -286,19 +286,23 @@ export default function Home() {
     return `Abre en ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'}`;
   };
 
-  const obtenerIconoMateria = (nombreMateria = '') => {
-    const texto = nombreMateria.toLowerCase();
+  const iconosMateriasUnicos = [
+    '🔐', '💻', '📐', '🧪', '📚', '🎨', '🧬', '💰', '📊', '🗂️',
+    '🧠', '🎯', '🌐', '📈', '⚙️', '🗣️', '🧭', '🏗️', '🧱', '📦'
+  ];
 
-    if (/seguridad|ciber|informaci[óo]n|iso|risk|cyber/.test(texto)) return '🔐';
-    if (/matem|algebra|estad|calculo|analit|geometr/.test(texto)) return '📐';
-    if (/program|software|algorit|datos|react|python|java|sql|base|db/.test(texto)) return '💻';
-    if (/f[íi]sica|quim|lab|exper/.test(texto)) return '🧪';
-    if (/hist|social|pol[ií]|derech|econ|admin|gesti/.test(texto)) return '📚';
-    if (/liter|idiom|ingles|españ|comun/.test(texto)) return '🗣️';
-    if (/art|dise|graf|visual|multim/.test(texto)) return '🎨';
-    if (/bio|salud|med|nutr/.test(texto)) return '🧬';
-    if (/conta|finan|impuest|negoc/.test(texto)) return '💰';
-    return '📘';
+  const obtenerIconoMateria = (nombreMateria = '') => {
+    const nombresUnicos = [...new Set((materias || []).map((materia) => materia.nombre).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b));
+
+    const indice = nombresUnicos.findIndex((nombre) => nombre === nombreMateria);
+    if (indice >= 0) return iconosMateriasUnicos[indice % iconosMateriasUnicos.length];
+
+    let hash = 0;
+    for (let i = 0; i < nombreMateria.length; i += 1) {
+      hash = (hash * 31 + nombreMateria.charCodeAt(i)) >>> 0;
+    }
+    return iconosMateriasUnicos[hash % iconosMateriasUnicos.length];
   };
 
   const obtenerDiasHastaTarea = (fechaStr) => {
@@ -378,7 +382,7 @@ export default function Home() {
         return { texto: 'Sin fecha de apertura', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
       }
       return {
-        texto: `⏰ ${textoApertura}`,
+        texto: `⏳ ${textoApertura}`,
         estilo: 'bg-blue-500/15 text-blue-300 border-blue-500/30 font-semibold'
       };
     }
@@ -1816,13 +1820,6 @@ export default function Home() {
                                         <h3 className="font-bold text-blue-400 text-base sm:text-lg flex items-center gap-2">
                                           <span>📝</span> {t.nombre}
                                         </h3>
-
-                                        {!tareaEstaHabilitada(t.inicio) && (
-                                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-300 bg-blue-500/10 border border-blue-500/30 rounded-full px-2.5 py-1">
-                                            <span>⏰</span>
-                                            {diasParaAbrir === 0 ? 'Abre hoy' : `Abre en ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'}`}
-                                          </span>
-                                        )}
 
                                         <span className={`text-xs px-3 py-1 rounded-md border ${semaforo.estilo}`}>
                                           {semaforo.texto}
