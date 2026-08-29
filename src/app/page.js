@@ -286,24 +286,30 @@ export default function Home() {
     return `Abre en ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'}`;
   };
 
-  const iconosMateriasUnicos = [
-    '�️', '🔐', '🧰', '💻', '📡', '🧪', '🛰️', '🧠', '📶', '🧬',
-    '🕵️', '🔒', '🧯', '🧱', '📊', '🛰️', '⚙️', '📁', '🗂️', '🧭'
-  ];
+  const normalizarTextoMateria = (texto = '') => String(texto)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 
   const obtenerIconoMateria = (nombreMateria = '') => {
-    const nombresUnicos = [...new Set((materias || []).map((materia) => materia.nombre).filter(Boolean))]
-      .sort((a, b) => a.localeCompare(b));
+    const nombre = normalizarTextoMateria(nombreMateria);
+    const reglas = [
+      { icono: '⚖️', claves: ['ciberdelito', 'delito'] },
+      { icono: '🔎', claves: ['auditor'] },
+      { icono: '⚠️', claves: ['riesgo'] },
+      { icono: '💾', claves: ['activo'] },
+      { icono: '🛡️', claves: ['sistemas de gestion', 'sgsi', 'iso 270'] },
+      { icono: '🌐', claves: ['red'] },
+      { icono: '🔑', claves: ['cripto', 'cifrado'] },
+      { icono: '🕵️', claves: ['forense'] },
+      { icono: '📜', claves: ['derecho', 'legal', 'normativ'] },
+      { icono: '🛡️', claves: ['seguridad'] }
+    ];
 
-    const indice = nombresUnicos.findIndex((nombre) => nombre === nombreMateria);
-    if (indice >= 0) return iconosMateriasUnicos[indice % iconosMateriasUnicos.length];
-
-    let hash = 0;
-    for (let i = 0; i < nombreMateria.length; i += 1) {
-      hash = (hash * 31 + nombreMateria.charCodeAt(i)) >>> 0;
-    }
-    return iconosMateriasUnicos[hash % iconosMateriasUnicos.length];
+    return reglas.find((regla) => regla.claves.some((clave) => nombre.includes(clave)))?.icono || '📘';
   };
+
+  const etiquetaMateria = (nombreMateria = '') => `${obtenerIconoMateria(nombreMateria)} ${nombreMateria}`;
 
   const obtenerDiasHastaTarea = (fechaStr) => {
     const diasHastaCierre = obtenerDiasHastaFecha(fechaStr);
@@ -1239,7 +1245,7 @@ export default function Home() {
                             className="w-full text-left px-4 py-3 hover:bg-slate-800/70 transition-colors cursor-pointer"
                           >
                             <p className="text-sm font-semibold text-slate-100 truncate">{notificacion.nombre}</p>
-                            <p className="text-xs text-slate-400 mt-1">{notificacion.materia}</p>
+                            <p className="text-xs text-slate-400 mt-1">{etiquetaMateria(notificacion.materia)}</p>
                             <p className={`text-xs font-bold mt-2 ${notificacion.tipo === 'vencimiento' && notificacion.dias <= 2 ? 'text-red-300' : 'text-amber-300'}`}>
                               {texto}
                             </p>
@@ -1461,7 +1467,7 @@ export default function Home() {
                       <div className="space-y-2">
                         <h2 className="text-lg font-bold text-white leading-snug">{proximoParcial.nombre}</h2>
                         <p className="text-sm text-purple-200 leading-relaxed">
-                          {materiaProximoParcial?.nombre || 'Materia'}
+                          {etiquetaMateria(materiaProximoParcial?.nombre || 'Materia')}
                         </p>
                         <p className="text-xs font-semibold text-purple-300 border-t border-purple-500/20 pt-3">
                           Fecha: {formatearFechaDDMMAAAA(proximoParcial.fecha)}
@@ -1688,7 +1694,7 @@ export default function Home() {
                                   return (
                                     <div key={m.id} className="bg-[#0f141c] p-4 rounded-xl border border-slate-800/60">
                                       <h4 className="text-xs font-bold text-amber-400 mb-2 flex items-center gap-1.5">
-                                        <span>📌</span> {m.nombre}
+                                        <span>{obtenerIconoMateria(m.nombre)}</span> {m.nombre}
                                       </h4>
                                       {gruposTareas.map((grupo) => (
                                         <div key={grupo.unidad || 'sin-unidad'} className="space-y-2 mb-3 last:mb-0">
@@ -1966,7 +1972,9 @@ export default function Home() {
                       <section key={materia.id} className="bg-[#161c26] border border-slate-800 rounded-2xl p-5 sm:p-6">
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-800 pb-4">
                           <div>
-                            <h3 className="text-lg font-bold text-white">{materia.nombre}</h3>
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                              <span>{obtenerIconoMateria(materia.nombre)}</span> {materia.nombre}
+                            </h3>
                             <p className="text-xs text-slate-400 mt-1">
                               Regulariza desde {materia.notaMinimaRegularizar}{['activos_porcentaje', 'tp_porcentaje_nota'].includes(materia.reglaPromocion) ? '%' : ''} · Promociona desde {materia.notaMinimaPromocionar}{materia.reglaPromocion === 'activos_porcentaje' ? '%' : ''}
                             </p>
@@ -2115,7 +2123,8 @@ export default function Home() {
                             <div className="space-y-5">
                               {historialAgrupado.map((grupoMateria) => (
                                 <section key={grupoMateria.materia} className="space-y-3">
-                                  <h3 className="border-b border-cyan-500/30 pb-2 text-sm font-extrabold uppercase tracking-wider text-cyan-300">
+                                  <h3 className="border-b border-cyan-500/30 pb-2 text-sm font-extrabold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+                                    <span className="normal-case">{obtenerIconoMateria(grupoMateria.materia)}</span>
                                     {grupoMateria.materia}
                                   </h3>
                                   {grupoMateria.grupos.map((grupoUnidad) => (
@@ -2340,7 +2349,7 @@ export default function Home() {
                         >
                           <option value="general">Todas las materias</option>
                           {materias.map((materia) => (
-                            <option key={materia.id} value={materia.id}>{materia.nombre}</option>
+                            <option key={materia.id} value={materia.id}>{etiquetaMateria(materia.nombre)}</option>
                           ))}
                         </select>
                         <span className="text-xs text-slate-500">Se actualiza al marcar tareas</span>
@@ -2451,7 +2460,7 @@ export default function Home() {
                                     <article key={horario.id} className="schedule-card relative overflow-hidden rounded-lg border border-slate-700/80 bg-[#0f141c] p-4 shadow-sm">
                                       <span className={`absolute inset-x-0 top-0 h-0.5 ${colorBarra}`} />
                                       <p className="text-sm font-bold text-white">{horario.hora_inicio} - {horario.hora_fin}</p>
-                                      <p className="mt-3 line-clamp-2 text-sm font-semibold leading-tight text-slate-200">{materia?.nombre || 'Materia no disponible'}</p>
+                                      <p className="mt-3 line-clamp-2 text-sm font-semibold leading-tight text-slate-200">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
                                       {horario.aula && <p className="mt-3 text-xs text-slate-500">Aula {horario.aula}</p>}
                                       {esAdmin && (
                                         <button
@@ -2588,7 +2597,7 @@ export default function Home() {
                           className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-3 text-sm text-white focus:outline-none font-medium cursor-pointer"
                         >
                           {materias.map((m) => (
-                            <option key={m.id} value={m.id}>{m.nombre}</option>
+                            <option key={m.id} value={m.id}>{etiquetaMateria(m.nombre)}</option>
                           ))}
                         </select>
                       </div>
@@ -2697,7 +2706,7 @@ export default function Home() {
                           className="w-full bg-[#0f141c] border border-slate-800 focus:border-purple-500 rounded-xl p-3 text-sm text-white focus:outline-none font-medium cursor-pointer"
                         >
                           {materias.map((m) => (
-                            <option key={m.id} value={m.id}>{m.nombre}</option>
+                            <option key={m.id} value={m.id}>{etiquetaMateria(m.nombre)}</option>
                           ))}
                         </select>
                       </div>
@@ -2769,7 +2778,7 @@ export default function Home() {
                           className="w-full bg-[#0f141c] border border-slate-800 focus:border-cyan-500 rounded-xl p-3 text-sm text-white focus:outline-none font-medium cursor-pointer"
                         >
                           {materias.map((m) => (
-                            <option key={m.id} value={m.id}>{m.nombre}</option>
+                            <option key={m.id} value={m.id}>{etiquetaMateria(m.nombre)}</option>
                           ))}
                         </select>
                       </div>
