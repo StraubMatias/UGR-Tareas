@@ -263,6 +263,23 @@ export default function Home() {
     return Math.ceil((fechaLimite.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
   };
 
+  const obtenerDiasHastaApertura = (fechaStr) => {
+    if (!fechaStr || fechaStr === 'Sin fecha') return null;
+    const partes = String(fechaStr).split('-').map(Number);
+    if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
+
+    const [year, month, day] = partes[0] > 31
+      ? partes
+      : [partes[2], partes[1], partes[0]];
+    const fechaApertura = new Date(year, month - 1, day);
+    fechaApertura.setHours(0, 0, 0, 0);
+    if (Number.isNaN(fechaApertura.getTime())) return null;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    return Math.ceil((fechaApertura.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
   const obtenerDiasHastaTarea = (fechaStr) => {
     const diasHastaCierre = obtenerDiasHastaFecha(fechaStr);
     return diasHastaCierre === null ? null : diasHastaCierre - 1;
@@ -332,7 +349,21 @@ export default function Home() {
 
   const esForo = (nombreTarea) => /\(\s*foro\s*\)/i.test(nombreTarea || '');
 
-  const calcularEstadoSemaforo = (fechaFinStr) => {
+  const calcularEstadoSemaforo = (fechaFinStr, fechaInicioStr = null) => {
+    if (fechaInicioStr && !tareaEstaHabilitada(fechaInicioStr)) {
+      const diasParaAbrir = obtenerDiasHastaApertura(fechaInicioStr);
+      if (diasParaAbrir === null) {
+        return { texto: 'Sin fecha de apertura', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
+      }
+      if (diasParaAbrir === 0) {
+        return { texto: '📅 Abre hoy', estilo: 'bg-blue-500/15 text-blue-300 border-blue-500/30 font-semibold' };
+      }
+      return {
+        texto: `⏳ Faltan ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'} para abrir`,
+        estilo: 'bg-blue-500/15 text-blue-300 border-blue-500/30 font-semibold'
+      };
+    }
+
     if (!fechaFinStr || fechaFinStr === 'Sin fecha') {
       return { texto: 'Sin fecha límite', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
     }
@@ -1494,7 +1525,8 @@ export default function Home() {
                                   {grupo.unidad && <p className="text-xs font-bold uppercase tracking-wider text-blue-300">Unidad {formatearUnidad(grupo.unidad)}</p>}
                                   <ul className="space-y-3">
                                     {grupo.tareas.map((t) => {
-                                      const semaforo = calcularEstadoSemaforo(t.fin);
+                                      const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
+                                      const diasParaAbrir = obtenerDiasHastaApertura(t.inicio);
                                       return (
                                         <li key={t.id} className="flex flex-col gap-1.5 bg-[#161c26]/80 p-3 rounded-lg border border-slate-800/60">
                                           <div className="flex items-start gap-2.5">
@@ -1511,7 +1543,9 @@ export default function Home() {
                                               {t.nombre}{t.conNota && <span className="text-xs text-purple-300 font-normal"> (con nota)</span>}
                                             </span>
                                             {!tareaEstaHabilitada(t.inicio) && (
-                                              <span className="text-[11px] text-blue-300">Abre el {formatearFechaDDMMAAAA(t.inicio)}</span>
+                                              <span className="text-[11px] text-blue-300">
+                                                {diasParaAbrir === 0 ? 'Abre hoy' : `Faltan ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'} para abrir`}
+                                              </span>
                                             )}
                                           </div>
                                           <div className="pl-7 flex items-end justify-between gap-3">
@@ -1644,14 +1678,17 @@ export default function Home() {
                                           {grupo.unidad && <p className="text-[11px] font-bold uppercase tracking-wider text-blue-300">Unidad {formatearUnidad(grupo.unidad)}</p>}
                                           <ul className="space-y-2">
                                             {grupo.tareas.map((t) => {
-                                              const semaforo = calcularEstadoSemaforo(t.fin);
+                                              const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
+                                              const diasParaAbrir = obtenerDiasHastaApertura(t.inicio);
                                               return (
                                                 <li key={t.id} className="bg-[#161c26]/60 p-2.5 rounded-lg border border-slate-800/50 flex flex-col gap-1">
                                                   <span className="text-xs text-slate-200 font-semibold">
                                                     • {t.nombre}
                                                   </span>
                                                   {!tareaEstaHabilitada(t.inicio) && (
-                                                    <span className="text-[10px] text-blue-300">Abre el {formatearFechaDDMMAAAA(t.inicio)}</span>
+                                                    <span className="text-[10px] text-blue-300">
+                                                      {diasParaAbrir === 0 ? 'Abre hoy' : `Faltan ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'} para abrir`}
+                                                    </span>
                                                   )}
                                                   <span className={`text-[10px] w-fit px-2 py-0.5 rounded border ${semaforo.estilo}`}>
                                                     {semaforo.texto}
