@@ -287,8 +287,8 @@ export default function Home() {
   };
 
   const iconosMateriasUnicos = [
-    '🔐', '💻', '📐', '🧪', '📚', '🎨', '🧬', '💰', '📊', '🗂️',
-    '🧠', '🎯', '🌐', '📈', '⚙️', '🗣️', '🧭', '🏗️', '🧱', '📦'
+    '�️', '🔐', '🧰', '💻', '📡', '🧪', '🛰️', '🧠', '📶', '🧬',
+    '🕵️', '🔒', '🧯', '🧱', '📊', '🛰️', '⚙️', '📁', '🗂️', '🧭'
   ];
 
   const obtenerIconoMateria = (nombreMateria = '') => {
@@ -1541,11 +1541,11 @@ export default function Home() {
                           return (
                             <div key={m.id} className="bg-[#0f141c] p-4 rounded-xl border border-slate-800/80">
                               <h3 className="text-sm font-bold text-amber-400/90 mb-3 flex items-center gap-1.5">
-                                <span>📌</span> {m.nombre}
+                                <span>{obtenerIconoMateria(m.nombre)}</span> {m.nombre}
                               </h3>
                               {gruposTareas.map((grupo) => (
-                                <div key={grupo.unidad || 'sin-unidad'} className="space-y-2.5">
-                                  {grupo.unidad && <p className="text-xs font-bold uppercase tracking-wider text-blue-300">Unidad {formatearUnidad(grupo.unidad)}</p>}
+                                <div key={grupo.unidad || 'sin-unidad'} className="space-y-3">
+                                  {grupo.unidad && <p className="mt-1 text-xs font-bold uppercase tracking-wider text-blue-300">Unidad {formatearUnidad(grupo.unidad)}</p>}
                                   <ul className="space-y-3">
                                     {grupo.tareas.map((t) => {
                                       const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
