@@ -280,6 +280,27 @@ export default function Home() {
     return Math.ceil((fechaApertura.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
   };
 
+  const obtenerTextoApertura = (diasParaAbrir) => {
+    if (diasParaAbrir === null) return 'Sin fecha de apertura';
+    if (diasParaAbrir === 0) return 'Abre hoy';
+    return `Abre en ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'}`;
+  };
+
+  const obtenerIconoMateria = (nombreMateria = '') => {
+    const texto = nombreMateria.toLowerCase();
+
+    if (/seguridad|ciber|informaci[óo]n|iso|risk|cyber/.test(texto)) return '🔐';
+    if (/matem|algebra|estad|calculo|analit|geometr/.test(texto)) return '📐';
+    if (/program|software|algorit|datos|react|python|java|sql|base|db/.test(texto)) return '💻';
+    if (/f[íi]sica|quim|lab|exper/.test(texto)) return '🧪';
+    if (/hist|social|pol[ií]|derech|econ|admin|gesti/.test(texto)) return '📚';
+    if (/liter|idiom|ingles|españ|comun/.test(texto)) return '🗣️';
+    if (/art|dise|graf|visual|multim/.test(texto)) return '🎨';
+    if (/bio|salud|med|nutr/.test(texto)) return '🧬';
+    if (/conta|finan|impuest|negoc/.test(texto)) return '💰';
+    return '📘';
+  };
+
   const obtenerDiasHastaTarea = (fechaStr) => {
     const diasHastaCierre = obtenerDiasHastaFecha(fechaStr);
     return diasHastaCierre === null ? null : diasHastaCierre - 1;
@@ -352,14 +373,12 @@ export default function Home() {
   const calcularEstadoSemaforo = (fechaFinStr, fechaInicioStr = null) => {
     if (fechaInicioStr && !tareaEstaHabilitada(fechaInicioStr)) {
       const diasParaAbrir = obtenerDiasHastaApertura(fechaInicioStr);
+      const textoApertura = obtenerTextoApertura(diasParaAbrir);
       if (diasParaAbrir === null) {
         return { texto: 'Sin fecha de apertura', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
       }
-      if (diasParaAbrir === 0) {
-        return { texto: '📅 Abre hoy', estilo: 'bg-blue-500/15 text-blue-300 border-blue-500/30 font-semibold' };
-      }
       return {
-        texto: `⏳ Faltan ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'} para abrir`,
+        texto: `⏰ ${textoApertura}`,
         estilo: 'bg-blue-500/15 text-blue-300 border-blue-500/30 font-semibold'
       };
     }
@@ -1526,7 +1545,6 @@ export default function Home() {
                                   <ul className="space-y-3">
                                     {grupo.tareas.map((t) => {
                                       const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
-                                      const diasParaAbrir = obtenerDiasHastaApertura(t.inicio);
                                       return (
                                         <li key={t.id} className="flex flex-col gap-1.5 bg-[#161c26]/80 p-3 rounded-lg border border-slate-800/60">
                                           <div className="flex items-start gap-2.5">
@@ -1542,11 +1560,6 @@ export default function Home() {
                                             <span className="text-sm sm:text-base text-slate-100 font-semibold leading-snug">
                                               {t.nombre}{t.conNota && <span className="text-xs text-purple-300 font-normal"> (con nota)</span>}
                                             </span>
-                                            {!tareaEstaHabilitada(t.inicio) && (
-                                              <span className="text-[11px] text-blue-300">
-                                                {diasParaAbrir === 0 ? 'Abre hoy' : `Faltan ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'} para abrir`}
-                                              </span>
-                                            )}
                                           </div>
                                           <div className="pl-7 flex items-end justify-between gap-3">
                                             <span className={`text-xs px-2.5 py-0.5 rounded-md border ${semaforo.estilo}`}>
@@ -1679,17 +1692,11 @@ export default function Home() {
                                           <ul className="space-y-2">
                                             {grupo.tareas.map((t) => {
                                               const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
-                                              const diasParaAbrir = obtenerDiasHastaApertura(t.inicio);
                                               return (
                                                 <li key={t.id} className="bg-[#161c26]/60 p-2.5 rounded-lg border border-slate-800/50 flex flex-col gap-1">
                                                   <span className="text-xs text-slate-200 font-semibold">
                                                     • {t.nombre}
                                                   </span>
-                                                  {!tareaEstaHabilitada(t.inicio) && (
-                                                    <span className="text-[10px] text-blue-300">
-                                                      {diasParaAbrir === 0 ? 'Abre hoy' : `Faltan ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'} para abrir`}
-                                                    </span>
-                                                  )}
                                                   <span className={`text-[10px] w-fit px-2 py-0.5 rounded border ${semaforo.estilo}`}>
                                                     {semaforo.texto}
                                                   </span>
@@ -1739,7 +1746,7 @@ export default function Home() {
                         <div key={m.id} className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-5 border-b border-slate-800 pb-3 gap-3">
                             <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-                              <span>📘</span> {m.nombre}
+                              <span>{obtenerIconoMateria(m.nombre)}</span> {m.nombre}
                             </h2>
                             <div className="flex flex-wrap gap-2 sm:justify-end">
                               {tareasCompletadas.length > 0 && (
@@ -1799,7 +1806,8 @@ export default function Home() {
                                     </h3>
                                   )}
                                   {grupo.tareas.map((t) => {
-                                    const semaforo = calcularEstadoSemaforo(t.fin);
+                                    const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
+                                    const diasParaAbrir = obtenerDiasHastaApertura(t.inicio);
 
                                     return (
                                       <div key={t.id} className="bg-[#0f141c] p-6 rounded-xl border border-slate-800/80 flex flex-col lg:flex-row justify-between gap-6">
@@ -1808,6 +1816,13 @@ export default function Home() {
                                         <h3 className="font-bold text-blue-400 text-base sm:text-lg flex items-center gap-2">
                                           <span>📝</span> {t.nombre}
                                         </h3>
+
+                                        {!tareaEstaHabilitada(t.inicio) && (
+                                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-300 bg-blue-500/10 border border-blue-500/30 rounded-full px-2.5 py-1">
+                                            <span>⏰</span>
+                                            {diasParaAbrir === 0 ? 'Abre hoy' : `Abre en ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'}`}
+                                          </span>
+                                        )}
 
                                         <span className={`text-xs px-3 py-1 rounded-md border ${semaforo.estilo}`}>
                                           {semaforo.texto}
@@ -2157,7 +2172,7 @@ export default function Home() {
                     parcialesAgrupados.map((grupo) => (
                       <section key={grupo.id} className="space-y-4">
                         <div className="flex items-center gap-3 border-b border-slate-800 pb-2">
-                          <span className="text-lg">📘</span>
+                          <span className="text-lg">{obtenerIconoMateria(grupo.nombre)}</span>
                           <h2 className="text-lg sm:text-xl font-extrabold text-white">{grupo.nombre}</h2>
                         </div>
 
@@ -2211,8 +2226,12 @@ export default function Home() {
                                   {esAdmin ? 'Cargar notas' : 'Tu nota'}
                                 </h3>
                                 {!parcialDisponible && (
-                                  <p className="text-xs text-amber-300 mt-1">
-                                    La carga se habilita a partir de la fecha del parcial.
+                                  <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-300 bg-blue-500/10 border border-blue-500/30 rounded-full px-2.5 py-1">
+                                    <span>⏰</span>
+                                    {(() => {
+                                      const diasParaAbrir = obtenerDiasHastaFecha(p.fecha);
+                                      return diasParaAbrir === 0 ? 'Abre hoy' : `Abre en ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'}`;
+                                    })()}
                                   </p>
                                 )}
                               </div>
