@@ -1062,6 +1062,7 @@ export default function Home() {
       const tareasConPuntaje = materiasDelRanking.flatMap((materia) => materia.tareas
         .filter((tarea) => tareaCompletadaPor(tarea, alumno))
         .map((tarea) => ({
+          alumno,
           materia: materia.nombre,
           nombre: tarea.nombre,
           fechaCarga: tarea.conNota ? tarea.notaCargadaEn?.[alumno] : tarea.completadoEn?.[alumno],
@@ -1115,11 +1116,53 @@ export default function Home() {
       const puntosEmpatados = Math.abs(diferenciaPuntos) < 0.0001;
       const ultimaTareaUsuario = historialUsuario.find((registro) => obtenerTimestamp(registro.fecha) !== null);
       const ultimaTareaComparado = historialComparado.find((registro) => obtenerTimestamp(registro.fecha) !== null);
+      const razonesPuntos = [];
+      const registrosPorClave = new Map();
+
+      [...usuarioRanking.tareasConPuntaje, ...comparadoRanking.tareasConPuntaje].forEach((registro) => {
+        const clave = `tarea-${registro.materia}-${registro.nombre}`;
+        const registros = registrosPorClave.get(clave) || {};
+        registros[registro.alumno || ''] = registro;
+        registrosPorClave.set(clave, registros);
+      });
+
+      usuarioRanking.parcialesConPuntaje.forEach((registro) => {
+        const clave = `parcial-${registro.materia}-${registro.nombre}`;
+        const registros = registrosPorClave.get(clave) || {};
+        registros[usuarioActual] = registro;
+        registrosPorClave.set(clave, registros);
+      });
+      comparadoRanking.parcialesConPuntaje.forEach((registro) => {
+        const clave = `parcial-${registro.materia}-${registro.nombre}`;
+        const registros = registrosPorClave.get(clave) || {};
+        registros[alumnoComparar] = registro;
+        registrosPorClave.set(clave, registros);
+      });
+
+      registrosPorClave.forEach((registros) => {
+        const registroUsuario = registros[usuarioActual];
+        const registroComparado = registros[alumnoComparar];
+        const puntosUsuario = registroUsuario?.puntos || 0;
+        const puntosComparado = registroComparado?.puntos || 0;
+        const diferencia = puntosUsuario - puntosComparado;
+        if (Math.abs(diferencia) < 0.0001) return;
+
+        const registro = registroUsuario || registroComparado;
+        razonesPuntos.push({
+          id: `${registro.materia}-${registro.nombre}`,
+          texto: registroUsuario && registroComparado
+            ? `${registro.materia}: ${registro.nombre} aporta ${puntosUsuario.toFixed(1)} vs. ${puntosComparado.toFixed(1)} puntos.`
+            : `${registro.materia}: ${registro.nombre} aporta ${registroUsuario ? puntosUsuario.toFixed(1) : '0.0'} vs. ${registroComparado ? puntosComparado.toFixed(1) : '0.0'} puntos porque solo lo tiene registrado ${registroUsuario ? usuarioActual : alumnoComparar}.`,
+          diferencia
+        });
+      });
+
+      razonesPuntos.sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia));
       let motivo;
 
       if (!puntosEmpatados) {
         const ganador = diferenciaPuntos > 0 ? usuarioActual : alumnoComparar;
-        motivo = `${ganador} está arriba porque tiene más puntos.`;
+        motivo = `${ganador} está arriba por ${Math.abs(diferenciaPuntos).toFixed(1)} puntos.`;
       } else if (usuarioRanking.ultimaCompletadaEn !== comparadoRanking.ultimaCompletadaEn) {
         const ganador = usuarioRanking.ultimaCompletadaEn < comparadoRanking.ultimaCompletadaEn
           ? usuarioActual
@@ -1143,7 +1186,9 @@ export default function Home() {
         ultimaTareaUsuario,
         ultimaTareaComparado,
         puntosEmpatados,
-        motivo
+        motivo,
+        diferenciaPuntos,
+        razonesPuntos
       };
     })()
     : null;
@@ -2072,11 +2117,28 @@ export default function Home() {
                           </div>
                         ))}
                       </div>
-                      {datosComparacion.puntosEmpatados && (
-                        <p className="mt-3 text-xs text-slate-400">
-                          Están empatados en puntos. El orden se resolvió comparando la fecha de la última tarea registrada y, si hace falta, la cantidad de actividades.
-                        </p>
-                      )}
+                      <div className="mt-4 border-t border-slate-800/80 pt-4">
+                        <h4 className="text-sm font-bold text-white">
+                          {datosComparacion.puntosEmpatados ? 'Coincidencias y desempate' : 'Qué explica la diferencia'}
+                        </h4>
+                        {datosComparacion.razonesPuntos.length > 0 ? (
+                          <ul className="mt-2 space-y-2">
+                            {datosComparacion.razonesPuntos.map((razon) => (
+                              <li key={razon.id} className="text-xs text-slate-300">
+                                <span className={razon.diferencia > 0 ? 'text-emerald-300' : 'text-amber-300'}>
+                                  {razon.diferencia > 0 ? `${usuarioActual} gana` : `${alumnoComparar} gana`}
+                                </span>
+                                {' '}· {razon.texto}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-2 text-xs text-slate-400">No hay diferencias de tareas, notas o parciales para explicar.</p>
+                        )}
+                        {datosComparacion.puntosEmpatados && (
+                          <p className="mt-2 text-xs text-slate-300">{datosComparacion.motivo}</p>
+                        )}
+                      </div>
                     </div>
                   )}
 
