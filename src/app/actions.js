@@ -396,10 +396,6 @@ export async function toggleTareaAction(tareaId, alumno) {
     if (!tareaHabilitada(tarea.rows[0].inicio)) {
       return { exito: false, mensaje: 'La tarea todavía no está habilitada.' };
     }
-    if (!tareaDentroDelPlazo(tarea.rows[0].fin)) {
-      return { exito: false, mensaje: 'La tarea ya cerró.' };
-    }
-
     const existe = await db.execute({
       sql: 'SELECT * FROM completadas WHERE tarea_id = ? AND alumno = ?',
       args: [tareaId, alumno]
@@ -753,10 +749,6 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
     if (!tareaHabilitada(tarea.rows[0].inicio)) {
       return { exito: false, mensaje: 'La tarea todavía no está habilitada para cargar notas.' };
     }
-    if (!tareaDentroDelPlazo(tarea.rows[0].fin)) {
-      return { exito: false, mensaje: 'La tarea ya cerró y no admite notas.' };
-    }
-
     const validacion = validarNota(nota);
     if (!validacion.vacia && !validacion.valida) {
       return { exito: false, mensaje: 'La nota debe ser un número entre 1 y 10.' };

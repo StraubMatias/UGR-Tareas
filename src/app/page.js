@@ -211,13 +211,19 @@ export default function Home() {
   };
 
   const multiplicadorPuntosTarea = (tarea, alumno) => {
-    if (!tarea.inicio || tarea.inicio === 'Sin fecha') return 1;
-
-    const apertura = new Date(`${tarea.inicio}T00:00:00`);
     const fechaCarga = obtenerTimestamp(tarea.conNota
       ? tarea.notaCargadaEn?.[alumno]
       : tarea.completadoEn?.[alumno]);
-    if (Number.isNaN(apertura.getTime()) || fechaCarga === null) return 1;
+    if (fechaCarga === null) return 1;
+
+    if (tarea.fin && tarea.fin !== 'Sin fecha') {
+      const cierre = new Date(`${tarea.fin}T00:00:00`);
+      if (!Number.isNaN(cierre.getTime()) && fechaCarga >= cierre.getTime()) return 0;
+    }
+
+    if (!tarea.inicio || tarea.inicio === 'Sin fecha') return 1;
+    const apertura = new Date(`${tarea.inicio}T00:00:00`);
+    if (Number.isNaN(apertura.getTime())) return 1;
 
     const diasDesdeApertura = Math.floor((fechaCarga - apertura.getTime()) / (1000 * 60 * 60 * 24));
     return diasDesdeApertura < 7 ? 1 : 0.5;
@@ -861,7 +867,7 @@ export default function Home() {
   };
 
   const tareaPuedeGestionarse = (tarea) =>
-    tareaEstaHabilitada(tarea.inicio) && tareaDentroDelPlazo(tarea.fin);
+    tareaEstaHabilitada(tarea.inicio);
 
   const obtenerResumenTareasAlumno = (alumno) => {
     const tareasNoCompletadas = materias.flatMap((materia) => materia.tareas)
@@ -950,10 +956,6 @@ export default function Home() {
   const toggleTareaDesdeCliente = async (tareaId, alumno, tarea) => {
     if (!tareaEstaHabilitada(tarea.inicio)) {
       alert('La tarea todavía no está habilitada.');
-      return;
-    }
-    if (!tareaDentroDelPlazo(tarea.fin)) {
-      alert('La tarea ya cerró.');
       return;
     }
     await handleToggleTarea(tareaId, alumno);
