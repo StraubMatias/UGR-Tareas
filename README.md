@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# 🎓 Tareas UGR
 
-## Getting Started
+> **Gestor de tareas y fechas clave para la facultad**  
+> Una plataforma simple, moderna y directa para no colgarse con ningún parcial, TP o entrega. Hecha por y para estudiantes.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 📌 ¿Qué es esto?
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**Tareas UGR** nace para solucionar el típico problema universitario: tener las fechas importantes, tareas y parciales desparramados en tres grupos de WhatsApp distintos y un PDF que nadie encuentra. 
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+Con esta app, centralizamos el calendario académico para que todo el grupo/comisión esté al día sin dar vueltas.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 🚀 Características principales
 
-To learn more about Next.js, take a look at the following resources:
+- 🗓️ **Calendario & Entregas:** Visualización clara de fechas límite de TPs, parciales y entregas.
+- ✅ **Gestión de Tareas:** Marcá lo que tenés pendiente, en proceso y completado.
+- ⚡ **Interfaz Ágil:** Diseño limpio, rápido y pensado para celulares y computadoras.
+- 🎯 **Organización por Materias:** Todo filtrado y ordenado para no mezclar los temas de estudio.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🛠️ Tecnologías utilizadas
 
-## Deploy on Vercel
+Este proyecto utiliza el siguiente stack tecnológico:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Frontend:** HTML5, CSS3, JavaScript
+- **Host / Deployment:** Vercel / GitHub Pages
+<!-- Agregá o modificá las tecnologías según lo que hayas usado (ej: React, Tailwind, Supabase, Node, etc.) -->
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## 💻 Desarrollo local
+
+Si querés clonar el proyecto para probarlo o meterle mano localmente:
+
+1. **Cloná el repositorio:**
+   ```bash
+   git clone [https://github.com/Matute2004/tareasUGR.git](https://github.com/Matute2004/tareasUGR.git)
