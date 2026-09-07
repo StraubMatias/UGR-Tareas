@@ -50,6 +50,10 @@ export default function Home() {
   const [notasTareasInputs, setNotasTareasInputs] = useState({});
   const [notasDesplegadas, setNotasDesplegadas] = useState({});
   const [horarios, setHorarios] = useState([]);
+  const [mesCalendario, setMesCalendario] = useState(() => {
+    const hoy = new Date();
+    return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  });
 
   // Acordeón para compañeros
   const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
@@ -1101,6 +1105,49 @@ export default function Home() {
     3: 'Miércoles',
     4: 'Jueves',
     5: 'Viernes'
+  };
+  const nombresMeses = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+  const formatearFechaCalendario = (fecha) => {
+    if (!fecha || fecha === 'Sin fecha') return null;
+    const partes = String(fecha).slice(0, 10).split('-').map(Number);
+    if (partes.length !== 3 || partes.some((parte) => !Number.isFinite(parte))) return null;
+    return `${partes[0]}-${String(partes[1]).padStart(2, '0')}-${String(partes[2]).padStart(2, '0')}`;
+  };
+  const obtenerClaveDiaCalendario = (fecha) => {
+    const fechaNormalizada = formatearFechaCalendario(fecha);
+    if (!fechaNormalizada) return null;
+    return fechaNormalizada;
+  };
+  const obtenerDiaSemanaHorario = (fecha) => {
+    const diaSemana = fecha.getDay();
+    return diaSemana === 0 ? 7 : diaSemana;
+  };
+  const hoyCalendario = new Date();
+  const claveHoyCalendario = `${hoyCalendario.getFullYear()}-${String(hoyCalendario.getMonth() + 1).padStart(2, '0')}-${String(hoyCalendario.getDate()).padStart(2, '0')}`;
+  const primerDiaMes = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth(), 1);
+  const diasEnMes = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() + 1, 0).getDate();
+  const desplazamientoMes = (primerDiaMes.getDay() + 6) % 7;
+  const diasCalendario = Array.from({ length: desplazamientoMes + diasEnMes }, (_, indice) => {
+    if (indice < desplazamientoMes) return null;
+    return new Date(mesCalendario.getFullYear(), mesCalendario.getMonth(), indice - desplazamientoMes + 1);
+  });
+  const tareasCalendario = materias.flatMap((materia) => materia.tareas.map((tarea) => ({ tarea, materia })));
+  const eventosDelDiaCalendario = (fecha) => {
+    if (!fecha) return { parciales: [], tareas: [], horarios: [] };
+
+    const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+    const diaSemana = obtenerDiaSemanaHorario(fecha);
+
+    return {
+      parciales: parciales.filter((parcial) => obtenerClaveDiaCalendario(parcial.fecha) === claveDia),
+      tareas: tareasCalendario.filter(({ tarea }) => obtenerClaveDiaCalendario(tarea.fin) === claveDia),
+      horarios: horarios
+        .filter((horario) => Number(horario.dia) === diaSemana)
+        .sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio)))
+    };
   };
   const materiasDelRanking = materiaRanking === 'general'
     ? materias
@@ -2631,64 +2678,103 @@ export default function Home() {
 
               {pestana === 'horarios' && (
                 <div className="space-y-5">
-                  <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-800 pb-4">
+                  <div className="flex flex-col gap-4 border-b border-slate-800 pb-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">Semana de cursada</p>
-                      <h2 className="mt-1 text-2xl font-extrabold text-white">Horarios</h2>
+                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">Cronograma de cursada</p>
+                      <h2 className="mt-1 text-2xl font-extrabold text-white">Calendario mensual</h2>
                     </div>
-                    <p className="text-xs text-slate-500">{horarios.length} {horarios.length === 1 ? 'clase cargada' : 'clases cargadas'}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMesCalendario(new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() - 1, 1))}
+                        aria-label="Mes anterior"
+                        className="calendar-nav-button"
+                      >
+                        ←
+                      </button>
+                      <h3 className="min-w-40 text-center text-lg font-extrabold capitalize text-white">
+                        {nombresMeses[mesCalendario.getMonth()]} {mesCalendario.getFullYear()}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setMesCalendario(new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() + 1, 1))}
+                        aria-label="Mes siguiente"
+                        className="calendar-nav-button"
+                      >
+                        →
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const hoy = new Date();
+                          setMesCalendario(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+                        }}
+                        className="calendar-today-button"
+                      >
+                        Hoy
+                      </button>
+                    </div>
                   </div>
-                  {horarios.length === 0 ? (
+                  {horarios.length === 0 && parciales.length === 0 && tareasCalendario.length === 0 ? (
                     <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
-                      Todavía no hay horarios de cursada cargados.
+                      Todavía no hay eventos ni horarios cargados.
                     </div>
                   ) : (
-                    <div className="schedule-scroll rounded-2xl border border-slate-800 bg-[#111821] p-3 sm:p-4">
-                      <div className="grid min-w-[900px] grid-cols-5 gap-4">
-                        {[
-                          ['1', 'Lunes', 'text-cyan-300', 'bg-cyan-400'],
-                          ['2', 'Martes', 'text-blue-300', 'bg-blue-400'],
-                          ['3', 'Miércoles', 'text-violet-300', 'bg-violet-400'],
-                          ['4', 'Jueves', 'text-fuchsia-300', 'bg-fuchsia-400'],
-                          ['5', 'Viernes', 'text-amber-300', 'bg-amber-400']
-                        ].map(([dia, nombreDia, colorTexto, colorBarra]) => {
-                          const horariosDelDia = horarios
-                            .filter((horario) => String(horario.dia) === dia)
-                            .sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+                    <div className="monthly-calendar rounded-2xl border border-slate-800 bg-[#111821] p-2 sm:p-4">
+                      <div className="grid grid-cols-7 border-b border-slate-800 pb-2 text-center">
+                        {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((dia) => (
+                          <span key={dia} className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 sm:text-xs">{dia}</span>
+                        ))}
+                      </div>
+                      <div className="calendar-grid mt-2 grid grid-cols-7 gap-1 sm:gap-2">
+                        {diasCalendario.map((fecha, indice) => {
+                          if (!fecha) return <div key={`vacio-${indice}`} className="calendar-empty" />;
 
+                          const eventos = eventosDelDiaCalendario(fecha);
+                          const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+                          const esHoy = claveDia === claveHoyCalendario;
                           return (
-                            <section key={dia} className="schedule-day min-h-80 rounded-xl border border-slate-800/80 bg-[#161c26] p-4">
-                              <header className="mb-4 border-b border-slate-800 pb-3">
-                                <p className={`text-sm font-extrabold uppercase tracking-widest ${colorTexto}`}>{nombreDia}</p>
-                                <p className="mt-1 text-xs text-slate-500">{horariosDelDia.length} {horariosDelDia.length === 1 ? 'clase' : 'clases'}</p>
-                              </header>
-                              <div className="space-y-3">
-                                {horariosDelDia.length === 0 ? (
-                                  <p className="px-1 py-6 text-center text-xs text-slate-600">Libre</p>
-                                ) : horariosDelDia.map((horario) => {
+                            <article key={claveDia} className={`calendar-day ${esHoy ? 'calendar-day-today' : ''}`}>
+                              <div className="flex items-center justify-between gap-1">
+                                <span className={`calendar-date ${esHoy ? 'calendar-date-today' : ''}`}>{fecha.getDate()}</span>
+                                {eventos.parciales.length + eventos.tareas.length > 0 && (
+                                  <span className="text-[9px] font-bold text-slate-500">
+                                    {eventos.parciales.length + eventos.tareas.length}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-2 space-y-1.5">
+                                {eventos.horarios.map((horario) => {
                                   const materia = materias.find((item) => item.id === horario.materia_id);
                                   return (
-                                    <article key={horario.id} className="schedule-card relative overflow-hidden rounded-lg border border-slate-700/80 bg-[#0f141c] p-4 shadow-sm">
-                                      <span className={`absolute inset-x-0 top-0 h-0.5 ${colorBarra}`} />
-                                      <p className="text-sm font-bold text-white">{horario.hora_inicio} - {horario.hora_fin}</p>
-                                      <p className="mt-3 line-clamp-2 text-sm font-semibold leading-tight text-slate-200">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
-                                      {horario.aula && <p className="mt-3 text-xs text-slate-500">Aula {horario.aula}</p>}
-                                      {esAdmin && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleEliminarHorario(horario.id)}
-                                          className="mt-3 text-xs font-semibold text-red-400 hover:text-red-300 cursor-pointer"
-                                        >
-                                          Borrar
-                                        </button>
-                                      )}
-                                    </article>
+                                    <div key={`${claveDia}-${horario.id}`} className="calendar-event calendar-class" title={`${materia?.nombre || 'Materia'} · ${horario.hora_inicio} - ${horario.hora_fin}`}>
+                                      <span className="font-bold">{horario.hora_inicio}</span> {materia?.nombre || 'Materia'}
+                                    </div>
                                   );
                                 })}
+                                {eventos.parciales.map((parcial) => {
+                                  const materia = materias.find((item) => item.id === parcial.materia_id);
+                                  return (
+                                    <div key={parcial.id} className="calendar-event calendar-exam" title={`${parcial.nombre} · ${materia?.nombre || 'Materia'}`}>
+                                      <span className="font-bold">Parcial</span> {materia?.nombre || 'Materia'}
+                                      {parcial.detalles && <span className="block truncate opacity-75">{parcial.detalles}</span>}
+                                    </div>
+                                  );
+                                })}
+                                {eventos.tareas.map(({ tarea, materia }) => (
+                                  <div key={tarea.id} className="calendar-event calendar-task" title={`Entrega: ${tarea.nombre} · ${materia.nombre}`}>
+                                    <span className="font-bold">Entrega</span> {tarea.nombre}
+                                  </div>
+                                ))}
                               </div>
-                            </section>
+                            </article>
                           );
                         })}
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-800 pt-3 text-[11px] font-semibold text-slate-400">
+                        <span><i className="calendar-legend-dot bg-cyan-400" /> Cursada</span>
+                        <span><i className="calendar-legend-dot bg-purple-400" /> Parcial</span>
+                        <span><i className="calendar-legend-dot bg-amber-400" /> Entrega</span>
                       </div>
                     </div>
                   )}
