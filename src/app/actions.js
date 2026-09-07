@@ -310,6 +310,7 @@ export async function cambiarPasswordAction(usuarioInput, passActualInput, passN
 // Obtener todos los alumnos registrados
 export async function obtenerAlumnosAction() {
   try {
+    if (!await obtenerUsuarioSesion()) return [];
     const res = await db.execute('SELECT nombre FROM alumnos ORDER BY nombre ASC');
     return res.rows.map((r) => r.nombre);
   } catch (error) {
@@ -395,6 +396,7 @@ export async function eliminarAlumnoAction(nombre) {
 
 export async function obtenerDatos() {
   try {
+    if (!await obtenerUsuarioSesion()) return [];
     await asegurarEsquemaNotasTareas();
     const [resMaterias, resTareas, resCompletadas, resNotasTareas] = await Promise.all([
       db.execute('SELECT * FROM materias ORDER BY nombre ASC'),
@@ -655,6 +657,7 @@ export async function eliminarTareaAction(id) {
 
 export async function obtenerHorariosAction() {
   try {
+    if (!await obtenerUsuarioSesion()) return [];
     const res = await db.execute('SELECT * FROM horarios WHERE CAST(dia AS INTEGER) BETWEEN 1 AND 5 ORDER BY dia ASC, hora_inicio ASC');
     return res.rows;
   } catch (error) {
@@ -704,6 +707,7 @@ export async function eliminarHorarioAction(id, usuario) {
 
 export async function obtenerParcialesAction() {
   try {
+    if (!await obtenerUsuarioSesion()) return { parciales: [], notas: [] };
     const [resParciales, resNotas] = await Promise.all([
       db.execute('SELECT * FROM parciales ORDER BY fecha ASC'),
       db.execute('SELECT * FROM notas_parciales')

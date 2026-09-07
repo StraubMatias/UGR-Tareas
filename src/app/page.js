@@ -476,10 +476,11 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // La carga inicial sincroniza el estado con la base de datos externa.
+    if (!usuarioActual) return;
+    // La carga empieza después de autenticar o restaurar una sesión válida.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     cargarBD();
-  }, [cargarBD]);
+  }, [usuarioActual, cargarBD]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
