@@ -1,12 +1,14 @@
 'use server';
 
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import { cookies } from 'next/headers';
 import { db } from './turso';
 
 const ADMINISTRADOR = 'Matute';
 const COOKIE_SESION = 'ugr_sesion';
 const DURACION_SESION_SEGUNDOS = 10 * 60;
+const scryptAsync = promisify(scrypt);
 
 function esAdministrador(usuario) {
   return typeof usuario === 'string' && usuario.trim().toLowerCase() === ADMINISTRADOR.toLowerCase();
@@ -67,6 +69,30 @@ async function obtenerUsuarioSesion() {
 
 async function verificarAdmin() {
   return esAdministrador(await obtenerUsuarioSesion());
+}
+
+async function hashearPassword(password) {
+  const salt = randomBytes(16).toString('hex');
+  const derivada = await scryptAsync(password, salt, 64);
+  return `scrypt$${salt}$${Buffer.from(derivada).toString('hex')}`;
+}
+
+async function verificarPassword(password, almacenada) {
+  if (!almacenada?.startsWith('scrypt$')) {
+    return password === (almacenada || '');
+  }
+
+  const [, salt, hashHex] = almacenada.split('$');
+  if (!salt || !hashHex) return false;
+
+  try {
+    const derivada = await scryptAsync(password, salt, hashHex.length / 2);
+    const hashBytes = Buffer.from(hashHex, 'hex');
+    const derivadaBytes = Buffer.from(derivada);
+    return hashBytes.length === derivadaBytes.length && timingSafeEqual(hashBytes, derivadaBytes);
+  } catch (error) {
+    return false;
+  }
 }
 
 function parcialHabilitado(fecha) {
@@ -247,10 +273,17 @@ export async function validarLoginAction(usuarioInput, passwordInput) {
     }
 
     const usuarioDB = res.rows[0];
-    // Si un alumno no tiene password definida en la BD, se usa su nombre como clave por defecto
-    const claveEsperada = usuarioDB.password ? usuarioDB.password : usuarioDB.nombre;
+    // Las claves antiguas se aceptan una vez y se convierten al hash seguro.
+    const claveEsperada = usuarioDB.password || usuarioDB.nombre;
+    const credencialesValidas = await verificarPassword(passClean, claveEsperada);
 
-    if (passClean === claveEsperada) {
+    if (credencialesValidas) {
+      if (!usuarioDB.password?.startsWith('scrypt$')) {
+        await db.execute({
+          sql: 'UPDATE alumnos SET password = ? WHERE LOWER(nombre) = LOWER(?)',
+          args: [await hashearPassword(passClean), usuarioDB.nombre]
+        });
+      }
       await establecerSesion(usuarioDB.nombre);
       return { exito: true, usuario: usuarioDB.nombre };
     } else {
@@ -301,7 +334,7 @@ export async function cambiarPasswordAction(usuarioInput, passActualInput, passN
     // 2. Actualizamos el campo password en la base de datos Turso
     await db.execute({
       sql: 'UPDATE alumnos SET password = ? WHERE LOWER(nombre) = LOWER(?)',
-      args: [passNuevaClean, userClean]
+      args: [await hashearPassword(passNuevaClean), userClean]
     });
 
     return { exito: true, mensaje: '¡Contraseña actualizada con éxito!' };
@@ -332,7 +365,7 @@ export async function crearAlumnoAction(nombre) {
     const id = 'a_' + Date.now();
     await db.execute({
       sql: 'INSERT INTO alumnos (id, nombre, password) VALUES (?, ?, ?)',
-      args: [id, nombreFormateado, nombreFormateado]
+      args: [id, nombreFormateado, await hashearPassword(nombreFormateado)]
     });
   } catch (error) {
     console.error('Error en crearAlumnoAction:', error);
