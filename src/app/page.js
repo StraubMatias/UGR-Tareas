@@ -1249,8 +1249,8 @@ export default function Home() {
   const diasPagina = Math.max(0, Math.floor((Date.now() - fechaCreacionPagina.getTime()) / (1000 * 60 * 60 * 24)));
 
   return (
-    <main className="portal-shell min-h-screen bg-[#0f141c]/70 text-slate-200 p-4 sm:p-6 md:p-10 font-sans selection:bg-cyan-400 selection:text-slate-950">
-      <header className="portal-header max-w-9xl mx-auto mb-8 border p-6 sm:p-8 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <main className="portal-shell min-h-screen bg-[#0f141c]/70 text-slate-200 px-4 pb-4 sm:px-6 md:px-10 font-sans selection:bg-cyan-400 selection:text-slate-950">
+      <header className="portal-header max-w-9xl mx-auto mb-4 border border-t-0 p-4 sm:p-5 rounded-b-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
           <p className="portal-kicker mb-3">Portal de cursada · UGR</p>
           <div className="flex items-center gap-3 mb-1">
@@ -1266,7 +1266,7 @@ export default function Home() {
             {usuarioActual ? (
               <>
                 <span>Alumno activo:</span>
-                <strong className="text-blue-400 font-bold bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded-lg text-sm sm:text-base">
+                <strong className="text-cyan-300 font-bold bg-cyan-500/10 border border-cyan-500/20 px-3 py-1 rounded-lg text-sm sm:text-base">
                   {usuarioActual}
                 </strong>
               </>
@@ -1386,7 +1386,7 @@ export default function Home() {
 
       {!usuarioActual ? (
         /* CARD LOGIN */
-        <div className="portal-login max-w-md mx-auto mt-12 border rounded-2xl p-8">
+        <div className="portal-login max-w-md mx-auto mt-8 border rounded-2xl p-8">
           <div className="text-center mb-6">
             <div className="portal-login-mark inline-block p-3 rounded-2xl mb-4 text-3xl">
               ✦
@@ -1409,7 +1409,7 @@ export default function Home() {
                 placeholder="Nombre de usuario"
                 value={inputUser}
                 onChange={(e) => setInputUser(e.target.value)}
-                className="w-full bg-[#0d1117] border border-slate-800 focus:border-blue-500/80 rounded-xl p-3.5 text-base text-white focus:outline-none transition-all"
+                className="w-full bg-[#0d1117] border border-slate-800 rounded-xl p-3.5 text-base text-white focus:outline-none transition-all"
               />
             </div>
             <div>
@@ -1419,7 +1419,7 @@ export default function Home() {
                 placeholder="••••••••"
                 value={inputPass}
                 onChange={(e) => setInputPass(e.target.value)}
-                className="w-full bg-[#0d1117] border border-slate-800 focus:border-blue-500/80 rounded-xl p-3.5 text-base text-white focus:outline-none transition-all"
+                className="w-full bg-[#0d1117] border border-slate-800 rounded-xl p-3.5 text-base text-white focus:outline-none transition-all"
               />
             </div>
             
@@ -1442,7 +1442,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setModalPasswordOpen(true)}
-              className="text-xs text-blue-400 hover:text-blue-300 underline font-medium cursor-pointer"
+              className="text-xs text-cyan-300 hover:text-cyan-200 underline font-medium cursor-pointer"
             >
               🔐 Modificar o cambiar mi contraseña
             </button>

@@ -65,7 +65,13 @@ textarea {
 .portal-login {
   background: linear-gradient(145deg, rgba(20, 31, 40, 0.98), rgba(13, 20, 28, 0.96));
   border-color: var(--line);
+  border-top: 2px solid rgba(98, 214, 209, 0.5);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+}
+
+.portal-login input:focus {
+  border-color: rgba(98, 214, 209, 0.8);
+  box-shadow: 0 0 0 3px rgba(98, 214, 209, 0.1);
 }
 
 .portal-login-mark {
@@ -95,6 +101,35 @@ textarea {
 .portal-nav {
   border-color: var(--line);
   background: rgba(11, 17, 23, 0.86);
+}
+
+.portal-nav > button,
+.portal-nav > a {
+  color: #d9e4ec;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.32);
+}
+
+.portal-nav > button[class~="bg-blue-600/20"] {
+  color: #b9ddff;
+}
+
+.portal-nav > button[class~="bg-emerald-600/20"] {
+  color: #baf5d2;
+}
+
+.portal-nav > button[class~="bg-cyan-600/20"] {
+  color: #b8f3f0;
+}
+
+.portal-nav > button[class~="bg-purple-600/20"] {
+  color: #e2c7ff;
+}
+
+.portal-nav > button:hover,
+.portal-nav > a:hover {
+  color: #ffffff;
 }
 
 @media (max-width: 640px) {
