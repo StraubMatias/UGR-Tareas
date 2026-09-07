@@ -1590,9 +1590,7 @@ export default function Home() {
                       {(() => {
                         const resumen = obtenerResumenTareasAlumno(usuarioActual);
                         return (
-                          <div className="flex flex-col items-start sm:items-end gap-1.5 text-[11px] font-bold">
-                            <span className="text-xs font-semibold text-blue-300">Tareas</span>
-                            <div className="flex flex-wrap justify-end gap-1.5">
+                          <div className="flex flex-wrap justify-end gap-1.5 text-[11px] font-bold">
                             <span className={`px-2.5 py-1 rounded-full border ${resumen.pendientes.length === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
                               {resumen.pendientes.length} pendiente{resumen.pendientes.length === 1 ? '' : 's'}
                             </span>
@@ -1602,7 +1600,6 @@ export default function Home() {
                             <span className="px-2.5 py-1 rounded-full border bg-blue-500/10 text-blue-300 border-blue-500/30">
                               {resumen.futuras.length} futura{resumen.futuras.length === 1 ? '' : 's'}
                             </span>
-                            </div>
                           </div>
                         );
                       })()}
@@ -1739,9 +1736,7 @@ export default function Home() {
                               </span>
                             </div>
 
-                            <div className="flex flex-col items-start sm:items-end gap-1.5">
-                              <span className="text-xs font-semibold text-blue-300">Tareas</span>
-                              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            <div className="flex flex-wrap items-center justify-end gap-1.5">
                                 <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${resumenAlumno.pendientes.length === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
                                   {resumenAlumno.pendientes.length} pendiente{resumenAlumno.pendientes.length === 1 ? '' : 's'}
                                 </span>
@@ -1754,7 +1749,6 @@ export default function Home() {
                                 <span className="ml-auto text-slate-400 text-sm font-bold">
                                   {estaDesplegado ? '▲' : '▼'}
                                 </span>
-                              </div>
                             </div>
                           </button>
 
