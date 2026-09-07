@@ -54,6 +54,7 @@ export default function Home() {
     const hoy = new Date();
     return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   });
+  const [diaCalendarioSeleccionado, setDiaCalendarioSeleccionado] = useState(null);
 
   // Acordeón para compañeros
   const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
@@ -1582,6 +1583,16 @@ export default function Home() {
               <span>📚</span> Materias y Consignas
             </button>
             <button
+              onClick={() => setPestana('horarios')}
+              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
+                pestana === 'horarios'
+                  ? 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40 shadow-sm'
+                  : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>🗓️</span> Cronograma
+            </button>
+            <button
               onClick={() => setPestana('promocion')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
                 pestana === 'promocion'
@@ -1624,17 +1635,6 @@ export default function Home() {
               }`}
             >
               <span>🏆</span> Ranking
-            </button>
-
-            <button
-              onClick={() => setPestana('horarios')}
-              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
-                pestana === 'horarios'
-                  ? 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40 shadow-sm'
-                  : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
-              }`}
-            >
-              <span>🗓️</span> Horarios de cursada
             </button>
 
             <a
@@ -2733,17 +2733,24 @@ export default function Home() {
                           const eventos = eventosDelDiaCalendario(fecha);
                           const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
                           const esHoy = claveDia === claveHoyCalendario;
+                          const cantidadEventos = eventos.horarios.length + eventos.parciales.length + eventos.tareas.length;
                           return (
-                            <article key={claveDia} className={`calendar-day ${esHoy ? 'calendar-day-today' : ''}`}>
+                            <button
+                              type="button"
+                              key={claveDia}
+                              onClick={() => setDiaCalendarioSeleccionado(fecha)}
+                              className={`calendar-day text-left ${cantidadEventos === 0 ? 'calendar-day-empty' : ''} ${esHoy ? 'calendar-day-today' : ''}`}
+                              aria-label={`Ver eventos del ${fecha.toLocaleDateString('es-AR', { dateStyle: 'full' })}`}
+                            >
                               <div className="flex items-center justify-between gap-1">
                                 <span className={`calendar-date ${esHoy ? 'calendar-date-today' : ''}`}>{fecha.getDate()}</span>
-                                {eventos.parciales.length + eventos.tareas.length > 0 && (
+                                {cantidadEventos > 0 && (
                                   <span className="text-[9px] font-bold text-slate-500">
-                                    {eventos.parciales.length + eventos.tareas.length}
+                                    {cantidadEventos}
                                   </span>
                                 )}
                               </div>
-                              <div className="mt-2 space-y-1.5">
+                              {cantidadEventos > 0 && <div className="mt-2 space-y-1.5">
                                 {eventos.horarios.map((horario) => {
                                   const materia = materias.find((item) => item.id === horario.materia_id);
                                   return (
@@ -2766,8 +2773,8 @@ export default function Home() {
                                     <span className="font-bold">Entrega</span> {tarea.nombre}
                                   </div>
                                 ))}
-                              </div>
-                            </article>
+                              </div>}
+                            </button>
                           );
                         })}
                       </div>
@@ -2780,6 +2787,73 @@ export default function Home() {
                   )}
                 </div>
               )}
+
+              {diaCalendarioSeleccionado && (() => {
+                const eventos = eventosDelDiaCalendario(diaCalendarioSeleccionado);
+                const fechaTexto = diaCalendarioSeleccionado.toLocaleDateString('es-AR', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric'
+                });
+
+                return (
+                  <div className="calendar-modal-backdrop" role="presentation" onMouseDown={(evento) => {
+                    if (evento.target === evento.currentTarget) setDiaCalendarioSeleccionado(null);
+                  }}>
+                    <section className="calendar-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-modal-title">
+                      <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">Detalle del día</p>
+                          <h2 id="calendar-modal-title" className="mt-1 text-xl font-extrabold capitalize text-white">{fechaTexto}</h2>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setDiaCalendarioSeleccionado(null)}
+                          aria-label="Cerrar detalle del día"
+                          className="calendar-modal-close"
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      {eventos.horarios.length === 0 && eventos.parciales.length === 0 && eventos.tareas.length === 0 ? (
+                        <p className="py-8 text-center text-sm text-slate-400">No hay eventos programados para este día.</p>
+                      ) : (
+                        <div className="mt-5 space-y-3">
+                          {eventos.horarios.map((horario) => {
+                            const materia = materias.find((item) => item.id === horario.materia_id);
+                            return (
+                              <div key={`modal-${horario.id}`} className="calendar-modal-event calendar-class">
+                                <p className="text-sm font-extrabold">Cursada · {horario.hora_inicio} - {horario.hora_fin}</p>
+                                <p className="mt-1 text-sm">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
+                                {horario.aula && <p className="mt-1 text-xs opacity-75">Aula {horario.aula}</p>}
+                              </div>
+                            );
+                          })}
+                          {eventos.parciales.map((parcial) => {
+                            const materia = materias.find((item) => item.id === parcial.materia_id);
+                            return (
+                              <div key={`modal-${parcial.id}`} className="calendar-modal-event calendar-exam">
+                                <p className="text-sm font-extrabold">Parcial · {parcial.nombre}</p>
+                                <p className="mt-1 text-sm">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
+                                {parcial.detalles && <p className="mt-2 text-sm opacity-85">{parcial.detalles}</p>}
+                              </div>
+                            );
+                          })}
+                          {eventos.tareas.map(({ tarea, materia }) => (
+                            <div key={`modal-${tarea.id}`} className="calendar-modal-event calendar-task">
+                              <p className="text-sm font-extrabold">Entrega · {tarea.nombre}</p>
+                              <p className="mt-1 text-sm">{etiquetaMateria(materia.nombre)}</p>
+                              {tarea.detalles && <p className="mt-2 text-sm opacity-85">{tarea.detalles}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  </div>
+                );
+              })()}
 
               {/* VISTA 4: ADMIN PANEL */}
               {pestana === 'admin' && esAdmin && (
