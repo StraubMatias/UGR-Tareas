@@ -1126,6 +1126,13 @@ export default function Home() {
     const diaSemana = fecha.getDay();
     return diaSemana === 0 ? 7 : diaSemana;
   };
+  const inicioCursada = new Date(2026, 7, 18);
+  const finCursada = new Date(2027, 2, 1);
+  const fechaDentroDelCronograma = (fecha) => {
+    const fechaNormalizada = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+    const esRecesoDeEnero = fechaNormalizada.getMonth() === 0;
+    return fechaNormalizada >= inicioCursada && fechaNormalizada < finCursada && !esRecesoDeEnero;
+  };
   const hoyCalendario = new Date();
   const claveHoyCalendario = `${hoyCalendario.getFullYear()}-${String(hoyCalendario.getMonth() + 1).padStart(2, '0')}-${String(hoyCalendario.getDate()).padStart(2, '0')}`;
   const primerDiaMes = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth(), 1);
@@ -1137,7 +1144,7 @@ export default function Home() {
   });
   const tareasCalendario = materias.flatMap((materia) => materia.tareas.map((tarea) => ({ tarea, materia })));
   const eventosDelDiaCalendario = (fecha) => {
-    if (!fecha) return { parciales: [], tareas: [], horarios: [] };
+    if (!fecha || !fechaDentroDelCronograma(fecha)) return { parciales: [], tareas: [], horarios: [] };
 
     const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
     const diaSemana = obtenerDiaSemanaHorario(fecha);
