@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0b1117;
+  --foreground: #e6edf3;
+  --ink: #e6edf3;
+  --muted: #8b9aaa;
+  --line: rgba(148, 163, 184, 0.16);
+  --amber: #f4b860;
+  --cyan: #62d6d1;
 }
 
 @theme inline {
@@ -18,17 +23,76 @@
   --text-xl: 1.375rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), sans-serif;
+  background-image:
+    radial-gradient(circle at 8% 0%, rgba(98, 214, 209, 0.1), transparent 30rem),
+    radial-gradient(circle at 92% 8%, rgba(244, 184, 96, 0.08), transparent 26rem),
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: auto, auto, 42px 42px, 42px 42px;
+  background-attachment: fixed;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.portal-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.portal-header {
+  background: linear-gradient(135deg, rgba(20, 31, 40, 0.96), rgba(13, 20, 28, 0.94));
+  border-color: var(--line);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+}
+
+.portal-kicker {
+  color: var(--cyan);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.portal-login {
+  background: linear-gradient(145deg, rgba(20, 31, 40, 0.98), rgba(13, 20, 28, 0.96));
+  border-color: var(--line);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+}
+
+.portal-login-mark {
+  background: rgba(98, 214, 209, 0.1);
+  border: 1px solid rgba(98, 214, 209, 0.24);
+  box-shadow: 0 0 30px rgba(98, 214, 209, 0.12);
+}
+
+.portal-login-button {
+  background: var(--cyan);
+  color: #092025;
+  box-shadow: 0 10px 24px rgba(98, 214, 209, 0.16);
+}
+
+.portal-login-button:hover {
+  background: #8be4df;
+}
+
+.portal-nav {
+  border-color: var(--line);
+  background: rgba(11, 17, 23, 0.86);
+}
+
+@media (max-width: 640px) {
+  body {
+    background-size: auto, auto, 30px 30px, 30px 30px;
+  }
 }
 
 .schedule-scroll {

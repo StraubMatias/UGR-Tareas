@@ -1247,11 +1247,12 @@ export default function Home() {
   const diasPagina = Math.max(0, Math.floor((Date.now() - fechaCreacionPagina.getTime()) / (1000 * 60 * 60 * 24)));
 
   return (
-    <main className="min-h-screen bg-[#0f141c] text-slate-200 p-4 sm:p-6 md:p-10 font-sans selection:bg-blue-500 selection:text-white">
-      <header className="max-w-9xl mx-auto mb-8 bg-[#161c26] border border-slate-800 p-6 sm:p-8 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <main className="portal-shell min-h-screen bg-[#0f141c]/70 text-slate-200 p-4 sm:p-6 md:p-10 font-sans selection:bg-cyan-400 selection:text-slate-950">
+      <header className="portal-header max-w-9xl mx-auto mb-8 border p-6 sm:p-8 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
+          <p className="portal-kicker mb-3">Portal de cursada · UGR</p>
           <div className="flex items-center gap-3 mb-1">
-            <span className="text-2xl">🎓</span>
+            <span className="text-2xl" aria-hidden="true">✦</span>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
               UGR - Tareas y Parciales
             </h1>
@@ -1383,13 +1384,14 @@ export default function Home() {
 
       {!usuarioActual ? (
         /* CARD LOGIN */
-        <div className="max-w-md mx-auto mt-12 bg-[#161c26] border border-slate-800 rounded-2xl p-8 shadow-xl">
+        <div className="portal-login max-w-md mx-auto mt-12 border rounded-2xl p-8">
           <div className="text-center mb-6">
-            <div className="inline-block p-3 bg-slate-800/80 rounded-2xl mb-2 text-3xl">
-              🔑
+            <div className="portal-login-mark inline-block p-3 rounded-2xl mb-4 text-3xl">
+              ✦
             </div>
-            <h2 className="text-xl font-bold text-white">Iniciar Sesión</h2>
-            <p className="text-sm text-slate-400 mt-1"></p>
+            <p className="portal-kicker mb-2">Acceso personal</p>
+            <h2 className="text-2xl font-bold text-white">Iniciar sesión</h2>
+            <p className="text-sm text-slate-400 mt-2">Tu tablero para seguir la cursada sin perder el hilo.</p>
           </div>
           
           <form onSubmit={handleLogin} className="space-y-4">
@@ -1422,7 +1424,7 @@ export default function Home() {
             
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl text-sm uppercase tracking-wider transition-all duration-200 shadow-md cursor-pointer"
+              className="portal-login-button w-full font-bold py-3.5 rounded-xl text-sm uppercase tracking-wider transition-all duration-200 cursor-pointer"
             >
               Entrar
             </button>
@@ -1442,7 +1444,7 @@ export default function Home() {
       ) : (
         <div className="max-w-9xl mx-auto">
           {/* NAVEGACIÓN */}
-          <div className="sticky top-0 z-40 -mx-4 px-4 py-3 sm:-mx-6 sm:px-6 md:-mx-10 md:px-10 mb-8 border-b border-slate-800/80 bg-[#0f141c]/95 shadow-lg backdrop-blur-sm flex flex-wrap gap-3">
+          <div className="portal-nav sticky top-0 z-40 -mx-4 px-4 py-3 sm:-mx-6 sm:px-6 md:-mx-10 md:px-10 mb-8 border-b shadow-lg backdrop-blur-sm flex flex-wrap gap-3">
             <button
               onClick={() => setPestana('alumnos')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
