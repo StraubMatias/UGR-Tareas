@@ -100,7 +100,12 @@ export default function Home() {
   const esAdmin = usuarioActual === "Matute";
 
   const tareaCompletadaPor = (tarea, alumno) => (
-    tarea.conNota ? Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno) : tarea.completadoPor.includes(alumno)
+    tarea.completadoPor.includes(alumno)
+    || (tarea.conNota && Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno))
+  );
+
+  const fechaEntregaTarea = (tarea, alumno) => (
+    tarea.completadoEn?.[alumno] || (tarea.conNota ? tarea.notaCargadaEn?.[alumno] : null)
   );
 
   useEffect(() => {
@@ -211,13 +216,11 @@ export default function Home() {
   };
 
   const multiplicadorPuntosTarea = (tarea, alumno) => {
-    const fechaCarga = obtenerTimestamp(tarea.conNota
-      ? tarea.notaCargadaEn?.[alumno]
-      : tarea.completadoEn?.[alumno]);
+    const fechaCarga = obtenerTimestamp(fechaEntregaTarea(tarea, alumno));
     if (fechaCarga === null) return 1;
 
     if (tarea.fin && tarea.fin !== 'Sin fecha') {
-      const cierre = new Date(`${tarea.fin}T00:00:00`);
+      const cierre = new Date(`${tarea.fin}T23:59:59.999Z`);
       if (!Number.isNaN(cierre.getTime()) && fechaCarga >= cierre.getTime()) return 0;
     }
 
@@ -886,8 +889,8 @@ export default function Home() {
         materia: materia.nombre,
         nombre: tarea.nombre,
         unidad: tarea.unidad,
-        fecha: tarea.conNota ? tarea.notaCargadaEn?.[alumno] : tarea.completadoEn?.[alumno],
-        fechaCompletada: tarea.conNota ? tarea.notaCargadaEn?.[alumno] : tarea.completadoEn?.[alumno],
+        fecha: fechaEntregaTarea(tarea, alumno),
+        fechaCompletada: fechaEntregaTarea(tarea, alumno),
         nota: tarea.conNota ? tarea.notas?.[alumno] : null,
         tipo: tarea.conNota ? 'Tarea con nota' : esForo(tarea.nombre) ? 'Foro' : 'Actividad'
       })));
@@ -1065,7 +1068,7 @@ export default function Home() {
           alumno,
           materia: materia.nombre,
           nombre: tarea.nombre,
-          fechaCarga: tarea.conNota ? tarea.notaCargadaEn?.[alumno] : tarea.completadoEn?.[alumno],
+          fechaCarga: fechaEntregaTarea(tarea, alumno),
           puntos: puntosBaseTarea(tarea, alumno) * multiplicadorPuntosTarea(tarea, alumno),
           puntosBase: puntosBaseTarea(tarea, alumno),
           tipo: tarea.conNota ? 'Nota de tarea' : esForo(tarea.nombre) ? 'Foro' : 'Actividad'
@@ -1086,7 +1089,7 @@ export default function Home() {
         .filter((parcial) => materiaRanking === 'general' || materiasDelRanking.some((materia) => materia.nombre === parcial.materia))
         .filter((parcial) => Number.isFinite(parcial.nota) && parcial.nota >= 0 && parcial.nota <= 10);
       const ultimaCompletadaEn = tareasCompletadas
-        .map((tarea) => tarea.conNota ? tarea.notaCargadaEn?.[alumno] : tarea.completadoEn?.[alumno])
+        .map((tarea) => fechaEntregaTarea(tarea, alumno))
         .map(obtenerTimestamp)
         .filter((fecha) => fecha !== null)
         .sort((a, b) => b - a)[0] || Number.MAX_SAFE_INTEGER;
@@ -1605,15 +1608,14 @@ export default function Home() {
                                       return (
                                         <li key={t.id} className="flex flex-col gap-1.5 bg-[#161c26]/80 p-3 rounded-lg border border-slate-800/60">
                                           <div className="flex items-start gap-2.5">
-                                            {!t.conNota && (
-                                              <input
-                                                type="checkbox"
-                                                checked={false}
-                                                disabled={!tareaPuedeGestionarse(t)}
-                                                onChange={() => toggleTareaDesdeCliente(t.id, usuarioActual, t)}
-                                                className="mt-0.5 h-5 w-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
-                                              />
-                                            )}
+                                            <input
+                                              type="checkbox"
+                                              checked={tareaCompletadaPor(t, usuarioActual)}
+                                              disabled={!tareaPuedeGestionarse(t)}
+                                              onChange={() => toggleTareaDesdeCliente(t.id, usuarioActual, t)}
+                                              aria-label={`Marcar entregada: ${t.nombre}`}
+                                              className="mt-0.5 h-5 w-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                                            />
                                             <span className="text-sm sm:text-base text-slate-100 font-semibold leading-snug">
                                               {t.nombre}{t.conNota && <span className="text-xs text-purple-300 font-normal"> (con nota)</span>}
                                             </span>
@@ -1923,6 +1925,16 @@ export default function Home() {
                                     <div className="lg:w-[260px] border-t lg:border-t-0 lg:border-l border-slate-800 pt-4 lg:pt-0 lg:pl-6 flex flex-col justify-between">
                                       {t.conNota ? (
                                         <div>
+                                          <label className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-300 mb-3">
+                                            <input
+                                              type="checkbox"
+                                              checked={tareaCompletadaPor(t, usuarioActual)}
+                                              disabled={!tareaPuedeGestionarse(t)}
+                                              onChange={() => toggleTareaDesdeCliente(t.id, usuarioActual, t)}
+                                              className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
+                                            />
+                                            Entregada
+                                          </label>
                                           <label className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">
                                             Tu nota (1 a 10)
                                           </label>
