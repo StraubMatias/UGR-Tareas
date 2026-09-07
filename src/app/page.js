@@ -986,9 +986,6 @@ export default function Home() {
   }
 
   const restoDeAlumnos = alumnos.filter((a) => a !== usuarioActual);
-  const alumnosDelHistorial = usuarioActual
-    ? [usuarioActual, ...restoDeAlumnos]
-    : alumnos;
   const parcialesOrdenados = ordenarParciales(parciales);
   const proximoParcial = parcialesOrdenados.find(
     (parcial) => obtenerFechaParcialEnMs(parcial.fecha) >= new Date().setHours(0, 0, 0, 0)
@@ -1117,6 +1114,22 @@ export default function Home() {
     .sort((a, b) => b.puntos - a.puntos || a.ultimaCompletadaEn - b.ultimaCompletadaEn || b.actividades - a.actividades || a.alumno.localeCompare(b.alumno));
   const rankingPodio = ranking.slice(0, 3);
   const restoRanking = ranking.slice(3);
+  const puntosUsuarioHistorial = ranking.find((item) => item.alumno === usuarioActual)?.puntos ?? 0;
+  const alumnosDelHistorial = usuarioActual
+    ? [
+      usuarioActual,
+      ...restoDeAlumnos.sort((alumnoA, alumnoB) => {
+        const puntosA = ranking.find((item) => item.alumno === alumnoA)?.puntos ?? 0;
+        const puntosB = ranking.find((item) => item.alumno === alumnoB)?.puntos ?? 0;
+        const empateA = Math.abs(puntosA - puntosUsuarioHistorial) < 0.0001;
+        const empateB = Math.abs(puntosB - puntosUsuarioHistorial) < 0.0001;
+        return Number(empateB) - Number(empateA)
+          || Math.abs(puntosA - puntosUsuarioHistorial) - Math.abs(puntosB - puntosUsuarioHistorial)
+          || puntosB - puntosA
+          || alumnoA.localeCompare(alumnoB);
+      })
+    ]
+    : alumnos;
   const datosComparacion = alumnoComparar && usuarioActual
     ? (() => {
       const usuarioRanking = ranking.find((item) => item.alumno === usuarioActual);
@@ -2102,10 +2115,21 @@ export default function Home() {
                   </div>
 
                   {datosComparacion && (
-                    <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/20 p-4 sm:p-5">
+                    <div
+                      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
+                      onMouseDown={(evento) => {
+                        if (evento.target === evento.currentTarget) setAlumnoComparar('');
+                      }}
+                    >
+                    <div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="comparacion-titulo"
+                      className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-emerald-500/40 bg-[#101720] p-4 shadow-2xl sm:p-6"
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <h3 className="text-base font-bold text-white">
+                          <h3 id="comparacion-titulo" className="text-base font-bold text-white">
                             Comparación: {usuarioActual} vs. {alumnoComparar}
                           </h3>
                           <p className="mt-2 text-sm text-emerald-200">{datosComparacion.motivo}</p>
@@ -2113,7 +2137,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => setAlumnoComparar('')}
-                          className="text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:border-slate-500 hover:text-white cursor-pointer"
                         >
                           Cerrar
                         </button>
@@ -2164,6 +2188,7 @@ export default function Home() {
                           <p className="mt-2 text-xs text-slate-300">{datosComparacion.motivo}</p>
                         )}
                       </div>
+                    </div>
                     </div>
                   )}
 
