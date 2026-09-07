@@ -84,6 +84,14 @@ textarea {
   background: #8be4df;
 }
 
+.portal-login-meta {
+  color: var(--amber);
+}
+
+.portal-login-meta span:not(:first-child) {
+  color: rgba(244, 184, 96, 0.45);
+}
+
 .portal-nav {
   border-color: var(--line);
   background: rgba(11, 17, 23, 0.86);

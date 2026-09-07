@@ -52,6 +52,8 @@ export default function Home() {
   // Acordeón para compañeros
   const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
   const [materiasDesplegadas, setMateriasDesplegadas] = useState({});
+  const [situacionPropiaAbierta, setSituacionPropiaAbierta] = useState(true);
+  const [historialPropioAbierto, setHistorialPropioAbierto] = useState(true);
   const [alumnoComparar, setAlumnoComparar] = useState('');
   const [materiaRanking, setMateriaRanking] = useState('general');
 
@@ -1392,6 +1394,11 @@ export default function Home() {
             <p className="portal-kicker mb-2">Acceso personal</p>
             <h2 className="text-2xl font-bold text-white">Iniciar sesión</h2>
             <p className="text-sm text-slate-400 mt-2">Tu tablero para seguir la cursada sin perder el hilo.</p>
+            <div className="portal-login-meta mt-5 flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+              <span>2° cuatrimestre</span>
+              <span aria-hidden="true">·</span>
+              <span>2026</span>
+            </div>
           </div>
           
           <form onSubmit={handleLogin} className="space-y-4">
@@ -1585,29 +1592,38 @@ export default function Home() {
                   <div className="space-y-8">
                   {/* TU TARJETA DESTACADA */}
                   <div className="bg-[#161c26] border-2 border-blue-500/80 rounded-2xl p-6 shadow-xl ring-1 ring-blue-500/20">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 border-b border-slate-800 pb-3">
-                      <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-expanded={situacionPropiaAbierta}
+                      onClick={() => setSituacionPropiaAbierta((abierta) => !abierta)}
+                      className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 border-b border-slate-800 pb-3 text-left cursor-pointer"
+                    >
+                      <span className="text-xl font-extrabold text-white flex items-center gap-2">
                         <span>👤</span> {usuarioActual}
-                      </h2>
-                      {(() => {
-                        const resumen = obtenerResumenTareasAlumno(usuarioActual);
-                        return (
-                          <div className="flex flex-wrap justify-end gap-1.5 text-[11px] font-bold">
-                            <span className={`px-2.5 py-1 rounded-full border ${resumen.pendientes.length === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
-                              {resumen.pendientes.length} pendiente{resumen.pendientes.length === 1 ? '' : 's'}
+                        <span className="text-xs font-semibold text-blue-300">· Tu situación</span>
+                      </span>
+                      <span className="flex items-center gap-2">
+                        {(() => {
+                          const resumen = obtenerResumenTareasAlumno(usuarioActual);
+                          return (
+                            <span className="flex flex-wrap justify-end gap-1.5 text-[11px] font-bold">
+                              <span className={`px-2.5 py-1 rounded-full border ${resumen.pendientes.length === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
+                                {resumen.pendientes.length} pendiente{resumen.pendientes.length === 1 ? '' : 's'}
+                              </span>
+                              <span className="px-2.5 py-1 rounded-full border bg-orange-500/10 text-orange-300 border-orange-500/30">
+                                {resumen.faltaNota.length} sin nota
+                              </span>
+                              <span className="px-2.5 py-1 rounded-full border bg-blue-500/10 text-blue-300 border-blue-500/30">
+                                {resumen.futuras.length} futura{resumen.futuras.length === 1 ? '' : 's'}
+                              </span>
                             </span>
-                            <span className="px-2.5 py-1 rounded-full border bg-orange-500/10 text-orange-300 border-orange-500/30">
-                              {resumen.faltaNota.length} sin nota
-                            </span>
-                            <span className="px-2.5 py-1 rounded-full border bg-blue-500/10 text-blue-300 border-blue-500/30">
-                              {resumen.futuras.length} futura{resumen.futuras.length === 1 ? '' : 's'}
-                            </span>
-                          </div>
-                        );
-                      })()}
-                    </div>
+                          );
+                        })()}
+                        <span className="ml-1 text-slate-400 text-sm" aria-hidden="true">{situacionPropiaAbierta ? '▲' : '▼'}</span>
+                      </span>
+                    </button>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {situacionPropiaAbierta && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {(() => {
                         const misMateriasConPendientes = materias.filter((m) =>
                           m.tareas.some((t) => tareaPendienteAlumno(t, usuarioActual))
@@ -1705,7 +1721,7 @@ export default function Home() {
                           );
                         });
                       })()}
-                    </div>
+                    </div>}
                   </div>
 
                   {/* RESTO DE COMPAÑEROS COLAPSADOS */}
@@ -2205,7 +2221,9 @@ export default function Home() {
                   )}
 
                   {alumnosDelHistorial.map((alumno) => {
-                    const estaDesplegado = alumno === usuarioActual || !!alumnosDesplegados[`historial-${alumno}`];
+                    const estaDesplegado = alumno === usuarioActual
+                      ? historialPropioAbierto
+                      : !!alumnosDesplegados[`historial-${alumno}`];
                     const historial = historialPorAlumno(alumno);
                     const historialAgrupado = agruparHistorial(historial);
 
@@ -2214,8 +2232,10 @@ export default function Home() {
                         key={alumno}
                         open={estaDesplegado}
                         onToggle={(evento) => {
-                          if (alumno !== usuarioActual) {
-                            const abierto = evento.currentTarget.open;
+                          const abierto = evento.currentTarget.open;
+                          if (alumno === usuarioActual) {
+                            setHistorialPropioAbierto(abierto);
+                          } else {
                             setAlumnosDesplegados((prev) => ({
                               ...prev,
                               [`historial-${alumno}`]: abierto
@@ -2231,7 +2251,10 @@ export default function Home() {
                             <span>👤</span> {alumno}
                             {alumno === usuarioActual && <span className="text-xs font-semibold text-blue-300">(vos)</span>}
                           </span>
-                          <span className="text-xs text-slate-400">{historial.length} registro{historial.length === 1 ? '' : 's'}</span>
+                          <span className="flex items-center gap-3 text-xs text-slate-400">
+                            {historial.length} registro{historial.length === 1 ? '' : 's'}
+                            <span aria-hidden="true">{estaDesplegado ? '▲' : '▼'}</span>
+                          </span>
                         </summary>
                         <div className="border-t border-slate-800/80 p-4 sm:p-5">
                           {alumno !== usuarioActual && (
