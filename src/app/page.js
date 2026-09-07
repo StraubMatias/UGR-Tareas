@@ -1708,6 +1708,9 @@ export default function Home() {
                       const estaDesplegado = !!alumnosDesplegados[alumno];
 
                       const resumenAlumno = obtenerResumenTareasAlumno(alumno);
+                      const tareasSinNota = resumenAlumno.tareasNoCompletadas.filter(
+                        (tarea) => tareaFaltaNota(tarea, alumno)
+                      );
 
                       return (
                         <div
@@ -1738,6 +1741,7 @@ export default function Home() {
                               >
                                 {resumenAlumno.pendientes.length === 0 ? '✓ Al día' : `${resumenAlumno.pendientes.length} por hacer`}
                                 {resumenAlumno.futuras.length > 0 && ` · ${resumenAlumno.futuras.length} futura${resumenAlumno.futuras.length === 1 ? '' : 's'}`}
+                                {tareasSinNota.length > 0 && ` · ${tareasSinNota.length} sin nota`}
                               </span>
                               <span className="text-slate-400 text-sm font-bold">
                                 {estaDesplegado ? '▲' : '▼'}
@@ -1781,6 +1785,9 @@ export default function Home() {
                                                 <li key={t.id} className="bg-[#161c26]/60 p-2.5 rounded-lg border border-slate-800/50 flex flex-col gap-1">
                                                   <span className="text-xs text-slate-200 font-semibold">
                                                     • {t.nombre}
+                                                    {tareaFaltaNota(t, alumno) && (
+                                                      <span className="ml-2 text-amber-300 font-normal">Entregada · falta nota</span>
+                                                    )}
                                                   </span>
                                                   <span className={`text-[10px] w-fit px-2 py-0.5 rounded border ${semaforo.estilo}`}>
                                                     {semaforo.texto}
