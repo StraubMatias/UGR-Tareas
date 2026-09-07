@@ -108,6 +108,16 @@ export default function Home() {
     tarea.completadoEn?.[alumno] || (tarea.conNota ? tarea.notaCargadaEn?.[alumno] : null)
   );
 
+  const tareaFaltaNota = (tarea, alumno) => (
+    tarea.conNota
+    && tareaCompletadaPor(tarea, alumno)
+    && (tarea.notas?.[alumno] === undefined || tarea.notas?.[alumno] === null || tarea.notas?.[alumno] === '')
+  );
+
+  const tareaPendienteAlumno = (tarea, alumno) => (
+    !tareaCompletadaPor(tarea, alumno) || tareaFaltaNota(tarea, alumno)
+  );
+
   useEffect(() => {
     document.title = "UGR - Tareas";
   }, []);
@@ -874,7 +884,7 @@ export default function Home() {
 
   const obtenerResumenTareasAlumno = (alumno) => {
     const tareasNoCompletadas = materias.flatMap((materia) => materia.tareas)
-      .filter((tarea) => !tareaCompletadaPor(tarea, alumno));
+      .filter((tarea) => tareaPendienteAlumno(tarea, alumno));
     const pendientes = tareasNoCompletadas.filter((tarea) => tareaEstaHabilitada(tarea.inicio));
     const futuras = tareasNoCompletadas.filter((tarea) => !tareaEstaHabilitada(tarea.inicio));
 
@@ -1577,7 +1587,7 @@ export default function Home() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {(() => {
                         const misMateriasConPendientes = materias.filter((m) =>
-                          m.tareas.some((t) => !tareaCompletadaPor(t, usuarioActual))
+                          m.tareas.some((t) => tareaPendienteAlumno(t, usuarioActual))
                         );
 
                         if (misMateriasConPendientes.length === 0) {
@@ -1590,7 +1600,7 @@ export default function Home() {
 
                         return misMateriasConPendientes.map((m) => {
                           const tareasPendientes = m.tareas.filter(
-                            (t) => !tareaCompletadaPor(t, usuarioActual)
+                            (t) => tareaPendienteAlumno(t, usuarioActual)
                           );
                           const gruposTareas = agruparTareasPorUnidad(tareasPendientes);
 
@@ -1618,6 +1628,9 @@ export default function Home() {
                                             />
                                             <span className="text-sm sm:text-base text-slate-100 font-semibold leading-snug">
                                               {t.nombre}{t.conNota && <span className="text-xs text-purple-300 font-normal"> (con nota)</span>}
+                                              {tareaFaltaNota(t, usuarioActual) && (
+                                                <span className="ml-2 text-xs text-amber-300 font-normal">Entregada · falta nota</span>
+                                              )}
                                             </span>
                                           </div>
                                           <div className="pl-7 flex items-end justify-between gap-3">
@@ -1734,7 +1747,7 @@ export default function Home() {
                                 )}
                                 {materias.map((m) => {
                                   const tareasPendientes = m.tareas.filter(
-                                    (t) => !tareaCompletadaPor(t, alumno)
+                                    (t) => tareaPendienteAlumno(t, alumno)
                                   );
 
                                   if (tareasPendientes.length === 0) return null;
@@ -1792,7 +1805,7 @@ export default function Home() {
                     materias.map((m) => {
                       const mostrarCompletadas = !!materiasDesplegadas[m.id];
                       const tareasPendientes = m.tareas.filter(
-                        (t) => !tareaCompletadaPor(t, usuarioActual)
+                        (t) => tareaPendienteAlumno(t, usuarioActual)
                       );
                       const tareasCompletadas = m.tareas.filter(
                         (t) => tareaCompletadaPor(t, usuarioActual)
@@ -1881,7 +1894,7 @@ export default function Home() {
                                         </span>
                                         {t.conNota && (
                                           <span className="text-xs px-3 py-1 rounded-md border bg-purple-500/10 text-purple-300 border-purple-500/30">
-                                            Tarea con nota
+                                            {tareaFaltaNota(t, usuarioActual) ? 'Entregada · falta nota' : 'Tarea con nota'}
                                           </span>
                                         )}
 
