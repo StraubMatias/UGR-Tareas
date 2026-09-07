@@ -268,6 +268,10 @@ export async function cerrarSesionAction() {
   return { exito: true };
 }
 
+export async function obtenerSesionAction() {
+  return { usuario: await obtenerUsuarioSesion() };
+}
+
 // Cambiar contraseña en la tabla alumnos en Turso
 export async function cambiarPasswordAction(usuarioInput, passActualInput, passNuevaInput) {
   try {

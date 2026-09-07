@@ -4,6 +4,7 @@ import { startTransition, useCallback, useEffect, useState } from 'react';
 import {
   validarLoginAction,
   cerrarSesionAction,
+  obtenerSesionAction,
   obtenerDatos,
   obtenerAlumnosAction,
   crearAlumnoAction,
@@ -163,43 +164,41 @@ export default function Home() {
 
   // PERSISTENCIA DE SESIÓN
   useEffect(() => {
-    const sesionGuardada = localStorage.getItem('sesion_ugr');
-    if (sesionGuardada) {
-      try {
-        const { usuario, timestamp } = JSON.parse(sesionGuardada);
-        const diezMinutosMs = 10 * 60 * 1000;
-        const ahora = Date.now();
+    let cancelado = false;
 
-        if (ahora - timestamp < diezMinutosMs) {
+    const restaurarSesion = async () => {
+      try {
+        const sesion = await obtenerSesionAction();
+        if (!cancelado && sesion?.usuario) {
           startTransition(() => {
-            setUsuarioActual(usuario);
+            setUsuarioActual(sesion.usuario);
             setMostrarAvisoInicio(true);
           });
-          localStorage.setItem('sesion_ugr', JSON.stringify({ usuario, timestamp: ahora }));
-        } else {
-          localStorage.removeItem('sesion_ugr');
         }
-      } catch (e) {
-        localStorage.removeItem('sesion_ugr');
+      } catch (error) {
+        console.error('No se pudo restaurar la sesión:', error);
+      } finally {
+        if (!cancelado) {
+          startTransition(() => {
+            setIniciado(true);
+          });
+        }
       }
-    }
-    startTransition(() => {
-      setIniciado(true);
-    });
+    };
+
+    restaurarSesion();
+    return () => {
+      cancelado = true;
+    };
   }, []);
 
   const iniciarSesionLocal = (usuario) => {
     setUsuarioActual(usuario);
-    localStorage.setItem(
-      'sesion_ugr',
-      JSON.stringify({ usuario, timestamp: Date.now() })
-    );
   };
 
   const cerrarSesionLocal = async () => {
     await cerrarSesionAction();
     setUsuarioActual(null);
-    localStorage.removeItem('sesion_ugr');
   };
 
   const formatearFechaDDMMAAAA = (fechaStr) => {
