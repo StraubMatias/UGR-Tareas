@@ -1,11 +1,72 @@
 'use server';
 
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import { cookies } from 'next/headers';
 import { db } from './turso';
 
 const ADMINISTRADOR = 'Matute';
+const COOKIE_SESION = 'ugr_sesion';
+const DURACION_SESION_SEGUNDOS = 10 * 60;
 
 function esAdministrador(usuario) {
   return typeof usuario === 'string' && usuario.trim().toLowerCase() === ADMINISTRADOR.toLowerCase();
+}
+
+function obtenerSecretoSesion() {
+  const secreto = process.env.SESSION_SECRET || process.env.TURSO_AUTH_TOKEN;
+  if (!secreto) throw new Error('Falta SESSION_SECRET en el entorno.');
+  return secreto;
+}
+
+function firmarSesion(payload) {
+  return createHmac('sha256', obtenerSecretoSesion()).update(payload).digest('base64url');
+}
+
+function crearValorSesion(usuario) {
+  const payload = Buffer.from(JSON.stringify({
+    usuario,
+    expira: Date.now() + DURACION_SESION_SEGUNDOS * 1000
+  })).toString('base64url');
+  return `${payload}.${firmarSesion(payload)}`;
+}
+
+function leerValorSesion(valor) {
+  try {
+    const [payload, firma] = String(valor || '').split('.');
+    if (!payload || !firma) return null;
+
+    const firmaEsperada = firmarSesion(payload);
+    const firmaBytes = Buffer.from(firma);
+    const firmaEsperadaBytes = Buffer.from(firmaEsperada);
+    if (firmaBytes.length !== firmaEsperadaBytes.length || !timingSafeEqual(firmaBytes, firmaEsperadaBytes)) {
+      return null;
+    }
+
+    const datos = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    return datos.expira > Date.now() && typeof datos.usuario === 'string' ? datos.usuario : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function establecerSesion(usuario) {
+  const cookieStore = await cookies();
+  cookieStore.set(COOKIE_SESION, crearValorSesion(usuario), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: DURACION_SESION_SEGUNDOS,
+    path: '/'
+  });
+}
+
+async function obtenerUsuarioSesion() {
+  const cookieStore = await cookies();
+  return leerValorSesion(cookieStore.get(COOKIE_SESION)?.value);
+}
+
+async function verificarAdmin() {
+  return esAdministrador(await obtenerUsuarioSesion());
 }
 
 function parcialHabilitado(fecha) {
@@ -190,6 +251,7 @@ export async function validarLoginAction(usuarioInput, passwordInput) {
     const claveEsperada = usuarioDB.password ? usuarioDB.password : usuarioDB.nombre;
 
     if (passClean === claveEsperada) {
+      await establecerSesion(usuarioDB.nombre);
       return { exito: true, usuario: usuarioDB.nombre };
     } else {
       return { exito: false, mensaje: 'Contraseña incorrecta' };
@@ -198,6 +260,12 @@ export async function validarLoginAction(usuarioInput, passwordInput) {
     console.error('Error en validarLoginAction:', error);
     return { exito: false, mensaje: 'Error de conexión con la base de datos' };
   }
+}
+
+export async function cerrarSesionAction() {
+  const cookieStore = await cookies();
+  cookieStore.delete(COOKIE_SESION);
+  return { exito: true };
 }
 
 // Cambiar contraseña en la tabla alumnos en Turso
@@ -219,6 +287,11 @@ export async function cambiarPasswordAction(usuarioInput, passActualInput, passN
     const loginValido = await validarLoginAction(userClean, passActualClean);
     if (!loginValido.exito) {
       return { exito: false, mensaje: 'La contraseña actual es incorrecta.' };
+    }
+
+    const usuarioSesion = await obtenerUsuarioSesion();
+    if (!usuarioSesion || usuarioSesion.toLowerCase() !== userClean.toLowerCase()) {
+      return { exito: false, mensaje: 'La sesión no es válida. Volvé a iniciar sesión.' };
     }
 
     // 2. Actualizamos el campo password en la base de datos Turso
@@ -248,6 +321,7 @@ export async function obtenerAlumnosAction() {
 // Crear nuevo alumno en la BD
 export async function crearAlumnoAction(nombre) {
   try {
+    if (!await verificarAdmin()) return;
     const nombreFormateado = nombre.trim();
     if (!nombreFormateado) return;
     const id = 'a_' + Date.now();
@@ -263,6 +337,7 @@ export async function crearAlumnoAction(nombre) {
 // Renombrar alumno
 export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
   try {
+    if (!await verificarAdmin()) return;
     await asegurarEsquemaNotasTareas();
     const nuevoFormateado = nuevoNombre.trim();
     if (!nuevoFormateado) return;
@@ -293,6 +368,7 @@ export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
 // Eliminar alumno de la BD
 export async function eliminarAlumnoAction(nombre) {
   try {
+    if (!await verificarAdmin()) return;
     await asegurarEsquemaNotasTareas();
     await db.execute({
       sql: 'DELETE FROM alumnos WHERE nombre = ?',
@@ -401,6 +477,9 @@ export async function obtenerDatos() {
 
 export async function toggleTareaAction(tareaId, alumno) {
   try {
+    const usuarioSesion = await obtenerUsuarioSesion();
+    if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
+    const alumnoObjetivo = esAdministrador(usuarioSesion) ? alumno : usuarioSesion;
     const tarea = await db.execute({
       sql: 'SELECT inicio, fin FROM tareas WHERE id = ?',
       args: [tareaId]
@@ -411,18 +490,18 @@ export async function toggleTareaAction(tareaId, alumno) {
     }
     const existe = await db.execute({
       sql: 'SELECT * FROM completadas WHERE tarea_id = ? AND alumno = ?',
-      args: [tareaId, alumno]
+      args: [tareaId, alumnoObjetivo]
     });
 
     if (existe.rows.length > 0) {
       await db.execute({
         sql: 'DELETE FROM completadas WHERE tarea_id = ? AND alumno = ?',
-        args: [tareaId, alumno]
+        args: [tareaId, alumnoObjetivo]
       });
     } else {
       await db.execute({
         sql: "INSERT INTO completadas (tarea_id, alumno, completada_en) VALUES (?, ?, datetime('now'))",
-        args: [tareaId, alumno]
+        args: [tareaId, alumnoObjetivo]
       });
     }
     return { exito: true };
@@ -434,6 +513,7 @@ export async function toggleTareaAction(tareaId, alumno) {
 
 export async function crearMateriaAction({ nombre, anio, cuatrimestre }) {
   try {
+    if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede crear materias.' };
     const nombreFormateado = nombre?.trim();
     const anioNumerico = Number(anio);
     const cuatrimestreNumerico = Number(cuatrimestre);
@@ -467,6 +547,7 @@ export async function crearMateriaAction({ nombre, anio, cuatrimestre }) {
 
 export async function renombrarMateriaAction(id, nuevoNombre) {
   try {
+    if (!await verificarAdmin()) return;
     await db.execute({
       sql: 'UPDATE materias SET nombre = ? WHERE id = ?',
       args: [nuevoNombre.toUpperCase().trim(), id]
@@ -481,7 +562,7 @@ export async function editarCondicionesMateriaAction({ id, condiciones, notaMini
     const regularizar = Number(notaMinimaRegularizar);
     const promocionar = Number(notaMinimaPromocionar);
     const maximo = ['activos_porcentaje', 'tp_porcentaje_nota'].includes(reglaPromocion) ? 100 : 10;
-    if (!esAdministrador(usuario)) {
+    if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede editar condiciones.' };
     }
     if (![regularizar, promocionar].every((nota) => Number.isFinite(nota) && nota >= 1 && nota <= maximo)) {
@@ -503,6 +584,7 @@ export async function editarCondicionesMateriaAction({ id, condiciones, notaMini
 
 export async function eliminarMateriaAction(id) {
   try {
+    if (!await verificarAdmin()) return;
     await db.execute({
       sql: 'DELETE FROM materias WHERE id = ?',
       args: [id]
@@ -514,6 +596,7 @@ export async function eliminarMateriaAction(id) {
 
 export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles, unidad, conNota, tipo }) {
   try {
+    if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede crear tareas.' };
     const unidadNormalizada = normalizarUnidad(unidad);
     if (!unidadNormalizada.valida) {
       return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
@@ -535,6 +618,7 @@ export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalle
 
 export async function editarTareaAction({ id, nombre, inicio, fin, detalles, unidad, conNota, tipo }) {
   try {
+    if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede editar tareas.' };
     const unidadNormalizada = normalizarUnidad(unidad);
     if (!unidadNormalizada.valida) {
       return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
@@ -555,6 +639,7 @@ export async function editarTareaAction({ id, nombre, inicio, fin, detalles, uni
 
 export async function eliminarTareaAction(id) {
   try {
+    if (!await verificarAdmin()) return;
     await asegurarEsquemaNotasTareas();
     await db.execute({ sql: 'DELETE FROM notas_tareas WHERE tarea_id = ?', args: [id] });
     await db.execute({
@@ -580,7 +665,7 @@ export async function obtenerHorariosAction() {
 
 export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, aula, usuario }) {
   try {
-    if (!esAdministrador(usuario)) {
+    if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede crear horarios.' };
     }
 
@@ -603,7 +688,7 @@ export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, 
 
 export async function eliminarHorarioAction(id, usuario) {
   try {
-    if (!esAdministrador(usuario)) {
+    if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede borrar horarios.' };
     }
 
@@ -636,7 +721,7 @@ export async function obtenerParcialesAction() {
 
 export async function crearParcialAction({ materiaId, nombre, fecha, detalles, usuario }) {
   try {
-    if (!esAdministrador(usuario)) {
+    if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede crear parciales.' };
     }
 
@@ -654,7 +739,7 @@ export async function crearParcialAction({ materiaId, nombre, fecha, detalles, u
 
 export async function editarParcialAction({ id, materiaId, nombre, fecha, detalles, usuario }) {
   try {
-    if (!esAdministrador(usuario)) {
+    if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede editar parciales.' };
     }
 
@@ -671,7 +756,7 @@ export async function editarParcialAction({ id, materiaId, nombre, fecha, detall
 
 export async function eliminarParcialAction(id, usuario) {
   try {
-    if (!esAdministrador(usuario)) {
+    if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede borrar parciales.' };
     }
 
@@ -686,7 +771,7 @@ export async function eliminarParcialAction(id, usuario) {
 
 export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario) {
   try {
-    if (!esAdministrador(usuario)) {
+    if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede cargar o editar notas.' };
     }
 
@@ -748,7 +833,8 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
   try {
     await asegurarEsquemaNotasTareas();
 
-    if (!alumno || (alumno !== usuario && !esAdministrador(usuario))) {
+    const usuarioSesion = await obtenerUsuarioSesion();
+    if (!alumno || !usuarioSesion || (alumno !== usuarioSesion && !esAdministrador(usuarioSesion))) {
       return { exito: false, mensaje: 'Solo podés cargar tu propia nota.' };
     }
 

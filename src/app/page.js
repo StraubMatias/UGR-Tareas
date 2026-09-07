@@ -3,6 +3,7 @@
 import { startTransition, useCallback, useEffect, useState } from 'react';
 import {
   validarLoginAction,
+  cerrarSesionAction,
   obtenerDatos,
   obtenerAlumnosAction,
   crearAlumnoAction,
@@ -195,7 +196,8 @@ export default function Home() {
     );
   };
 
-  const cerrarSesionLocal = () => {
+  const cerrarSesionLocal = async () => {
+    await cerrarSesionAction();
     setUsuarioActual(null);
     localStorage.removeItem('sesion_ugr');
   };
