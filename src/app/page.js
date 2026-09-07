@@ -1583,14 +1583,17 @@ export default function Home() {
                   <div className="space-y-8">
                   {/* TU TARJETA DESTACADA */}
                   <div className="bg-[#161c26] border-2 border-blue-500/80 rounded-2xl p-6 shadow-xl ring-1 ring-blue-500/20">
-                    <div className="flex justify-between items-center mb-5 border-b border-slate-800 pb-3">
-                      <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
-                        <span>👤</span> {usuarioActual} <span className="text-xs text-blue-400 font-semibold bg-blue-500/10 border border-blue-500/30 px-2 py-0.5 rounded">(Mis Tareas Pendientes)</span>
-                      </h2>
+                    <div className="flex flex-col gap-3 mb-5 border-b border-slate-800 pb-3">
+                      <div>
+                        <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
+                          <span>👤</span> {usuarioActual}
+                        </h2>
+                        <p className="mt-1 pl-7 text-sm font-semibold text-blue-300">Tareas</p>
+                      </div>
                       {(() => {
                         const resumen = obtenerResumenTareasAlumno(usuarioActual);
                         return (
-                          <div className="flex flex-wrap justify-end gap-1.5 text-[11px] font-bold">
+                          <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
                             <span className={`px-2.5 py-1 rounded-full border ${resumen.pendientes.length === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
                               {resumen.pendientes.length} pendiente{resumen.pendientes.length === 1 ? '' : 's'}
                             </span>
@@ -1724,31 +1727,34 @@ export default function Home() {
                         >
                           <button
                             onClick={() => toggleDesplegarAlumno(alumno)}
-                            className="w-full p-4 sm:p-5 flex justify-between items-center text-left hover:bg-slate-800/40 transition-all cursor-pointer"
+                            className="w-full p-4 sm:p-5 flex flex-col items-start gap-3 text-left hover:bg-slate-800/40 transition-all cursor-pointer"
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 w-full">
                               <span className="text-lg">👤</span>
                               <div className="flex flex-col items-start gap-1 min-w-0">
                                 <span className="text-base font-bold text-white">{alumno}</span>
+                                <span className="text-sm font-semibold text-blue-300">Tareas</span>
                               </div>
                               <span className="text-xs text-slate-500 font-normal hidden sm:inline">
                                 {estaDesplegado ? '(Tocar para ocultar)' : '(Tocar para ver detalle)'}
                               </span>
                             </div>
 
-                            <div className="flex flex-wrap items-center justify-end gap-1.5">
-                              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${resumenAlumno.pendientes.length === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
-                                {resumenAlumno.pendientes.length} pendiente{resumenAlumno.pendientes.length === 1 ? '' : 's'}
-                              </span>
-                              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-orange-500/10 text-orange-300 border-orange-500/30">
-                                {resumenAlumno.faltaNota.length} tarea{resumenAlumno.faltaNota.length === 1 ? '' : 's'} sin nota
-                              </span>
-                              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-blue-500/10 text-blue-300 border-blue-500/30">
-                                {resumenAlumno.futuras.length} futura{resumenAlumno.futuras.length === 1 ? '' : 's'}
-                              </span>
-                              <span className="text-slate-400 text-sm font-bold">
-                                {estaDesplegado ? '▲' : '▼'}
-                              </span>
+                            <div className="flex w-full flex-col items-start gap-2">
+                              <div className="flex w-full flex-wrap items-center gap-1.5">
+                                <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${resumenAlumno.pendientes.length === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
+                                  {resumenAlumno.pendientes.length} pendiente{resumenAlumno.pendientes.length === 1 ? '' : 's'}
+                                </span>
+                                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-orange-500/10 text-orange-300 border-orange-500/30">
+                                  {resumenAlumno.faltaNota.length} tarea{resumenAlumno.faltaNota.length === 1 ? '' : 's'} sin nota
+                                </span>
+                                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-blue-500/10 text-blue-300 border-blue-500/30">
+                                  {resumenAlumno.futuras.length} futura{resumenAlumno.futuras.length === 1 ? '' : 's'}
+                                </span>
+                                <span className="ml-auto text-slate-400 text-sm font-bold">
+                                  {estaDesplegado ? '▲' : '▼'}
+                                </span>
+                              </div>
                             </div>
                           </button>
 
