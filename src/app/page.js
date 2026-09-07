@@ -887,10 +887,13 @@ export default function Home() {
   const obtenerResumenTareasAlumno = (alumno) => {
     const tareasNoCompletadas = materias.flatMap((materia) => materia.tareas)
       .filter((tarea) => tareaPendienteAlumno(tarea, alumno));
-    const pendientes = tareasNoCompletadas.filter((tarea) => tareaEstaHabilitada(tarea.inicio));
-    const futuras = tareasNoCompletadas.filter((tarea) => !tareaEstaHabilitada(tarea.inicio));
+    const faltaNota = tareasNoCompletadas.filter((tarea) => tareaFaltaNota(tarea, alumno));
+    const pendientes = tareasNoCompletadas
+      .filter((tarea) => !tareaFaltaNota(tarea, alumno) && tareaEstaHabilitada(tarea.inicio));
+    const futuras = tareasNoCompletadas
+      .filter((tarea) => !tareaFaltaNota(tarea, alumno) && !tareaEstaHabilitada(tarea.inicio));
 
-    return { pendientes, futuras, tareasNoCompletadas };
+    return { pendientes, faltaNota, futuras, tareasNoCompletadas };
   };
 
   const historialPorAlumno = (alumno) => {
@@ -1587,14 +1590,17 @@ export default function Home() {
                       {(() => {
                         const resumen = obtenerResumenTareasAlumno(usuarioActual);
                         return (
-                          <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
-                            resumen.pendientes.length === 0
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                              : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                          }`}>
-                            {resumen.pendientes.length === 0 ? '✓ Al día' : `${resumen.pendientes.length} por hacer`}
-                            {resumen.futuras.length > 0 && ` · ${resumen.futuras.length} futura${resumen.futuras.length === 1 ? '' : 's'}`}
-                          </span>
+                          <div className="flex flex-wrap justify-end gap-1.5 text-[11px] font-bold">
+                            <span className={`px-2.5 py-1 rounded-full border ${resumen.pendientes.length === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
+                              {resumen.pendientes.length} pendiente{resumen.pendientes.length === 1 ? '' : 's'}
+                            </span>
+                            <span className="px-2.5 py-1 rounded-full border bg-orange-500/10 text-orange-300 border-orange-500/30">
+                              {resumen.faltaNota.length} tarea{resumen.faltaNota.length === 1 ? '' : 's'} sin nota
+                            </span>
+                            <span className="px-2.5 py-1 rounded-full border bg-blue-500/10 text-blue-300 border-blue-500/30">
+                              {resumen.futuras.length} futura{resumen.futuras.length === 1 ? '' : 's'}
+                            </span>
+                          </div>
                         );
                       })()}
                     </div>
@@ -1710,9 +1716,6 @@ export default function Home() {
                       const estaDesplegado = !!alumnosDesplegados[alumno];
 
                       const resumenAlumno = obtenerResumenTareasAlumno(alumno);
-                      const tareasSinNota = resumenAlumno.tareasNoCompletadas.filter(
-                        (tarea) => tareaFaltaNota(tarea, alumno)
-                      );
 
                       return (
                         <div
@@ -1733,17 +1736,15 @@ export default function Home() {
                               </span>
                             </div>
 
-                            <div className="flex items-center gap-3">
-                              <span
-                                className={`text-xs font-semibold px-3 py-1 rounded-full border ${
-                                  resumenAlumno.pendientes.length === 0
-                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                                }`}
-                              >
-                                {resumenAlumno.pendientes.length === 0 ? '✓ Al día' : `${resumenAlumno.pendientes.length} por hacer`}
-                                {resumenAlumno.futuras.length > 0 && ` · ${resumenAlumno.futuras.length} futura${resumenAlumno.futuras.length === 1 ? '' : 's'}`}
-                                {tareasSinNota.length > 0 && ` · ${tareasSinNota.length} sin nota`}
+                            <div className="flex flex-wrap items-center justify-end gap-1.5">
+                              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${resumenAlumno.pendientes.length === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
+                                {resumenAlumno.pendientes.length} pendiente{resumenAlumno.pendientes.length === 1 ? '' : 's'}
+                              </span>
+                              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-orange-500/10 text-orange-300 border-orange-500/30">
+                                {resumenAlumno.faltaNota.length} tarea{resumenAlumno.faltaNota.length === 1 ? '' : 's'} sin nota
+                              </span>
+                              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-blue-500/10 text-blue-300 border-blue-500/30">
+                                {resumenAlumno.futuras.length} futura{resumenAlumno.futuras.length === 1 ? '' : 's'}
                               </span>
                               <span className="text-slate-400 text-sm font-bold">
                                 {estaDesplegado ? '▲' : '▼'}
