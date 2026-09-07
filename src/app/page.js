@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useCallback, useEffect, useState } from 'react';
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import {
   validarLoginAction,
   cerrarSesionAction,
@@ -38,6 +38,8 @@ export default function Home() {
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
   const [notificacionesAbiertas, setNotificacionesAbiertas] = useState(false);
+  const [notificacionesVistas, setNotificacionesVistas] = useState([]);
+  const notificacionesRef = useRef(null);
   const [mostrarAvisoInicio, setMostrarAvisoInicio] = useState(false);
   const [novedades, setNovedades] = useState([]);
 
@@ -127,7 +129,36 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!usuarioActual || esAdmin || cargando) return;
+    if (!usuarioActual) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setNotificacionesVistas([]);
+      return;
+    }
+
+    const claveVistas = `ugr_novedades_vistas_${encodeURIComponent(usuarioActual)}`;
+    try {
+      const guardadas = JSON.parse(localStorage.getItem(claveVistas) || '[]');
+      setNotificacionesVistas(Array.isArray(guardadas) ? guardadas : []);
+    } catch (error) {
+      setNotificacionesVistas([]);
+    }
+  }, [usuarioActual]);
+
+  useEffect(() => {
+    if (!notificacionesAbiertas) return undefined;
+
+    const cerrarAlHacerClickAfuera = (evento) => {
+      if (!notificacionesRef.current?.contains(evento.target)) {
+        setNotificacionesAbiertas(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', cerrarAlHacerClickAfuera);
+    return () => document.removeEventListener('pointerdown', cerrarAlHacerClickAfuera);
+  }, [notificacionesAbiertas]);
+
+  useEffect(() => {
+    if (!usuarioActual || cargando) return;
 
     const tareasActuales = materias.flatMap((materia) => materia.tareas.map((tarea) => ({
       id: `tarea-${tarea.id}`,
@@ -162,7 +193,7 @@ export default function Home() {
       setNovedades(nuevas);
     });
     localStorage.setItem(claveNovedades, JSON.stringify(elementosActuales.map((elemento) => elemento.id)));
-  }, [usuarioActual, esAdmin, cargando, materias, parciales]);
+  }, [usuarioActual, cargando, materias, parciales]);
 
   // PERSISTENCIA DE SESIÓN
   useEffect(() => {
@@ -434,8 +465,8 @@ export default function Home() {
     }
   };
 
-  const cargarBD = useCallback(async () => {
-    setCargando(true);
+  const cargarBD = useCallback(async (mostrarCarga = true) => {
+    if (mostrarCarga) setCargando(true);
     const [dataMaterias, dataAlumnos, dataParciales, dataHorarios] = await Promise.all([
       obtenerDatos(),
       obtenerAlumnosAction(),
@@ -473,7 +504,7 @@ export default function Home() {
       setMateriaParcialSel((valorActual) => valorActual || dataMaterias[0].id);
       setMateriaHorarioSel((valorActual) => valorActual || dataMaterias[0].id);
     }
-    setCargando(false);
+    if (mostrarCarga) setCargando(false);
   }, []);
 
   useEffect(() => {
@@ -481,6 +512,16 @@ export default function Home() {
     // La carga empieza después de autenticar o restaurar una sesión válida.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     cargarBD();
+  }, [usuarioActual, cargarBD]);
+
+  useEffect(() => {
+    if (!usuarioActual) return undefined;
+
+    const intervalo = window.setInterval(() => {
+      cargarBD(false);
+    }, 30000);
+
+    return () => window.clearInterval(intervalo);
   }, [usuarioActual, cargarBD]);
 
   const handleLogin = async (e) => {
@@ -1000,7 +1041,7 @@ export default function Home() {
   const materiaProximoParcial = proximoParcial
     ? materias.find((materia) => materia.id === proximoParcial.materia_id)
     : null;
-  const notificaciones = usuarioActual && !esAdmin
+  const notificaciones = usuarioActual
     ? [
       ...novedades,
       ...materias.flatMap((materia) => materia.tareas
@@ -1034,8 +1075,21 @@ export default function Home() {
           dias: obtenerDiasHastaFecha(tarea.inicio)
         }))
         .filter(({ dias }) => dias === 1))
-    ].sort((a, b) => a.dias - b.dias || a.nombre.localeCompare(b.nombre))
+    ].sort((a, b) => (a.dias ?? -1) - (b.dias ?? -1) || a.nombre.localeCompare(b.nombre))
     : [];
+  const notificacionesNoVistas = notificaciones.filter(
+    (notificacion) => !notificacionesVistas.includes(notificacion.id)
+  );
+  const marcarNotificacionesVistas = (ids) => {
+    if (!usuarioActual || ids.length === 0) return;
+
+    const idsActualizados = [...new Set([...notificacionesVistas, ...ids])];
+    setNotificacionesVistas(idsActualizados);
+    localStorage.setItem(
+      `ugr_novedades_vistas_${encodeURIComponent(usuarioActual)}`,
+      JSON.stringify(idsActualizados)
+    );
+  };
   const horariosProximoParcial = proximoParcial
     ? horarios
       .filter((horario) => horario.materia_id === proximoParcial.materia_id)
@@ -1278,18 +1332,18 @@ export default function Home() {
 
         {usuarioActual && (
           <div className="flex items-center gap-3">
-            <div className="relative">
+            <div ref={notificacionesRef} className="relative">
               <button
                 type="button"
-                aria-label={`Notificaciones${notificaciones.length ? ` (${notificaciones.length})` : ''}`}
+                aria-label={`Notificaciones${notificacionesNoVistas.length ? ` (${notificacionesNoVistas.length} sin ver)` : ''}`}
                 aria-expanded={notificacionesAbiertas}
                 onClick={() => setNotificacionesAbiertas((abiertas) => !abiertas)}
                 className="relative bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 p-2.5 rounded-xl text-lg transition-all cursor-pointer"
               >
                 🔔
-                {notificaciones.length > 0 && (
+                {notificacionesNoVistas.length > 0 && (
                   <span className="absolute -right-1 -top-1 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center border-2 border-[#161c26]">
-                    {notificaciones.length > 9 ? '9+' : notificaciones.length}
+                    {notificacionesNoVistas.length > 9 ? '9+' : notificacionesNoVistas.length}
                   </span>
                 )}
               </button>
@@ -1297,7 +1351,14 @@ export default function Home() {
                 <div className="absolute right-0 top-14 z-50 w-[calc(100vw-2rem)] max-w-80 bg-[#161c26] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
                   <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
                     <p className="text-sm font-bold text-white">Recordatorios</p>
-                    <span className="text-xs text-slate-400">Recordatorios</span>
+                    <button
+                      type="button"
+                      disabled={notificacionesNoVistas.length === 0}
+                      onClick={() => marcarNotificacionesVistas(notificaciones.map((notificacion) => notificacion.id))}
+                      className="text-[11px] font-semibold text-cyan-300 hover:text-cyan-100 disabled:text-slate-600 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      Marcar vistas
+                    </button>
                   </div>
                   {notificaciones.length === 0 ? (
                     <p className="px-4 py-5 text-sm text-slate-400">No tenés recordatorios pendientes.</p>
@@ -1320,10 +1381,11 @@ export default function Home() {
                             type="button"
                             key={notificacion.id}
                             onClick={() => {
+                              marcarNotificacionesVistas([notificacion.id]);
                               setPestana(['parcial', 'nuevo-parcial'].includes(notificacion.tipo) ? 'parciales' : 'materias');
                               setNotificacionesAbiertas(false);
                             }}
-                            className="w-full text-left px-4 py-3 hover:bg-slate-800/70 transition-colors cursor-pointer"
+                            className={`w-full text-left px-4 py-3 hover:bg-slate-800/70 transition-colors cursor-pointer ${notificacionesVistas.includes(notificacion.id) ? 'opacity-60' : ''}`}
                           >
                             <p className="text-sm font-semibold text-slate-100 truncate">{notificacion.nombre}</p>
                             <p className="text-xs text-slate-400 mt-1">{etiquetaMateria(notificacion.materia)}</p>
@@ -1451,7 +1513,7 @@ export default function Home() {
       ) : (
         <div className="max-w-9xl mx-auto">
           {/* NAVEGACIÓN */}
-          <div className="portal-nav sticky top-0 z-40 -mx-4 px-4 py-3 sm:-mx-6 sm:px-6 md:-mx-10 md:px-10 mb-8 border-b shadow-lg backdrop-blur-sm flex flex-wrap gap-3">
+          <div className="portal-nav sticky top-0 z-40 -mx-4 px-4 py-3 sm:-mx-6 sm:px-6 md:-mx-10 md:px-10 mb-8 border-b shadow-lg backdrop-blur-sm flex flex-nowrap gap-3 overflow-x-auto">
             <button
               onClick={() => setPestana('alumnos')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${

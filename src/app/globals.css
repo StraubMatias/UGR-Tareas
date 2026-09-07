@@ -101,10 +101,13 @@ textarea {
 .portal-nav {
   border-color: var(--line);
   background: rgba(11, 17, 23, 0.86);
+  scrollbar-color: #3c6772 transparent;
+  scrollbar-width: thin;
 }
 
 .portal-nav > button,
 .portal-nav > a {
+  flex-shrink: 0;
   color: #d9e4ec;
   font-weight: 800;
   letter-spacing: 0.01em;
