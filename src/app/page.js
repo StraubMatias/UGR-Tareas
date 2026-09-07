@@ -466,12 +466,12 @@ export default function Home() {
     setNotasTareasInputs(mapaNotasTareas);
 
     if (dataMaterias && dataMaterias.length > 0) {
-      if (!materiaSel) setMateriaSel(dataMaterias[0].id);
-      if (!materiaParcialSel) setMateriaParcialSel(dataMaterias[0].id);
-      if (!materiaHorarioSel) setMateriaHorarioSel(dataMaterias[0].id);
+      setMateriaSel((valorActual) => valorActual || dataMaterias[0].id);
+      setMateriaParcialSel((valorActual) => valorActual || dataMaterias[0].id);
+      setMateriaHorarioSel((valorActual) => valorActual || dataMaterias[0].id);
     }
     setCargando(false);
-  }, [materiaSel, materiaParcialSel, materiaHorarioSel]);
+  }, []);
 
   useEffect(() => {
     // La carga inicial sincroniza el estado con la base de datos externa.

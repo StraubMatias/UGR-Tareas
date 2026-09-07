@@ -35,7 +35,9 @@ function tareaDentroDelPlazo(fecha) {
   return !Number.isNaN(fechaCierre.getTime()) && hoy < fechaCierre;
 }
 
-async function asegurarEsquemaNotasTareas() {
+let promesaEsquemaNotasTareas;
+
+async function ejecutarAsegurarEsquemaNotasTareas() {
   await db.execute(
     'CREATE TABLE IF NOT EXISTS notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT NOT NULL, alumno TEXT NOT NULL, nota TEXT NOT NULL, cargada_en TEXT, UNIQUE(tarea_id, alumno))'
   );
@@ -132,6 +134,17 @@ async function asegurarEsquemaNotasTareas() {
       args: [regla.condiciones, regla.regularizar, regla.promocionar, regla.regla, regla.nombre]
     });
   }
+}
+
+async function asegurarEsquemaNotasTareas() {
+  if (!promesaEsquemaNotasTareas) {
+    promesaEsquemaNotasTareas = ejecutarAsegurarEsquemaNotasTareas().catch((error) => {
+      promesaEsquemaNotasTareas = null;
+      throw error;
+    });
+  }
+
+  return promesaEsquemaNotasTareas;
 }
 
 function validarNota(nota) {
@@ -307,10 +320,11 @@ export async function eliminarAlumnoAction(nombre) {
 export async function obtenerDatos() {
   try {
     await asegurarEsquemaNotasTareas();
-    const [resMaterias, resTareas, resCompletadas] = await Promise.all([
+    const [resMaterias, resTareas, resCompletadas, resNotasTareas] = await Promise.all([
       db.execute('SELECT * FROM materias ORDER BY nombre ASC'),
       db.execute('SELECT * FROM tareas'),
-      db.execute('SELECT * FROM completadas')
+      db.execute('SELECT * FROM completadas'),
+      db.execute('SELECT tarea_id, alumno, nota, cargada_en FROM notas_tareas')
     ]);
 
     const tareasPorMateria = new Map();
@@ -327,7 +341,6 @@ export async function obtenerDatos() {
       completadasPorTarea.set(completada.tarea_id, completadasTarea);
     });
 
-    const resNotasTareas = await db.execute('SELECT tarea_id, alumno, nota, cargada_en FROM notas_tareas');
     const notasPorTarea = new Map();
     const fechasNotasPorTarea = new Map();
     resNotasTareas.rows.forEach((nota) => {
