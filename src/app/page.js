@@ -118,6 +118,7 @@ export default function Home() {
   const [tareaEnEdicion, setTareaEnEdicion] = useState(null);
   const [materiaEnEdicion, setMateriaEnEdicion] = useState(null);
   const [alumnoEnEdicion, setAlumnoEnEdicion] = useState(null);
+  const [progresoPlanEnEdicion, setProgresoPlanEnEdicion] = useState({});
   const [planModalAbierto, setPlanModalAbierto] = useState(false);
   const [cuatrimestreSimulado, setCuatrimestreSimulado] = useState('');
   const [materiasSimuladas, setMateriasSimuladas] = useState([]);
@@ -629,18 +630,22 @@ export default function Home() {
     }
   };
 
-  const handleGuardarProgresoPlan = async (alumno, materiaCodigo, estado) => {
-    const progresoActual = obtenerProgresoMateria(alumno, materiaCodigo);
+  const handleGuardarProgresoPlan = async (alumno, materiaCodigo, estado, nota = '') => {
     const resultado = await guardarProgresoPlanAction({
       alumno,
       materiaCodigo,
       estado,
-      nota: progresoActual?.nota || ''
+      nota
     });
     if (!resultado?.exito) {
       alert(resultado?.mensaje || 'No se pudo guardar el progreso.');
       return;
     }
+    setProgresoPlanEnEdicion((actual) => {
+      const siguiente = { ...actual };
+      delete siguiente[`${alumno}_${materiaCodigo}`];
+      return siguiente;
+    });
     await cargarBD(false);
   };
 
@@ -2583,6 +2588,12 @@ export default function Home() {
                                   ).map((alumno) => {
                                     const progreso = obtenerProgresoMateria(alumno, materia.codigo);
                                     const puedeEditar = esAdmin || alumno === usuarioActual;
+                                    const claveProgreso = `${alumno}_${materia.codigo}`;
+                                    const edicion = progresoPlanEnEdicion[claveProgreso] || {
+                                      estado: progreso?.estado || 'pendiente',
+                                      nota: progreso?.nota || ''
+                                    };
+                                    const requiereNota = ['aprobada', 'promocionada'].includes(edicion.estado);
                                     return (
                                       <div
                                         key={`${materia.codigo}-${alumno}`}
@@ -2596,19 +2607,50 @@ export default function Home() {
                                           {alumno}{alumno === usuarioActual ? ' · vos' : ''}
                                         </span>
                                         {puedeEditar ? (
-                                          <select
-                                            value={progreso?.estado || 'pendiente'}
-                                            onChange={(evento) => handleGuardarProgresoPlan(alumno, materia.codigo, evento.target.value)}
-                                            className="rounded-lg border border-slate-700 bg-[#0f141c] px-2 py-1.5 font-semibold text-slate-200 outline-none focus:border-cyan-400"
-                                          >
-                                            <option value="pendiente">Pendiente</option>
-                                            {esAdmin && <option value="cursando">Cursando</option>}
-                                            <option value="aprobada">Aprobada</option>
-                                            <option value="promocionada">Promocionada</option>
-                                          </select>
+                                          <div className="flex flex-wrap items-center justify-end gap-2">
+                                            <select
+                                              value={edicion.estado}
+                                              onChange={(evento) => setProgresoPlanEnEdicion((actual) => ({
+                                                ...actual,
+                                                [claveProgreso]: {
+                                                  estado: evento.target.value,
+                                                  nota: ['aprobada', 'promocionada'].includes(evento.target.value) ? edicion.nota : ''
+                                                }
+                                              }))}
+                                              className="rounded-lg border border-slate-700 bg-[#0f141c] px-2 py-1.5 font-semibold text-slate-200 outline-none focus:border-cyan-400"
+                                            >
+                                              <option value="pendiente">Pendiente</option>
+                                              {esAdmin && <option value="cursando">Cursando</option>}
+                                              <option value="aprobada">Aprobada</option>
+                                              <option value="promocionada">Promocionada</option>
+                                            </select>
+                                            {requiereNota && (
+                                              <input
+                                                type="number"
+                                                min="1"
+                                                max="10"
+                                                step="0.01"
+                                                value={edicion.nota}
+                                                onChange={(evento) => setProgresoPlanEnEdicion((actual) => ({
+                                                  ...actual,
+                                                  [claveProgreso]: { ...edicion, nota: evento.target.value }
+                                                }))}
+                                                placeholder="Nota"
+                                                aria-label={`Nota final de ${materia.nombre} para ${alumno}`}
+                                                className="w-20 rounded-lg border border-slate-700 bg-[#0f141c] px-2 py-1.5 font-semibold text-slate-200 outline-none focus:border-cyan-400"
+                                              />
+                                            )}
+                                            <button
+                                              type="button"
+                                              onClick={() => handleGuardarProgresoPlan(alumno, materia.codigo, edicion.estado, edicion.nota)}
+                                              className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-extrabold text-cyan-200 hover:bg-cyan-500/20"
+                                            >
+                                              Guardar
+                                            </button>
+                                          </div>
                                         ) : (
                                           <span className="rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-1 font-bold capitalize text-slate-300">
-                                            {progreso?.estado || 'pendiente'}
+                                            {progreso?.estado || 'pendiente'}{progreso?.nota ? ` · ${progreso.nota}` : ''}
                                           </span>
                                         )}
                                       </div>

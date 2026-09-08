@@ -439,6 +439,13 @@ export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado,
     if (!admin && !['aprobada', 'promocionada'].includes(estado)) {
       return { exito: false, mensaje: 'Tu estado solo puede ser aprobada o promocionada.' };
     }
+    const notaValidada = validarNota(nota);
+    if (['aprobada', 'promocionada'].includes(estado) && notaValidada.vacia) {
+      return { exito: false, mensaje: 'Cargá la nota final para guardar una materia aprobada.' };
+    }
+    if (!notaValidada.vacia && !notaValidada.valida) {
+      return { exito: false, mensaje: 'La nota debe ser un número entre 1 y 10.' };
+    }
 
     await db.execute({
       sql: `
@@ -449,7 +456,7 @@ export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado,
           nota = excluded.nota,
           actualizado_en = excluded.actualizado_en
       `,
-      args: [`progreso_${alumno}_${materiaCodigo}`, alumno, materiaCodigo, estado, nota?.trim() || null]
+      args: [`progreso_${alumno}_${materiaCodigo}`, alumno, materiaCodigo, estado, ['aprobada', 'promocionada'].includes(estado) ? notaValidada.valor : null]
     });
     return { exito: true };
   } catch (error) {
