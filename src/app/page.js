@@ -36,6 +36,7 @@ export default function Home() {
   const [materias, setMaterias] = useState([]);
   const [alumnos, setAlumnos] = useState([]);
   const [usuarioActual, setUsuarioActual] = useState(null);
+  const [rolUsuario, setRolUsuario] = useState(null);
   const [pestana, setPestana] = useState('alumnos');
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
@@ -114,7 +115,7 @@ export default function Home() {
   const [cuatrimestreSimulado, setCuatrimestreSimulado] = useState('');
   const [materiasSimuladas, setMateriasSimuladas] = useState([]);
 
-  const esAdmin = usuarioActual === "Matute";
+  const esAdmin = rolUsuario === 'admin';
   const planDeEstudio = [
     { codigo: '1.1.1', nombre: 'Introducción a la Seguridad de la Información', cuatrimestre: '1° año · 1° cuatrimestre', correlativas: [] },
     { codigo: '1.2.1', nombre: 'Introducción a Tecnologías de la Información y las Comunicaciones (TIC)', cuatrimestre: '1° año · 1° cuatrimestre', correlativas: [] },
@@ -290,6 +291,7 @@ export default function Home() {
         if (!cancelado && sesion?.usuario) {
           startTransition(() => {
             setUsuarioActual(sesion.usuario);
+            setRolUsuario(sesion.rol);
             setMostrarAvisoInicio(true);
           });
         }
@@ -310,13 +312,15 @@ export default function Home() {
     };
   }, []);
 
-  const iniciarSesionLocal = (usuario) => {
+  const iniciarSesionLocal = (usuario, rol) => {
     setUsuarioActual(usuario);
+    setRolUsuario(rol);
   };
 
   const cerrarSesionLocal = async () => {
     await cerrarSesionAction();
     setUsuarioActual(null);
+    setRolUsuario(null);
   };
 
   const formatearFechaDDMMAAAA = (fechaStr) => {
@@ -608,9 +612,11 @@ export default function Home() {
       const sesion = await obtenerSesionAction();
       if (!sesion?.usuario) {
         setUsuarioActual(null);
+        setRolUsuario(null);
         setCargando(false);
         return;
       }
+      setRolUsuario(sesion.rol);
       cargarBD(false);
     }, 30000);
 
@@ -624,7 +630,7 @@ export default function Home() {
     const res = await validarLoginAction(inputUser, inputPass);
 
     if (res.exito) {
-      iniciarSesionLocal(res.usuario);
+      iniciarSesionLocal(res.usuario, res.rol);
       setMostrarAvisoInicio(true);
       setErrorLogin('');
       setInputUser('');

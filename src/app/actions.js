@@ -5,15 +5,9 @@ import { promisify } from 'node:util';
 import { cookies } from 'next/headers';
 import { db } from './turso';
 
-const ADMINISTRADOR = 'Matute';
 const COOKIE_SESION = 'ugr_sesion';
 const DURACION_SESION_SEGUNDOS = 10 * 60;
-const MATERIAS_PRIMER_CUATRIMESTRE = ['1.1.1', '1.2.1', '1.3.1', '1.4.1', '1.5.1'];
 const scryptAsync = promisify(scrypt);
-
-function esAdministrador(usuario) {
-  return typeof usuario === 'string' && usuario.trim().toLowerCase() === ADMINISTRADOR.toLowerCase();
-}
 
 function obtenerSecretoSesion() {
   const secreto = process.env.SESSION_SECRET || process.env.TURSO_AUTH_TOKEN;
@@ -69,7 +63,30 @@ async function obtenerUsuarioSesion() {
 }
 
 async function verificarAdmin() {
-  return esAdministrador(await obtenerUsuarioSesion());
+  const usuario = await obtenerUsuarioSesion();
+  if (!usuario) return false;
+  const resultado = await db.execute({
+    sql: 'SELECT rol FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+    args: [usuario]
+  });
+  return resultado.rows[0]?.rol === 'admin';
+}
+
+async function obtenerRolUsuario(usuario) {
+  if (!usuario) return null;
+  const resultado = await db.execute({
+    sql: 'SELECT rol FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+    args: [usuario]
+  });
+  return resultado.rows[0]?.rol || 'alumno';
+}
+
+async function existeMateria(id) {
+  const resultado = await db.execute({
+    sql: 'SELECT 1 FROM materias WHERE id = ?',
+    args: [id]
+  });
+  return resultado.rows.length > 0;
 }
 
 async function hashearPassword(password) {
@@ -123,144 +140,6 @@ function tareaDentroDelPlazo(fecha) {
   return !Number.isNaN(fechaCierre.getTime()) && hoy < fechaCierre;
 }
 
-let promesaEsquemaNotasTareas;
-
-async function ejecutarAsegurarEsquemaNotasTareas() {
-  await db.execute(
-    'CREATE TABLE IF NOT EXISTS notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT NOT NULL, alumno TEXT NOT NULL, nota TEXT NOT NULL, cargada_en TEXT, UNIQUE(tarea_id, alumno))'
-  );
-
-  try {
-    await db.execute('ALTER TABLE notas_tareas ADD COLUMN cargada_en TEXT');
-  } catch (error) {
-    // La columna ya existe en instalaciones que recibieron la migración.
-  }
-
-  try {
-    await db.execute('ALTER TABLE tareas ADD COLUMN con_nota INTEGER NOT NULL DEFAULT 0');
-  } catch (error) {
-    // La columna ya existe en instalaciones que recibieron la migración.
-  }
-
-  try {
-    await db.execute("ALTER TABLE tareas ADD COLUMN tipo TEXT NOT NULL DEFAULT 'actividad'");
-  } catch (error) {
-    // La columna ya existe en instalaciones que recibieron la migración.
-  }
-
-  try {
-    await db.execute("ALTER TABLE materias ADD COLUMN condiciones TEXT NOT NULL DEFAULT ''");
-  } catch (error) {
-    // La columna ya existe en instalaciones que recibieron la migración.
-  }
-
-  try {
-    await db.execute('ALTER TABLE materias ADD COLUMN nota_minima_regularizar REAL NOT NULL DEFAULT 4');
-  } catch (error) {
-    // La columna ya existe en instalaciones que recibieron la migración.
-  }
-
-  try {
-    await db.execute('ALTER TABLE materias ADD COLUMN nota_minima_promocionar REAL NOT NULL DEFAULT 8');
-  } catch (error) {
-    // La columna ya existe en instalaciones que recibieron la migración.
-  }
-
-  try {
-    await db.execute("ALTER TABLE materias ADD COLUMN regla_promocion TEXT NOT NULL DEFAULT 'tp_nota'");
-  } catch (error) {
-    // La columna ya existe en instalaciones que recibieron la migración.
-  }
-
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS progreso_materias (
-      id TEXT PRIMARY KEY,
-      alumno TEXT NOT NULL,
-      materia_codigo TEXT NOT NULL,
-      estado TEXT NOT NULL DEFAULT 'pendiente',
-      nota TEXT,
-      actualizado_en TEXT,
-      UNIQUE(alumno, materia_codigo)
-    )
-  `);
-
-  const alumnosIniciales = await db.execute('SELECT nombre FROM alumnos');
-  for (const alumno of alumnosIniciales.rows) {
-    for (const codigo of MATERIAS_PRIMER_CUATRIMESTRE) {
-      await db.execute({
-        sql: `
-          INSERT OR IGNORE INTO progreso_materias
-            (id, alumno, materia_codigo, estado, actualizado_en)
-          VALUES (?, ?, ?, 'aprobada', datetime('now'))
-        `,
-        args: [`progreso_${alumno.nombre}_${codigo}`, alumno.nombre, codigo]
-      });
-    }
-  }
-
-  await db.execute({
-    sql: "UPDATE materias SET condiciones = ?, nota_minima_regularizar = 4, nota_minima_promocionar = 8 WHERE nombre LIKE ? AND (condiciones IS NULL OR condiciones = '')",
-    args: [
-      'Para regularizar la materia es necesario haber completado los trabajos prácticos propuestos. Quienes aprueben los trabajos prácticos con 8 (ocho) o más promueven la materia sin rendir el final.',
-      '%SISTEMAS DE GESTIÓN DE SEGURIDAD DE LA INFORMACIÓN%'
-    ]
-  });
-
-  await db.execute({
-    sql: "UPDATE materias SET regla_promocion = 'tp_porcentaje_nota', nota_minima_regularizar = 75, nota_minima_promocionar = 8 WHERE nombre LIKE ? AND condiciones LIKE '%75%%' AND condiciones LIKE '%100%%'",
-    args: ['%SISTEMAS DE GESTIÓN DE SEGURIDAD DE LA INFORMACIÓN%']
-  });
-
-  const reglasIniciales = [
-    {
-      nombre: '%AUDITORÍAS DE SEGURIDAD DE LA INFORMACIÓN%',
-      regla: 'auditorias_tps',
-      condiciones: 'Para regularizar la materia se necesita una nota de cursada de 6 (seis) o más y una nota de 6 (seis) o más en cada trabajo práctico. Promociona quien obtiene como mínimo 8 (ocho) en la cursada y 8 (ocho) o más en cada trabajo práctico.',
-      regularizar: 6,
-      promocionar: 8
-    },
-    {
-      nombre: '%CIBERDELITOS%',
-      regla: 'ciberdelitos_parciales',
-      condiciones: 'Para regularizar y poder rendir el final hay que aprobar los dos parciales con nota mínima de 6 (seis) en cada uno. Promociona quien aprueba cada parcial con nota mínima de 8 (ocho).',
-      regularizar: 6,
-      promocionar: 8
-    },
-    {
-      nombre: '%EVALUACIÓN Y GESTIÓN DE RIESGOS%',
-      regla: 'riesgos_tps',
-      condiciones: 'Para regularizar la materia es necesario haber completado al menos tres actividades prácticas obligatorias. Promociona quien tiene todos los trabajos prácticos aprobados con nota 8 (ocho) o más.',
-      regularizar: 6,
-      promocionar: 8
-    },
-    {
-      nombre: '%GESTIÓN DE ACTIVOS DE LA INFORMACIÓN%',
-      regla: 'activos_porcentaje',
-      condiciones: 'Regulariza quien completa al menos el 75% de todas las actividades de la plataforma: tareas, foros, actividades y trabajos prácticos. Promociona quien completa al menos el 90% de esas actividades al cierre de regularidades.',
-      regularizar: 75,
-      promocionar: 90
-    }
-  ];
-
-  for (const regla of reglasIniciales) {
-    await db.execute({
-      sql: 'UPDATE materias SET condiciones = ?, nota_minima_regularizar = ?, nota_minima_promocionar = ?, regla_promocion = ? WHERE nombre LIKE ? AND (condiciones IS NULL OR condiciones = \'\')',
-      args: [regla.condiciones, regla.regularizar, regla.promocionar, regla.regla, regla.nombre]
-    });
-  }
-}
-
-async function asegurarEsquemaNotasTareas() {
-  if (!promesaEsquemaNotasTareas) {
-    promesaEsquemaNotasTareas = ejecutarAsegurarEsquemaNotasTareas().catch((error) => {
-      promesaEsquemaNotasTareas = null;
-      throw error;
-    });
-  }
-
-  return promesaEsquemaNotasTareas;
-}
-
 function validarNota(nota) {
   const notaLimpia = typeof nota === 'string' ? nota.trim().replace(',', '.') : String(nota ?? '').trim();
   if (!notaLimpia) return { valida: false, vacia: true, valor: '' };
@@ -291,7 +170,7 @@ export async function validarLoginAction(usuarioInput, passwordInput) {
     const passClean = passwordInput.trim();
 
     const res = await db.execute({
-      sql: 'SELECT nombre, password FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+      sql: 'SELECT nombre, password, rol FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
       args: [userClean]
     });
 
@@ -312,7 +191,7 @@ export async function validarLoginAction(usuarioInput, passwordInput) {
         });
       }
       await establecerSesion(usuarioDB.nombre);
-      return { exito: true, usuario: usuarioDB.nombre };
+      return { exito: true, usuario: usuarioDB.nombre, rol: usuarioDB.rol || 'alumno' };
     } else {
       return { exito: false, mensaje: 'Contraseña incorrecta' };
     }
@@ -329,7 +208,8 @@ export async function cerrarSesionAction() {
 }
 
 export async function obtenerSesionAction() {
-  return { usuario: await obtenerUsuarioSesion() };
+  const usuario = await obtenerUsuarioSesion();
+  return { usuario, rol: await obtenerRolUsuario(usuario) };
 }
 
 // Cambiar contraseña en la tabla alumnos en Turso
@@ -402,57 +282,46 @@ export async function crearAlumnoAction(nombre) {
 // Renombrar alumno
 export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
   try {
-    if (!await verificarAdmin()) return;
-    await asegurarEsquemaNotasTareas();
+    if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede editar alumnos.' };
     const nuevoFormateado = nuevoNombre.trim();
-    if (!nuevoFormateado) return;
+    if (!nuevoFormateado) return { exito: false, mensaje: 'El nombre es obligatorio.' };
+    if (nuevoFormateado.toLowerCase() !== nombreAntiguo.toLowerCase()) {
+      const existente = await db.execute({
+        sql: 'SELECT 1 FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+        args: [nuevoFormateado]
+      });
+      if (existente.rows.length > 0) return { exito: false, mensaje: 'Ya existe un alumno con ese nombre.' };
+    }
 
-    await db.execute({
-      sql: 'UPDATE alumnos SET nombre = ? WHERE nombre = ?',
-      args: [nuevoFormateado, nombreAntiguo]
-    });
-
-    await db.execute({
-      sql: 'UPDATE completadas SET alumno = ? WHERE alumno = ?',
-      args: [nuevoFormateado, nombreAntiguo]
-    });
-
-    await db.execute({
-      sql: 'UPDATE notas_parciales SET alumno = ? WHERE alumno = ?',
-      args: [nuevoFormateado, nombreAntiguo]
-    });
-    await db.execute({
-      sql: 'UPDATE notas_tareas SET alumno = ? WHERE alumno = ?',
-      args: [nuevoFormateado, nombreAntiguo]
-    });
+    await db.batch([
+      { sql: 'UPDATE alumnos SET nombre = ? WHERE nombre = ?', args: [nuevoFormateado, nombreAntiguo] },
+      { sql: 'UPDATE completadas SET alumno = ? WHERE alumno = ?', args: [nuevoFormateado, nombreAntiguo] },
+      { sql: 'UPDATE notas_parciales SET alumno = ? WHERE alumno = ?', args: [nuevoFormateado, nombreAntiguo] },
+      { sql: 'UPDATE notas_tareas SET alumno = ? WHERE alumno = ?', args: [nuevoFormateado, nombreAntiguo] },
+      { sql: 'UPDATE progreso_materias SET alumno = ? WHERE alumno = ?', args: [nuevoFormateado, nombreAntiguo] }
+    ], 'write');
+    return { exito: true };
   } catch (error) {
     console.error('Error en editarAlumnoAction:', error);
+    return { exito: false, mensaje: 'No se pudo editar el alumno.' };
   }
 }
 
 // Eliminar alumno de la BD
 export async function eliminarAlumnoAction(nombre) {
   try {
-    if (!await verificarAdmin()) return;
-    await asegurarEsquemaNotasTareas();
-    await db.execute({
-      sql: 'DELETE FROM alumnos WHERE nombre = ?',
-      args: [nombre]
-    });
-    await db.execute({
-      sql: 'DELETE FROM completadas WHERE alumno = ?',
-      args: [nombre]
-    });
-    await db.execute({
-      sql: 'DELETE FROM notas_parciales WHERE alumno = ?',
-      args: [nombre]
-    });
-    await db.execute({
-      sql: 'DELETE FROM notas_tareas WHERE alumno = ?',
-      args: [nombre]
-    });
+    if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede eliminar alumnos.' };
+    await db.batch([
+      { sql: 'DELETE FROM completadas WHERE alumno = ?', args: [nombre] },
+      { sql: 'DELETE FROM notas_parciales WHERE alumno = ?', args: [nombre] },
+      { sql: 'DELETE FROM notas_tareas WHERE alumno = ?', args: [nombre] },
+      { sql: 'DELETE FROM progreso_materias WHERE alumno = ?', args: [nombre] },
+      { sql: 'DELETE FROM alumnos WHERE nombre = ?', args: [nombre] }
+    ], 'write');
+    return { exito: true };
   } catch (error) {
     console.error('Error en eliminarAlumnoAction:', error);
+    return { exito: false, mensaje: 'No se pudo eliminar el alumno.' };
   }
 }
 
@@ -461,7 +330,6 @@ export async function eliminarAlumnoAction(nombre) {
 export async function obtenerDatos() {
   try {
     if (!await obtenerUsuarioSesion()) return [];
-    await asegurarEsquemaNotasTareas();
     const [resMaterias, resTareas, resCompletadas, resNotasTareas] = await Promise.all([
       db.execute('SELECT * FROM materias ORDER BY nombre ASC'),
       db.execute('SELECT * FROM tareas'),
@@ -544,7 +412,6 @@ export async function obtenerDatos() {
 export async function obtenerProgresoPlanAction() {
   try {
     if (!await obtenerUsuarioSesion()) return [];
-    await asegurarEsquemaNotasTareas();
     const res = await db.execute('SELECT alumno, materia_codigo, estado, nota, actualizado_en FROM progreso_materias ORDER BY alumno ASC, materia_codigo ASC');
     return res.rows;
   } catch (error) {
@@ -557,19 +424,19 @@ export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado,
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
+    const admin = await verificarAdmin();
 
     const estadosValidos = ['pendiente', 'cursando', 'aprobada', 'promocionada'];
     if (!alumno || !materiaCodigo || !estadosValidos.includes(estado)) {
       return { exito: false, mensaje: 'Los datos del progreso no son válidos.' };
     }
-    if (!esAdministrador(usuarioSesion) && usuarioSesion.toLowerCase() !== alumno.toLowerCase()) {
+    if (!admin && usuarioSesion.toLowerCase() !== alumno.toLowerCase()) {
       return { exito: false, mensaje: 'Solo podés actualizar tu propio estado académico.' };
     }
-    if (!esAdministrador(usuarioSesion) && !['aprobada', 'promocionada'].includes(estado)) {
+    if (!admin && !['aprobada', 'promocionada'].includes(estado)) {
       return { exito: false, mensaje: 'Tu estado solo puede ser aprobada o promocionada.' };
     }
 
-    await asegurarEsquemaNotasTareas();
     await db.execute({
       sql: `
         INSERT INTO progreso_materias (id, alumno, materia_codigo, estado, nota, actualizado_en)
@@ -592,7 +459,7 @@ export async function toggleTareaAction(tareaId, alumno) {
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
-    const alumnoObjetivo = esAdministrador(usuarioSesion) ? alumno : usuarioSesion;
+    const alumnoObjetivo = await verificarAdmin() ? alumno : usuarioSesion;
     const tarea = await db.execute({
       sql: 'SELECT inicio, fin FROM tareas WHERE id = ?',
       args: [tareaId]
@@ -674,6 +541,7 @@ export async function editarCondicionesMateriaAction({ id, condiciones, notaMini
   try {
     const regularizar = Number(notaMinimaRegularizar);
     const promocionar = Number(notaMinimaPromocionar);
+    const reglasValidas = ['tp_nota', 'tp_porcentaje_nota', 'auditorias_tps', 'ciberdelitos_parciales', 'riesgos_tps', 'activos_porcentaje'];
     const maximo = ['activos_porcentaje', 'tp_porcentaje_nota'].includes(reglaPromocion) ? 100 : 10;
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede editar condiciones.' };
@@ -681,12 +549,15 @@ export async function editarCondicionesMateriaAction({ id, condiciones, notaMini
     if (![regularizar, promocionar].every((nota) => Number.isFinite(nota) && nota >= 1 && nota <= maximo)) {
       return { exito: false, mensaje: `Los valores mínimos deben estar entre 1 y ${maximo}.` };
     }
+    if (!reglasValidas.includes(reglaPromocion)) {
+      return { exito: false, mensaje: 'La regla de promoción no es válida.' };
+    }
     if (promocionar < regularizar) {
       return { exito: false, mensaje: 'La nota para promocionar no puede ser menor que la de regularización.' };
     }
     await db.execute({
-      sql: 'UPDATE materias SET condiciones = ?, nota_minima_regularizar = ?, nota_minima_promocionar = ? WHERE id = ?',
-      args: [condiciones?.trim() || '', regularizar, promocionar, id]
+      sql: 'UPDATE materias SET condiciones = ?, nota_minima_regularizar = ?, nota_minima_promocionar = ?, regla_promocion = ? WHERE id = ?',
+      args: [condiciones?.trim() || '', regularizar, promocionar, reglaPromocion, id]
     });
     return { exito: true };
   } catch (error) {
@@ -697,19 +568,27 @@ export async function editarCondicionesMateriaAction({ id, condiciones, notaMini
 
 export async function eliminarMateriaAction(id) {
   try {
-    if (!await verificarAdmin()) return;
-    await db.execute({
-      sql: 'DELETE FROM materias WHERE id = ?',
-      args: [id]
-    });
+    if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede eliminar materias.' };
+    await db.batch([
+      { sql: 'DELETE FROM completadas WHERE tarea_id IN (SELECT id FROM tareas WHERE materia_id = ?)', args: [id] },
+      { sql: 'DELETE FROM notas_tareas WHERE tarea_id IN (SELECT id FROM tareas WHERE materia_id = ?)', args: [id] },
+      { sql: 'DELETE FROM tareas WHERE materia_id = ?', args: [id] },
+      { sql: 'DELETE FROM notas_parciales WHERE parcial_id IN (SELECT id FROM parciales WHERE materia_id = ?)', args: [id] },
+      { sql: 'DELETE FROM parciales WHERE materia_id = ?', args: [id] },
+      { sql: 'DELETE FROM horarios WHERE materia_id = ?', args: [id] },
+      { sql: 'DELETE FROM materias WHERE id = ?', args: [id] }
+    ], 'write');
+    return { exito: true };
   } catch (error) {
     console.error('Error en eliminarMateriaAction:', error);
+    return { exito: false, mensaje: 'No se pudo eliminar la materia y sus datos relacionados.' };
   }
 }
 
 export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles, unidad, conNota, tipo }) {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede crear tareas.' };
+    if (!await existeMateria(materiaId)) return { exito: false, mensaje: 'La materia seleccionada no existe.' };
     const unidadNormalizada = normalizarUnidad(unidad);
     if (!unidadNormalizada.valida) {
       return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
@@ -752,15 +631,16 @@ export async function editarTareaAction({ id, nombre, inicio, fin, detalles, uni
 
 export async function eliminarTareaAction(id) {
   try {
-    if (!await verificarAdmin()) return;
-    await asegurarEsquemaNotasTareas();
-    await db.execute({ sql: 'DELETE FROM notas_tareas WHERE tarea_id = ?', args: [id] });
-    await db.execute({
-      sql: 'DELETE FROM tareas WHERE id = ?',
-      args: [id]
-    });
+    if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede eliminar tareas.' };
+    await db.batch([
+      { sql: 'DELETE FROM completadas WHERE tarea_id = ?', args: [id] },
+      { sql: 'DELETE FROM notas_tareas WHERE tarea_id = ?', args: [id] },
+      { sql: 'DELETE FROM tareas WHERE id = ?', args: [id] }
+    ], 'write');
+    return { exito: true };
   } catch (error) {
     console.error('Error en eliminarTareaAction:', error);
+    return { exito: false, mensaje: 'No se pudo eliminar la tarea.' };
   }
 }
 
@@ -782,6 +662,7 @@ export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, 
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede crear horarios.' };
     }
+    if (!await existeMateria(materiaId)) return { exito: false, mensaje: 'La materia seleccionada no existe.' };
 
     const diaNumerico = Number(dia);
     if (!Number.isInteger(diaNumerico) || diaNumerico < 1 || diaNumerico > 5) {
@@ -839,6 +720,7 @@ export async function crearParcialAction({ materiaId, nombre, fecha, detalles, u
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede crear parciales.' };
     }
+    if (!await existeMateria(materiaId)) return { exito: false, mensaje: 'La materia seleccionada no existe.' };
 
     const id = 'parcial_' + Date.now();
     await db.execute({
@@ -857,6 +739,7 @@ export async function editarParcialAction({ id, materiaId, nombre, fecha, detall
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede editar parciales.' };
     }
+    if (!await existeMateria(materiaId)) return { exito: false, mensaje: 'La materia seleccionada no existe.' };
 
     await db.execute({
       sql: 'UPDATE parciales SET materia_id = ?, nombre = ?, fecha = ?, detalles = ? WHERE id = ?',
@@ -875,8 +758,10 @@ export async function eliminarParcialAction(id, usuario) {
       return { exito: false, mensaje: 'Solo el administrador puede borrar parciales.' };
     }
 
-    await db.execute({ sql: 'DELETE FROM parciales WHERE id = ?', args: [id] });
-    await db.execute({ sql: 'DELETE FROM notas_parciales WHERE parcial_id = ?', args: [id] });
+    await db.batch([
+      { sql: 'DELETE FROM notas_parciales WHERE parcial_id = ?', args: [id] },
+      { sql: 'DELETE FROM parciales WHERE id = ?', args: [id] }
+    ], 'write');
     return { exito: true };
   } catch (error) {
     console.error('Error en eliminarParcialAction:', error);
@@ -946,10 +831,9 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
 
 export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
   try {
-    await asegurarEsquemaNotasTareas();
-
     const usuarioSesion = await obtenerUsuarioSesion();
-    if (!alumno || !usuarioSesion || (alumno !== usuarioSesion && !esAdministrador(usuarioSesion))) {
+    const admin = await verificarAdmin();
+    if (!alumno || !usuarioSesion || (alumno !== usuarioSesion && !admin)) {
       return { exito: false, mensaje: 'Solo podés cargar tu propia nota.' };
     }
 

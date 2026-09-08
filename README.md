@@ -127,7 +127,8 @@ Si querés probarlo en tu entorno local, lo más simple es:
 1. Cloná el proyecto y entrá a la carpeta.
 2. Instalá dependencias con npm install.
 3. Creá un archivo .env.local con tus variables de entorno.
-4. Ejecutá npm run dev y abrí la app en tu navegador.
+4. Ejecutá npm run migrate para preparar o actualizar la base de datos.
+5. Ejecutá npm run dev y abrí la app en tu navegador.
 
 Ejemplo de variables:
 
@@ -144,6 +145,7 @@ npm run dev
 npm run build
 npm run start
 npm run lint
+npm run migrate
 ```
 
 ## Motivación
