@@ -1,18 +1,87 @@
 'use server';
 
-import { createHmac, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { db } from './turso';
 
 const COOKIE_SESION = 'ugr_sesion';
 const DURACION_SESION_SEGUNDOS = 10 * 60;
 const scryptAsync = promisify(scrypt);
 
+const MENSAJE_LOGIN_INVALIDO = 'Usuario o contraseña incorrectos.';
+const MENSAJE_LOGIN_BLOQUEADO = 'Demasiados intentos. Probá de nuevo en unos minutos.';
+const LIMITE_LOGIN_USUARIO = 5;
+const LIMITE_LOGIN_IP = 20;
+const VENTANA_LOGIN_MS = 15 * 60 * 1000;
+const BLOQUEO_LOGIN_MS = 15 * 60 * 1000;
+
 function obtenerSecretoSesion() {
-  const secreto = process.env.SESSION_SECRET || process.env.TURSO_AUTH_TOKEN;
+  const secreto = process.env.SESSION_SECRET?.trim();
   if (!secreto) throw new Error('Falta SESSION_SECRET en el entorno.');
   return secreto;
+}
+
+function crearId(prefijo) {
+  return `${prefijo}${randomUUID()}`;
+}
+
+async function obtenerClavesLogin(usuario) {
+  const encabezados = await headers();
+  const ip = encabezados.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || encabezados.get('x-real-ip')?.trim()
+    || 'unknown';
+  const claves = [{ clave: `ip:${ip}`, limite: LIMITE_LOGIN_IP }];
+  if (usuario) claves.push({ clave: `user:${usuario.toLowerCase()}`, limite: LIMITE_LOGIN_USUARIO });
+  return claves;
+}
+
+async function loginEstaBloqueado(claves) {
+  const ahora = Date.now();
+  for (const { clave } of claves) {
+    const res = await db.execute({
+      sql: 'SELECT bloqueado_hasta FROM login_intentos WHERE clave = ?',
+      args: [clave]
+    });
+    if (Number(res.rows[0]?.bloqueado_hasta || 0) > ahora) return true;
+  }
+  return false;
+}
+
+async function registrarFalloLogin(claves) {
+  const ahora = Date.now();
+  for (const { clave, limite } of claves) {
+    const res = await db.execute({
+      sql: 'SELECT fallos, ventana_inicio FROM login_intentos WHERE clave = ?',
+      args: [clave]
+    });
+    const fila = res.rows[0];
+    const mismaVentana = fila && ahora - Number(fila.ventana_inicio) < VENTANA_LOGIN_MS;
+    const fallos = mismaVentana ? Number(fila.fallos) + 1 : 1;
+    const ventanaInicio = mismaVentana ? Number(fila.ventana_inicio) : ahora;
+    const bloqueadoHasta = fallos >= limite ? ahora + BLOQUEO_LOGIN_MS : null;
+
+    await db.execute({
+      sql: `
+        INSERT INTO login_intentos (clave, fallos, ventana_inicio, bloqueado_hasta)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(clave) DO UPDATE SET
+          fallos = excluded.fallos,
+          ventana_inicio = excluded.ventana_inicio,
+          bloqueado_hasta = excluded.bloqueado_hasta
+      `,
+      args: [clave, fallos, ventanaInicio, bloqueadoHasta]
+    });
+  }
+}
+
+async function limpiarIntentosLogin(claves) {
+  for (const { clave } of claves) {
+    await db.execute({
+      sql: 'DELETE FROM login_intentos WHERE clave = ?',
+      args: [clave]
+    });
+  }
 }
 
 function firmarSesion(payload) {
@@ -104,9 +173,7 @@ async function hashearPassword(password) {
 }
 
 async function verificarPassword(password, almacenada) {
-  if (!almacenada?.startsWith('scrypt$')) {
-    return password === (almacenada || '');
-  }
+  if (!almacenada?.startsWith('scrypt$')) return false;
 
   const [, salt, hashHex] = almacenada.split('$');
   if (!salt || !hashHex) return false;
@@ -174,8 +241,17 @@ function normalizarUnidad(unidad) {
 // Valida credenciales consultando directamente a la tabla alumnos en Turso
 export async function validarLoginAction(usuarioInput, passwordInput) {
   try {
-    const userClean = usuarioInput.trim();
-    const passClean = passwordInput.trim();
+    const userClean = String(usuarioInput || '').trim();
+    const passClean = String(passwordInput || '').trim();
+
+    if (!userClean || !passClean) {
+      return { exito: false, mensaje: MENSAJE_LOGIN_INVALIDO };
+    }
+
+    const clavesLogin = await obtenerClavesLogin(userClean);
+    if (await loginEstaBloqueado(clavesLogin)) {
+      return { exito: false, mensaje: MENSAJE_LOGIN_BLOQUEADO };
+    }
 
     const res = await db.execute({
       sql: 'SELECT nombre, password, rol FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
@@ -183,29 +259,28 @@ export async function validarLoginAction(usuarioInput, passwordInput) {
     });
 
     if (res.rows.length === 0) {
-      return { exito: false, mensaje: 'Usuario no registrado en el sistema' };
+      await registrarFalloLogin(clavesLogin);
+      return { exito: false, mensaje: MENSAJE_LOGIN_INVALIDO };
     }
 
     const usuarioDB = res.rows[0];
-    // Las claves antiguas se aceptan una vez y se convierten al hash seguro.
-    const claveEsperada = usuarioDB.password || usuarioDB.nombre;
-    const credencialesValidas = await verificarPassword(passClean, claveEsperada);
+    const credencialesValidas = await verificarPassword(passClean, usuarioDB.password);
 
-    if (credencialesValidas) {
-      if (!usuarioDB.password?.startsWith('scrypt$')) {
-        await db.execute({
-          sql: 'UPDATE alumnos SET password = ? WHERE LOWER(nombre) = LOWER(?)',
-          args: [await hashearPassword(passClean), usuarioDB.nombre]
-        });
-      }
-      await establecerSesion(usuarioDB.nombre);
-      return { exito: true, usuario: usuarioDB.nombre, rol: usuarioDB.rol || 'alumno' };
-    } else {
-      return { exito: false, mensaje: 'Contraseña incorrecta' };
+    if (!credencialesValidas) {
+      await registrarFalloLogin(clavesLogin);
+      return { exito: false, mensaje: MENSAJE_LOGIN_INVALIDO };
     }
+
+    await limpiarIntentosLogin(clavesLogin);
+    await establecerSesion(usuarioDB.nombre);
+    return { exito: true, usuario: usuarioDB.nombre, rol: usuarioDB.rol || 'alumno' };
   } catch (error) {
     console.error('Error en validarLoginAction:', error);
-    if (String(error?.message || '').toLowerCase().includes('no such column') && String(error?.message || '').includes('rol')) {
+    const detalle = String(error?.message || '').toLowerCase();
+    if (detalle.includes('no such table') && detalle.includes('login_intentos')) {
+      return { exito: false, mensaje: 'La base necesita actualizarse. Ejecutá npm run migrate antes de iniciar la app.' };
+    }
+    if (detalle.includes('no such column') && detalle.includes('rol')) {
       return { exito: false, mensaje: 'La base necesita actualizarse. Ejecutá npm run migrate antes de iniciar la app.' };
     }
     return { exito: false, mensaje: 'Error de conexión con la base de datos' };
@@ -291,7 +366,7 @@ export async function crearAlumnoAction(nombre) {
     if (!await verificarAdmin()) return;
     const nombreFormateado = nombre.trim();
     if (!nombreFormateado) return;
-    const id = 'a_' + Date.now();
+    const id = crearId('a_');
     await db.execute({
       sql: 'INSERT INTO alumnos (id, nombre, password) VALUES (?, ?, ?)',
       args: [id, nombreFormateado, await hashearPassword(nombreFormateado)]
@@ -353,17 +428,51 @@ export async function eliminarAlumnoAction(nombre) {
 
 // --- MATERIAS Y TAREAS ---
 
+function consultaPeriodo(periodoId, sqlConPeriodo, sqlSinPeriodo) {
+  return periodoId
+    ? { sql: sqlConPeriodo, args: [periodoId] }
+    : { sql: sqlSinPeriodo, args: [] };
+}
+
 export async function obtenerDatos(periodoId = null) {
   try {
     if (!await obtenerUsuarioSesion()) return [];
     const [resMaterias, resTareas, resCompletadas, resNotasTareas] = await Promise.all([
-      db.execute({
-        sql: 'SELECT m.*, p.nombre AS periodo_nombre FROM materias m LEFT JOIN periodos p ON p.id = m.periodo_id WHERE ? IS NULL OR m.periodo_id = ? ORDER BY m.nombre ASC',
-        args: [periodoId, periodoId]
-      }),
-      db.execute('SELECT * FROM tareas'),
-      db.execute('SELECT c.tarea_id, COALESCE(a.nombre, c.alumno) AS alumno, c.completada_en FROM completadas c LEFT JOIN alumnos a ON a.id = c.alumno_id'),
-      db.execute('SELECT n.tarea_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota, n.cargada_en FROM notas_tareas n LEFT JOIN alumnos a ON a.id = n.alumno_id')
+      db.execute(consultaPeriodo(
+        periodoId,
+        `SELECT id, nombre, condiciones, nota_minima_regularizar, nota_minima_promocionar, regla_promocion
+         FROM materias WHERE periodo_id = ? ORDER BY nombre ASC`,
+        `SELECT id, nombre, condiciones, nota_minima_regularizar, nota_minima_promocionar, regla_promocion
+         FROM materias ORDER BY nombre ASC`
+      )),
+      db.execute(consultaPeriodo(
+        periodoId,
+        `SELECT t.id, t.materia_id, t.nombre, t.inicio, t.fin, t.detalles, t.unidad, t.con_nota, t.tipo
+         FROM tareas t JOIN materias m ON m.id = t.materia_id WHERE m.periodo_id = ?`,
+        `SELECT id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo FROM tareas`
+      )),
+      db.execute(consultaPeriodo(
+        periodoId,
+        `SELECT c.tarea_id, COALESCE(a.nombre, c.alumno) AS alumno, c.completada_en
+         FROM completadas c
+         JOIN tareas t ON t.id = c.tarea_id
+         JOIN materias m ON m.id = t.materia_id
+         LEFT JOIN alumnos a ON a.id = c.alumno_id
+         WHERE m.periodo_id = ?`,
+        `SELECT c.tarea_id, COALESCE(a.nombre, c.alumno) AS alumno, c.completada_en
+         FROM completadas c LEFT JOIN alumnos a ON a.id = c.alumno_id`
+      )),
+      db.execute(consultaPeriodo(
+        periodoId,
+        `SELECT n.tarea_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota, n.cargada_en
+         FROM notas_tareas n
+         JOIN tareas t ON t.id = n.tarea_id
+         JOIN materias m ON m.id = t.materia_id
+         LEFT JOIN alumnos a ON a.id = n.alumno_id
+         WHERE m.periodo_id = ?`,
+        `SELECT n.tarea_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota, n.cargada_en
+         FROM notas_tareas n LEFT JOIN alumnos a ON a.id = n.alumno_id`
+      ))
     ]);
 
     const tareasPorMateria = new Map();
@@ -550,7 +659,7 @@ export async function crearMateriaAction({ nombre, anio, cuatrimestre }) {
     }
 
     const periodoId = `periodo_${anioNumerico}_${cuatrimestreNumerico}`;
-    const id = 'm_' + Date.now();
+    const id = crearId('m_');
     await db.execute({
       sql: 'INSERT OR IGNORE INTO periodos (id, anio, cuatrimestre, nombre, activo) VALUES (?, ?, ?, ?, 1)',
       args: [periodoId, anioNumerico, cuatrimestreNumerico, `${anioNumerico} - ${cuatrimestreNumerico}° cuatrimestre`]
@@ -637,7 +746,7 @@ export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalle
     const conNotaNumerico = conNota ? 1 : 0;
     const tipoNormalizado = ['actividad', 'foro', 'trabajo_practico'].includes(tipo) ? tipo : 'actividad';
 
-    const id = 't_' + Date.now();
+    const id = crearId('t_');
     await db.execute({
       sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       args: [id, materiaId, nombre, inicio || 'Sin fecha', fin || 'Sin fecha', detalles || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado]
@@ -690,10 +799,17 @@ export async function eliminarTareaAction(id) {
 export async function obtenerHorariosAction(periodoId = null) {
   try {
     if (!await obtenerUsuarioSesion()) return [];
-    const res = await db.execute({
-      sql: 'SELECT h.* FROM horarios h JOIN materias m ON m.id = h.materia_id WHERE CAST(h.dia AS INTEGER) BETWEEN 1 AND 5 AND (? IS NULL OR m.periodo_id = ?) ORDER BY h.dia ASC, h.hora_inicio ASC',
-      args: [periodoId, periodoId]
-    });
+    const res = await db.execute(consultaPeriodo(
+      periodoId,
+      `SELECT h.id, h.materia_id, h.dia, h.hora_inicio, h.hora_fin, h.aula
+       FROM horarios h JOIN materias m ON m.id = h.materia_id
+       WHERE CAST(h.dia AS INTEGER) BETWEEN 1 AND 5 AND m.periodo_id = ?
+       ORDER BY h.dia ASC, h.hora_inicio ASC`,
+      `SELECT h.id, h.materia_id, h.dia, h.hora_inicio, h.hora_fin, h.aula
+       FROM horarios h
+       WHERE CAST(h.dia AS INTEGER) BETWEEN 1 AND 5
+       ORDER BY h.dia ASC, h.hora_inicio ASC`
+    ));
     return res.rows;
   } catch (error) {
     console.error('Error al obtener horarios:', error);
@@ -713,7 +829,7 @@ export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, 
       return { exito: false, mensaje: 'Los horarios solo pueden cargarse de lunes a viernes.' };
     }
 
-    const id = 'horario_' + Date.now();
+    const id = crearId('horario_');
     await db.execute({
       sql: 'INSERT INTO horarios (id, materia_id, dia, hora_inicio, hora_fin, aula) VALUES (?, ?, ?, ?, ?, ?)',
       args: [id, materiaId, diaNumerico, horaInicio, horaFin, aula?.trim() || '']
@@ -745,14 +861,24 @@ export async function obtenerParcialesAction(periodoId = null) {
   try {
     if (!await obtenerUsuarioSesion()) return { parciales: [], notas: [] };
     const [resParciales, resNotas] = await Promise.all([
-      db.execute({
-        sql: 'SELECT p.* FROM parciales p JOIN materias m ON m.id = p.materia_id WHERE ? IS NULL OR m.periodo_id = ? ORDER BY p.fecha ASC',
-        args: [periodoId, periodoId]
-      }),
-      db.execute({
-        sql: 'SELECT n.id, n.parcial_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota FROM notas_parciales n JOIN parciales p ON p.id = n.parcial_id JOIN materias m ON m.id = p.materia_id LEFT JOIN alumnos a ON a.id = n.alumno_id WHERE ? IS NULL OR m.periodo_id = ?',
-        args: [periodoId, periodoId]
-      })
+      db.execute(consultaPeriodo(
+        periodoId,
+        `SELECT p.id, p.materia_id, p.nombre, p.fecha, p.detalles
+         FROM parciales p JOIN materias m ON m.id = p.materia_id
+         WHERE m.periodo_id = ? ORDER BY p.fecha ASC`,
+        `SELECT id, materia_id, nombre, fecha, detalles FROM parciales ORDER BY fecha ASC`
+      )),
+      db.execute(consultaPeriodo(
+        periodoId,
+        `SELECT n.id, n.parcial_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota
+         FROM notas_parciales n
+         JOIN parciales p ON p.id = n.parcial_id
+         JOIN materias m ON m.id = p.materia_id
+         LEFT JOIN alumnos a ON a.id = n.alumno_id
+         WHERE m.periodo_id = ?`,
+        `SELECT n.id, n.parcial_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota
+         FROM notas_parciales n LEFT JOIN alumnos a ON a.id = n.alumno_id`
+      ))
     ]);
 
     return {
@@ -772,7 +898,7 @@ export async function crearParcialAction({ materiaId, nombre, fecha, detalles, u
     }
     if (!await existeMateria(materiaId)) return { exito: false, mensaje: 'La materia seleccionada no existe.' };
 
-    const id = 'parcial_' + Date.now();
+    const id = crearId('parcial_');
     await db.execute({
       sql: 'INSERT INTO parciales (id, materia_id, nombre, fecha, detalles) VALUES (?, ?, ?, ?, ?)',
       args: [id, materiaId, nombre, fecha || 'Sin fecha', detalles || 'Sin observaciones']
@@ -868,7 +994,7 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
       }
     } else if (notaLimpia !== '') {
       // Insertamos nueva nota
-      const id = 'nota_' + Date.now();
+      const id = crearId('nota_');
       await db.execute({
         sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno_id, alumno, nota) VALUES (?, ?, ?, ?, ?)',
         args: [id, parcialId, alumnoDB.id, alumnoDB.nombre, notaLimpia]
@@ -915,7 +1041,7 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
       const cargadaEn = new Date().toISOString();
       await db.execute({
         sql: 'INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, nota = excluded.nota, cargada_en = excluded.cargada_en',
-        args: [`nota_tarea_${Date.now()}`, tareaId, alumnoDB.id, alumnoDB.nombre, validacion.valor, cargadaEn]
+        args: [crearId('nota_tarea_'), tareaId, alumnoDB.id, alumnoDB.nombre, validacion.valor, cargadaEn]
       });
     }
 

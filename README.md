@@ -126,8 +126,8 @@ Si querés probarlo en tu entorno local, lo más simple es:
 
 1. Cloná el proyecto y entrá a la carpeta.
 2. Instalá dependencias con npm install.
-3. Copiá `.env.example` como `.env.local` y completá tus variables de entorno.
-4. Ejecutá `npm run migrate` para preparar o actualizar la base de datos.
+3. Copiá `.env.example` como `.env.local` y completá tus variables de entorno. `SESSION_SECRET` es obligatorio y no puede reutilizar el token de Turso.
+4. Ejecutá `npm run migrate` para preparar o actualizar la base de datos (incluye hashear contraseñas que todavía estén en texto plano).
 5. Ejecutá npm run dev y abrí la app en tu navegador.
 
 Ejemplo de variables:

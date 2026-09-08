@@ -1,6 +1,16 @@
+import { randomBytes, scrypt } from 'node:crypto';
+import { promisify } from 'node:util';
 import { createClient } from '@libsql/client';
 
 process.loadEnvFile?.('.env.local');
+
+const scryptAsync = promisify(scrypt);
+
+async function hashearPassword(password) {
+  const salt = randomBytes(16).toString('hex');
+  const derivada = await scryptAsync(password, salt, 64);
+  return `scrypt$${salt}$${Buffer.from(derivada).toString('hex')}`;
+}
 
 const db = createClient({
   url: process.env.TURSO_DATABASE_URL,
@@ -152,6 +162,44 @@ async function main() {
       { sql: 'CREATE INDEX IF NOT EXISTS idx_notas_parciales_alumno_id ON notas_parciales(alumno_id)', args: [] },
       { sql: 'CREATE INDEX IF NOT EXISTS idx_notas_tareas_alumno_id ON notas_tareas(alumno_id)', args: [] },
       { sql: 'CREATE INDEX IF NOT EXISTS idx_progreso_materias_alumno_id ON progreso_materias(alumno_id)', args: [] }
+    ], 'write');
+  });
+
+  await ejecutarMigracion(3, 'hashear contraseñas en texto plano', async () => {
+    const alumnos = await db.execute('SELECT id, nombre, password FROM alumnos');
+    for (const alumno of alumnos.rows) {
+      if (String(alumno.password || '').startsWith('scrypt$')) continue;
+      const plano = alumno.password || alumno.nombre;
+      await db.execute({
+        sql: 'UPDATE alumnos SET password = ? WHERE id = ?',
+        args: [await hashearPassword(plano), alumno.id]
+      });
+    }
+  });
+
+  await ejecutarMigracion(4, 'registrar intentos de login', async () => {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS login_intentos (
+        clave TEXT PRIMARY KEY,
+        fallos INTEGER NOT NULL DEFAULT 0,
+        ventana_inicio INTEGER NOT NULL,
+        bloqueado_hasta INTEGER
+      )
+    `);
+  });
+
+  await ejecutarMigracion(5, 'indices de consultas por periodo', async () => {
+    await db.batch([
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_alumnos_nombre_lower ON alumnos(LOWER(nombre))', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_materias_periodo_id ON materias(periodo_id)', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_tareas_materia_id ON tareas(materia_id)', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_completadas_tarea_id ON completadas(tarea_id)', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_completadas_tarea_alumno ON completadas(tarea_id, alumno_id)', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_notas_tareas_tarea_id ON notas_tareas(tarea_id)', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_parciales_materia_id ON parciales(materia_id)', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_notas_parciales_parcial_id ON notas_parciales(parcial_id)', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_notas_parciales_parcial_alumno ON notas_parciales(parcial_id, alumno_id)', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_horarios_materia_id ON horarios(materia_id)', args: [] }
     ], 'write');
   });
 
