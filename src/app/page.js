@@ -109,6 +109,34 @@ export default function Home() {
   const [alumnoEnEdicion, setAlumnoEnEdicion] = useState(null);
 
   const esAdmin = usuarioActual === "Matute";
+  const planDeEstudio = [
+    { codigo: '1.1.1', nombre: 'Introducción a la Seguridad de la Información', cuatrimestre: '1° año · 1° cuatrimestre', correlativas: [] },
+    { codigo: '1.2.1', nombre: 'Introducción a Tecnologías de la Información y las Comunicaciones (TIC)', cuatrimestre: '1° año · 1° cuatrimestre', correlativas: [] },
+    { codigo: '1.3.1', nombre: 'Tecnologías de las Comunicaciones', cuatrimestre: '1° año · 1° cuatrimestre', correlativas: [] },
+    { codigo: '1.4.1', nombre: 'Seguridad Física', cuatrimestre: '1° año · 1° cuatrimestre', correlativas: [] },
+    { codigo: '1.5.1', nombre: 'Inglés Técnico', cuatrimestre: '1° año · 1° cuatrimestre', correlativas: [] },
+    { codigo: '1.6.2', nombre: 'Sistemas de Gestión de Seguridad de la Información (Marcos Normativos)', cuatrimestre: '1° año · 2° cuatrimestre', correlativas: ['1.1.1'] },
+    { codigo: '1.7.2', nombre: 'Auditorías de Seguridad de la Información', cuatrimestre: '1° año · 2° cuatrimestre', correlativas: ['1.1.1'] },
+    { codigo: '1.8.2', nombre: 'Ciberdelitos', cuatrimestre: '1° año · 2° cuatrimestre', correlativas: [] },
+    { codigo: '1.9.2', nombre: 'Evaluación y Gestión de Riesgos', cuatrimestre: '1° año · 2° cuatrimestre', correlativas: [] },
+    { codigo: '1.10.2', nombre: 'Gestión de Activos de la Información', cuatrimestre: '1° año · 2° cuatrimestre', correlativas: ['1.2.1'] },
+    { codigo: '2.11.1', nombre: 'Tratamiento de Vulnerabilidades', cuatrimestre: '2° año · 1° cuatrimestre', correlativas: ['1.9.2'] },
+    { codigo: '2.12.1', nombre: 'Aspectos Legales y Normativos', cuatrimestre: '2° año · 1° cuatrimestre', correlativas: ['1.8.2'] },
+    { codigo: '2.13.1', nombre: 'Gestión de Continuidad del Negocio', cuatrimestre: '2° año · 1° cuatrimestre', correlativas: ['1.9.2'] },
+    { codigo: '2.14.1', nombre: 'Seguridad en el Software Base y las Aplicaciones', cuatrimestre: '2° año · 1° cuatrimestre', correlativas: ['1.2.1'] },
+    { codigo: '2.15.1', nombre: 'Gestión de Accesos', cuatrimestre: '2° año · 1° cuatrimestre', correlativas: ['1.6.2'] },
+    { codigo: '2.16.1', nombre: 'Conceptos de Desarrollo de Software', cuatrimestre: '2° año · 1° cuatrimestre', correlativas: [] },
+    { codigo: '2.17.2', nombre: 'Tratamiento de Incidentes', cuatrimestre: '2° año · 2° cuatrimestre', correlativas: ['2.13.1'] },
+    { codigo: '2.18.2', nombre: 'Introducción a la Criptografía', cuatrimestre: '2° año · 2° cuatrimestre', correlativas: [] },
+    { codigo: '2.19.2', nombre: 'Técnicas de Hacking Ético', cuatrimestre: '2° año · 2° cuatrimestre', correlativas: ['2.11.1'] },
+    { codigo: '2.20.2', nombre: 'Infraestructuras Críticas', cuatrimestre: '2° año · 2° cuatrimestre', correlativas: ['2.13.1'] },
+    { codigo: '2.21.2', nombre: 'Desarrollo de Software Seguro', cuatrimestre: '2° año · 2° cuatrimestre', correlativas: ['2.14.1', '2.16.1'] },
+    { codigo: '2.22.2', nombre: 'Seguridad en Cloud Services', cuatrimestre: '2° año · 2° cuatrimestre', correlativas: ['1.6.2'] },
+    { codigo: '3.23.1', nombre: 'Análisis Forense', cuatrimestre: '3° año · 1° cuatrimestre', correlativas: ['2.12.1'] },
+    { codigo: '3.24.1', nombre: 'Cibercrimen, Evidencia e Investigación Digital', cuatrimestre: '3° año · 1° cuatrimestre', correlativas: [] },
+    { codigo: '3.25.1', nombre: 'Ciberdefensa', cuatrimestre: '3° año · 1° cuatrimestre', correlativas: ['2.12.1', '2.20.2'] },
+    { codigo: '3.26.1', nombre: 'Pasantía Profesional', cuatrimestre: '3° año · 1° cuatrimestre', correlativas: ['1° año aprobado', '1° cuatrimestre de 2° año regularizado'] }
+  ];
 
   const tareaCompletadaPor = (tarea, alumno) => (
     tarea.completadoPor.includes(alumno)
@@ -522,7 +550,13 @@ export default function Home() {
   useEffect(() => {
     if (!usuarioActual) return undefined;
 
-    const intervalo = window.setInterval(() => {
+    const intervalo = window.setInterval(async () => {
+      const sesion = await obtenerSesionAction();
+      if (!sesion?.usuario) {
+        setUsuarioActual(null);
+        setCargando(false);
+        return;
+      }
       cargarBD(false);
     }, 30000);
 
@@ -1587,7 +1621,17 @@ export default function Home() {
                   : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
               }`}
             >
-              <span>📚</span> Materias y Consignas
+              <span>📚</span> Materias
+            </button>
+            <button
+              onClick={() => setPestana('plan')}
+              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
+                pestana === 'plan'
+                  ? 'bg-amber-600/20 text-amber-300 border-amber-500/40 shadow-sm'
+                  : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>🧭</span> Plan de estudio
             </button>
             <button
               onClick={() => setPestana('horarios')}
@@ -1621,7 +1665,6 @@ export default function Home() {
               <span>🕘</span> Historial
             </button>
 
-            {/* NUEVO BOTÓN PARCIALES */}
             <button
               onClick={() => setPestana('parciales')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
@@ -1630,7 +1673,7 @@ export default function Home() {
                   : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
               }`}
             >
-              <span>📋</span> Parciales y Notas
+              <span>📋</span> Parciales
             </button>
 
             <button
@@ -2427,6 +2470,46 @@ export default function Home() {
                           )}
                         </div>
                       </details>
+                    );
+                  })}
+                </div>
+              )}
+
+              {pestana === 'plan' && (
+                <div className="space-y-6">
+                  <div className="border-b border-slate-800 pb-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400">Tecnicatura Universitaria en Ciberseguridad</p>
+                    <h2 className="mt-1 text-2xl font-extrabold text-white">Plan de estudio</h2>
+                    <p className="mt-2 max-w-3xl text-sm text-slate-400">
+                      Materias, códigos y correlativas según el plan oficial. El seguimiento de aprobaciones se agregará en el próximo paso.
+                    </p>
+                  </div>
+                  {['1° año · 1° cuatrimestre', '1° año · 2° cuatrimestre', '2° año · 1° cuatrimestre', '2° año · 2° cuatrimestre', '3° año · 1° cuatrimestre'].map((cuatrimestre) => {
+                    const materiasDelCuatrimestre = planDeEstudio.filter((materia) => materia.cuatrimestre === cuatrimestre);
+                    return (
+                      <section key={cuatrimestre} className="space-y-3">
+                        <h3 className="border-b border-amber-500/30 pb-2 text-sm font-extrabold uppercase tracking-wider text-amber-300">
+                          {cuatrimestre}
+                        </h3>
+                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                          {materiasDelCuatrimestre.map((materia) => (
+                            <article key={materia.codigo} className="rounded-xl border border-slate-800 bg-[#161c26] p-4">
+                              <div className="flex items-start gap-3">
+                                <span className="shrink-0 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs font-extrabold text-cyan-300">
+                                  {materia.codigo}
+                                </span>
+                                <div className="min-w-0">
+                                  <h4 className="font-bold leading-snug text-white">{materia.nombre}</h4>
+                                  <p className="mt-2 text-xs text-slate-400">
+                                    <span className="font-semibold text-slate-300">Correlativas:</span>{' '}
+                                    {materia.correlativas.length > 0 ? materia.correlativas.join(' · ') : 'Ninguna'}
+                                  </p>
+                                </div>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      </section>
                     );
                   })}
                 </div>
