@@ -110,6 +110,9 @@ export default function Home() {
   const [tareaEnEdicion, setTareaEnEdicion] = useState(null);
   const [materiaEnEdicion, setMateriaEnEdicion] = useState(null);
   const [alumnoEnEdicion, setAlumnoEnEdicion] = useState(null);
+  const [planModalAbierto, setPlanModalAbierto] = useState(false);
+  const [cuatrimestreSimulado, setCuatrimestreSimulado] = useState('');
+  const [cantidadAprobadasSimuladas, setCantidadAprobadasSimuladas] = useState(null);
 
   const esAdmin = usuarioActual === "Matute";
   const planDeEstudio = [
@@ -153,6 +156,25 @@ export default function Home() {
     const estado = obtenerProgresoMateria(alumno, materiaCorrelativa.codigo)?.estado;
     return !['aprobada', 'promocionada'].includes(estado);
   });
+
+  const cuatrimestresPlan = ['1° año · 1° cuatrimestre', '1° año · 2° cuatrimestre', '2° año · 1° cuatrimestre', '2° año · 2° cuatrimestre', '3° año · 1° cuatrimestre'];
+  const materiasAprobadasUsuario = planDeEstudio.filter((materia) => ['aprobada', 'promocionada'].includes(obtenerProgresoMateria(usuarioActual, materia.codigo)?.estado));
+  const materiasPendientesUsuario = planDeEstudio.filter((materia) => !materiasAprobadasUsuario.some((aprobada) => aprobada.codigo === materia.codigo));
+  const cantidadAprobadasConsideradas = cantidadAprobadasSimuladas ?? materiasAprobadasUsuario.length;
+  const codigosAprobadosSimulados = new Set([
+    ...materiasAprobadasUsuario.map((materia) => materia.codigo),
+    ...materiasPendientesUsuario.slice(0, Math.max(0, cantidadAprobadasConsideradas - materiasAprobadasUsuario.length)).map((materia) => materia.codigo)
+  ]);
+  const cuatrimestreSugerido = cuatrimestresPlan.find((cuatrimestre) => planDeEstudio.some((materia) => (
+    materia.cuatrimestre === cuatrimestre && !codigosAprobadosSimulados.has(materia.codigo)
+  ))) || cuatrimestresPlan[0];
+  const cuatrimestreActivo = cuatrimestreSimulado || cuatrimestreSugerido;
+  const materiasDelSimulador = planDeEstudio.filter((materia) => materia.cuatrimestre === cuatrimestreActivo && !codigosAprobadosSimulados.has(materia.codigo));
+  const obtenerCorrelativasPendientesSimuladas = (materia) => materia.correlativas.filter((correlativa) => {
+    const materiaCorrelativa = obtenerMateriaPlan(correlativa);
+    return materiaCorrelativa ? !codigosAprobadosSimulados.has(materiaCorrelativa.codigo) : true;
+  });
+  const materiasRecomendadas = materiasDelSimulador.filter((materia) => obtenerCorrelativasPendientesSimuladas(materia).length === 0);
 
   const tareaCompletadaPor = (tarea, alumno) => (
     tarea.completadoPor.includes(alumno)
@@ -2510,12 +2532,22 @@ export default function Home() {
 
               {pestana === 'plan' && (
                 <div className="space-y-6">
-                  <div className="border-b border-slate-800 pb-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400">Tecnicatura Universitaria en Ciberseguridad</p>
-                    <h2 className="mt-1 text-2xl font-extrabold text-white">Plan de estudio</h2>
-                    <p className="mt-2 max-w-3xl text-sm text-slate-400">Materias, códigos y correlativas según el plan oficial.</p>
+                  <div className="flex flex-col gap-4 border-b border-slate-800 pb-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400">Tecnicatura Universitaria en Ciberseguridad</p>
+                      <h2 className="mt-1 text-2xl font-extrabold text-white">Plan de estudio</h2>
+                      <p className="mt-2 max-w-3xl text-sm text-slate-400">Materias, códigos y correlativas según el plan oficial.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPlanModalAbierto(true)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-extrabold text-cyan-200 transition hover:bg-cyan-400/20"
+                    >
+                      <span aria-hidden="true">◈</span>
+                      Ver mi camino
+                    </button>
                   </div>
-                  {['1° año · 1° cuatrimestre', '1° año · 2° cuatrimestre', '2° año · 1° cuatrimestre', '2° año · 2° cuatrimestre', '3° año · 1° cuatrimestre'].map((cuatrimestre) => {
+                  {cuatrimestresPlan.map((cuatrimestre) => {
                     const materiasDelCuatrimestre = planDeEstudio.filter((materia) => materia.cuatrimestre === cuatrimestre);
                     return (
                       <section key={cuatrimestre} className="space-y-3">
@@ -2602,6 +2634,96 @@ export default function Home() {
                       </section>
                     );
                   })}
+
+                  {planModalAbierto && (
+                    <div className="calendar-modal-backdrop" role="presentation" onMouseDown={(evento) => {
+                      if (evento.target === evento.currentTarget) setPlanModalAbierto(false);
+                    }}>
+                      <section className="calendar-modal max-w-3xl" role="dialog" aria-modal="true" aria-labelledby="camino-plan-titulo">
+                        <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Planificador personal</p>
+                            <h3 id="camino-plan-titulo" className="mt-1 text-xl font-extrabold text-white">Tu camino para adelantar</h3>
+                            <p className="mt-1 text-sm text-slate-400">Una simulación basada en tus aprobadas y las correlativas del plan.</p>
+                          </div>
+                          <button type="button" className="calendar-modal-close" aria-label="Cerrar camino del plan" onClick={() => setPlanModalAbierto(false)}>×</button>
+                        </div>
+
+                        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+                            <p className="text-xs font-bold uppercase tracking-wider text-emerald-300">Aprobadas reales</p>
+                            <p className="mt-1 text-2xl font-extrabold text-white">{materiasAprobadasUsuario.length}<span className="text-sm font-semibold text-slate-400"> / {planDeEstudio.length}</span></p>
+                          </div>
+                          <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
+                            <p className="text-xs font-bold uppercase tracking-wider text-cyan-300">Avance</p>
+                            <p className="mt-1 text-2xl font-extrabold text-white">{Math.round((materiasAprobadasUsuario.length / planDeEstudio.length) * 100)}%</p>
+                          </div>
+                          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                            <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Pendientes</p>
+                            <p className="mt-1 text-2xl font-extrabold text-white">{materiasPendientesUsuario.length}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 grid gap-4 border-b border-slate-800 pb-5 sm:grid-cols-2">
+                          <label className="text-sm font-semibold text-slate-300">
+                            Aprobadas a considerar
+                            <input
+                              type="number"
+                              min={materiasAprobadasUsuario.length}
+                              max={planDeEstudio.length}
+                              value={cantidadAprobadasConsideradas}
+                              onChange={(evento) => setCantidadAprobadasSimuladas(Math.min(planDeEstudio.length, Math.max(materiasAprobadasUsuario.length, Number(evento.target.value) || 0)))}
+                              className="mt-2 w-full rounded-lg border border-slate-700 bg-[#0f141c] px-3 py-2 text-white outline-none focus:border-cyan-400"
+                            />
+                            <span className="mt-1 block text-xs font-normal text-slate-500">Las adicionales se simulan en el orden del plan.</span>
+                          </label>
+                          <label className="text-sm font-semibold text-slate-300">
+                            Cuatrimestre a planificar
+                            <select
+                              value={cuatrimestreActivo}
+                              onChange={(evento) => setCuatrimestreSimulado(evento.target.value)}
+                              className="mt-2 w-full rounded-lg border border-slate-700 bg-[#0f141c] px-3 py-2 text-white outline-none focus:border-cyan-400"
+                            >
+                              {cuatrimestresPlan.map((cuatrimestre) => <option key={cuatrimestre} value={cuatrimestre}>{cuatrimestre}</option>)}
+                            </select>
+                            <span className="mt-1 block text-xs font-normal text-slate-500">Sugerido por tu avance: {cuatrimestreSugerido}.</span>
+                          </label>
+                        </div>
+
+                        <div className="mt-5 space-y-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h4 className="text-sm font-extrabold uppercase tracking-wider text-white">Para ese cuatrimestre</h4>
+                            <span className="text-xs text-slate-500">{materiasDelSimulador.length} pendientes</span>
+                          </div>
+                          {materiasDelSimulador.length === 0 ? (
+                            <p className="rounded-xl border border-slate-800 bg-[#0f141c] p-4 text-sm text-slate-400">No quedan materias pendientes en este cuatrimestre.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {materiasDelSimulador.map((materia) => {
+                                const correlativasPendientes = obtenerCorrelativasPendientesSimuladas(materia);
+                                const puedeCursar = correlativasPendientes.length === 0;
+                                return (
+                                  <div key={materia.codigo} className={`rounded-xl border p-3 ${puedeCursar ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <p className="text-sm font-bold text-white">{materia.nombre}</p>
+                                        <p className="mt-1 text-xs text-slate-400">{materia.codigo}</p>
+                                      </div>
+                                      <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider ${puedeCursar ? 'border-emerald-400/40 text-emerald-300' : 'border-amber-400/40 text-amber-300'}`}>
+                                        {puedeCursar ? 'Podés cursar' : 'Bloqueada'}
+                                      </span>
+                                    </div>
+                                    {!puedeCursar && <p className="mt-2 text-xs text-amber-200">Falta: {correlativasPendientes.map((correlativa) => obtenerMateriaPlan(correlativa)?.nombre || correlativa).join(' · ')}</p>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <p className="text-sm font-bold text-cyan-200">Resultado: {materiasRecomendadas.length} {materiasRecomendadas.length === 1 ? 'materia habilitada' : 'materias habilitadas'} para priorizar.</p>
+                        </div>
+                      </section>
+                    </div>
+                  )}
                 </div>
               )}
 
