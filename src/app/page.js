@@ -147,6 +147,12 @@ export default function Home() {
 
   const obtenerMateriaPlan = (codigo) => materiaPlanPorCodigo[codigo];
   const obtenerProgresoMateria = (alumno, codigo) => progresoPlanPorClave[`${alumno}_${codigo}`];
+  const obtenerCorrelativasPendientes = (materia, alumno) => materia.correlativas.filter((correlativa) => {
+    const materiaCorrelativa = obtenerMateriaPlan(correlativa);
+    if (!materiaCorrelativa) return true;
+    const estado = obtenerProgresoMateria(alumno, materiaCorrelativa.codigo)?.estado;
+    return !['aprobada', 'promocionada'].includes(estado);
+  });
 
   const tareaCompletadaPor = (tarea, alumno) => (
     tarea.completadoPor.includes(alumno)
@@ -618,8 +624,7 @@ export default function Home() {
       alumno,
       materiaCodigo,
       estado,
-      nota: progresoActual?.nota || '',
-      usuario: usuarioActual
+      nota: progresoActual?.nota || ''
     });
     if (!resultado?.exito) {
       alert(resultado?.mensaje || 'No se pudo guardar el progreso.');
@@ -2518,7 +2523,9 @@ export default function Home() {
                           {cuatrimestre}
                         </h3>
                         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                          {materiasDelCuatrimestre.map((materia) => (
+                          {materiasDelCuatrimestre.map((materia) => {
+                            const correlativasPendientes = obtenerCorrelativasPendientes(materia, usuarioActual);
+                            return (
                             <article key={materia.codigo} className="rounded-xl border border-slate-800 bg-[#161c26] p-4">
                               <div className="flex items-start gap-3">
                                 <span className="shrink-0 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs font-extrabold text-cyan-300">
@@ -2539,37 +2546,46 @@ export default function Home() {
                                   </p>
                                 </div>
                               </div>
-                              <div className="mt-4 border-t border-slate-800 pt-3">
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Estado académico</p>
-                                <div className="mt-2 space-y-2">
+                              <p className={`mt-3 text-xs font-bold ${correlativasPendientes.length === 0 ? 'text-emerald-300' : 'text-amber-300'}`}>
+                                {correlativasPendientes.length === 0
+                                  ? '✓ Correlativas cumplidas'
+                                  : `Requiere: ${correlativasPendientes.map((correlativa) => obtenerMateriaPlan(correlativa)?.nombre || correlativa).join(' · ')}`}
+                              </p>
+                              <details className="mt-4 border-t border-slate-800 pt-3">
+                                <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300">
+                                  Ver estados por alumno
+                                </summary>
+                                <div className="mt-3 space-y-2">
                                   {(esAdmin ? alumnos : [usuarioActual]).map((alumno) => {
                                     const progreso = obtenerProgresoMateria(alumno, materia.codigo);
+                                    const puedeEditar = esAdmin || alumno === usuarioActual;
                                     return (
                                       <div key={`${materia.codigo}-${alumno}`} className="flex flex-wrap items-center justify-between gap-2 text-xs">
                                         <span className="font-semibold text-slate-300">{alumno}</span>
-                                        {esAdmin ? (
+                                        {puedeEditar ? (
                                           <select
                                             value={progreso?.estado || 'pendiente'}
                                             onChange={(evento) => handleGuardarProgresoPlan(alumno, materia.codigo, evento.target.value)}
                                             className="rounded-lg border border-slate-700 bg-[#0f141c] px-2 py-1.5 font-semibold text-slate-200 outline-none focus:border-cyan-400"
                                           >
                                             <option value="pendiente">Pendiente</option>
-                                            <option value="cursando">Cursando</option>
+                                            {esAdmin && <option value="cursando">Cursando</option>}
                                             <option value="aprobada">Aprobada</option>
                                             <option value="promocionada">Promocionada</option>
                                           </select>
                                         ) : (
                                           <span className="rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-1 font-bold capitalize text-slate-300">
-                                            {(progreso?.estado || 'pendiente').replace('promocionada', 'promocionada')}
+                                            {progreso?.estado || 'pendiente'}
                                           </span>
                                         )}
                                       </div>
                                     );
                                   })}
                                 </div>
-                              </div>
+                              </details>
                             </article>
-                          ))}
+                            );
+                          })}
                         </div>
                       </section>
                     );

@@ -553,15 +553,20 @@ export async function obtenerProgresoPlanAction() {
   }
 }
 
-export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado, nota, usuario }) {
+export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado, nota }) {
   try {
-    if (!esAdministrador(await obtenerUsuarioSesion()) || usuario !== ADMINISTRADOR) {
-      return { exito: false, mensaje: 'Solo el administrador puede actualizar el plan.' };
-    }
+    const usuarioSesion = await obtenerUsuarioSesion();
+    if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
 
     const estadosValidos = ['pendiente', 'cursando', 'aprobada', 'promocionada'];
     if (!alumno || !materiaCodigo || !estadosValidos.includes(estado)) {
       return { exito: false, mensaje: 'Los datos del progreso no son válidos.' };
+    }
+    if (!esAdministrador(usuarioSesion) && usuarioSesion.toLowerCase() !== alumno.toLowerCase()) {
+      return { exito: false, mensaje: 'Solo podés actualizar tu propio estado académico.' };
+    }
+    if (!esAdministrador(usuarioSesion) && !['aprobada', 'promocionada'].includes(estado)) {
+      return { exito: false, mensaje: 'Tu estado solo puede ser aprobada o promocionada.' };
     }
 
     await asegurarEsquemaNotasTareas();
