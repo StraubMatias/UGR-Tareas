@@ -80,25 +80,25 @@ También existe una vista para el admin que permite cargar todo el contenido del
 
 Las vistas principales del proyecto son estas:
 
-### Dashboard principal
+### Estado del Alumno
 
-![Dashboard principal](./screenshots/Screenshot_2026-09-07-215924.png)
+![Estado del Alumno](./screenshots/Screenshot_2026-09-07-215924.png)
 
-### Estado del alumno y tareas
+### Cronograma
 
-![Estado del alumno y tareas](./screenshots/Screenshot_2026-09-07-215958.png)
+![Cronograma](./screenshots/Screenshot_2026-09-07-215958.png)
 
-### Calendario y cronograma de la cursada
+### Plan de Estudio
 
-![Calendario y cronograma](./screenshots/Screenshot_2026-09-07-220030.png)
+![Plan de Estudio](./screenshots/Screenshot_2026-09-07-220030.png)
 
-### Plan de estudio
+### Historial
 
-![Plan de estudio](./screenshots/Screenshot_2026-09-07-220050.png)
+![Historial](./screenshots/Screenshot_2026-09-07-220050.png)
 
-### Historial de entregas y notas
+### Ranking
 
-![Historial de entregas y notas](./screenshots/Screenshot_2026-09-07-220103.png)
+![Ranking](./screenshots/Screenshot_2026-09-07-220103.png)
 
 ## Estado del proyecto
 
