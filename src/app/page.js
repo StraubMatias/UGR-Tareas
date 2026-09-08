@@ -112,7 +112,7 @@ export default function Home() {
   const [alumnoEnEdicion, setAlumnoEnEdicion] = useState(null);
   const [planModalAbierto, setPlanModalAbierto] = useState(false);
   const [cuatrimestreSimulado, setCuatrimestreSimulado] = useState('');
-  const [cantidadAprobadasSimuladas, setCantidadAprobadasSimuladas] = useState(null);
+  const [materiasSimuladas, setMateriasSimuladas] = useState([]);
 
   const esAdmin = usuarioActual === "Matute";
   const planDeEstudio = [
@@ -160,11 +160,7 @@ export default function Home() {
   const cuatrimestresPlan = ['1° año · 1° cuatrimestre', '1° año · 2° cuatrimestre', '2° año · 1° cuatrimestre', '2° año · 2° cuatrimestre', '3° año · 1° cuatrimestre'];
   const materiasAprobadasUsuario = planDeEstudio.filter((materia) => ['aprobada', 'promocionada'].includes(obtenerProgresoMateria(usuarioActual, materia.codigo)?.estado));
   const materiasPendientesUsuario = planDeEstudio.filter((materia) => !materiasAprobadasUsuario.some((aprobada) => aprobada.codigo === materia.codigo));
-  const cantidadAprobadasConsideradas = cantidadAprobadasSimuladas ?? materiasAprobadasUsuario.length;
-  const codigosAprobadosSimulados = new Set([
-    ...materiasAprobadasUsuario.map((materia) => materia.codigo),
-    ...materiasPendientesUsuario.slice(0, Math.max(0, cantidadAprobadasConsideradas - materiasAprobadasUsuario.length)).map((materia) => materia.codigo)
-  ]);
+  const codigosAprobadosSimulados = new Set([...materiasAprobadasUsuario.map((materia) => materia.codigo), ...materiasSimuladas]);
   const cuatrimestreSugerido = cuatrimestresPlan.find((cuatrimestre) => planDeEstudio.some((materia) => (
     materia.cuatrimestre === cuatrimestre && !codigosAprobadosSimulados.has(materia.codigo)
   ))) || cuatrimestresPlan[0];
@@ -175,6 +171,15 @@ export default function Home() {
     return materiaCorrelativa ? !codigosAprobadosSimulados.has(materiaCorrelativa.codigo) : true;
   });
   const materiasRecomendadas = materiasDelSimulador.filter((materia) => obtenerCorrelativasPendientesSimuladas(materia).length === 0);
+  const materiasPriorizadas = materiasPendientesUsuario
+    .filter((materia) => !codigosAprobadosSimulados.has(materia.codigo))
+    .map((materia) => ({
+      materia,
+      habilita: materiasPendientesUsuario.filter((otra) => otra.codigo !== materia.codigo && otra.correlativas.includes(materia.codigo)).length,
+      pendientes: obtenerCorrelativasPendientesSimuladas(materia).length
+    }))
+    .filter(({ pendientes }) => pendientes === 0)
+    .sort((a, b) => b.habilita - a.habilita);
 
   const tareaCompletadaPor = (tarea, alumno) => (
     tarea.completadoPor.includes(alumno)
@@ -2665,18 +2670,27 @@ export default function Home() {
                         </div>
 
                         <div className="mt-5 grid gap-4 border-b border-slate-800 pb-5 sm:grid-cols-2">
-                          <label className="text-sm font-semibold text-slate-300">
-                            Aprobadas a considerar
-                            <input
-                              type="number"
-                              min={materiasAprobadasUsuario.length}
-                              max={planDeEstudio.length}
-                              value={cantidadAprobadasConsideradas}
-                              onChange={(evento) => setCantidadAprobadasSimuladas(Math.min(planDeEstudio.length, Math.max(materiasAprobadasUsuario.length, Number(evento.target.value) || 0)))}
-                              className="mt-2 w-full rounded-lg border border-slate-700 bg-[#0f141c] px-3 py-2 text-white outline-none focus:border-cyan-400"
-                            />
-                            <span className="mt-1 block text-xs font-normal text-slate-500">Las adicionales se simulan en el orden del plan.</span>
-                          </label>
+                          <div className="text-sm font-semibold text-slate-300">
+                            Materias que suponés aprobar
+                            <p className="mt-1 text-xs font-normal text-slate-500">Marcá las materias hipotéticas. Las aprobadas reales ya están incluidas.</p>
+                            <div className="mt-3 max-h-48 space-y-2 overflow-y-auto pr-1">
+                              {materiasPendientesUsuario.map((materia) => {
+                                const seleccionada = materiasSimuladas.includes(materia.codigo);
+                                return (
+                                  <label key={materia.codigo} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2 text-xs transition ${seleccionada ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-100' : 'border-slate-800 bg-[#0f141c] text-slate-300 hover:border-slate-600'}`}>
+                                    <input
+                                      type="checkbox"
+                                      checked={seleccionada}
+                                      onChange={() => setMateriasSimuladas((actuales) => seleccionada ? actuales.filter((codigo) => codigo !== materia.codigo) : [...actuales, materia.codigo])}
+                                      className="mt-0.5 accent-cyan-400"
+                                    />
+                                    <span><strong>{materia.codigo}</strong> · {materia.nombre}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <button type="button" onClick={() => setMateriasSimuladas([])} className="mt-2 text-xs font-bold text-slate-500 hover:text-cyan-300">Limpiar selección ({materiasSimuladas.length})</button>
+                          </div>
                           <label className="text-sm font-semibold text-slate-300">
                             Cuatrimestre a planificar
                             <select
@@ -2720,6 +2734,19 @@ export default function Home() {
                             </div>
                           )}
                           <p className="text-sm font-bold text-cyan-200">Resultado: {materiasRecomendadas.length} {materiasRecomendadas.length === 1 ? 'materia habilitada' : 'materias habilitadas'} para priorizar.</p>
+                          {materiasPriorizadas.length > 0 && (
+                            <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4">
+                              <h5 className="text-xs font-extrabold uppercase tracking-wider text-cyan-200">Qué te conviene priorizar</h5>
+                              <div className="mt-3 space-y-2">
+                                {materiasPriorizadas.slice(0, 3).map(({ materia, habilita }) => (
+                                  <div key={materia.codigo} className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="font-semibold text-white">{materia.nombre}</span>
+                                    <span className="shrink-0 text-xs font-bold text-cyan-200">{habilita > 0 ? `desbloquea ${habilita}` : 'habilitada ahora'}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </section>
                     </div>
