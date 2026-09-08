@@ -80,12 +80,25 @@ También existe una vista para el admin que permite cargar todo el contenido del
 
 Las vistas principales del proyecto son estas:
 
-- Dashboard principal: estado del alumno, accesos rápidos y notificaciones
-- Materias y tareas: organización por materia, unidades y tareas pendientes
-- Cronograma: calendario mensual con tareas, entregas y parciales
-- Plan de estudio: materias del recorrido académico con estados y correlatividades
-- Historial: entregas, notas y actividades ya realizadas
-- Ranking: comparación de puntos y posición dentro del grupo
+### Dashboard principal
+
+![Dashboard principal](./screenshots/Screenshot_2026-09-07-215924.png)
+
+### Estado del alumno y tareas
+
+![Estado del alumno y tareas](./screenshots/Screenshot_2026-09-07-215958.png)
+
+### Calendario y cronograma de la cursada
+
+![Calendario y cronograma](./screenshots/Screenshot_2026-09-07-220030.png)
+
+### Plan de estudio
+
+![Plan de estudio](./screenshots/Screenshot_2026-09-07-220050.png)
+
+### Historial de entregas y notas
+
+![Historial de entregas y notas](./screenshots/Screenshot_2026-09-07-220103.png)
 
 ## Estado del proyecto
 
