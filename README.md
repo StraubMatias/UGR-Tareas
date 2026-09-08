@@ -1,43 +1,101 @@
 # Tareas UGR
 
-> Un lugar simple para organizar la cursada con tus compañeros.
+Portal de gestión de cursada para una comisión de estudiantes de la UGR.
 
 ## Sobre el proyecto
 
-Este proyecto nació de una necesidad bastante concreta: con mis amigos, que también son compañeros de la carrera, necesitábamos una forma clara de llevar el control de las tareas, las fechas importantes y el avance de cada uno.
+Tareas UGR es una aplicación pensada para centralizar la información de la carrera en un solo lugar. La idea es que un grupo de compañeros pueda organizar materias, tareas, fechas de parciales, notas, horarios y progreso sin depender de varios canales separados.
 
-Entre grupos de WhatsApp, apuntes, PDFs y calendarios separados, era fácil perder una entrega o enterarse tarde de un parcial. **Tareas UGR** busca resolver eso centralizando la información de la cursada en un solo lugar, de forma simple, rápida y fácil de consultar.
+La app está diseñada para que cada alumno vea rápidamente qué tiene pendiente, qué ya entregó, qué falta corregir, qué nota cargó y cómo avanza respecto de sus compañeros. También incluye un panel de administración para cargar y modificar la información del curso.
 
-Aunque empezó pensado para nuestra carrera y nuestra comisión, el sistema puede adaptarse a cualquier carrera, materia o grupo de estudiantes.
+## Qué hace la aplicación
 
-## ¿Qué permite hacer?
+### Gestión de materias y tareas
+- Crear, editar y eliminar materias
+- Cargar tareas por materia, unidad y tipo
+- Definir fechas de inicio y fin de cada tarea
+- Marcar tareas como realizadas por cada alumno
+- Diferenciar tareas pendientes, entregadas, futuras y con nota faltante
 
-- Organizar las tareas por materia, unidad y tipo de actividad.
-- Marcar las tareas realizadas y consultar qué tiene pendiente cada alumno.
-- Diferenciar tareas pendientes, tareas entregadas que todavía necesitan una nota y tareas futuras.
-- Cargar notas de trabajos prácticos y parciales.
-- Registrar fechas y detalles de parciales.
-- Mostrar avisos cuando se acercan vencimientos o nuevas fechas importantes.
-- Consultar los horarios de cursada y la información de cada materia.
-- Ver un historial de actividades y notas registradas.
-- Comparar el avance entre compañeros.
-- Mantener un ranking basado en la participación y las actividades realizadas, como una competencia sana dentro del grupo.
+### Seguimiento del alumno
+- Ver el estado personal de cada materia
+- Consultar qué tareas faltan por completar
+- Revisar si una tarea ya fue entregada o si falta cargar la nota
+- Mantener un historial de actividades y notas cargadas
 
-La idea no es agregar complejidad, sino evitar tener que buscar la misma información en varios lugares. Todo lo importante de la cursada debería estar a mano, ordenado y entendido de un vistazo.
+### Parciales y notas
+- Registrar parciales por materia y fecha
+- Cargar notas por alumno
+- Gestionar notas de trabajos prácticos y evaluaciones
+- Mantener un registro de todas las notas y su fecha de carga
 
-## Tecnologías
+### Horarios y calendario
+- Cargar horarios de cursada por materia y día
+- Visualizar el cronograma semanal
+- Ver eventos relevantes del calendario académico
+- Consultar fechas importantes de tareas y parciales
+
+### Notificaciones y alertas
+- Avisar vencimientos próximos
+- Notificar tareas que se habilitan en breve
+- Mostrar nuevos parciales o tareas cargadas
+- Marcar recordatorios como leídos
+
+### Progreso y comparación
+- Ver el avance del plan de estudio por alumno
+- Comparar el progreso entre compañeros
+- Revisar ranking por participación y tareas completadas
+- Analizar quién está más adelantado o quién tiene más actividades realizadas
+
+### Panel administrativo
+- Dar de alta alumnos
+- Editar datos del grupo
+- Crear y modificar tareas, materias, horarios y parciales
+- Administrar el contenido del portal desde un mismo lugar
+
+## Nuevas funcionalidades agregadas
+
+Además de la organización básica, la aplicación incluye varias funciones que la convierten en una herramienta más completa para la cursada:
+
+- Sistema de ranking con comparación entre compañeros
+- Historial de actividades por alumno
+- Gestion de plan de estudio y estados de materias
+- Notificaciones automáticas por fechas importantes
+- Calendario con eventos y vencimientos
+- Panel de administración más completo para manejar la comisión
+- Diferenciación de tareas según estado y requerimientos de nota
+
+## Tecnologías usadas
 
 - [Next.js](https://nextjs.org/)
 - React
 - Tailwind CSS
-- [Turso](https://turso.tech/) mediante `@libsql/client`
+- [Turso](https://turso.tech/) con libSQL
 - Node.js
+
+## Capturas del proyecto
+
+La siguiente sección está preparada para incluir imágenes reales del proyecto. Cuando tengas screenshots del app los pasás y yo los dejo integrados en el README para que quede más visual y presentable.
+
+### Dashboard principal
+
+![Dashboard principal](https://placehold.co/1400x900/0f172a/ffffff?text=Dashboard+Tareas+UGR)
+
+### Materias y tareas
+
+![Materias y tareas](https://placehold.co/1400x900/1e293b/ffffff?text=Materias+y+Tareas)
+
+### Parciales, notas y horarios
+
+![Parciales, notas y horarios](https://placehold.co/1400x900/334155/ffffff?text=Parciales%2C+notas+y+horarios)
+
+> Si me pasás capturas reales del proyecto, las reemplazo por estas imágenes de ejemplo para que el README quede listo para GitHub.
 
 ## Requisitos
 
-- Node.js 20 o superior.
-- Una base de datos compatible con Turso/libSQL.
-- Las variables de entorno necesarias para conectarse a la base de datos y firmar las sesiones.
+- Node.js 20 o superior
+- Base de datos compatible con Turso/libSQL
+- Variables de entorno para la conexión a la base de datos y la sesión
 
 ## Configuración local
 
@@ -54,7 +112,7 @@ La idea no es agregar complejidad, sino evitar tener que buscar la misma informa
    npm install
    ```
 
-3. Creá un archivo `.env.local` en la raíz del proyecto:
+3. Creá un archivo .env.local en la raíz del proyecto:
 
    ```env
    TURSO_DATABASE_URL=tu_url_de_turso
@@ -62,33 +120,46 @@ La idea no es agregar complejidad, sino evitar tener que buscar la misma informa
    SESSION_SECRET=una_clave_larga_y_secreta
    ```
 
-   `SESSION_SECRET` se utiliza para firmar las sesiones. Si no está definido, la aplicación puede usar `TURSO_AUTH_TOKEN` como alternativa, aunque se recomienda configurar un secreto separado.
+   SESSION_SECRET se usa para firmar la sesión. Si no está definido, la app puede usar TURSO_AUTH_TOKEN como alternativa, pero es recomendable configurar un secreto aparte.
 
-4. Iniciá el servidor de desarrollo:
+4. Iniciá el entorno de desarrollo:
 
    ```bash
    npm run dev
    ```
 
-5. Abrí [http://localhost:3000](http://localhost:3000) en el navegador.
+5. Abrí http://localhost:3000 en tu navegador.
 
 ## Scripts disponibles
 
 ```bash
-npm run dev      # inicia el entorno de desarrollo
-npm run build    # genera la compilación de producción
-npm run start    # inicia la aplicación compilada
+npm run dev      # inicia el servidor de desarrollo
+npm run build    # genera la build de producción
+npm run start    # levanta la app compilada
 npm run lint     # ejecuta ESLint
 ```
 
-## Roles
+## Roles y administración
 
-Cada alumno puede consultar y actualizar su propio avance. El usuario administrador puede cargar y editar materias, tareas, horarios, parciales y notas del grupo.
+Cada alumno puede consultar y actualizar su propio avance. El administrador puede manejar materias, tareas, horarios, parciales, notas y configuración general del grupo.
 
-El nombre del administrador se configura actualmente en el código del servidor. Si se adapta el proyecto para otra comisión o institución, conviene reemplazarlo por un sistema de roles configurable.
+Actualmente el nombre del administrador está definido dentro del código, pero el proyecto está pensado para adaptarse fácilmente a otra comisión o institución.
 
-## La idea detrás
+## Motivación
 
-Este no busca ser un sistema académico enorme ni reemplazar las plataformas oficiales de la universidad. Es una herramienta hecha por estudiantes para estudiantes: un tablero compartido para saber qué hay que hacer, cuándo hay que hacerlo y cómo viene el grupo.
+Este proyecto no busca reemplazar una plataforma universitaria ni convertirse en un sistema académico rígido. Busca ser una herramienta útil, simple y rápida para estudiantes que quieren organizar la cursada de una manera clara y ordenada.
 
-La competencia del ranking es un extra para motivar, pero el objetivo principal sigue siendo que nadie se pierda una tarea, un parcial o un horario por falta de información.
+La parte de ranking y comparación funciona como motivación extra, pero la utilidad principal sigue siendo ayudar a la comisión a no perder fechas ni tareas importantes.
+
+## Estado
+
+Proyecto en desarrollo activo, orientado a uso real de una comisión o grupo de cursada.
+
+## ¿Qué sigue?
+
+Si querés, se puede dejar todavía más pulido con una versión final para GitHub con:
+- screenshots reales del proyecto
+- una sección de demo o usos comunes
+- un logo o portada del proyecto
+- una explicación más visual del flujo del usuario
+
