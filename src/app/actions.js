@@ -89,6 +89,14 @@ async function existeMateria(id) {
   return resultado.rows.length > 0;
 }
 
+async function obtenerAlumno(nombre) {
+  const resultado = await db.execute({
+    sql: 'SELECT id, nombre FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+    args: [nombre]
+  });
+  return resultado.rows[0] || null;
+}
+
 async function hashearPassword(password) {
   const salt = randomBytes(16).toString('hex');
   const derivada = await scryptAsync(password, salt, 64);
@@ -266,6 +274,17 @@ export async function obtenerAlumnosAction() {
   }
 }
 
+export async function obtenerPeriodosAction() {
+  try {
+    if (!await obtenerUsuarioSesion()) return [];
+    const res = await db.execute('SELECT id, anio, cuatrimestre, nombre, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC');
+    return res.rows;
+  } catch (error) {
+    console.error('Error al obtener períodos:', error);
+    return [];
+  }
+}
+
 // Crear nuevo alumno en la BD
 export async function crearAlumnoAction(nombre) {
   try {
@@ -288,6 +307,8 @@ export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede editar alumnos.' };
     const nuevoFormateado = nuevoNombre.trim();
     if (!nuevoFormateado) return { exito: false, mensaje: 'El nombre es obligatorio.' };
+    const alumnoActual = await obtenerAlumno(nombreAntiguo);
+    if (!alumnoActual) return { exito: false, mensaje: 'El alumno no existe.' };
     if (nuevoFormateado.toLowerCase() !== nombreAntiguo.toLowerCase()) {
       const existente = await db.execute({
         sql: 'SELECT 1 FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
@@ -297,11 +318,11 @@ export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
     }
 
     await db.batch([
-      { sql: 'UPDATE alumnos SET nombre = ? WHERE nombre = ?', args: [nuevoFormateado, nombreAntiguo] },
-      { sql: 'UPDATE completadas SET alumno = ? WHERE alumno = ?', args: [nuevoFormateado, nombreAntiguo] },
-      { sql: 'UPDATE notas_parciales SET alumno = ? WHERE alumno = ?', args: [nuevoFormateado, nombreAntiguo] },
-      { sql: 'UPDATE notas_tareas SET alumno = ? WHERE alumno = ?', args: [nuevoFormateado, nombreAntiguo] },
-      { sql: 'UPDATE progreso_materias SET alumno = ? WHERE alumno = ?', args: [nuevoFormateado, nombreAntiguo] }
+      { sql: 'UPDATE alumnos SET nombre = ? WHERE id = ?', args: [nuevoFormateado, alumnoActual.id] },
+      { sql: 'UPDATE completadas SET alumno = ? WHERE alumno_id = ?', args: [nuevoFormateado, alumnoActual.id] },
+      { sql: 'UPDATE notas_parciales SET alumno = ? WHERE alumno_id = ?', args: [nuevoFormateado, alumnoActual.id] },
+      { sql: 'UPDATE notas_tareas SET alumno = ? WHERE alumno_id = ?', args: [nuevoFormateado, alumnoActual.id] },
+      { sql: 'UPDATE progreso_materias SET alumno = ? WHERE alumno_id = ?', args: [nuevoFormateado, alumnoActual.id] }
     ], 'write');
     return { exito: true };
   } catch (error) {
@@ -314,12 +335,14 @@ export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
 export async function eliminarAlumnoAction(nombre) {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede eliminar alumnos.' };
+    const alumnoActual = await obtenerAlumno(nombre);
+    if (!alumnoActual) return { exito: false, mensaje: 'El alumno no existe.' };
     await db.batch([
-      { sql: 'DELETE FROM completadas WHERE alumno = ?', args: [nombre] },
-      { sql: 'DELETE FROM notas_parciales WHERE alumno = ?', args: [nombre] },
-      { sql: 'DELETE FROM notas_tareas WHERE alumno = ?', args: [nombre] },
-      { sql: 'DELETE FROM progreso_materias WHERE alumno = ?', args: [nombre] },
-      { sql: 'DELETE FROM alumnos WHERE nombre = ?', args: [nombre] }
+      { sql: 'DELETE FROM completadas WHERE alumno_id = ?', args: [alumnoActual.id] },
+      { sql: 'DELETE FROM notas_parciales WHERE alumno_id = ?', args: [alumnoActual.id] },
+      { sql: 'DELETE FROM notas_tareas WHERE alumno_id = ?', args: [alumnoActual.id] },
+      { sql: 'DELETE FROM progreso_materias WHERE alumno_id = ?', args: [alumnoActual.id] },
+      { sql: 'DELETE FROM alumnos WHERE id = ?', args: [alumnoActual.id] }
     ], 'write');
     return { exito: true };
   } catch (error) {
@@ -330,14 +353,17 @@ export async function eliminarAlumnoAction(nombre) {
 
 // --- MATERIAS Y TAREAS ---
 
-export async function obtenerDatos() {
+export async function obtenerDatos(periodoId = null) {
   try {
     if (!await obtenerUsuarioSesion()) return [];
     const [resMaterias, resTareas, resCompletadas, resNotasTareas] = await Promise.all([
-      db.execute('SELECT * FROM materias ORDER BY nombre ASC'),
+      db.execute({
+        sql: 'SELECT m.*, p.nombre AS periodo_nombre FROM materias m LEFT JOIN periodos p ON p.id = m.periodo_id WHERE ? IS NULL OR m.periodo_id = ? ORDER BY m.nombre ASC',
+        args: [periodoId, periodoId]
+      }),
       db.execute('SELECT * FROM tareas'),
-      db.execute('SELECT * FROM completadas'),
-      db.execute('SELECT tarea_id, alumno, nota, cargada_en FROM notas_tareas')
+      db.execute('SELECT c.tarea_id, COALESCE(a.nombre, c.alumno) AS alumno, c.completada_en FROM completadas c LEFT JOIN alumnos a ON a.id = c.alumno_id'),
+      db.execute('SELECT n.tarea_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota, n.cargada_en FROM notas_tareas n LEFT JOIN alumnos a ON a.id = n.alumno_id')
     ]);
 
     const tareasPorMateria = new Map();
@@ -415,7 +441,7 @@ export async function obtenerDatos() {
 export async function obtenerProgresoPlanAction() {
   try {
     if (!await obtenerUsuarioSesion()) return [];
-    const res = await db.execute('SELECT alumno, materia_codigo, estado, nota, actualizado_en FROM progreso_materias ORDER BY alumno ASC, materia_codigo ASC');
+    const res = await db.execute('SELECT COALESCE(a.nombre, p.alumno) AS alumno, p.materia_codigo, p.estado, p.nota, p.actualizado_en FROM progreso_materias p LEFT JOIN alumnos a ON a.id = p.alumno_id ORDER BY alumno ASC, p.materia_codigo ASC');
     return res.rows;
   } catch (error) {
     console.error('Error al obtener progreso del plan:', error);
@@ -433,6 +459,8 @@ export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado,
     if (!alumno || !materiaCodigo || !estadosValidos.includes(estado)) {
       return { exito: false, mensaje: 'Los datos del progreso no son válidos.' };
     }
+    const alumnoDB = await obtenerAlumno(alumno);
+    if (!alumnoDB) return { exito: false, mensaje: 'El alumno no existe.' };
     if (!admin && usuarioSesion.toLowerCase() !== alumno.toLowerCase()) {
       return { exito: false, mensaje: 'Solo podés actualizar tu propio estado académico.' };
     }
@@ -449,14 +477,15 @@ export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado,
 
     await db.execute({
       sql: `
-        INSERT INTO progreso_materias (id, alumno, materia_codigo, estado, nota, actualizado_en)
-        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        INSERT INTO progreso_materias (id, alumno_id, alumno, materia_codigo, estado, nota, actualizado_en)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(alumno, materia_codigo) DO UPDATE SET
+          alumno_id = excluded.alumno_id,
           estado = excluded.estado,
           nota = excluded.nota,
           actualizado_en = excluded.actualizado_en
       `,
-      args: [`progreso_${alumno}_${materiaCodigo}`, alumno, materiaCodigo, estado, ['aprobada', 'promocionada'].includes(estado) ? notaValidada.valor : null]
+      args: [`progreso_${alumnoDB.id}_${materiaCodigo}`, alumnoDB.id, alumnoDB.nombre, materiaCodigo, estado, ['aprobada', 'promocionada'].includes(estado) ? notaValidada.valor : null]
     });
     return { exito: true };
   } catch (error) {
@@ -470,6 +499,8 @@ export async function toggleTareaAction(tareaId, alumno) {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
     const alumnoObjetivo = await verificarAdmin() ? alumno : usuarioSesion;
+    const alumnoDB = await obtenerAlumno(alumnoObjetivo);
+    if (!alumnoDB) return { exito: false, mensaje: 'El alumno no existe.' };
     const tarea = await db.execute({
       sql: 'SELECT inicio, fin FROM tareas WHERE id = ?',
       args: [tareaId]
@@ -479,19 +510,19 @@ export async function toggleTareaAction(tareaId, alumno) {
       return { exito: false, mensaje: 'La tarea todavía no está habilitada.' };
     }
     const existe = await db.execute({
-      sql: 'SELECT * FROM completadas WHERE tarea_id = ? AND alumno = ?',
-      args: [tareaId, alumnoObjetivo]
+      sql: 'SELECT * FROM completadas WHERE tarea_id = ? AND alumno_id = ?',
+      args: [tareaId, alumnoDB.id]
     });
 
     if (existe.rows.length > 0) {
       await db.execute({
-        sql: 'DELETE FROM completadas WHERE tarea_id = ? AND alumno = ?',
-        args: [tareaId, alumnoObjetivo]
+        sql: 'DELETE FROM completadas WHERE tarea_id = ? AND alumno_id = ?',
+        args: [tareaId, alumnoDB.id]
       });
     } else {
       await db.execute({
-        sql: "INSERT INTO completadas (tarea_id, alumno, completada_en) VALUES (?, ?, datetime('now'))",
-        args: [tareaId, alumnoObjetivo]
+        sql: "INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, datetime('now'))",
+        args: [tareaId, alumnoDB.id, alumnoDB.nombre]
       });
     }
     return { exito: true };
@@ -656,10 +687,13 @@ export async function eliminarTareaAction(id) {
 
 // --- HORARIOS DE CURSADA ---
 
-export async function obtenerHorariosAction() {
+export async function obtenerHorariosAction(periodoId = null) {
   try {
     if (!await obtenerUsuarioSesion()) return [];
-    const res = await db.execute('SELECT * FROM horarios WHERE CAST(dia AS INTEGER) BETWEEN 1 AND 5 ORDER BY dia ASC, hora_inicio ASC');
+    const res = await db.execute({
+      sql: 'SELECT h.* FROM horarios h JOIN materias m ON m.id = h.materia_id WHERE CAST(h.dia AS INTEGER) BETWEEN 1 AND 5 AND (? IS NULL OR m.periodo_id = ?) ORDER BY h.dia ASC, h.hora_inicio ASC',
+      args: [periodoId, periodoId]
+    });
     return res.rows;
   } catch (error) {
     console.error('Error al obtener horarios:', error);
@@ -707,12 +741,18 @@ export async function eliminarHorarioAction(id, usuario) {
 
 // --- PARCIALES Y NOTAS ---
 
-export async function obtenerParcialesAction() {
+export async function obtenerParcialesAction(periodoId = null) {
   try {
     if (!await obtenerUsuarioSesion()) return { parciales: [], notas: [] };
     const [resParciales, resNotas] = await Promise.all([
-      db.execute('SELECT * FROM parciales ORDER BY fecha ASC'),
-      db.execute('SELECT * FROM notas_parciales')
+      db.execute({
+        sql: 'SELECT p.* FROM parciales p JOIN materias m ON m.id = p.materia_id WHERE ? IS NULL OR m.periodo_id = ? ORDER BY p.fecha ASC',
+        args: [periodoId, periodoId]
+      }),
+      db.execute({
+        sql: 'SELECT n.id, n.parcial_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota FROM notas_parciales n JOIN parciales p ON p.id = n.parcial_id JOIN materias m ON m.id = p.materia_id LEFT JOIN alumnos a ON a.id = n.alumno_id WHERE ? IS NULL OR m.periodo_id = ?',
+        args: [periodoId, periodoId]
+      })
     ]);
 
     return {
@@ -797,6 +837,8 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
     if (!parcialHabilitado(parcial.rows[0].fecha)) {
       return { exito: false, mensaje: 'La nota se puede cargar a partir de la fecha del parcial.' };
     }
+    const alumnoDB = await obtenerAlumno(alumno);
+    if (!alumnoDB) return { exito: false, mensaje: 'El alumno no existe.' };
 
     const notaLimpia = typeof nota === 'string' ? nota.trim() : '';
     const validacion = validarNota(nota);
@@ -806,30 +848,30 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
     
     // Verificamos si ya existe nota cargada para este alumno en este parcial
     const existe = await db.execute({
-      sql: 'SELECT id FROM notas_parciales WHERE parcial_id = ? AND alumno = ?',
-      args: [parcialId, alumno]
+      sql: 'SELECT id FROM notas_parciales WHERE parcial_id = ? AND alumno_id = ?',
+      args: [parcialId, alumnoDB.id]
     });
 
     if (existe.rows.length > 0) {
       if (notaLimpia === '') {
         // Si borra el input, eliminamos la nota registrada
         await db.execute({
-          sql: 'DELETE FROM notas_parciales WHERE parcial_id = ? AND alumno = ?',
-          args: [parcialId, alumno]
+          sql: 'DELETE FROM notas_parciales WHERE parcial_id = ? AND alumno_id = ?',
+          args: [parcialId, alumnoDB.id]
         });
       } else {
         // Actualizamos la nota
         await db.execute({
-          sql: 'UPDATE notas_parciales SET nota = ? WHERE parcial_id = ? AND alumno = ?',
-          args: [validacion.valor, parcialId, alumno]
+          sql: 'UPDATE notas_parciales SET nota = ? WHERE parcial_id = ? AND alumno_id = ?',
+          args: [validacion.valor, parcialId, alumnoDB.id]
         });
       }
     } else if (notaLimpia !== '') {
       // Insertamos nueva nota
       const id = 'nota_' + Date.now();
       await db.execute({
-        sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno, nota) VALUES (?, ?, ?, ?)',
-        args: [id, parcialId, alumno, notaLimpia]
+        sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno_id, alumno, nota) VALUES (?, ?, ?, ?, ?)',
+        args: [id, parcialId, alumnoDB.id, alumnoDB.nombre, notaLimpia]
       });
     }
     return { exito: true };
@@ -846,6 +888,8 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
     if (!alumno || !usuarioSesion || (alumno !== usuarioSesion && !admin)) {
       return { exito: false, mensaje: 'Solo podés cargar tu propia nota.' };
     }
+    const alumnoDB = await obtenerAlumno(alumno);
+    if (!alumnoDB) return { exito: false, mensaje: 'El alumno no existe.' };
 
     const tarea = await db.execute({
       sql: 'SELECT con_nota, inicio, fin FROM tareas WHERE id = ?',
@@ -864,14 +908,14 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
 
     if (validacion.vacia) {
       await db.execute({
-        sql: 'DELETE FROM notas_tareas WHERE tarea_id = ? AND alumno = ?',
-        args: [tareaId, alumno]
+        sql: 'DELETE FROM notas_tareas WHERE tarea_id = ? AND alumno_id = ?',
+        args: [tareaId, alumnoDB.id]
       });
     } else {
       const cargadaEn = new Date().toISOString();
       await db.execute({
-        sql: 'INSERT INTO notas_tareas (id, tarea_id, alumno, nota, cargada_en) VALUES (?, ?, ?, ?, ?) ON CONFLICT(tarea_id, alumno) DO UPDATE SET nota = excluded.nota, cargada_en = excluded.cargada_en',
-        args: [`nota_tarea_${Date.now()}`, tareaId, alumno, validacion.valor, cargadaEn]
+        sql: 'INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, nota = excluded.nota, cargada_en = excluded.cargada_en',
+        args: [`nota_tarea_${Date.now()}`, tareaId, alumnoDB.id, alumnoDB.nombre, validacion.valor, cargadaEn]
       });
     }
 

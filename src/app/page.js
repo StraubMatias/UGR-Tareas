@@ -7,6 +7,7 @@ import {
   obtenerSesionAction,
   obtenerDatos,
   obtenerAlumnosAction,
+  obtenerPeriodosAction,
   obtenerProgresoPlanAction,
   guardarProgresoPlanAction,
   crearAlumnoAction,
@@ -42,6 +43,8 @@ import {
 export default function Home() {
   const [materias, setMaterias] = useState([]);
   const [alumnos, setAlumnos] = useState([]);
+  const [periodos, setPeriodos] = useState([]);
+  const [periodoSeleccionado, setPeriodoSeleccionado] = useState('');
   const [usuarioActual, setUsuarioActual] = useState(null);
   const [rolUsuario, setRolUsuario] = useState(null);
   const [pestana, setPestana] = useState('alumnos');
@@ -526,11 +529,18 @@ export default function Home() {
 
   const cargarBD = useCallback(async (mostrarCarga = true) => {
     if (mostrarCarga) setCargando(true);
+    const dataPeriodos = await obtenerPeriodosAction();
+    const periodoParaCargar = periodoSeleccionado
+      || dataPeriodos.find((periodo) => Number(periodo.activo) === 1)?.id
+      || dataPeriodos[0]?.id
+      || null;
+    setPeriodos(dataPeriodos || []);
+    if (!periodoSeleccionado && periodoParaCargar) setPeriodoSeleccionado(periodoParaCargar);
     const [dataMaterias, dataAlumnos, dataParciales, dataHorarios, dataProgresoPlan] = await Promise.all([
-      obtenerDatos(),
+      obtenerDatos(periodoParaCargar),
       obtenerAlumnosAction(),
-      obtenerParcialesAction(),
-      obtenerHorariosAction(),
+      obtenerParcialesAction(periodoParaCargar),
+      obtenerHorariosAction(periodoParaCargar),
       obtenerProgresoPlanAction()
     ]);
     
@@ -566,7 +576,7 @@ export default function Home() {
       setMateriaHorarioSel((valorActual) => valorActual || dataMaterias[0].id);
     }
     if (mostrarCarga) setCargando(false);
-  }, []);
+  }, [periodoSeleccionado]);
 
   useEffect(() => {
     if (!usuarioActual) return;
@@ -681,7 +691,11 @@ export default function Home() {
 
   const handleEliminarAlumno = async (nombre) => {
     if (confirm(`¿Seguro que querés eliminar a "${nombre}" de la lista?`)) {
-      await eliminarAlumnoAction(nombre);
+      const resultado = await eliminarAlumnoAction(nombre);
+      if (!resultado?.exito) {
+        alert(resultado?.mensaje || 'No se pudo eliminar el alumno.');
+        return;
+      }
       await cargarBD();
     }
   };
@@ -733,7 +747,11 @@ export default function Home() {
 
   const handleEliminarMateria = async (id, nombre) => {
     if (confirm(`¿Seguro que querés eliminar la materia "${nombre}" y sus tareas?`)) {
-      await eliminarMateriaAction(id);
+      const resultado = await eliminarMateriaAction(id);
+      if (!resultado?.exito) {
+        alert(resultado?.mensaje || 'No se pudo eliminar la materia.');
+        return;
+      }
       await cargarBD();
     }
   };
@@ -863,7 +881,11 @@ export default function Home() {
 
   const handleEliminarTarea = async (id) => {
     if (confirm('¿Seguro que querés borrar esta tarea?')) {
-      await eliminarTareaAction(id);
+      const resultado = await eliminarTareaAction(id);
+      if (!resultado?.exito) {
+        alert(resultado?.mensaje || 'No se pudo borrar la tarea.');
+        return;
+      }
       await cargarBD();
     }
   };
@@ -1466,6 +1488,20 @@ export default function Home() {
               ''
             )}
           </p>
+          {usuarioActual && periodos.length > 0 && (
+            <label className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+              Período
+              <select
+                value={periodoSeleccionado}
+                onChange={(evento) => setPeriodoSeleccionado(evento.target.value)}
+                className="rounded-lg border border-cyan-500/30 bg-[#0f141c] px-3 py-2 text-xs font-semibold normal-case tracking-normal text-cyan-200 outline-none focus:border-cyan-400"
+              >
+                {periodos.map((periodo) => (
+                  <option key={periodo.id} value={periodo.id}>{periodo.nombre}</option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
 
         {usuarioActual && (

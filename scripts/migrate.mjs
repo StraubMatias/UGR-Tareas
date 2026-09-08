@@ -138,6 +138,23 @@ async function main() {
     }
   });
 
+  await ejecutarMigracion(2, 'agregar IDs estables de alumnos', async () => {
+    for (const tabla of ['completadas', 'notas_parciales', 'notas_tareas', 'progreso_materias']) {
+      await agregarColumnaSiFalta(tabla, 'alumno_id', 'TEXT');
+    }
+
+    await db.batch([
+      { sql: 'UPDATE completadas SET alumno_id = (SELECT id FROM alumnos WHERE LOWER(alumnos.nombre) = LOWER(completadas.alumno)) WHERE alumno_id IS NULL', args: [] },
+      { sql: 'UPDATE notas_parciales SET alumno_id = (SELECT id FROM alumnos WHERE LOWER(alumnos.nombre) = LOWER(notas_parciales.alumno)) WHERE alumno_id IS NULL', args: [] },
+      { sql: 'UPDATE notas_tareas SET alumno_id = (SELECT id FROM alumnos WHERE LOWER(alumnos.nombre) = LOWER(notas_tareas.alumno)) WHERE alumno_id IS NULL', args: [] },
+      { sql: 'UPDATE progreso_materias SET alumno_id = (SELECT id FROM alumnos WHERE LOWER(alumnos.nombre) = LOWER(progreso_materias.alumno)) WHERE alumno_id IS NULL', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_completadas_alumno_id ON completadas(alumno_id)', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_notas_parciales_alumno_id ON notas_parciales(alumno_id)', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_notas_tareas_alumno_id ON notas_tareas(alumno_id)', args: [] },
+      { sql: 'CREATE INDEX IF NOT EXISTS idx_progreso_materias_alumno_id ON progreso_materias(alumno_id)', args: [] }
+    ], 'write');
+  });
+
   await db.close?.();
 }
 
