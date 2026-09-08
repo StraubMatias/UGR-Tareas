@@ -171,6 +171,15 @@ export default function Home() {
     return materiaCorrelativa ? !codigosAprobadosSimulados.has(materiaCorrelativa.codigo) : true;
   });
   const materiasRecomendadas = materiasDelSimulador.filter((materia) => obtenerCorrelativasPendientesSimuladas(materia).length === 0);
+  const materiasExtraDisponibles = materiasPendientesUsuario
+    .filter((materia) => materia.cuatrimestre !== cuatrimestreActivo && !codigosAprobadosSimulados.has(materia.codigo))
+    .map((materia) => ({
+      materia,
+      habilita: materiasPendientesUsuario.filter((otra) => otra.codigo !== materia.codigo && otra.correlativas.includes(materia.codigo)).length,
+      pendientes: obtenerCorrelativasPendientesSimuladas(materia).length
+    }))
+    .filter(({ pendientes }) => pendientes === 0)
+    .sort((a, b) => b.habilita - a.habilita);
   const materiasPriorizadas = materiasPendientesUsuario
     .filter((materia) => !codigosAprobadosSimulados.has(materia.codigo))
     .map((materia) => ({
@@ -2734,6 +2743,37 @@ export default function Home() {
                             </div>
                           )}
                           <p className="text-sm font-bold text-cyan-200">Resultado: {materiasRecomendadas.length} {materiasRecomendadas.length === 1 ? 'materia habilitada' : 'materias habilitadas'} para priorizar.</p>
+                          {materiasExtraDisponibles.length > 0 && (
+                            <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <h5 className="text-xs font-extrabold uppercase tracking-wider text-purple-200">Extras que podés adelantar</h5>
+                                  <p className="mt-1 text-xs text-purple-100/70">No pertenecen a este cuatrimestre, pero ya tenés las correlativas para cursarlas.</p>
+                                </div>
+                                <span className="text-xs font-bold text-purple-200">{materiasExtraDisponibles.length} disponibles</span>
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                {materiasExtraDisponibles.slice(0, 5).map(({ materia, habilita }) => (
+                                  <div key={materia.codigo} className="flex items-center justify-between gap-3 rounded-lg border border-purple-400/20 bg-[#0f141c]/50 p-2.5 text-sm">
+                                    <div className="min-w-0">
+                                      <p className="truncate font-semibold text-white">{materia.nombre}</p>
+                                      <p className="text-xs text-purple-100/60">{materia.codigo} · {materia.cuatrimestre}</p>
+                                    </div>
+                                    <span className="shrink-0 text-right text-xs font-bold text-purple-200">{habilita > 0 ? `desbloquea ${habilita}` : 'suma avance'}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {(materiasRecomendadas.length > 0 || materiasExtraDisponibles.length > 0) && (
+                            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                              <h5 className="text-xs font-extrabold uppercase tracking-wider text-emerald-200">Cómo te conviene cursar</h5>
+                              <p className="mt-2 text-sm text-emerald-50/90">
+                                Priorizá las {materiasRecomendadas.length} materias habilitadas del cuatrimestre y sumá {Math.min(2, materiasExtraDisponibles.length)} extra{Math.min(2, materiasExtraDisponibles.length) === 1 ? '' : 's'} con mayor desbloqueo.
+                              </p>
+                              <p className="mt-2 text-xs text-emerald-100/70">La sugerencia busca adelantar correlativas sin reemplazar la decisión final de carga, horarios o disponibilidad.</p>
+                            </div>
+                          )}
                           {materiasPriorizadas.length > 0 && (
                             <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4">
                               <h5 className="text-xs font-extrabold uppercase tracking-wider text-cyan-200">Qué te conviene priorizar</h5>
