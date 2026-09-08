@@ -197,6 +197,9 @@ export async function validarLoginAction(usuarioInput, passwordInput) {
     }
   } catch (error) {
     console.error('Error en validarLoginAction:', error);
+    if (String(error?.message || '').toLowerCase().includes('no such column') && String(error?.message || '').includes('rol')) {
+      return { exito: false, mensaje: 'La base necesita actualizarse. Ejecutá npm run migrate antes de iniciar la app.' };
+    }
     return { exito: false, mensaje: 'Error de conexión con la base de datos' };
   }
 }
