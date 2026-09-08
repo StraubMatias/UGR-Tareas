@@ -2556,12 +2556,24 @@ export default function Home() {
                                   Ver estados por alumno
                                 </summary>
                                 <div className="mt-3 space-y-2">
-                                  {(esAdmin ? alumnos : [usuarioActual]).map((alumno) => {
+                                  {(esAdmin
+                                    ? [usuarioActual, ...alumnos.filter((alumno) => alumno !== usuarioActual)]
+                                    : [usuarioActual]
+                                  ).map((alumno) => {
                                     const progreso = obtenerProgresoMateria(alumno, materia.codigo);
                                     const puedeEditar = esAdmin || alumno === usuarioActual;
                                     return (
-                                      <div key={`${materia.codigo}-${alumno}`} className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                                        <span className="font-semibold text-slate-300">{alumno}</span>
+                                      <div
+                                        key={`${materia.codigo}-${alumno}`}
+                                        className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-2 py-1.5 text-xs ${
+                                          alumno === usuarioActual
+                                            ? 'border-cyan-500/40 bg-cyan-500/10'
+                                            : 'border-transparent'
+                                        }`}
+                                      >
+                                        <span className={`font-semibold ${alumno === usuarioActual ? 'text-cyan-200' : 'text-slate-300'}`}>
+                                          {alumno}{alumno === usuarioActual ? ' · vos' : ''}
+                                        </span>
                                         {puedeEditar ? (
                                           <select
                                             value={progreso?.estado || 'pendiente'}
