@@ -4,6 +4,7 @@ import { createHmac, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'no
 import { promisify } from 'node:util';
 import { cookies, headers } from 'next/headers';
 import { db } from './turso';
+import { PLAN_DE_ESTUDIO } from './plan-utils';
 
 const COOKIE_SESION = 'ugr_sesion';
 const DURACION_SESION_SEGUNDOS = 10 * 60;
@@ -15,6 +16,7 @@ const LIMITE_LOGIN_USUARIO = 5;
 const LIMITE_LOGIN_IP = 20;
 const VENTANA_LOGIN_MS = 15 * 60 * 1000;
 const BLOQUEO_LOGIN_MS = 15 * 60 * 1000;
+const CODIGOS_PLAN = new Set(PLAN_DE_ESTUDIO.map((materia) => materia.codigo));
 
 function obtenerSecretoSesion() {
   const secreto = process.env.SESSION_SECRET?.trim();
@@ -88,9 +90,10 @@ function firmarSesion(payload) {
   return createHmac('sha256', obtenerSecretoSesion()).update(payload).digest('base64url');
 }
 
-function crearValorSesion(usuario) {
+function crearValorSesion(usuario, versionSesion) {
   const payload = Buffer.from(JSON.stringify({
     usuario,
+    versionSesion,
     expira: Date.now() + DURACION_SESION_SEGUNDOS * 1000
   })).toString('base64url');
   return `${payload}.${firmarSesion(payload)}`;
@@ -109,15 +112,17 @@ function leerValorSesion(valor) {
     }
 
     const datos = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    return datos.expira > Date.now() && typeof datos.usuario === 'string' ? datos.usuario : null;
+    return datos.expira > Date.now() && typeof datos.usuario === 'string'
+      ? { usuario: datos.usuario, versionSesion: Number(datos.versionSesion) || 1 }
+      : null;
   } catch (error) {
     return null;
   }
 }
 
-async function establecerSesion(usuario) {
+async function establecerSesion(usuario, versionSesion) {
   const cookieStore = await cookies();
-  cookieStore.set(COOKIE_SESION, crearValorSesion(usuario), {
+  cookieStore.set(COOKIE_SESION, crearValorSesion(usuario, versionSesion), {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -128,7 +133,15 @@ async function establecerSesion(usuario) {
 
 async function obtenerUsuarioSesion() {
   const cookieStore = await cookies();
-  return leerValorSesion(cookieStore.get(COOKIE_SESION)?.value);
+  const sesion = leerValorSesion(cookieStore.get(COOKIE_SESION)?.value);
+  if (!sesion) return null;
+
+  const resultado = await db.execute({
+    sql: 'SELECT sesion_version FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+    args: [sesion.usuario]
+  });
+  const versionActual = Number(resultado.rows[0]?.sesion_version || 0);
+  return versionActual > 0 && versionActual === sesion.versionSesion ? sesion.usuario : null;
 }
 
 async function verificarAdmin() {
@@ -254,7 +267,7 @@ export async function validarLoginAction(usuarioInput, passwordInput) {
     }
 
     const res = await db.execute({
-      sql: 'SELECT nombre, password, rol FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+      sql: 'SELECT nombre, password, rol, sesion_version FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
       args: [userClean]
     });
 
@@ -272,7 +285,7 @@ export async function validarLoginAction(usuarioInput, passwordInput) {
     }
 
     await limpiarIntentosLogin(clavesLogin);
-    await establecerSesion(usuarioDB.nombre);
+    await establecerSesion(usuarioDB.nombre, Number(usuarioDB.sesion_version) || 1);
     return { exito: true, usuario: usuarioDB.nombre, rol: usuarioDB.rol || 'alumno' };
   } catch (error) {
     console.error('Error en validarLoginAction:', error);
@@ -325,10 +338,16 @@ export async function cambiarPasswordAction(usuarioInput, passActualInput, passN
     }
 
     // 2. Actualizamos el campo password en la base de datos Turso
-    await db.execute({
-      sql: 'UPDATE alumnos SET password = ? WHERE LOWER(nombre) = LOWER(?)',
-      args: [await hashearPassword(passNuevaClean), userClean]
+    const version = await db.execute({
+      sql: 'SELECT sesion_version FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+      args: [userClean]
     });
+    const nuevaVersion = Number(version.rows[0]?.sesion_version || 1) + 1;
+    await db.execute({
+      sql: 'UPDATE alumnos SET password = ?, sesion_version = ? WHERE LOWER(nombre) = LOWER(?)',
+      args: [await hashearPassword(passNuevaClean), nuevaVersion, userClean]
+    });
+    await establecerSesion(userClean, nuevaVersion);
 
     return { exito: true, mensaje: '¡Contraseña actualizada con éxito!' };
   } catch (error) {
@@ -565,7 +584,7 @@ export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado,
     const admin = await verificarAdmin();
 
     const estadosValidos = ['pendiente', 'cursando', 'aprobada', 'promocionada'];
-    if (!alumno || !materiaCodigo || !estadosValidos.includes(estado)) {
+    if (!alumno || !CODIGOS_PLAN.has(materiaCodigo) || !estadosValidos.includes(estado)) {
       return { exito: false, mensaje: 'Los datos del progreso no son válidos.' };
     }
     const alumnoDB = await obtenerAlumno(alumno);

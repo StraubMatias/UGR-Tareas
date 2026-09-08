@@ -53,6 +53,7 @@ export default function Home() {
   const [notificacionesAbiertas, setNotificacionesAbiertas] = useState(false);
   const [notificacionesVistas, setNotificacionesVistas] = useState([]);
   const notificacionesRef = useRef(null);
+  const refrescandoRef = useRef(false);
   const [mostrarAvisoInicio, setMostrarAvisoInicio] = useState(false);
   const [novedades, setNovedades] = useState([]);
 
@@ -589,15 +590,22 @@ export default function Home() {
     if (!usuarioActual) return undefined;
 
     const intervalo = window.setInterval(async () => {
-      const sesion = await obtenerSesionAction();
-      if (!sesion?.usuario) {
-        setUsuarioActual(null);
-        setRolUsuario(null);
-        setCargando(false);
-        return;
+      if (document.visibilityState !== 'visible' || refrescandoRef.current) return;
+
+      refrescandoRef.current = true;
+      try {
+        const sesion = await obtenerSesionAction();
+        if (!sesion?.usuario) {
+          setUsuarioActual(null);
+          setRolUsuario(null);
+          setCargando(false);
+          return;
+        }
+        setRolUsuario(sesion.rol);
+        await cargarBD(false);
+      } finally {
+        refrescandoRef.current = false;
       }
-      setRolUsuario(sesion.rol);
-      cargarBD(false);
     }, 30000);
 
     return () => window.clearInterval(intervalo);

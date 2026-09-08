@@ -203,6 +203,10 @@ async function main() {
     ], 'write');
   });
 
+  await ejecutarMigracion(6, 'revocación de sesiones', async () => {
+    await agregarColumnaSiFalta('alumnos', 'sesion_version', 'INTEGER NOT NULL DEFAULT 1');
+  });
+
   await db.close?.();
 }
 
