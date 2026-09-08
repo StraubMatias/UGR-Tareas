@@ -8,6 +8,7 @@ import { db } from './turso';
 const ADMINISTRADOR = 'Matute';
 const COOKIE_SESION = 'ugr_sesion';
 const DURACION_SESION_SEGUNDOS = 10 * 60;
+const MATERIAS_PRIMER_CUATRIMESTRE = ['1.1.1', '1.2.1', '1.3.1', '1.4.1', '1.5.1'];
 const scryptAsync = promisify(scrypt);
 
 function esAdministrador(usuario) {
@@ -169,6 +170,32 @@ async function ejecutarAsegurarEsquemaNotasTareas() {
     await db.execute("ALTER TABLE materias ADD COLUMN regla_promocion TEXT NOT NULL DEFAULT 'tp_nota'");
   } catch (error) {
     // La columna ya existe en instalaciones que recibieron la migración.
+  }
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS progreso_materias (
+      id TEXT PRIMARY KEY,
+      alumno TEXT NOT NULL,
+      materia_codigo TEXT NOT NULL,
+      estado TEXT NOT NULL DEFAULT 'pendiente',
+      nota TEXT,
+      actualizado_en TEXT,
+      UNIQUE(alumno, materia_codigo)
+    )
+  `);
+
+  const alumnosIniciales = await db.execute('SELECT nombre FROM alumnos');
+  for (const alumno of alumnosIniciales.rows) {
+    for (const codigo of MATERIAS_PRIMER_CUATRIMESTRE) {
+      await db.execute({
+        sql: `
+          INSERT OR IGNORE INTO progreso_materias
+            (id, alumno, materia_codigo, estado, actualizado_en)
+          VALUES (?, ?, ?, 'aprobada', datetime('now'))
+        `,
+        args: [`progreso_${alumno.nombre}_${codigo}`, alumno.nombre, codigo]
+      });
+    }
   }
 
   await db.execute({
@@ -511,6 +538,48 @@ export async function obtenerDatos() {
   } catch (error) {
     console.error('Error al obtener datos de Turso:', error);
     return [];
+  }
+}
+
+export async function obtenerProgresoPlanAction() {
+  try {
+    if (!await obtenerUsuarioSesion()) return [];
+    await asegurarEsquemaNotasTareas();
+    const res = await db.execute('SELECT alumno, materia_codigo, estado, nota, actualizado_en FROM progreso_materias ORDER BY alumno ASC, materia_codigo ASC');
+    return res.rows;
+  } catch (error) {
+    console.error('Error al obtener progreso del plan:', error);
+    return [];
+  }
+}
+
+export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado, nota, usuario }) {
+  try {
+    if (!esAdministrador(await obtenerUsuarioSesion()) || usuario !== ADMINISTRADOR) {
+      return { exito: false, mensaje: 'Solo el administrador puede actualizar el plan.' };
+    }
+
+    const estadosValidos = ['pendiente', 'cursando', 'aprobada', 'promocionada'];
+    if (!alumno || !materiaCodigo || !estadosValidos.includes(estado)) {
+      return { exito: false, mensaje: 'Los datos del progreso no son válidos.' };
+    }
+
+    await asegurarEsquemaNotasTareas();
+    await db.execute({
+      sql: `
+        INSERT INTO progreso_materias (id, alumno, materia_codigo, estado, nota, actualizado_en)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(alumno, materia_codigo) DO UPDATE SET
+          estado = excluded.estado,
+          nota = excluded.nota,
+          actualizado_en = excluded.actualizado_en
+      `,
+      args: [`progreso_${alumno}_${materiaCodigo}`, alumno, materiaCodigo, estado, nota?.trim() || null]
+    });
+    return { exito: true };
+  } catch (error) {
+    console.error('Error al guardar progreso del plan:', error);
+    return { exito: false, mensaje: 'No se pudo guardar el progreso.' };
   }
 }
 

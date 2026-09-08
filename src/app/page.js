@@ -7,6 +7,8 @@ import {
   obtenerSesionAction,
   obtenerDatos,
   obtenerAlumnosAction,
+  obtenerProgresoPlanAction,
+  guardarProgresoPlanAction,
   crearAlumnoAction,
   editarAlumnoAction,
   eliminarAlumnoAction,
@@ -50,6 +52,7 @@ export default function Home() {
   const [notasTareasInputs, setNotasTareasInputs] = useState({});
   const [notasDesplegadas, setNotasDesplegadas] = useState({});
   const [horarios, setHorarios] = useState([]);
+  const [progresoPlan, setProgresoPlan] = useState([]);
   const [mesCalendario, setMesCalendario] = useState(() => {
     const hoy = new Date();
     return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
@@ -137,6 +140,13 @@ export default function Home() {
     { codigo: '3.25.1', nombre: 'Ciberdefensa', cuatrimestre: '3° año · 1° cuatrimestre', correlativas: ['2.12.1', '2.20.2'] },
     { codigo: '3.26.1', nombre: 'Pasantía Profesional', cuatrimestre: '3° año · 1° cuatrimestre', correlativas: ['1° año aprobado', '1° cuatrimestre de 2° año regularizado'] }
   ];
+  const materiaPlanPorCodigo = Object.fromEntries(planDeEstudio.map((materia) => [materia.codigo, materia]));
+  const progresoPlanPorClave = Object.fromEntries(
+    progresoPlan.map((registro) => [`${registro.alumno}_${registro.materia_codigo}`, registro])
+  );
+
+  const obtenerMateriaPlan = (codigo) => materiaPlanPorCodigo[codigo];
+  const obtenerProgresoMateria = (alumno, codigo) => progresoPlanPorClave[`${alumno}_${codigo}`];
 
   const tareaCompletadaPor = (tarea, alumno) => (
     tarea.completadoPor.includes(alumno)
@@ -500,11 +510,12 @@ export default function Home() {
 
   const cargarBD = useCallback(async (mostrarCarga = true) => {
     if (mostrarCarga) setCargando(true);
-    const [dataMaterias, dataAlumnos, dataParciales, dataHorarios] = await Promise.all([
+    const [dataMaterias, dataAlumnos, dataParciales, dataHorarios, dataProgresoPlan] = await Promise.all([
       obtenerDatos(),
       obtenerAlumnosAction(),
       obtenerParcialesAction(),
-      obtenerHorariosAction()
+      obtenerHorariosAction(),
+      obtenerProgresoPlanAction()
     ]);
     
     setMaterias(dataMaterias || []);
@@ -512,6 +523,7 @@ export default function Home() {
     setParciales(dataParciales.parciales || []);
     setNotas(dataParciales.notas || []);
     setHorarios(dataHorarios || []);
+    setProgresoPlan(dataProgresoPlan || []);
 
     // Inicializar inputs de notas locales
     const mapaNotas = {};
@@ -598,6 +610,22 @@ export default function Home() {
     } else {
       setMsgPassChange({ tipo: 'error', texto: res.mensaje });
     }
+  };
+
+  const handleGuardarProgresoPlan = async (alumno, materiaCodigo, estado) => {
+    const progresoActual = obtenerProgresoMateria(alumno, materiaCodigo);
+    const resultado = await guardarProgresoPlanAction({
+      alumno,
+      materiaCodigo,
+      estado,
+      nota: progresoActual?.nota || '',
+      usuario: usuarioActual
+    });
+    if (!resultado?.exito) {
+      alert(resultado?.mensaje || 'No se pudo guardar el progreso.');
+      return;
+    }
+    await cargarBD(false);
   };
 
   const toggleDesplegarAlumno = (nombreAlumno) => {
@@ -1624,16 +1652,6 @@ export default function Home() {
               <span>📚</span> Materias
             </button>
             <button
-              onClick={() => setPestana('plan')}
-              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
-                pestana === 'plan'
-                  ? 'bg-amber-600/20 text-amber-300 border-amber-500/40 shadow-sm'
-                  : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
-              }`}
-            >
-              <span>🧭</span> Plan de estudio
-            </button>
-            <button
               onClick={() => setPestana('horarios')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
                 pestana === 'horarios'
@@ -1642,6 +1660,16 @@ export default function Home() {
               }`}
             >
               <span>🗓️</span> Cronograma
+            </button>
+            <button
+              onClick={() => setPestana('plan')}
+              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
+                pestana === 'plan'
+                  ? 'bg-amber-600/20 text-amber-300 border-amber-500/40 shadow-sm'
+                  : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>🧭</span> Plan de estudio
             </button>
             <button
               onClick={() => setPestana('promocion')}
@@ -2480,9 +2508,7 @@ export default function Home() {
                   <div className="border-b border-slate-800 pb-4">
                     <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400">Tecnicatura Universitaria en Ciberseguridad</p>
                     <h2 className="mt-1 text-2xl font-extrabold text-white">Plan de estudio</h2>
-                    <p className="mt-2 max-w-3xl text-sm text-slate-400">
-                      Materias, códigos y correlativas según el plan oficial. El seguimiento de aprobaciones se agregará en el próximo paso.
-                    </p>
+                    <p className="mt-2 max-w-3xl text-sm text-slate-400">Materias, códigos y correlativas según el plan oficial.</p>
                   </div>
                   {['1° año · 1° cuatrimestre', '1° año · 2° cuatrimestre', '2° año · 1° cuatrimestre', '2° año · 2° cuatrimestre', '3° año · 1° cuatrimestre'].map((cuatrimestre) => {
                     const materiasDelCuatrimestre = planDeEstudio.filter((materia) => materia.cuatrimestre === cuatrimestre);
@@ -2502,8 +2528,44 @@ export default function Home() {
                                   <h4 className="font-bold leading-snug text-white">{materia.nombre}</h4>
                                   <p className="mt-2 text-xs text-slate-400">
                                     <span className="font-semibold text-slate-300">Correlativas:</span>{' '}
-                                    {materia.correlativas.length > 0 ? materia.correlativas.join(' · ') : 'Ninguna'}
+                                    {materia.correlativas.length > 0
+                                      ? materia.correlativas.map((correlativa) => {
+                                        const materiaCorrelativa = obtenerMateriaPlan(correlativa);
+                                        return materiaCorrelativa
+                                          ? `${materiaCorrelativa.codigo} · ${materiaCorrelativa.nombre} · ${materiaCorrelativa.cuatrimestre}`
+                                          : correlativa;
+                                      }).join(' | ')
+                                      : 'Ninguna'}
                                   </p>
+                                </div>
+                              </div>
+                              <div className="mt-4 border-t border-slate-800 pt-3">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Estado académico</p>
+                                <div className="mt-2 space-y-2">
+                                  {(esAdmin ? alumnos : [usuarioActual]).map((alumno) => {
+                                    const progreso = obtenerProgresoMateria(alumno, materia.codigo);
+                                    return (
+                                      <div key={`${materia.codigo}-${alumno}`} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                        <span className="font-semibold text-slate-300">{alumno}</span>
+                                        {esAdmin ? (
+                                          <select
+                                            value={progreso?.estado || 'pendiente'}
+                                            onChange={(evento) => handleGuardarProgresoPlan(alumno, materia.codigo, evento.target.value)}
+                                            className="rounded-lg border border-slate-700 bg-[#0f141c] px-2 py-1.5 font-semibold text-slate-200 outline-none focus:border-cyan-400"
+                                          >
+                                            <option value="pendiente">Pendiente</option>
+                                            <option value="cursando">Cursando</option>
+                                            <option value="aprobada">Aprobada</option>
+                                            <option value="promocionada">Promocionada</option>
+                                          </select>
+                                        ) : (
+                                          <span className="rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-1 font-bold capitalize text-slate-300">
+                                            {(progreso?.estado || 'pendiente').replace('promocionada', 'promocionada')}
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             </article>
