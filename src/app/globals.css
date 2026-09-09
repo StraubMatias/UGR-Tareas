@@ -1,0 +1,354 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0b1117;
+  --foreground: #e6edf3;
+  --ink: #e6edf3;
+  --muted: #8b9aaa;
+  --line: rgba(148, 163, 184, 0.16);
+  --amber: #f4b860;
+  --cyan: #62d6d1;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --container-9xl: 100rem;
+  --text-xs: 0.875rem;
+  --text-sm: 1rem;
+  --text-base: 1.125rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.375rem;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), sans-serif;
+  background-image:
+    radial-gradient(circle at 8% 0%, rgba(98, 214, 209, 0.1), transparent 30rem),
+    radial-gradient(circle at 92% 8%, rgba(244, 184, 96, 0.08), transparent 26rem),
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: auto, auto, 42px 42px, 42px 42px;
+  background-attachment: fixed;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.portal-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.portal-header {
+  background: linear-gradient(135deg, rgba(20, 31, 40, 0.96), rgba(13, 20, 28, 0.94));
+  border-color: var(--line);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+}
+
+.portal-kicker {
+  color: var(--cyan);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.portal-login {
+  background: linear-gradient(145deg, rgba(20, 31, 40, 0.98), rgba(13, 20, 28, 0.96));
+  border-color: var(--line);
+  border-top: 2px solid rgba(98, 214, 209, 0.5);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+}
+
+.portal-login input:focus {
+  border-color: rgba(98, 214, 209, 0.8);
+  box-shadow: 0 0 0 3px rgba(98, 214, 209, 0.1);
+}
+
+.portal-login-mark {
+  background: rgba(98, 214, 209, 0.1);
+  border: 1px solid rgba(98, 214, 209, 0.24);
+  box-shadow: 0 0 30px rgba(98, 214, 209, 0.12);
+}
+
+.portal-login-button {
+  background: var(--cyan);
+  color: #092025;
+  box-shadow: 0 10px 24px rgba(98, 214, 209, 0.16);
+}
+
+.portal-login-button:hover {
+  background: #8be4df;
+}
+
+.portal-login-meta {
+  color: var(--amber);
+}
+
+.portal-login-meta span:not(:first-child) {
+  color: rgba(244, 184, 96, 0.45);
+}
+
+.portal-nav {
+  border-color: var(--line);
+  background: rgba(11, 17, 23, 0.86);
+  scrollbar-color: #3c6772 transparent;
+  scrollbar-width: thin;
+}
+
+.portal-nav > button,
+.portal-nav > a {
+  flex-shrink: 0;
+  color: #d9e4ec;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.32);
+}
+
+.portal-nav > button[class~="bg-blue-600/20"] {
+  color: #b9ddff;
+}
+
+.portal-nav > button[class~="bg-emerald-600/20"] {
+  color: #baf5d2;
+}
+
+.portal-nav > button[class~="bg-cyan-600/20"] {
+  color: #b8f3f0;
+}
+
+.portal-nav > button[class~="bg-purple-600/20"] {
+  color: #e2c7ff;
+}
+
+.portal-nav > button:hover,
+.portal-nav > a:hover {
+  color: #ffffff;
+}
+
+@media (max-width: 640px) {
+  body {
+    background-size: auto, auto, 30px 30px, 30px 30px;
+  }
+}
+
+.schedule-scroll {
+  overflow-x: auto;
+  scrollbar-color: #334155 #111821;
+  scrollbar-width: thin;
+}
+
+.schedule-card {
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease;
+}
+
+.schedule-card:hover {
+  transform: translateY(-2px);
+  border-color: #475569;
+  background-color: #151e2a;
+}
+
+.calendar-nav-button,
+.calendar-today-button {
+  min-width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid #334155;
+  border-radius: 0.7rem;
+  background: #161c26;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  font-weight: 800;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.calendar-nav-button:hover,
+.calendar-today-button:hover {
+  border-color: rgba(98, 214, 209, 0.6);
+  background: rgba(98, 214, 209, 0.12);
+  color: #b8f3f0;
+}
+
+.calendar-today-button {
+  padding: 0 0.75rem;
+  color: #62d6d1;
+}
+
+.calendar-empty {
+  min-height: 3rem;
+}
+
+.calendar-day {
+  align-self: stretch;
+  width: 100%;
+  appearance: none;
+  overflow: hidden;
+  border: 1px solid rgba(51, 65, 85, 0.72);
+  border-radius: 0.75rem;
+  background: rgba(22, 28, 38, 0.82);
+  padding: 0.5rem;
+}
+
+.calendar-day-empty {
+  align-self: start;
+  min-height: 3.25rem;
+  background: rgba(15, 20, 28, 0.42);
+  border-color: rgba(51, 65, 85, 0.42);
+}
+
+.calendar-day:hover {
+  border-color: rgba(98, 214, 209, 0.65);
+  background: rgba(28, 42, 49, 0.9);
+}
+
+.calendar-day-today {
+  border-color: rgba(98, 214, 209, 0.7);
+  box-shadow: inset 0 2px 0 #62d6d1;
+}
+
+.calendar-date {
+  display: inline-flex;
+  min-width: 1.65rem;
+  height: 1.65rem;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.calendar-date-today {
+  border-radius: 999px;
+  background: #62d6d1;
+  color: #092025;
+}
+
+.calendar-event {
+  overflow: hidden;
+  border-left: 2px solid;
+  border-radius: 0.35rem;
+  padding: 0.3rem 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-class {
+  border-color: #62d6d1;
+  background: rgba(98, 214, 209, 0.12);
+  color: #b8f3f0;
+}
+
+.calendar-exam {
+  border-color: #c084fc;
+  background: rgba(168, 85, 247, 0.14);
+  color: #e9d5ff;
+  white-space: normal;
+}
+
+.calendar-task {
+  border-color: #f4b860;
+  background: rgba(244, 184, 96, 0.13);
+  color: #fde2b4;
+}
+
+.calendar-academic {
+  border-color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+  color: #bbf7d0;
+  white-space: normal;
+}
+
+.calendar-async {
+  border-color: #fb923c;
+  background: rgba(251, 146, 60, 0.14);
+  color: #fed7aa;
+  white-space: normal;
+}
+
+.calendar-legend-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.35rem;
+  border-radius: 999px;
+}
+
+.calendar-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(3, 7, 12, 0.78);
+  backdrop-filter: blur(5px);
+}
+
+.calendar-modal {
+  width: min(100%, 34rem);
+  max-height: min(90vh, 42rem);
+  overflow-y: auto;
+  border: 1px solid rgba(98, 214, 209, 0.35);
+  border-radius: 1rem;
+  background: #161c26;
+  padding: 1.25rem;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.calendar-modal-close {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #334155;
+  border-radius: 0.6rem;
+  color: #94a3b8;
+  font-size: 1.35rem;
+  line-height: 1;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.calendar-modal-close:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: #ffffff;
+}
+
+.calendar-modal-event {
+  border-left-width: 3px;
+  border-left-style: solid;
+  border-radius: 0.65rem;
+  padding: 0.8rem 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .calendar-empty {
+    min-height: 2.25rem;
+  }
+
+  .calendar-day {
+    min-height: 6.75rem;
+    padding: 0.3rem;
+  }
+
+  .calendar-day-empty {
+    min-height: 2.5rem;
+  }
+
+  .calendar-event {
+    padding: 0.25rem 0.25rem;
+    font-size: 0.58rem;
+  }
+}

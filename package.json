@@ -1,0 +1,29 @@
+{
+  "name": "dashboard-tareas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "migrate": "node scripts/migrate.mjs",
+    "test": "node --test tests/**/*.test.mjs"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.4",
+    "next": "16.3.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.2",
+    "tailwindcss": "^4"
+  },
+  "allowScripts": {
+    "unrs-resolver@1.12.2": true
+  }
+}
