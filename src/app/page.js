@@ -1267,9 +1267,9 @@ export default function Home() {
     const diaSemana = obtenerDiaSemanaHorario(fecha);
 
     const eventosCronogramaDia = cronograma.filter((evento) => obtenerClaveDiaCalendario(evento.fecha) === claveDia);
-    const materiasAsincronicasDia = new Set(
+    const materiasSinCursadaDia = new Set(
       eventosCronogramaDia
-        .filter((evento) => evento.modalidad === 'asincrónico')
+        .filter((evento) => evento.modalidad !== 'sincrónico')
         .map((evento) => evento.materia_id)
     );
 
@@ -1278,7 +1278,7 @@ export default function Home() {
       tareas: tareasCalendario.filter(({ tarea }) => obtenerClaveDiaCalendario(tarea.fin) === claveDia),
       horarios: horarios
         .filter((horario) => Number(horario.dia) === diaSemana)
-        .filter((horario) => !materiasAsincronicasDia.has(horario.materia_id))
+        .filter((horario) => !materiasSinCursadaDia.has(horario.materia_id))
         .sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio))),
       cronograma: eventosCronogramaDia
     };
@@ -3219,11 +3219,12 @@ export default function Home() {
                                 {eventos.cronograma.map((evento) => {
                                   const materia = materias.find((item) => item.id === evento.materia_id);
                                   const esAsincronico = evento.modalidad === 'asincrónico';
+                                  const esSinClases = evento.modalidad === 'sin_clases';
                                   const diaSemana = obtenerDiaSemanaHorario(new Date(`${evento.fecha}T00:00:00`));
                                   const horarioMateria = horarios.find((h) => h.materia_id === evento.materia_id && Number(h.dia) === diaSemana);
                                   return (
                                     <div key={evento.id} className={`calendar-event ${esAsincronico ? 'calendar-async' : 'calendar-academic'}`} title={`${evento.titulo} · ${materia?.nombre || 'Materia'}`}>
-                                      <span className="font-bold">{esAsincronico ? 'Asíncrono' : 'Clase'}</span> {esAsincronico ? (horarioMateria ? `${horarioMateria.hora_inicio} - ${horarioMateria.hora_fin}` : '') : evento.titulo}
+                                      <span className="font-bold">{esAsincronico ? 'Asíncrono' : esSinClases ? 'Sin clases' : 'Clase'}</span> {esAsincronico ? (horarioMateria ? `${horarioMateria.hora_inicio} - ${horarioMateria.hora_fin}` : '') : esSinClases ? 'Sin clases' : evento.titulo}
                                     </div>
                                   );
                                 })}
@@ -3307,13 +3308,15 @@ export default function Home() {
                           {eventos.cronograma.map((evento) => {
                             const materia = materias.find((item) => item.id === evento.materia_id);
                             const esAsincronico = evento.modalidad === 'asincrónico';
+                            const esSinClases = evento.modalidad === 'sin_clases';
                             const diaSemana = obtenerDiaSemanaHorario(new Date(`${evento.fecha}T00:00:00`));
                             const horarioMateria = horarios.find((h) => h.materia_id === evento.materia_id && Number(h.dia) === diaSemana);
                             return (
                               <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esAsincronico ? 'calendar-async' : 'calendar-academic'}`}>
-                                <p className="text-sm font-extrabold">{esAsincronico ? 'Clase asincrónica' : 'Cronograma'} · {esAsincronico ? (horarioMateria ? `${horarioMateria.hora_inicio} - ${horarioMateria.hora_fin}` : '') : evento.titulo}</p>
+                                <p className="text-sm font-extrabold">{esAsincronico ? 'Clase asincrónica' : esSinClases ? 'Sin clases' : 'Cronograma'} · {esAsincronico ? (horarioMateria ? `${horarioMateria.hora_inicio} - ${horarioMateria.hora_fin}` : '') : esSinClases ? 'Sin clases' : evento.titulo}</p>
                                 <p className="mt-1 text-sm">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
                                 {esAsincronico && evento.titulo && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
+                                {esSinClases && evento.titulo && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
                                 {evento.detalles && <p className="mt-2 text-sm opacity-85">{evento.detalles}</p>}
                               </div>
                             );
