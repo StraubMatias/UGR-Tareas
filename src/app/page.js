@@ -1266,13 +1266,21 @@ export default function Home() {
     const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
     const diaSemana = obtenerDiaSemanaHorario(fecha);
 
+    const eventosCronogramaDia = cronograma.filter((evento) => obtenerClaveDiaCalendario(evento.fecha) === claveDia);
+    const materiasAsincronicasDia = new Set(
+      eventosCronogramaDia
+        .filter((evento) => evento.modalidad === 'asincrónico')
+        .map((evento) => evento.materia_id)
+    );
+
     return {
       parciales: parciales.filter((parcial) => obtenerClaveDiaCalendario(parcial.fecha) === claveDia),
       tareas: tareasCalendario.filter(({ tarea }) => obtenerClaveDiaCalendario(tarea.fin) === claveDia),
       horarios: horarios
         .filter((horario) => Number(horario.dia) === diaSemana)
+        .filter((horario) => !materiasAsincronicasDia.has(horario.materia_id))
         .sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio))),
-      cronograma: cronograma.filter((evento) => obtenerClaveDiaCalendario(evento.fecha) === claveDia)
+      cronograma: eventosCronogramaDia
     };
   };
   const materiasDelRanking = materiaRanking === 'general'
