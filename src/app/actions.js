@@ -836,6 +836,24 @@ export async function obtenerHorariosAction(periodoId = null) {
   }
 }
 
+export async function obtenerCronogramaAction(periodoId = null) {
+  try {
+    if (!await obtenerUsuarioSesion()) return [];
+    const res = await db.execute(consultaPeriodo(
+      periodoId,
+      `SELECT c.id, c.materia_id, c.fecha, c.modalidad, c.tipo, c.titulo, c.detalles
+       FROM cronograma_eventos c JOIN materias m ON m.id = c.materia_id
+       WHERE m.periodo_id = ? ORDER BY c.fecha ASC, c.titulo ASC`,
+      `SELECT id, materia_id, fecha, modalidad, tipo, titulo, detalles
+       FROM cronograma_eventos ORDER BY fecha ASC, titulo ASC`
+    ));
+    return res.rows;
+  } catch (error) {
+    console.error('Error al obtener cronograma:', error);
+    return [];
+  }
+}
+
 export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, aula, usuario }) {
   try {
     if (!await verificarAdmin()) {

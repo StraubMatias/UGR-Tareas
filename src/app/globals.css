@@ -262,6 +262,20 @@ textarea {
   color: #fde2b4;
 }
 
+.calendar-academic {
+  border-color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+  color: #bbf7d0;
+  white-space: normal;
+}
+
+.calendar-async {
+  border-color: #fb923c;
+  background: rgba(251, 146, 60, 0.14);
+  color: #fed7aa;
+  white-space: normal;
+}
+
 .calendar-legend-dot {
   display: inline-block;
   width: 0.5rem;

@@ -29,6 +29,7 @@ import {
   eliminarParcialAction,
   guardarNotaParcialAction,
   obtenerHorariosAction,
+  obtenerCronogramaAction,
   crearHorarioAction,
   eliminarHorarioAction
 } from './actions';
@@ -64,6 +65,7 @@ export default function Home() {
   const [notasTareasInputs, setNotasTareasInputs] = useState({});
   const [notasDesplegadas, setNotasDesplegadas] = useState({});
   const [horarios, setHorarios] = useState([]);
+  const [cronograma, setCronograma] = useState([]);
   const [progresoPlan, setProgresoPlan] = useState([]);
   const [mesCalendario, setMesCalendario] = useState(() => {
     const hoy = new Date();
@@ -537,11 +539,12 @@ export default function Home() {
       || null;
     setPeriodos(dataPeriodos || []);
     if (!periodoSeleccionado && periodoParaCargar) setPeriodoSeleccionado(periodoParaCargar);
-    const [dataMaterias, dataAlumnos, dataParciales, dataHorarios, dataProgresoPlan] = await Promise.all([
+    const [dataMaterias, dataAlumnos, dataParciales, dataHorarios, dataCronograma, dataProgresoPlan] = await Promise.all([
       obtenerDatos(periodoParaCargar),
       obtenerAlumnosAction(),
       obtenerParcialesAction(periodoParaCargar),
       obtenerHorariosAction(periodoParaCargar),
+      obtenerCronogramaAction(periodoParaCargar),
       obtenerProgresoPlanAction()
     ]);
     
@@ -550,6 +553,7 @@ export default function Home() {
     setParciales(dataParciales.parciales || []);
     setNotas(dataParciales.notas || []);
     setHorarios(dataHorarios || []);
+    setCronograma(dataCronograma || []);
     setProgresoPlan(dataProgresoPlan || []);
 
     // Inicializar inputs de notas locales
@@ -1257,7 +1261,7 @@ export default function Home() {
   });
   const tareasCalendario = materias.flatMap((materia) => materia.tareas.map((tarea) => ({ tarea, materia })));
   const eventosDelDiaCalendario = (fecha) => {
-    if (!fecha || !fechaDentroDelCronograma(fecha)) return { parciales: [], tareas: [], horarios: [] };
+    if (!fecha || !fechaDentroDelCronograma(fecha)) return { parciales: [], tareas: [], horarios: [], cronograma: [] };
 
     const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
     const diaSemana = obtenerDiaSemanaHorario(fecha);
@@ -1267,7 +1271,8 @@ export default function Home() {
       tareas: tareasCalendario.filter(({ tarea }) => obtenerClaveDiaCalendario(tarea.fin) === claveDia),
       horarios: horarios
         .filter((horario) => Number(horario.dia) === diaSemana)
-        .sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio)))
+        .sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio))),
+      cronograma: cronograma.filter((evento) => obtenerClaveDiaCalendario(evento.fecha) === claveDia)
     };
   };
   const materiasDelRanking = materiaRanking === 'general'
@@ -3145,7 +3150,7 @@ export default function Home() {
                       </button>
                     </div>
                   </div>
-                  {horarios.length === 0 && parciales.length === 0 && tareasCalendario.length === 0 ? (
+                  {horarios.length === 0 && parciales.length === 0 && tareasCalendario.length === 0 && cronograma.length === 0 ? (
                     <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
                       Todavía no hay eventos ni horarios cargados.
                     </div>
@@ -3163,7 +3168,7 @@ export default function Home() {
                           const eventos = eventosDelDiaCalendario(fecha);
                           const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
                           const esHoy = claveDia === claveHoyCalendario;
-                          const cantidadEventos = eventos.horarios.length + eventos.parciales.length + eventos.tareas.length;
+                          const cantidadEventos = eventos.horarios.length + eventos.parciales.length + eventos.tareas.length + eventos.cronograma.length;
                           return (
                             <button
                               type="button"
@@ -3203,6 +3208,14 @@ export default function Home() {
                                     <span className="font-bold">Entrega</span> {tarea.nombre}
                                   </div>
                                 ))}
+                                {eventos.cronograma.map((evento) => {
+                                  const materia = materias.find((item) => item.id === evento.materia_id);
+                                  return (
+                                    <div key={evento.id} className={`calendar-event ${evento.modalidad === 'asincrónico' ? 'calendar-async' : 'calendar-academic'}`} title={`${evento.titulo} · ${materia?.nombre || 'Materia'}`}>
+                                      <span className="font-bold">{evento.modalidad === 'asincrónico' ? 'Asíncrono' : 'Clase'}</span> {evento.titulo}
+                                    </div>
+                                  );
+                                })}
                               </div>}
                             </button>
                           );
@@ -3212,6 +3225,8 @@ export default function Home() {
                         <span><i className="calendar-legend-dot bg-cyan-400" /> Cursada</span>
                         <span><i className="calendar-legend-dot bg-purple-400" /> Parcial</span>
                         <span><i className="calendar-legend-dot bg-amber-400" /> Entrega</span>
+                        <span><i className="calendar-legend-dot bg-emerald-400" /> Cronograma</span>
+                        <span><i className="calendar-legend-dot bg-orange-400" /> Asincrónico</span>
                       </div>
                     </div>
                   )}
@@ -3247,7 +3262,7 @@ export default function Home() {
                         </button>
                       </div>
 
-                      {eventos.horarios.length === 0 && eventos.parciales.length === 0 && eventos.tareas.length === 0 ? (
+                      {eventos.horarios.length === 0 && eventos.parciales.length === 0 && eventos.tareas.length === 0 && eventos.cronograma.length === 0 ? (
                         <p className="py-8 text-center text-sm text-slate-400">No hay eventos programados para este día.</p>
                       ) : (
                         <div className="mt-5 space-y-3">
@@ -3278,6 +3293,16 @@ export default function Home() {
                               {tarea.detalles && <p className="mt-2 text-sm opacity-85">{tarea.detalles}</p>}
                             </div>
                           ))}
+                          {eventos.cronograma.map((evento) => {
+                            const materia = materias.find((item) => item.id === evento.materia_id);
+                            return (
+                              <div key={`modal-${evento.id}`} className={`calendar-modal-event ${evento.modalidad === 'asincrónico' ? 'calendar-async' : 'calendar-academic'}`}>
+                                <p className="text-sm font-extrabold">{evento.modalidad === 'asincrónico' ? 'Clase asincrónica' : 'Cronograma'} · {evento.titulo}</p>
+                                <p className="mt-1 text-sm">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
+                                {evento.detalles && <p className="mt-2 text-sm opacity-85">{evento.detalles}</p>}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </section>

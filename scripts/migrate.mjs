@@ -207,6 +207,119 @@ async function main() {
     await agregarColumnaSiFalta('alumnos', 'sesion_version', 'INTEGER NOT NULL DEFAULT 1');
   });
 
+  await ejecutarMigracion(7, 'agregar cronogramas académicos con modalidad', async () => {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS cronograma_eventos (
+        id TEXT PRIMARY KEY,
+        materia_id TEXT NOT NULL,
+        fecha TEXT NOT NULL,
+        modalidad TEXT NOT NULL DEFAULT 'sincrónico',
+        tipo TEXT NOT NULL DEFAULT 'clase',
+        titulo TEXT NOT NULL,
+        detalles TEXT NOT NULL DEFAULT '',
+        UNIQUE(materia_id, fecha, titulo)
+      )
+    `);
+
+    const materias = await db.execute('SELECT id, nombre FROM materias');
+    const buscarMateria = (texto) => materias.rows.find((materia) => materia.nombre.includes(texto));
+    const eventos = [
+      {
+        materia: 'GESTIÓN DE ACTIVOS',
+        filas: [
+          ['2026-08-24', 'sincrónico', 'clase', 'Introducción a la materia y activos de información', 'Activos empresariales, ciclo de vida, ISO 27000 y Joyas de la Corona.'],
+          ['2026-08-31', 'sincrónico', 'clase', 'Datos, metadatos y Data Governance', 'DLP, retención, eliminación segura, backups, caché y fuga de información.'],
+          ['2026-09-07', 'sincrónico', 'clase', 'Superficie de ataque e inventarios', 'Shadow IT, inventario de sistemas y hardware, dueño y custodio.'],
+          ['2026-09-14', 'sincrónico', 'sin_clases', 'Sin clases', 'Semana del turno de examen de septiembre.'],
+          ['2026-09-21', 'sincrónico', 'clase', 'Inventario y clasificación de datos', 'Datos públicos, internos, confidenciales y personales.'],
+          ['2026-09-28', 'sincrónico', 'clase', 'Inventario de software y servicios', 'Licencias, proveedores, procesos, roles, cloud e IA. Parcial opcional de unidades 1 y 2.'],
+          ['2026-10-05', 'sincrónico', 'clase', 'Herramientas de inventariado', 'Hardware, software y herramientas de gestión de activos de TI.'],
+          ['2026-10-19', 'sincrónico', 'clase', 'Herramientas de inventariado de datos', 'Cloud, IA y OSINT.'],
+          ['2026-10-26', 'sincrónico', 'clase', 'Herramientas de GRC y TPRM', ''],
+          ['2026-11-02', 'sincrónico', 'clase', 'Gestión de activos en marcos y legislación', 'COBIT 5, ITIL 4, SOx, PCI-DSS, NIST 800-60, ley 25326, DNPDP e ISO 42001.'],
+          ['2026-11-09', 'sincrónico', 'clase', 'ISO 19770 y desarrollo profesional', 'Parcial opcional de unidades 3 y 4.'],
+          ['2026-11-23', 'sincrónico', 'consulta', 'Clase de consulta', ''],
+          ['2026-11-30', 'sincrónico', 'examen', '1er llamado Turno Diciembre', ''],
+          ['2026-12-07', 'sincrónico', 'consulta', 'Clase de consulta', ''],
+          ['2026-12-14', 'sincrónico', 'examen', '2do llamado Turno Diciembre', '']
+        ]
+      },
+      {
+        materia: 'EVALUACIÓN Y GESTIÓN DE RIESGOS',
+        filas: [
+          ['2026-08-21', 'sincrónico', 'clase', '¿Qué es el riesgo?', 'Fundamentos y marcos de referencia.'],
+          ['2026-08-28', 'sincrónico', 'clase', 'Gobierno del riesgo', 'Apetito, tolerancia y marco regulatorio.'],
+          ['2026-09-04', 'sincrónico', 'entrega', 'Contexto organizacional y activos de información', 'Trabajo final: primera entrega.'],
+          ['2026-09-11', 'sincrónico', 'clase', 'Identificación de amenazas y vulnerabilidades', ''],
+          ['2026-09-18', 'sincrónico', 'sin_clases', 'Sin clases', 'Turno de examen septiembre 2026.'],
+          ['2026-09-25', 'sincrónico', 'clase', 'Análisis de riesgos', 'Metodologías cualitativas y cuantitativas.'],
+          ['2026-10-02', 'sincrónico', 'clase', 'Tratamiento del riesgo', 'Controles, mitigación y planes de acción.'],
+          ['2026-10-09', 'sincrónico', 'clase', 'Riesgo en Cloud y terceros', 'Cadena de suministro.'],
+          ['2026-10-16', 'sincrónico', 'entrega', 'Métricas y riesgos emergentes', 'KRI, monitoreo y trabajo final: segunda entrega.'],
+          ['2026-10-23', 'sincrónico', 'clase', 'GRC y cultura de riesgo', 'Comunicación ejecutiva.'],
+          ['2026-10-30', 'sincrónico', 'clase', 'Cierre integrador', ''],
+          ['2026-11-06', 'sincrónico', 'exposición', 'Presentación final por grupos', '1er turno.'],
+          ['2026-11-13', 'sincrónico', 'exposición', 'Presentación final por grupos', '2do turno.'],
+          ['2026-11-27', 'sincrónico', 'consulta', 'Clase de consulta', ''],
+          ['2026-12-04', 'sincrónico', 'examen', 'Examen 1er llamado', 'Turno julio/agosto.'],
+          ['2026-12-11', 'sincrónico', 'consulta', 'Clase de consulta', ''],
+          ['2026-12-18', 'sincrónico', 'examen', 'Examen 2do llamado', 'Turno julio/agosto.']
+        ]
+      },
+      {
+        materia: 'CIBERDELITOS',
+        filas: [
+          ['2026-08-24', 'sincrónico', 'clase', 'Unidad 1: presentación e introducción a los ciberdelitos', 'Sociedad de la información, economía de datos e implicancias. Gonzalo Rodríguez.'],
+          ['2026-08-31', 'sincrónico', 'clase', 'Unidad 1: derecho penal y ciberdelincuencia', 'Delitos informáticos y marco jurídico general. Gonzalo Rodríguez.'],
+          ['2026-09-07', 'sincrónico', 'clase', 'Unidad 2: abordaje gubernamental del ciberdelito', 'Leonardo Gianzone.'],
+          ['2026-09-14', 'sincrónico', 'sin_clases', 'Sin clases', 'Semana del turno de examen de septiembre.'],
+          ['2026-09-21', 'sincrónico', 'clase', 'Unidad 2: marco jurídico internacional', 'Gonzalo Rodríguez.'],
+          ['2026-09-28', 'sincrónico', 'clase', 'Unidad 3: regulación internacional', 'Implicancias geopolíticas. Leonardo Gianzone.'],
+          ['2026-10-05', 'sincrónico', 'clase', 'Unidad 4: protección de datos personales', 'Gonzalo Rodríguez.'],
+          ['2026-10-19', 'sincrónico', 'examen', '1er examen parcial', ''],
+          ['2026-10-26', 'sincrónico', 'clase', 'Unidad 5: cibercrimen económico', 'Características y clases. Leonardo Gianzone.'],
+          ['2026-11-02', 'sincrónico', 'clase', 'Unidad 6: delitos sexuales en la era digital', 'Leonardo Gianzone.'],
+          ['2026-11-09', 'sincrónico', 'examen', '2do examen parcial', ''],
+          ['2026-11-23', 'sincrónico', 'consulta', 'Clase de consulta', ''],
+          ['2026-11-30', 'sincrónico', 'examen', '1er llamado Turno Diciembre', ''],
+          ['2026-12-07', 'sincrónico', 'consulta', 'Clase de consulta', ''],
+          ['2026-12-14', 'sincrónico', 'examen', '2do llamado Turno Diciembre', '']
+        ]
+      },
+      {
+        materia: 'SISTEMAS DE GESTIÓN DE SEGURIDAD',
+        filas: [
+          ['2026-08-19', 'sincrónico', 'clase', 'Unidad 1: presentación y marcos de seguridad', ''],
+          ['2026-08-26', 'sincrónico', 'entrega', 'Presentación del trabajo práctico', 'Consultoría y apoyo a auditoría externa.'],
+          ['2026-09-02', 'asincrónico', 'clase', 'Unidad 2: ISO/IEC 27001', 'Introducción y familia ISO 27K.'],
+          ['2026-09-09', 'asincrónico', 'clase', 'Unidad 2: fundamentos de ISO 27001', 'SGSI, PDCA, riesgos, estructura, Anexo A e implementación.'],
+          ['2026-09-16', 'sincrónico', 'entrega', 'Kick-off del proyecto', 'Entrega del cronograma del plan de cumplimiento de auditoría.'],
+          ['2026-09-23', 'sincrónico', 'entrega', 'Plan de cumplimiento normativo', 'Presentación referida al caso de negocio elegido.'],
+          ['2026-09-30', 'asincrónico', 'entrega', 'Simulador del caso de negocio', 'Cumplimiento de auditoría según el caso elegido.'],
+          ['2026-10-07', 'asincrónico', 'clase', 'Unidad 3: CIS Controls v8', 'Controles básicos, fundamentales y organizativos.'],
+          ['2026-10-14', 'sincrónico', 'exposición', 'Exposición de hitos 1, 2 y 3', 'Trabajo práctico, grupos turno 1.'],
+          ['2026-10-21', 'sincrónico', 'exposición', 'Exposición de hitos 1, 2 y 3', 'Trabajo práctico, grupos turno 2.'],
+          ['2026-10-28', 'sincrónico', 'exposición', 'Presentación de hitos 4 y 5', 'Trabajo práctico.'],
+          ['2026-11-04', 'sincrónico', 'exposición', 'Presentación de hitos 4 y 5', 'Trabajo práctico.'],
+          ['2026-11-11', 'sincrónico', 'entrega', 'Entrega de trabajo práctico', 'Fecha 1, instancia de evaluación principal.'],
+          ['2026-11-18', 'sincrónico', 'entrega', 'Entrega de trabajo práctico', 'Fecha 2, instancia de evaluación principal.'],
+          ['2026-11-25', 'sincrónico', 'entrega', 'Entrega de trabajo práctico', 'Fecha 2, instancia de evaluación principal.']
+        ]
+      }
+    ];
+
+    for (const cronograma of eventos) {
+      const materia = buscarMateria(cronograma.materia);
+      if (!materia) continue;
+      for (const [fecha, modalidad, tipo, titulo, detalles] of cronograma.filas) {
+        await db.execute({
+          sql: 'INSERT OR IGNORE INTO cronograma_eventos (id, materia_id, fecha, modalidad, tipo, titulo, detalles) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          args: [`cronograma_${materia.id}_${fecha}_${titulo}`, materia.id, fecha, modalidad, tipo, titulo, detalles]
+        });
+      }
+    }
+  });
+
   await db.close?.();
 }
 
