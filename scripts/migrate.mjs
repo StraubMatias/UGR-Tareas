@@ -207,6 +207,7 @@ async function main() {
     await agregarColumnaSiFalta('alumnos', 'sesion_version', 'INTEGER NOT NULL DEFAULT 1');
   });
 
+<<<<<<< HEAD
   await ejecutarMigracion(8, 'tabla de auditoría de acciones sensibles', async () => {
     await db.execute(`
       CREATE TABLE IF NOT EXISTS auditoria (
@@ -223,6 +224,8 @@ async function main() {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_auditoria_creada_en ON auditoria(creada_en)');
   });
 
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
   await ejecutarMigracion(7, 'agregar cronogramas académicos con modalidad', async () => {
     await db.execute(`
       CREATE TABLE IF NOT EXISTS cronograma_eventos (

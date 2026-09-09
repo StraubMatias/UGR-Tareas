@@ -9,6 +9,7 @@ const nextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+<<<<<<< HEAD
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
           {
             key: 'Content-Security-Policy',
@@ -25,6 +26,9 @@ const nextConfig = {
             ].join('; ')
           },
           { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0' }
+=======
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
         ]
       }
     ];

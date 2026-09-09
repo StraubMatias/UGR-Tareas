@@ -17,6 +17,7 @@ const LIMITE_LOGIN_IP = 20;
 const VENTANA_LOGIN_MS = 15 * 60 * 1000;
 const BLOQUEO_LOGIN_MS = 15 * 60 * 1000;
 const CODIGOS_PLAN = new Set(PLAN_DE_ESTUDIO.map((materia) => materia.codigo));
+<<<<<<< HEAD
 const LIMITE_ACCIONES_ESCRITURA = 30;
 const VENTANA_ACCIONES_MS = 60 * 1000;
 const BLOQUEO_ACCIONES_MS = 5 * 60 * 1000;
@@ -27,6 +28,8 @@ const MAX_AULA_LENGTH = 50;
 const MAX_TITULO_LENGTH = 200;
 const MAX_PASSWORD_LENGTH = 128;
 const MAX_USUARIO_LENGTH = 100;
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
 
 function obtenerSecretoSesion() {
   const secreto = process.env.SESSION_SECRET?.trim();
@@ -38,6 +41,7 @@ function crearId(prefijo) {
   return `${prefijo}${randomUUID()}`;
 }
 
+<<<<<<< HEAD
 function esIPPrivada(ip) {
   if (!ip) return true;
   if (ip === '::1' || ip === '127.0.0.1' || ip === 'localhost') return true;
@@ -70,11 +74,19 @@ async function obtenerIPReal() {
 
 async function obtenerClavesLogin(usuario) {
   const ip = await obtenerIPReal();
+=======
+async function obtenerClavesLogin(usuario) {
+  const encabezados = await headers();
+  const ip = encabezados.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || encabezados.get('x-real-ip')?.trim()
+    || 'unknown';
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
   const claves = [{ clave: `ip:${ip}`, limite: LIMITE_LOGIN_IP }];
   if (usuario) claves.push({ clave: `user:${usuario.toLowerCase()}`, limite: LIMITE_LOGIN_USUARIO });
   return claves;
 }
 
+<<<<<<< HEAD
 async function accionEscrituraEstaBloqueada(usuario) {
   const ip = await obtenerIPReal();
   const ahora = Date.now();
@@ -160,6 +172,8 @@ async function registrarAuditoria({ accion, usuario, detalle, ip }) {
   }
 }
 
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
 async function loginEstaBloqueado(claves) {
   const ahora = Date.now();
   for (const { clave } of claves) {
@@ -382,9 +396,12 @@ export async function validarLoginAction(usuarioInput, passwordInput) {
     if (!userClean || !passClean) {
       return { exito: false, mensaje: MENSAJE_LOGIN_INVALIDO };
     }
+<<<<<<< HEAD
     if (userClean.length > MAX_USUARIO_LENGTH || passClean.length > MAX_PASSWORD_LENGTH) {
       return { exito: false, mensaje: MENSAJE_LOGIN_INVALIDO };
     }
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
 
     const clavesLogin = await obtenerClavesLogin(userClean);
     if (await loginEstaBloqueado(clavesLogin)) {
@@ -411,7 +428,10 @@ export async function validarLoginAction(usuarioInput, passwordInput) {
 
     await limpiarIntentosLogin(clavesLogin);
     await establecerSesion(usuarioDB.nombre, Number(usuarioDB.sesion_version) || 1);
+<<<<<<< HEAD
     await registrarAuditoria({ accion: 'login', usuario: usuarioDB.nombre, detalle: 'Inicio de sesión exitoso', ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true, usuario: usuarioDB.nombre, rol: usuarioDB.rol || 'alumno' };
   } catch (error) {
     console.error('Error en validarLoginAction:', error);
@@ -451,8 +471,16 @@ export async function cambiarPasswordAction(usuarioInput, passActualInput, passN
     if (passNuevaClean.length < 6) {
       return { exito: false, mensaje: 'La nueva contraseña debe tener al menos 6 caracteres.' };
     }
+<<<<<<< HEAD
     if (passNuevaClean.length > MAX_PASSWORD_LENGTH) {
       return { exito: false, mensaje: `La contraseña no puede superar los ${MAX_PASSWORD_LENGTH} caracteres.` };
+=======
+
+    // 1. Validamos credenciales actuales
+    const loginValido = await validarLoginAction(userClean, passActualClean);
+    if (!loginValido.exito) {
+      return { exito: false, mensaje: 'La contraseña actual es incorrecta.' };
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     }
 
     const usuarioSesion = await obtenerUsuarioSesion();
@@ -460,6 +488,7 @@ export async function cambiarPasswordAction(usuarioInput, passActualInput, passN
       return { exito: false, mensaje: 'La sesión no es válida. Volvé a iniciar sesión.' };
     }
 
+<<<<<<< HEAD
     // 1. Verificamos la contraseña actual directamente (sin efectos secundarios de login)
     const res = await db.execute({
       sql: 'SELECT password FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
@@ -473,6 +502,8 @@ export async function cambiarPasswordAction(usuarioInput, passActualInput, passN
       return { exito: false, mensaje: 'La contraseña actual es incorrecta.' };
     }
 
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     // 2. Actualizamos el campo password en la base de datos Turso
     const version = await db.execute({
       sql: 'SELECT sesion_version FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
@@ -484,7 +515,10 @@ export async function cambiarPasswordAction(usuarioInput, passActualInput, passN
       args: [await hashearPassword(passNuevaClean), nuevaVersion, userClean]
     });
     await establecerSesion(userClean, nuevaVersion);
+<<<<<<< HEAD
     await registrarAuditoria({ accion: 'cambiar_password', usuario: userClean, detalle: 'Cambio de contraseña', ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
 
     return { exito: true, mensaje: '¡Contraseña actualizada con éxito!' };
   } catch (error) {
@@ -519,6 +553,7 @@ export async function obtenerPeriodosAction() {
 // Crear nuevo alumno en la BD
 export async function crearAlumnoAction(nombre) {
   try {
+<<<<<<< HEAD
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede crear alumnos.' };
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
@@ -527,16 +562,26 @@ export async function crearAlumnoAction(nombre) {
     if (!validacionNombre.valida) return validacionNombre;
     const nombreFormateado = validacionNombre.valor;
     if (!nombreFormateado) return { exito: false, mensaje: 'El nombre es obligatorio.' };
+=======
+    if (!await verificarAdmin()) return;
+    const nombreFormateado = nombre.trim();
+    if (!nombreFormateado) return;
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     const id = crearId('a_');
     await db.execute({
       sql: 'INSERT INTO alumnos (id, nombre, password) VALUES (?, ?, ?)',
       args: [id, nombreFormateado, await hashearPassword(nombreFormateado)]
     });
+<<<<<<< HEAD
     await registrarAuditoria({ accion: 'crear_alumno', usuario: usuarioSesion, detalle: `Creó al alumno ${nombreFormateado}`, ip: await obtenerIPReal() });
     return { exito: true };
   } catch (error) {
     console.error('Error en crearAlumnoAction:', error);
     return { exito: false, mensaje: 'No se pudo crear el alumno.' };
+=======
+  } catch (error) {
+    console.error('Error en crearAlumnoAction:', error);
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
   }
 }
 
@@ -544,12 +589,16 @@ export async function crearAlumnoAction(nombre) {
 export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede editar alumnos.' };
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
     const validacionNombre = validarLongitud(nuevoNombre, MAX_NOMBRE_LENGTH, 'nombre');
     if (!validacionNombre.valida) return validacionNombre;
     const nuevoFormateado = validacionNombre.valor;
+=======
+    const nuevoFormateado = nuevoNombre.trim();
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     if (!nuevoFormateado) return { exito: false, mensaje: 'El nombre es obligatorio.' };
     const alumnoActual = await obtenerAlumno(nombreAntiguo);
     if (!alumnoActual) return { exito: false, mensaje: 'El alumno no existe.' };
@@ -568,7 +617,10 @@ export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
       { sql: 'UPDATE notas_tareas SET alumno = ? WHERE alumno_id = ?', args: [nuevoFormateado, alumnoActual.id] },
       { sql: 'UPDATE progreso_materias SET alumno = ? WHERE alumno_id = ?', args: [nuevoFormateado, alumnoActual.id] }
     ], 'write');
+<<<<<<< HEAD
     await registrarAuditoria({ accion: 'editar_alumno', usuario: usuarioSesion, detalle: `Renombró ${nombreAntiguo} a ${nuevoFormateado}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error en editarAlumnoAction:', error);
@@ -580,9 +632,12 @@ export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
 export async function eliminarAlumnoAction(nombre) {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede eliminar alumnos.' };
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     const alumnoActual = await obtenerAlumno(nombre);
     if (!alumnoActual) return { exito: false, mensaje: 'El alumno no existe.' };
     await db.batch([
@@ -592,7 +647,10 @@ export async function eliminarAlumnoAction(nombre) {
       { sql: 'DELETE FROM progreso_materias WHERE alumno_id = ?', args: [alumnoActual.id] },
       { sql: 'DELETE FROM alumnos WHERE id = ?', args: [alumnoActual.id] }
     ], 'write');
+<<<<<<< HEAD
     await registrarAuditoria({ accion: 'eliminar_alumno', usuario: usuarioSesion, detalle: `Eliminó al alumno ${alumnoActual.nombre}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error en eliminarAlumnoAction:', error);
@@ -737,8 +795,11 @@ export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado,
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
     const admin = await verificarAdmin();
+<<<<<<< HEAD
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
 
     const estadosValidos = ['pendiente', 'cursando', 'aprobada', 'promocionada'];
     if (!alumno || !CODIGOS_PLAN.has(materiaCodigo) || !estadosValidos.includes(estado)) {
@@ -772,7 +833,10 @@ export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado,
       `,
       args: [`progreso_${alumnoDB.id}_${materiaCodigo}`, alumnoDB.id, alumnoDB.nombre, materiaCodigo, estado, ['aprobada', 'promocionada'].includes(estado) ? notaValidada.valor : null]
     });
+<<<<<<< HEAD
     await registrarAuditoria({ accion: 'guardar_progreso_plan', usuario: usuarioSesion, detalle: `Actualizó ${materiaCodigo} de ${alumnoDB.nombre} a ${estado}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error al guardar progreso del plan:', error);
@@ -784,8 +848,11 @@ export async function toggleTareaAction(tareaId, alumno) {
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
+<<<<<<< HEAD
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     const alumnoObjetivo = await verificarAdmin() ? alumno : usuarioSesion;
     const alumnoDB = await obtenerAlumno(alumnoObjetivo);
     if (!alumnoDB) return { exito: false, mensaje: 'El alumno no existe.' };
@@ -807,13 +874,19 @@ export async function toggleTareaAction(tareaId, alumno) {
         sql: 'DELETE FROM completadas WHERE tarea_id = ? AND alumno_id = ?',
         args: [tareaId, alumnoDB.id]
       });
+<<<<<<< HEAD
       await registrarAuditoria({ accion: 'desmarcar_tarea', usuario: usuarioSesion, detalle: `Desmarcó la tarea ${tareaId} de ${alumnoDB.nombre}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     } else {
       await db.execute({
         sql: "INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, datetime('now'))",
         args: [tareaId, alumnoDB.id, alumnoDB.nombre]
       });
+<<<<<<< HEAD
       await registrarAuditoria({ accion: 'marcar_tarea', usuario: usuarioSesion, detalle: `Marcó la tarea ${tareaId} de ${alumnoDB.nombre}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     }
     return { exito: true };
   } catch (error) {
@@ -825,12 +898,16 @@ export async function toggleTareaAction(tareaId, alumno) {
 export async function crearMateriaAction({ nombre, anio, cuatrimestre }) {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede crear materias.' };
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
     const validacionNombre = validarLongitud(nombre, MAX_NOMBRE_LENGTH, 'nombre de la materia');
     if (!validacionNombre.valida) return validacionNombre;
     const nombreFormateado = validacionNombre.valor;
+=======
+    const nombreFormateado = nombre?.trim();
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     const anioNumerico = Number(anio);
     const cuatrimestreNumerico = Number(cuatrimestre);
 
@@ -854,7 +931,10 @@ export async function crearMateriaAction({ nombre, anio, cuatrimestre }) {
       sql: 'INSERT INTO materias (id, nombre, periodo_id) VALUES (?, ?, ?)',
       args: [id, nombreFormateado.toUpperCase(), periodoId]
     });
+<<<<<<< HEAD
     await registrarAuditoria({ accion: 'crear_materia', usuario: usuarioSesion, detalle: `Creó la materia ${nombreFormateado}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error en crearMateriaAction:', error);
@@ -864,6 +944,7 @@ export async function crearMateriaAction({ nombre, anio, cuatrimestre }) {
 
 export async function renombrarMateriaAction(id, nuevoNombre) {
   try {
+<<<<<<< HEAD
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede renombrar materias.' };
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
@@ -880,6 +961,15 @@ export async function renombrarMateriaAction(id, nuevoNombre) {
   } catch (error) {
     console.error('Error en renombrarMateriaAction:', error);
     return { exito: false, mensaje: 'No se pudo renombrar la materia.' };
+=======
+    if (!await verificarAdmin()) return;
+    await db.execute({
+      sql: 'UPDATE materias SET nombre = ? WHERE id = ?',
+      args: [nuevoNombre.toUpperCase().trim(), id]
+    });
+  } catch (error) {
+    console.error('Error en renombrarMateriaAction:', error);
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
   }
 }
 
@@ -892,11 +982,14 @@ export async function editarCondicionesMateriaAction({ id, condiciones, notaMini
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede editar condiciones.' };
     }
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
     const validacionCondiciones = validarLongitud(condiciones, MAX_CONDICIONES_LENGTH, 'condiciones');
     if (!validacionCondiciones.valida) return validacionCondiciones;
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     if (![regularizar, promocionar].every((nota) => Number.isFinite(nota) && nota >= 1 && nota <= maximo)) {
       return { exito: false, mensaje: `Los valores mínimos deben estar entre 1 y ${maximo}.` };
     }
@@ -908,9 +1001,14 @@ export async function editarCondicionesMateriaAction({ id, condiciones, notaMini
     }
     await db.execute({
       sql: 'UPDATE materias SET condiciones = ?, nota_minima_regularizar = ?, nota_minima_promocionar = ?, regla_promocion = ? WHERE id = ?',
+<<<<<<< HEAD
       args: [validacionCondiciones.valor, regularizar, promocionar, reglaPromocion, id]
     });
     await registrarAuditoria({ accion: 'editar_condiciones_materia', usuario: usuarioSesion, detalle: `Editó condiciones de la materia ${id}`, ip: await obtenerIPReal() });
+=======
+      args: [condiciones?.trim() || '', regularizar, promocionar, reglaPromocion, id]
+    });
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error al editar condiciones de materia:', error);
@@ -921,9 +1019,12 @@ export async function editarCondicionesMateriaAction({ id, condiciones, notaMini
 export async function eliminarMateriaAction(id) {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede eliminar materias.' };
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     await db.batch([
       { sql: 'DELETE FROM completadas WHERE tarea_id IN (SELECT id FROM tareas WHERE materia_id = ?)', args: [id] },
       { sql: 'DELETE FROM notas_tareas WHERE tarea_id IN (SELECT id FROM tareas WHERE materia_id = ?)', args: [id] },
@@ -933,7 +1034,10 @@ export async function eliminarMateriaAction(id) {
       { sql: 'DELETE FROM horarios WHERE materia_id = ?', args: [id] },
       { sql: 'DELETE FROM materias WHERE id = ?', args: [id] }
     ], 'write');
+<<<<<<< HEAD
     await registrarAuditoria({ accion: 'eliminar_materia', usuario: usuarioSesion, detalle: `Eliminó la materia ${id}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error en eliminarMateriaAction:', error);
@@ -944,6 +1048,7 @@ export async function eliminarMateriaAction(id) {
 export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles, unidad, conNota, tipo }) {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede crear tareas.' };
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
@@ -957,6 +1062,9 @@ export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalle
     if (!validacionInicio.valida) return { exito: false, mensaje: 'La fecha de inicio no es válida.' };
     const validacionFin = validarFecha(fin);
     if (!validacionFin.valida) return { exito: false, mensaje: 'La fecha de fin no es válida.' };
+=======
+    if (!await existeMateria(materiaId)) return { exito: false, mensaje: 'La materia seleccionada no existe.' };
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     const unidadNormalizada = normalizarUnidad(unidad);
     if (!unidadNormalizada.valida) {
       return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
@@ -967,9 +1075,14 @@ export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalle
     const id = crearId('t_');
     await db.execute({
       sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+<<<<<<< HEAD
       args: [id, materiaId, validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado]
     });
     await registrarAuditoria({ accion: 'crear_tarea', usuario: usuarioSesion, detalle: `Creó la tarea ${validacionNombre.valor}`, ip: await obtenerIPReal() });
+=======
+      args: [id, materiaId, nombre, inicio || 'Sin fecha', fin || 'Sin fecha', detalles || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado]
+    });
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error en crearTareaAction:', error);
@@ -980,6 +1093,7 @@ export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalle
 export async function editarTareaAction({ id, nombre, inicio, fin, detalles, unidad, conNota, tipo }) {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede editar tareas.' };
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
@@ -992,6 +1106,8 @@ export async function editarTareaAction({ id, nombre, inicio, fin, detalles, uni
     if (!validacionInicio.valida) return { exito: false, mensaje: 'La fecha de inicio no es válida.' };
     const validacionFin = validarFecha(fin);
     if (!validacionFin.valida) return { exito: false, mensaje: 'La fecha de fin no es válida.' };
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     const unidadNormalizada = normalizarUnidad(unidad);
     if (!unidadNormalizada.valida) {
       return { exito: false, mensaje: 'La unidad debe ser un número entero mayor o igual a 1.' };
@@ -1001,9 +1117,14 @@ export async function editarTareaAction({ id, nombre, inicio, fin, detalles, uni
 
     await db.execute({
       sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ?, con_nota = ?, tipo = ? WHERE id = ?',
+<<<<<<< HEAD
       args: [validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, id]
     });
     await registrarAuditoria({ accion: 'editar_tarea', usuario: usuarioSesion, detalle: `Editó la tarea ${id}`, ip: await obtenerIPReal() });
+=======
+      args: [nombre, inicio, fin, detalles, unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, id]
+    });
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error en editarTareaAction:', error);
@@ -1014,15 +1135,21 @@ export async function editarTareaAction({ id, nombre, inicio, fin, detalles, uni
 export async function eliminarTareaAction(id) {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede eliminar tareas.' };
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     await db.batch([
       { sql: 'DELETE FROM completadas WHERE tarea_id = ?', args: [id] },
       { sql: 'DELETE FROM notas_tareas WHERE tarea_id = ?', args: [id] },
       { sql: 'DELETE FROM tareas WHERE id = ?', args: [id] }
     ], 'write');
+<<<<<<< HEAD
     await registrarAuditoria({ accion: 'eliminar_tarea', usuario: usuarioSesion, detalle: `Eliminó la tarea ${id}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error en eliminarTareaAction:', error);
@@ -1076,24 +1203,35 @@ export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, 
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede crear horarios.' };
     }
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     if (!await existeMateria(materiaId)) return { exito: false, mensaje: 'La materia seleccionada no existe.' };
 
     const diaNumerico = Number(dia);
     if (!Number.isInteger(diaNumerico) || diaNumerico < 1 || diaNumerico > 5) {
       return { exito: false, mensaje: 'Los horarios solo pueden cargarse de lunes a viernes.' };
     }
+<<<<<<< HEAD
     const validacionAula = validarLongitud(aula, MAX_AULA_LENGTH, 'aula');
     if (!validacionAula.valida) return validacionAula;
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
 
     const id = crearId('horario_');
     await db.execute({
       sql: 'INSERT INTO horarios (id, materia_id, dia, hora_inicio, hora_fin, aula) VALUES (?, ?, ?, ?, ?, ?)',
+<<<<<<< HEAD
       args: [id, materiaId, diaNumerico, horaInicio, horaFin, validacionAula.valor]
     });
     await registrarAuditoria({ accion: 'crear_horario', usuario: usuarioSesion, detalle: `Creó horario para la materia ${materiaId}`, ip: await obtenerIPReal() });
+=======
+      args: [id, materiaId, diaNumerico, horaInicio, horaFin, aula?.trim() || '']
+    });
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error al crear horario:', error);
@@ -1106,12 +1244,17 @@ export async function eliminarHorarioAction(id, usuario) {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede borrar horarios.' };
     }
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
 
     await db.execute({ sql: 'DELETE FROM horarios WHERE id = ?', args: [id] });
     await registrarAuditoria({ accion: 'eliminar_horario', usuario: usuarioSesion, detalle: `Eliminó el horario ${id}`, ip: await obtenerIPReal() });
+=======
+
+    await db.execute({ sql: 'DELETE FROM horarios WHERE id = ?', args: [id] });
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error al eliminar horario:', error);
@@ -1160,6 +1303,7 @@ export async function crearParcialAction({ materiaId, nombre, fecha, detalles, u
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede crear parciales.' };
     }
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
@@ -1171,13 +1315,21 @@ export async function crearParcialAction({ materiaId, nombre, fecha, detalles, u
     if (!validacionDetalles.valida) return validacionDetalles;
     const validacionFecha = validarFecha(fecha);
     if (!validacionFecha.valida) return { exito: false, mensaje: 'La fecha no es válida.' };
+=======
+    if (!await existeMateria(materiaId)) return { exito: false, mensaje: 'La materia seleccionada no existe.' };
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
 
     const id = crearId('parcial_');
     await db.execute({
       sql: 'INSERT INTO parciales (id, materia_id, nombre, fecha, detalles) VALUES (?, ?, ?, ?, ?)',
+<<<<<<< HEAD
       args: [id, materiaId, validacionNombre.valor, validacionFecha.valor, validacionDetalles.valor || 'Sin observaciones']
     });
     await registrarAuditoria({ accion: 'crear_parcial', usuario: usuarioSesion, detalle: `Creó el parcial ${validacionNombre.valor}`, ip: await obtenerIPReal() });
+=======
+      args: [id, materiaId, nombre, fecha || 'Sin fecha', detalles || 'Sin observaciones']
+    });
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error en crearParcialAction:', error);
@@ -1190,6 +1342,7 @@ export async function editarParcialAction({ id, materiaId, nombre, fecha, detall
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede editar parciales.' };
     }
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
@@ -1207,6 +1360,14 @@ export async function editarParcialAction({ id, materiaId, nombre, fecha, detall
       args: [materiaId, validacionNombre.valor, validacionFecha.valor, validacionDetalles.valor || 'Sin observaciones', id]
     });
     await registrarAuditoria({ accion: 'editar_parcial', usuario: usuarioSesion, detalle: `Editó el parcial ${id}`, ip: await obtenerIPReal() });
+=======
+    if (!await existeMateria(materiaId)) return { exito: false, mensaje: 'La materia seleccionada no existe.' };
+
+    await db.execute({
+      sql: 'UPDATE parciales SET materia_id = ?, nombre = ?, fecha = ?, detalles = ? WHERE id = ?',
+      args: [materiaId, nombre, fecha || 'Sin fecha', detalles || 'Sin observaciones', id]
+    });
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error en editarParcialAction:', error);
@@ -1219,15 +1380,21 @@ export async function eliminarParcialAction(id, usuario) {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede borrar parciales.' };
     }
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
 
     await db.batch([
       { sql: 'DELETE FROM notas_parciales WHERE parcial_id = ?', args: [id] },
       { sql: 'DELETE FROM parciales WHERE id = ?', args: [id] }
     ], 'write');
+<<<<<<< HEAD
     await registrarAuditoria({ accion: 'eliminar_parcial', usuario: usuarioSesion, detalle: `Eliminó el parcial ${id}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     return { exito: true };
   } catch (error) {
     console.error('Error en eliminarParcialAction:', error);
@@ -1240,9 +1407,12 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede cargar o editar notas.' };
     }
+<<<<<<< HEAD
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
 
     const parcial = await db.execute({
       sql: 'SELECT fecha FROM parciales WHERE id = ?',
@@ -1278,14 +1448,20 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
           sql: 'DELETE FROM notas_parciales WHERE parcial_id = ? AND alumno_id = ?',
           args: [parcialId, alumnoDB.id]
         });
+<<<<<<< HEAD
         await registrarAuditoria({ accion: 'eliminar_nota_parcial', usuario: usuarioSesion, detalle: `Eliminó la nota de ${alumnoDB.nombre} en el parcial ${parcialId}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
       } else {
         // Actualizamos la nota
         await db.execute({
           sql: 'UPDATE notas_parciales SET nota = ? WHERE parcial_id = ? AND alumno_id = ?',
           args: [validacion.valor, parcialId, alumnoDB.id]
         });
+<<<<<<< HEAD
         await registrarAuditoria({ accion: 'guardar_nota_parcial', usuario: usuarioSesion, detalle: `Actualizó nota ${validacion.valor} de ${alumnoDB.nombre} en el parcial ${parcialId}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
       }
     } else if (notaLimpia !== '') {
       // Insertamos nueva nota
@@ -1294,7 +1470,10 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
         sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno_id, alumno, nota) VALUES (?, ?, ?, ?, ?)',
         args: [id, parcialId, alumnoDB.id, alumnoDB.nombre, notaLimpia]
       });
+<<<<<<< HEAD
       await registrarAuditoria({ accion: 'guardar_nota_parcial', usuario: usuarioSesion, detalle: `Cargó nota ${notaLimpia} a ${alumnoDB.nombre} en el parcial ${parcialId}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     }
     return { exito: true };
   } catch (error) {
@@ -1306,11 +1485,18 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
 export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
+<<<<<<< HEAD
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede cargar o editar notas.' };
     }
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
+=======
+    const admin = await verificarAdmin();
+    if (!alumno || !usuarioSesion || (alumno !== usuarioSesion && !admin)) {
+      return { exito: false, mensaje: 'Solo podés cargar tu propia nota.' };
+    }
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     const alumnoDB = await obtenerAlumno(alumno);
     if (!alumnoDB) return { exito: false, mensaje: 'El alumno no existe.' };
 
@@ -1334,14 +1520,20 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
         sql: 'DELETE FROM notas_tareas WHERE tarea_id = ? AND alumno_id = ?',
         args: [tareaId, alumnoDB.id]
       });
+<<<<<<< HEAD
       await registrarAuditoria({ accion: 'eliminar_nota_tarea', usuario: usuarioSesion, detalle: `Eliminó la nota de ${alumnoDB.nombre} en la tarea ${tareaId}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     } else {
       const cargadaEn = new Date().toISOString();
       await db.execute({
         sql: 'INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, nota = excluded.nota, cargada_en = excluded.cargada_en',
         args: [crearId('nota_tarea_'), tareaId, alumnoDB.id, alumnoDB.nombre, validacion.valor, cargadaEn]
       });
+<<<<<<< HEAD
       await registrarAuditoria({ accion: 'guardar_nota_tarea', usuario: usuarioSesion, detalle: `Cargó nota ${validacion.valor} a ${alumnoDB.nombre} en la tarea ${tareaId}`, ip: await obtenerIPReal() });
+=======
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
     }
 
     return { exito: true };
@@ -1349,4 +1541,8 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
     console.error('Error en guardarNotaTareaAction:', error);
     return { exito: false, mensaje: 'No se pudo guardar la nota de la tarea.' };
   }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 00a8c98c81c3ba5939e9c69550d1d9a769ddf788
