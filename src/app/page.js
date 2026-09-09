@@ -3210,9 +3210,12 @@ export default function Home() {
                                 ))}
                                 {eventos.cronograma.map((evento) => {
                                   const materia = materias.find((item) => item.id === evento.materia_id);
+                                  const esAsincronico = evento.modalidad === 'asincrónico';
+                                  const diaSemana = obtenerDiaSemanaHorario(new Date(`${evento.fecha}T00:00:00`));
+                                  const horarioMateria = horarios.find((h) => h.materia_id === evento.materia_id && Number(h.dia) === diaSemana);
                                   return (
-                                    <div key={evento.id} className={`calendar-event ${evento.modalidad === 'asincrónico' ? 'calendar-async' : 'calendar-academic'}`} title={`${evento.titulo} · ${materia?.nombre || 'Materia'}`}>
-                                      <span className="font-bold">{evento.modalidad === 'asincrónico' ? 'Asíncrono' : 'Clase'}</span> {evento.titulo}
+                                    <div key={evento.id} className={`calendar-event ${esAsincronico ? 'calendar-async' : 'calendar-academic'}`} title={`${evento.titulo} · ${materia?.nombre || 'Materia'}`}>
+                                      <span className="font-bold">{esAsincronico ? 'Asíncrono' : 'Clase'}</span> {esAsincronico ? (horarioMateria ? `${horarioMateria.hora_inicio} - ${horarioMateria.hora_fin}` : '') : evento.titulo}
                                     </div>
                                   );
                                 })}
@@ -3295,10 +3298,14 @@ export default function Home() {
                           ))}
                           {eventos.cronograma.map((evento) => {
                             const materia = materias.find((item) => item.id === evento.materia_id);
+                            const esAsincronico = evento.modalidad === 'asincrónico';
+                            const diaSemana = obtenerDiaSemanaHorario(new Date(`${evento.fecha}T00:00:00`));
+                            const horarioMateria = horarios.find((h) => h.materia_id === evento.materia_id && Number(h.dia) === diaSemana);
                             return (
-                              <div key={`modal-${evento.id}`} className={`calendar-modal-event ${evento.modalidad === 'asincrónico' ? 'calendar-async' : 'calendar-academic'}`}>
-                                <p className="text-sm font-extrabold">{evento.modalidad === 'asincrónico' ? 'Clase asincrónica' : 'Cronograma'} · {evento.titulo}</p>
+                              <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esAsincronico ? 'calendar-async' : 'calendar-academic'}`}>
+                                <p className="text-sm font-extrabold">{esAsincronico ? 'Clase asincrónica' : 'Cronograma'} · {esAsincronico ? (horarioMateria ? `${horarioMateria.hora_inicio} - ${horarioMateria.hora_fin}` : '') : evento.titulo}</p>
                                 <p className="mt-1 text-sm">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
+                                {esAsincronico && evento.titulo && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
                                 {evento.detalles && <p className="mt-2 text-sm opacity-85">{evento.detalles}</p>}
                               </div>
                             );
