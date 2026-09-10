@@ -1014,7 +1014,7 @@ export default function Home() {
   };
 
   const handleGuardarNotaOnBlur = async (parcialId, alumno) => {
-    if (!esAdmin) return;
+    if (!esAdmin && alumno !== usuarioActual) return;
     const clave = `${parcialId}_${alumno}`;
     const valor = notasInputs[clave] || '';
     const resultado = await guardarNotaParcialAction(parcialId, alumno, valor, usuarioActual);
@@ -2969,12 +2969,12 @@ export default function Home() {
                                     inputMode="decimal"
                                     pattern="[0-9]+([.,][0-9]+)?"
                                     placeholder="-"
-                                    disabled={!esAdmin || !parcialDisponible}
+                                    disabled={!parcialDisponible}
                                     value={valorMiNota}
                                     onChange={(e) => handleNotaChangeLocal(p.id, usuarioActual, e.target.value)}
                                     onBlur={() => handleGuardarNotaOnBlur(p.id, usuarioActual)}
                                     className={`w-16 text-center font-bold text-sm py-1 px-2 rounded-lg border focus:outline-none transition-all ${
-                                      esAdmin && parcialDisponible
+                                      parcialDisponible
                                         ? 'bg-[#161c26] text-purple-300 border-purple-500/50 focus:border-purple-400'
                                         : 'bg-transparent text-slate-400 border-transparent cursor-not-allowed'
                                     }`}

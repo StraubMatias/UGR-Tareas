@@ -1237,10 +1237,15 @@ export async function eliminarParcialAction(id, usuario) {
 
 export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario) {
   try {
-    if (!await verificarAdmin()) {
-      return { exito: false, mensaje: 'Solo el administrador puede cargar o editar notas.' };
-    }
     const usuarioSesion = await obtenerUsuarioSesion();
+    if (!usuarioSesion) {
+      return { exito: false, mensaje: 'Debés iniciar sesión para cargar notas.' };
+    }
+    const alumnoSolicitado = String(alumno || '').trim();
+    const esAdmin = await verificarAdmin();
+    if (!esAdmin && alumnoSolicitado.toLowerCase() !== usuarioSesion.toLowerCase()) {
+      return { exito: false, mensaje: 'Solo podés cargar o editar tu propia nota.' };
+    }
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
 
@@ -1306,8 +1311,13 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
 export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
-    if (!await verificarAdmin()) {
-      return { exito: false, mensaje: 'Solo el administrador puede cargar o editar notas.' };
+    if (!usuarioSesion) {
+      return { exito: false, mensaje: 'Debés iniciar sesión para cargar notas.' };
+    }
+    const alumnoSolicitado = String(alumno || '').trim();
+    const esAdmin = await verificarAdmin();
+    if (!esAdmin && alumnoSolicitado.toLowerCase() !== usuarioSesion.toLowerCase()) {
+      return { exito: false, mensaje: 'Solo podés cargar o editar tu propia nota.' };
     }
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
