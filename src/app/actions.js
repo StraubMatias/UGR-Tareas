@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import { cookies, headers } from 'next/headers';
 import { db } from './turso';
 import { PLAN_DE_ESTUDIO } from './plan-utils';
+import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
 
 const COOKIE_SESION = 'ugr_sesion';
 const DURACION_SESION_SEGUNDOS = 10 * 60;
@@ -323,54 +324,6 @@ async function verificarPassword(password, almacenada) {
   }
 }
 
-function parcialHabilitado(fecha) {
-  if (!fecha || fecha === 'Sin fecha') return false;
-
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const fechaParcial = new Date(`${fecha}T00:00:00`);
-  return !Number.isNaN(fechaParcial.getTime()) && fechaParcial <= hoy;
-}
-
-function tareaHabilitada(fecha) {
-  if (!fecha || fecha === 'Sin fecha') return true;
-
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const fechaInicio = new Date(`${fecha}T00:00:00`);
-  return !Number.isNaN(fechaInicio.getTime()) && fechaInicio <= hoy;
-}
-
-function tareaDentroDelPlazo(fecha) {
-  if (!fecha || fecha === 'Sin fecha') return true;
-
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const fechaCierre = new Date(`${fecha}T00:00:00`);
-  return !Number.isNaN(fechaCierre.getTime()) && hoy < fechaCierre;
-}
-
-function validarNota(nota) {
-  const notaLimpia = typeof nota === 'string' ? nota.trim().replace(',', '.') : String(nota ?? '').trim();
-  if (!notaLimpia) return { valida: false, vacia: true, valor: '' };
-
-  const valor = Number(notaLimpia);
-  return {
-    valida: Number.isFinite(valor) && valor >= 1 && valor <= 10,
-    vacia: false,
-    valor: notaLimpia
-  };
-}
-
-function normalizarUnidad(unidad) {
-  const unidadLimpia = unidad === null || unidad === undefined ? '' : String(unidad).trim();
-  if (!unidadLimpia) return { valida: true, valor: null };
-  if (!/^\d+$/.test(unidadLimpia) || Number(unidadLimpia) < 1) {
-    return { valida: false, valor: null };
-  }
-  return { valida: true, valor: Number(unidadLimpia) };
-}
-
 // --- AUTENTICACIÓN Y ALUMNOS ---
 
 // Valida credenciales consultando directamente a la tabla alumnos en Turso
@@ -527,6 +480,11 @@ export async function crearAlumnoAction(nombre) {
     if (!validacionNombre.valida) return validacionNombre;
     const nombreFormateado = validacionNombre.valor;
     if (!nombreFormateado) return { exito: false, mensaje: 'El nombre es obligatorio.' };
+    const existente = await db.execute({
+      sql: 'SELECT 1 FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+      args: [nombreFormateado]
+    });
+    if (existente.rows.length > 0) return { exito: false, mensaje: 'Ya existe un alumno con ese nombre.' };
     const id = crearId('a_');
     await db.execute({
       sql: 'INSERT INTO alumnos (id, nombre, password) VALUES (?, ?, ?)',
@@ -729,6 +687,47 @@ export async function obtenerProgresoPlanAction() {
   } catch (error) {
     console.error('Error al obtener progreso del plan:', error);
     return [];
+  }
+}
+
+// Trae todo el estado del dashboard en una sola llamada (materias, alumnos, parciales,
+// horarios, cronograma y progreso), evitando 7 roundtrips por cada carga/refresco.
+export async function obtenerEstadoCompleto(periodoIdSolicitado = null) {
+  try {
+    const usuarioSesion = await obtenerUsuarioSesion();
+    if (!usuarioSesion) return null;
+
+    const periodos = await obtenerPeriodosAction();
+    const periodoParaCargar = periodoIdSolicitado
+      || periodos.find((periodo) => Number(periodo.activo) === 1)?.id
+      || periodos[0]?.id
+      || null;
+
+    const [materias, alumnos, datosParciales, horarios, cronograma, progresoPlan] = await Promise.all([
+      obtenerDatos(periodoParaCargar),
+      obtenerAlumnosAction(),
+      obtenerParcialesAction(periodoParaCargar),
+      obtenerHorariosAction(periodoParaCargar),
+      obtenerCronogramaAction(periodoParaCargar),
+      obtenerProgresoPlanAction()
+    ]);
+
+    return {
+      usuario: usuarioSesion,
+      rol: await obtenerRolUsuario(usuarioSesion),
+      periodos,
+      periodoActivo: periodoParaCargar,
+      materias,
+      alumnos,
+      parciales: datosParciales?.parciales || [],
+      notas: datosParciales?.notas || [],
+      horarios,
+      cronograma,
+      progresoPlan
+    };
+  } catch (error) {
+    console.error('Error en obtenerEstadoCompleto:', error);
+    return null;
   }
 }
 
@@ -1292,14 +1291,14 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
         });
         await registrarAuditoria({ accion: 'guardar_nota_parcial', usuario: usuarioSesion, detalle: `Actualizó nota ${validacion.valor} de ${alumnoDB.nombre} en el parcial ${parcialId}`, ip: await obtenerIPReal() });
       }
-    } else if (notaLimpia !== '') {
+    } else if (!validacion.vacia) {
       // Insertamos nueva nota
       const id = crearId('nota_');
       await db.execute({
         sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno_id, alumno, nota) VALUES (?, ?, ?, ?, ?)',
-        args: [id, parcialId, alumnoDB.id, alumnoDB.nombre, notaLimpia]
+        args: [id, parcialId, alumnoDB.id, alumnoDB.nombre, validacion.valor]
       });
-      await registrarAuditoria({ accion: 'guardar_nota_parcial', usuario: usuarioSesion, detalle: `Cargó nota ${notaLimpia} a ${alumnoDB.nombre} en el parcial ${parcialId}`, ip: await obtenerIPReal() });
+      await registrarAuditoria({ accion: 'guardar_nota_parcial', usuario: usuarioSesion, detalle: `Cargó nota ${validacion.valor} a ${alumnoDB.nombre} en el parcial ${parcialId}`, ip: await obtenerIPReal() });
     }
     return { exito: true };
   } catch (error) {

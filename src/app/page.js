@@ -5,10 +5,7 @@ import {
   validarLoginAction,
   cerrarSesionAction,
   obtenerSesionAction,
-  obtenerDatos,
-  obtenerAlumnosAction,
-  obtenerPeriodosAction,
-  obtenerProgresoPlanAction,
+  obtenerEstadoCompleto,
   guardarProgresoPlanAction,
   crearAlumnoAction,
   editarAlumnoAction,
@@ -23,16 +20,17 @@ import {
   eliminarTareaAction,
   guardarNotaTareaAction,
   cambiarPasswordAction,
-  obtenerParcialesAction,
   crearParcialAction,
   editarParcialAction,
   eliminarParcialAction,
   guardarNotaParcialAction,
-  obtenerHorariosAction,
-  obtenerCronogramaAction,
   crearHorarioAction,
   eliminarHorarioAction
 } from './actions';
+import {
+  parcialHabilitado as parcialEstaHabilitado,
+  tareaHabilitada as tareaEstaHabilitada
+} from './validators';
 import {
   CUATRIMESTRES_PLAN,
   PLAN_DE_ESTUDIO,
@@ -530,43 +528,29 @@ export default function Home() {
     }
   };
 
-  const cargarBD = useCallback(async (mostrarCarga = true) => {
-    if (mostrarCarga) setCargando(true);
-    const dataPeriodos = await obtenerPeriodosAction();
-    const periodoParaCargar = periodoSeleccionado
-      || dataPeriodos.find((periodo) => Number(periodo.activo) === 1)?.id
-      || dataPeriodos[0]?.id
-      || null;
-    setPeriodos(dataPeriodos || []);
-    if (!periodoSeleccionado && periodoParaCargar) setPeriodoSeleccionado(periodoParaCargar);
-    const [dataMaterias, dataAlumnos, dataParciales, dataHorarios, dataCronograma, dataProgresoPlan] = await Promise.all([
-      obtenerDatos(periodoParaCargar),
-      obtenerAlumnosAction(),
-      obtenerParcialesAction(periodoParaCargar),
-      obtenerHorariosAction(periodoParaCargar),
-      obtenerCronogramaAction(periodoParaCargar),
-      obtenerProgresoPlanAction()
-    ]);
-    
-    setMaterias(dataMaterias || []);
-    setAlumnos(dataAlumnos || []);
-    setParciales(dataParciales.parciales || []);
-    setNotas(dataParciales.notas || []);
-    setHorarios(dataHorarios || []);
-    setCronograma(dataCronograma || []);
-    setProgresoPlan(dataProgresoPlan || []);
+  // Aplica un estado completo al componente (materias, notas inputs, selections, etc.).
+  const aplicarEstado = useCallback((estado) => {
+    if (!estado) return;
+
+    setPeriodos(estado.periodos || []);
+    setMaterias(estado.materias || []);
+    setAlumnos(estado.alumnos || []);
+    setParciales(estado.parciales || []);
+    setNotas(estado.notas || []);
+    setHorarios(estado.horarios || []);
+    setCronograma(estado.cronograma || []);
+    setProgresoPlan(estado.progresoPlan || []);
+    if (estado.rol) setRolUsuario(estado.rol);
 
     // Inicializar inputs de notas locales
     const mapaNotas = {};
-    if (dataParciales.notas) {
-      dataParciales.notas.forEach((n) => {
-        mapaNotas[`${n.parcial_id}_${n.alumno}`] = n.nota;
-      });
-    }
+    (estado.notas || []).forEach((n) => {
+      mapaNotas[`${n.parcial_id}_${n.alumno}`] = n.nota;
+    });
     setNotasInputs(mapaNotas);
 
     const mapaNotasTareas = {};
-    dataMaterias?.forEach((materia) => {
+    (estado.materias || []).forEach((materia) => {
       materia.tareas.forEach((tarea) => {
         Object.entries(tarea.notas || {}).forEach(([alumno, nota]) => {
           mapaNotasTareas[`${tarea.id}_${alumno}`] = nota;
@@ -575,13 +559,28 @@ export default function Home() {
     });
     setNotasTareasInputs(mapaNotasTareas);
 
-    if (dataMaterias && dataMaterias.length > 0) {
-      setMateriaSel((valorActual) => valorActual || dataMaterias[0].id);
-      setMateriaParcialSel((valorActual) => valorActual || dataMaterias[0].id);
-      setMateriaHorarioSel((valorActual) => valorActual || dataMaterias[0].id);
+    if (estado.materias && estado.materias.length > 0) {
+      setMateriaSel((valorActual) => valorActual || estado.materias[0].id);
+      setMateriaParcialSel((valorActual) => valorActual || estado.materias[0].id);
+      setMateriaHorarioSel((valorActual) => valorActual || estado.materias[0].id);
     }
-    if (mostrarCarga) setCargando(false);
-  }, [periodoSeleccionado]);
+  }, []);
+
+  const cargarBD = useCallback(async (mostrarCarga = true) => {
+    if (mostrarCarga) setCargando(true);
+    try {
+      const estado = await obtenerEstadoCompleto(periodoSeleccionado || undefined);
+      if (!estado) return false;
+
+      if (!periodoSeleccionado && estado.periodoActivo) {
+        setPeriodoSeleccionado(estado.periodoActivo);
+      }
+      aplicarEstado(estado);
+      return true;
+    } finally {
+      if (mostrarCarga) setCargando(false);
+    }
+  }, [periodoSeleccionado, aplicarEstado]);
 
   useEffect(() => {
     if (!usuarioActual) return;
@@ -598,15 +597,12 @@ export default function Home() {
 
       refrescandoRef.current = true;
       try {
-        const sesion = await obtenerSesionAction();
-        if (!sesion?.usuario) {
+        const sesionValida = await cargarBD(false);
+        if (!sesionValida) {
           setUsuarioActual(null);
           setRolUsuario(null);
           setCargando(false);
-          return;
         }
-        setRolUsuario(sesion.rol);
-        await cargarBD(false);
       } finally {
         refrescandoRef.current = false;
       }
@@ -1022,28 +1018,6 @@ export default function Home() {
       alert(resultado?.mensaje || 'No se pudo guardar la nota.');
       await cargarBD();
     }
-  };
-
-  const parcialEstaHabilitado = (fecha) => {
-    if (!fecha || fecha === 'Sin fecha') return false;
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const fechaParcial = new Date(`${fecha}T00:00:00`);
-    return !Number.isNaN(fechaParcial.getTime()) && fechaParcial <= hoy;
-  };
-
-  const tareaEstaHabilitada = (fecha) => {
-    if (!fecha || fecha === 'Sin fecha') return true;
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const fechaInicio = new Date(`${fecha}T00:00:00`);
-    return !Number.isNaN(fechaInicio.getTime()) && fechaInicio <= hoy;
-  };
-
-  const tareaDentroDelPlazo = (fecha) => {
-    if (!fecha || fecha === 'Sin fecha') return true;
-    const diasRestantes = obtenerDiasHastaTarea(fecha);
-    return diasRestantes !== null && diasRestantes >= 0;
   };
 
   const tareaPuedeGestionarse = (tarea) =>
