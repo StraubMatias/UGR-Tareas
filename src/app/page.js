@@ -38,6 +38,42 @@ import {
   obtenerCorrelativasPendientesSimuladas as obtenerCorrelativasPendientesDelPlan,
   calcularMateriasPriorizadas
 } from './plan-utils';
+import {
+  tareaCompletadaPor,
+  fechaEntregaTarea,
+  tareaFaltaNota,
+  tareaPendienteAlumno,
+  formatearFechaDDMMAAAA,
+  formatearFechaHora,
+  obtenerTimestamp,
+  multiplicadorPuntosTarea,
+  puntosBaseTarea,
+  obtenerFechaParcialEnMs,
+  obtenerDiasHastaParcial,
+  obtenerDiasHastaFecha,
+  obtenerDiasHastaApertura,
+  obtenerTextoApertura,
+  obtenerIconoMateria,
+  etiquetaMateria,
+  obtenerDiasHastaTarea,
+  ordenarParciales,
+  ordenarTareas,
+  agruparTareasPorUnidad,
+  formatearUnidad,
+  esForo,
+  calcularEstadoSemaforo,
+  tareaPuedeGestionarse,
+  obtenerResumenTareasAlumno,
+  historialPorAlumno,
+  agruparHistorial
+} from '../lib/cursada';
+import VistaPromocion from '../components/VistaPromocion';
+import VistaRanking from '../components/VistaRanking';
+import VistaParciales from '../components/VistaParciales';
+import VistaMaterias from '../components/VistaMaterias';
+import VistaPlan from '../components/VistaPlan';
+import VistaHorarios from '../components/VistaHorarios';
+import VistaHistorial from '../components/VistaHistorial';
 
 export default function Home() {
   const [materias, setMaterias] = useState([]);
@@ -168,24 +204,6 @@ export default function Home() {
     .sort((a, b) => b.habilita - a.habilita);
   const materiasPriorizadas = calcularMateriasPriorizadas(planDeEstudio, codigosAprobadosSimulados);
 
-  const tareaCompletadaPor = (tarea, alumno) => (
-    tarea.completadoPor.includes(alumno)
-    || (tarea.conNota && Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno))
-  );
-
-  const fechaEntregaTarea = (tarea, alumno) => (
-    tarea.completadoEn?.[alumno] || (tarea.conNota ? tarea.notaCargadaEn?.[alumno] : null)
-  );
-
-  const tareaFaltaNota = (tarea, alumno) => (
-    tarea.conNota
-    && tareaCompletadaPor(tarea, alumno)
-    && (tarea.notas?.[alumno] === undefined || tarea.notas?.[alumno] === null || tarea.notas?.[alumno] === '')
-  );
-
-  const tareaPendienteAlumno = (tarea, alumno) => (
-    !tareaCompletadaPor(tarea, alumno) || tareaFaltaNota(tarea, alumno)
-  );
 
   useEffect(() => {
     document.title = "UGR - Tareas";
@@ -320,236 +338,8 @@ export default function Home() {
     setRolUsuario(null);
   };
 
-  const formatearFechaDDMMAAAA = (fechaStr) => {
-    if (!fechaStr || fechaStr === 'Sin fecha') return 'Sin fecha';
-    if (fechaStr.includes('-')) {
-      const partes = fechaStr.split('-');
-      if (partes.length === 3 && partes[0].length === 4) {
-        return `${partes[2]}-${partes[1]}-${partes[0]}`;
-      }
-    }
-    return fechaStr;
-  };
 
-  const formatearFechaHora = (fechaStr) => {
-    if (!fechaStr) return 'Fecha no disponible';
-    const fecha = new Date(String(fechaStr).endsWith('Z') ? fechaStr : `${String(fechaStr).replace(' ', 'T')}Z`);
-    if (Number.isNaN(fecha.getTime())) return 'Fecha no disponible';
-    return fecha.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
-  };
 
-  const obtenerTimestamp = (fechaStr) => {
-    if (!fechaStr) return null;
-    const fecha = new Date(String(fechaStr).endsWith('Z') ? fechaStr : `${String(fechaStr).replace(' ', 'T')}Z`);
-    const timestamp = fecha.getTime();
-    return Number.isFinite(timestamp) ? timestamp : null;
-  };
-
-  const multiplicadorPuntosTarea = (tarea, alumno) => {
-    const fechaCarga = obtenerTimestamp(fechaEntregaTarea(tarea, alumno));
-    if (fechaCarga === null) return 1;
-
-    if (tarea.fin && tarea.fin !== 'Sin fecha') {
-      const cierre = new Date(`${tarea.fin}T23:59:59.999Z`);
-      if (!Number.isNaN(cierre.getTime()) && fechaCarga >= cierre.getTime()) return 0;
-    }
-
-    if (!tarea.inicio || tarea.inicio === 'Sin fecha') return 1;
-    const apertura = new Date(`${tarea.inicio}T00:00:00`);
-    if (Number.isNaN(apertura.getTime())) return 1;
-
-    const diasDesdeApertura = Math.floor((fechaCarga - apertura.getTime()) / (1000 * 60 * 60 * 24));
-    return diasDesdeApertura < 7 ? 1 : 0.5;
-  };
-
-  const puntosBaseTarea = (tarea, alumno) => tarea.conNota
-    ? Number.parseFloat(String(tarea.notas?.[alumno]).replace(',', '.'))
-    : esForo(tarea.nombre) ? 1 : 2;
-
-  const obtenerFechaParcialEnMs = (fechaStr) => {
-    if (!fechaStr || fechaStr === 'Sin fecha') return null;
-    const partes = fechaStr.split('-').map(Number);
-    if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
-
-    const [year, month, day] = partes;
-    const fecha = new Date(year, month - 1, day);
-    return Number.isNaN(fecha.getTime()) ? null : fecha.getTime();
-  };
-
-  const obtenerDiasHastaParcial = (fechaStr) => {
-    const fechaParcialEnMs = obtenerFechaParcialEnMs(fechaStr);
-    if (fechaParcialEnMs === null) return null;
-
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    return Math.max(0, Math.ceil((fechaParcialEnMs - hoy.getTime()) / (1000 * 60 * 60 * 24)));
-  };
-
-  const obtenerDiasHastaFecha = (fechaStr) => {
-    if (!fechaStr || fechaStr === 'Sin fecha') return null;
-    const partes = String(fechaStr).split('-').map(Number);
-    if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
-
-    const [year, month, day] = partes[0] > 31
-      ? partes
-      : [partes[2], partes[1], partes[0]];
-    const fechaLimite = new Date(year, month - 1, day);
-    fechaLimite.setHours(0, 0, 0, 0);
-    if (Number.isNaN(fechaLimite.getTime())) return null;
-
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    return Math.ceil((fechaLimite.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
-  };
-
-  const obtenerDiasHastaApertura = (fechaStr) => {
-    if (!fechaStr || fechaStr === 'Sin fecha') return null;
-    const partes = String(fechaStr).split('-').map(Number);
-    if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
-
-    const [year, month, day] = partes[0] > 31
-      ? partes
-      : [partes[2], partes[1], partes[0]];
-    const fechaApertura = new Date(year, month - 1, day);
-    fechaApertura.setHours(0, 0, 0, 0);
-    if (Number.isNaN(fechaApertura.getTime())) return null;
-
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    return Math.ceil((fechaApertura.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
-  };
-
-  const obtenerTextoApertura = (diasParaAbrir) => {
-    if (diasParaAbrir === null) return 'Sin fecha de apertura';
-    if (diasParaAbrir === 0) return 'Abre hoy';
-    return `Abre en ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'}`;
-  };
-
-  const normalizarTextoMateria = (texto = '') => String(texto)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-
-  const obtenerIconoMateria = (nombreMateria = '') => {
-    const nombre = normalizarTextoMateria(nombreMateria);
-    const reglas = [
-      { icono: '⚖️', claves: ['ciberdelito', 'delito'] },
-      { icono: '🔎', claves: ['auditor'] },
-      { icono: '⚠️', claves: ['riesgo'] },
-      { icono: '💾', claves: ['activo'] },
-      { icono: '🛡️', claves: ['sistemas de gestion', 'sgsi', 'iso 270'] },
-      { icono: '🌐', claves: ['red'] },
-      { icono: '🔑', claves: ['cripto', 'cifrado'] },
-      { icono: '🕵️', claves: ['forense'] },
-      { icono: '📜', claves: ['derecho', 'legal', 'normativ'] },
-      { icono: '🛡️', claves: ['seguridad'] }
-    ];
-
-    return reglas.find((regla) => regla.claves.some((clave) => nombre.includes(clave)))?.icono || '📘';
-  };
-
-  const etiquetaMateria = (nombreMateria = '') => `${obtenerIconoMateria(nombreMateria)} ${nombreMateria}`;
-
-  const obtenerDiasHastaTarea = (fechaStr) => {
-    const diasHastaCierre = obtenerDiasHastaFecha(fechaStr);
-    return diasHastaCierre === null ? null : diasHastaCierre - 1;
-  };
-
-  const ordenarParciales = (listaParciales) => {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const hoyEnMs = hoy.getTime();
-
-    return [...listaParciales].sort((a, b) => {
-      const fechaA = obtenerFechaParcialEnMs(a.fecha);
-      const fechaB = obtenerFechaParcialEnMs(b.fecha);
-
-      if (fechaA === null) return fechaB === null ? a.nombre.localeCompare(b.nombre) : 1;
-      if (fechaB === null) return -1;
-
-      const futuroA = fechaA >= hoyEnMs;
-      const futuroB = fechaB >= hoyEnMs;
-      if (futuroA !== futuroB) return futuroA ? -1 : 1;
-      return futuroA ? fechaA - fechaB : fechaB - fechaA;
-    });
-  };
-
-  const ordenarTareas = (listaTareas) => {
-    return [...listaTareas].sort((a, b) => {
-      const tieneFinA = a.fin && a.fin !== 'Sin fecha';
-      const tieneFinB = b.fin && b.fin !== 'Sin fecha';
-
-      if (tieneFinA && tieneFinB) return a.fin.localeCompare(b.fin);
-      if (tieneFinA) return -1;
-      if (tieneFinB) return 1;
-
-      const tieneInicioA = a.inicio && a.inicio !== 'Sin fecha';
-      const tieneInicioB = b.inicio && b.inicio !== 'Sin fecha';
-
-      if (tieneInicioA && tieneInicioB) return a.inicio.localeCompare(b.inicio);
-      if (tieneInicioA) return -1;
-      if (tieneInicioB) return 1;
-
-      return a.nombre.localeCompare(b.nombre);
-    });
-  };
-
-  const agruparTareasPorUnidad = (listaTareas) => {
-    const grupos = new Map();
-    listaTareas.forEach((tarea) => {
-      const unidad = tarea.unidad?.trim() || '';
-      const grupo = grupos.get(unidad) || [];
-      grupo.push(tarea);
-      grupos.set(unidad, grupo);
-    });
-
-    return [...grupos.entries()]
-      .sort(([unidadA], [unidadB]) => {
-        if (!unidadA) return -1;
-        if (!unidadB) return 1;
-        return unidadA.localeCompare(unidadB, 'es', { numeric: true });
-      })
-      .map(([unidad, tareas]) => ({ unidad, tareas: ordenarTareas(tareas) }));
-  };
-
-  const formatearUnidad = (unidad) => {
-    const valor = Number(unidad);
-    return Number.isFinite(valor) ? String(valor) : String(unidad || '');
-  };
-
-  const esForo = (nombreTarea) => /\(\s*foro\s*\)/i.test(nombreTarea || '');
-
-  const calcularEstadoSemaforo = (fechaFinStr, fechaInicioStr = null) => {
-    if (fechaInicioStr && !tareaEstaHabilitada(fechaInicioStr)) {
-      const diasParaAbrir = obtenerDiasHastaApertura(fechaInicioStr);
-      const textoApertura = obtenerTextoApertura(diasParaAbrir);
-      if (diasParaAbrir === null) {
-        return { texto: 'Sin fecha de apertura', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
-      }
-      return {
-        texto: `⏳ ${textoApertura}`,
-        estilo: 'bg-blue-500/15 text-blue-300 border-blue-500/30 font-semibold'
-      };
-    }
-
-    if (!fechaFinStr || fechaFinStr === 'Sin fecha') {
-      return { texto: 'Sin fecha límite', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
-    }
-
-    const diasRestantes = obtenerDiasHastaTarea(fechaFinStr);
-
-    if (diasRestantes < 0) {
-      return { texto: 'Vencida', estilo: 'bg-red-950/80 text-red-400 border-red-800/80 font-bold' };
-    } else if (diasRestantes === 0) {
-      return { texto: '⚠️ Cierra Hoy', estilo: 'bg-red-500/20 text-red-300 border-red-500/40 font-bold animate-pulse' };
-    } else if (diasRestantes <= 2) {
-      return { texto: `🔴 Quedan ${diasRestantes} ${diasRestantes === 1 ? 'día' : 'días'}`, estilo: 'bg-red-500/15 text-red-300 border-red-500/30 font-semibold' };
-    } else if (diasRestantes <= 7) {
-      return { texto: `🟠 Quedan ${diasRestantes} días`, estilo: 'bg-amber-500/15 text-amber-300 border-amber-500/30 font-semibold' };
-    } else {
-      return { texto: `🟢 Quedan ${diasRestantes} días`, estilo: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-semibold' };
-    }
-  };
 
   // Aplica un estado completo al componente (materias, notas inputs, selections, etc.).
   const aplicarEstado = useCallback((estado) => {
@@ -719,6 +509,14 @@ export default function Home() {
     setTareaFoco({ materiaId: materia.id, tareaId });
     setTareaFocoVisible(true);
     setPestana('materias');
+  };
+
+  // Cambia de sección dejando el scroll arriba del todo (para que al entrar
+  // a "Estado por Alumno" siempre se vea la propia situación desde arriba).
+  const navegarA = (destino) => {
+    setTareaFoco(null);
+    setPestana(destino);
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
   const handleCrearAlumno = async (e) => {
@@ -1060,88 +858,6 @@ export default function Home() {
     }
   };
 
-  const tareaPuedeGestionarse = (tarea) =>
-    tareaEstaHabilitada(tarea.inicio);
-
-  const obtenerResumenTareasAlumno = (alumno) => {
-    const tareasNoCompletadas = materias.flatMap((materia) => materia.tareas)
-      .filter((tarea) => tareaPendienteAlumno(tarea, alumno));
-    const faltaNota = tareasNoCompletadas.filter((tarea) => tareaFaltaNota(tarea, alumno));
-    const pendientes = tareasNoCompletadas
-      .filter((tarea) => !tareaFaltaNota(tarea, alumno) && tareaEstaHabilitada(tarea.inicio));
-    const futuras = tareasNoCompletadas
-      .filter((tarea) => !tareaFaltaNota(tarea, alumno) && !tareaEstaHabilitada(tarea.inicio));
-
-    return { pendientes, faltaNota, futuras, tareasNoCompletadas };
-  };
-
-  const historialPorAlumno = (alumno) => {
-    const tareas = materias.flatMap((materia) => materia.tareas
-      .filter((tarea) => tareaCompletadaPor(tarea, alumno))
-      .map((tarea) => ({
-        id: `tarea-${tarea.id}`,
-        materia: materia.nombre,
-        nombre: tarea.nombre,
-        unidad: tarea.unidad,
-        fecha: fechaEntregaTarea(tarea, alumno),
-        fechaCompletada: fechaEntregaTarea(tarea, alumno),
-        nota: tarea.conNota ? tarea.notas?.[alumno] : null,
-        tipo: tarea.conNota ? 'Tarea con nota' : esForo(tarea.nombre) ? 'Foro' : 'Actividad'
-      })));
-    const parcialesDelAlumno = notas
-      .filter((nota) => nota.alumno === alumno)
-      .map((nota) => {
-        const parcial = parciales.find((item) => item.id === nota.parcial_id);
-        return {
-          id: `parcial-${nota.parcial_id}`,
-          materia: materias.find((materia) => materia.id === parcial?.materia_id)?.nombre || 'Materia',
-          nombre: parcial?.nombre || 'Parcial',
-          fecha: nota.cargada_en,
-          fechaCompletada: nota.cargada_en,
-          nota: nota.nota,
-          tipo: 'Parcial'
-        };
-      });
-
-    return [...tareas, ...parcialesDelAlumno].sort((a, b) => obtenerTimestamp(b.fecha) - obtenerTimestamp(a.fecha));
-  };
-
-  const agruparHistorial = (historial) => {
-    const materiasHistorial = new Map();
-
-    historial.forEach((registro) => {
-      const gruposPorUnidad = materiasHistorial.get(registro.materia) || new Map();
-      const claveUnidad = registro.tipo === 'Parcial'
-        ? 'Evaluaciones'
-        : registro.unidad || 'Sin unidad';
-      const registrosUnidad = gruposPorUnidad.get(claveUnidad) || [];
-      registrosUnidad.push(registro);
-      gruposPorUnidad.set(claveUnidad, registrosUnidad);
-      materiasHistorial.set(registro.materia, gruposPorUnidad);
-    });
-
-    return [...materiasHistorial.entries()]
-      .map(([materia, gruposPorUnidad]) => ({
-        materia,
-        grupos: [...gruposPorUnidad.entries()]
-          .map(([unidad, registros]) => ({
-            unidad,
-            registros: registros.sort((a, b) => obtenerTimestamp(b.fecha) - obtenerTimestamp(a.fecha))
-          }))
-          .sort((a, b) => {
-            if (a.unidad === 'Sin unidad') return 1;
-            if (b.unidad === 'Sin unidad') return -1;
-            if (a.unidad === 'Evaluaciones') return -1;
-            if (b.unidad === 'Evaluaciones') return 1;
-            return Number(b.unidad) - Number(a.unidad);
-          })
-      }))
-      .sort((a, b) => {
-        const fechaA = obtenerTimestamp(a.grupos[0]?.registros[0]?.fecha) || 0;
-        const fechaB = obtenerTimestamp(b.grupos[0]?.registros[0]?.fecha) || 0;
-        return fechaB - fechaA;
-      });
-  };
 
   const toggleNotasParcial = (parcialId) => {
     setNotasDesplegadas((prev) => ({
@@ -1392,8 +1108,8 @@ export default function Home() {
       const comparadoRanking = ranking.find((item) => item.alumno === alumnoComparar);
       if (!usuarioRanking || !comparadoRanking) return null;
 
-      const historialUsuario = historialPorAlumno(usuarioActual);
-      const historialComparado = historialPorAlumno(alumnoComparar);
+      const historialUsuario = historialPorAlumno(usuarioActual, materias, notas, parciales);
+      const historialComparado = historialPorAlumno(alumnoComparar, materias, notas, parciales);
       const diferenciaPuntos = usuarioRanking.puntos - comparadoRanking.puntos;
       const puntosEmpatados = Math.abs(diferenciaPuntos) < 0.0001;
       const ultimaTareaUsuario = historialUsuario.find((registro) => obtenerTimestamp(registro.fecha) !== null);
@@ -1591,7 +1307,7 @@ export default function Home() {
                             key={notificacion.id}
                             onClick={() => {
                               marcarNotificacionesVistas([notificacion.id]);
-                              setPestana(['parcial', 'nuevo-parcial'].includes(notificacion.tipo) ? 'parciales' : 'materias');
+                              navegarA(['parcial', 'nuevo-parcial'].includes(notificacion.tipo) ? 'parciales' : 'materias');
                               setNotificacionesAbiertas(false);
                             }}
                             className={`w-full text-left px-4 py-3 hover:bg-slate-800/70 transition-colors cursor-pointer ${notificacionesVistas.includes(notificacion.id) ? 'opacity-60' : ''}`}
@@ -1620,7 +1336,7 @@ export default function Home() {
             </button>
             {esAdmin && (
               <button
-                onClick={() => setPestana('admin')}
+                onClick={() => navegarA('admin')}
                 className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
               >
                 ⚙️ Panel de Carga
@@ -1724,7 +1440,7 @@ export default function Home() {
           {/* NAVEGACIÓN */}
           <div className="portal-nav sticky top-0 z-40 -mx-4 px-4 py-3 sm:-mx-6 sm:px-6 md:-mx-10 md:px-10 mb-8 border-b shadow-lg backdrop-blur-sm flex flex-nowrap gap-3 overflow-x-auto">
             <button
-              onClick={() => setPestana('alumnos')}
+              onClick={() => navegarA('alumnos')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
                 pestana === 'alumnos'
                   ? 'bg-blue-600/20 text-blue-300 border-blue-500/40 shadow-sm'
@@ -1734,7 +1450,7 @@ export default function Home() {
               <span>👥</span> Estado por Alumno
             </button>
             <button
-              onClick={() => setPestana('materias')}
+              onClick={() => navegarA('materias')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
                 pestana === 'materias'
                   ? 'bg-blue-600/20 text-blue-300 border-blue-500/40 shadow-sm'
@@ -1744,7 +1460,7 @@ export default function Home() {
               <span>📚</span> Materias
             </button>
             <button
-              onClick={() => setPestana('horarios')}
+              onClick={() => navegarA('horarios')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
                 pestana === 'horarios'
                   ? 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40 shadow-sm'
@@ -1754,7 +1470,7 @@ export default function Home() {
               <span>🗓️</span> Cronograma
             </button>
             <button
-              onClick={() => setPestana('plan')}
+              onClick={() => navegarA('plan')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
                 pestana === 'plan'
                   ? 'bg-amber-600/20 text-amber-300 border-amber-500/40 shadow-sm'
@@ -1764,7 +1480,7 @@ export default function Home() {
               <span>🧭</span> Plan de estudio
             </button>
             <button
-              onClick={() => setPestana('promocion')}
+              onClick={() => navegarA('promocion')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
                 pestana === 'promocion'
                   ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 shadow-sm'
@@ -1775,7 +1491,7 @@ export default function Home() {
             </button>
 
             <button
-              onClick={() => setPestana('historial')}
+              onClick={() => navegarA('historial')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
                 pestana === 'historial'
                   ? 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40 shadow-sm'
@@ -1786,7 +1502,7 @@ export default function Home() {
             </button>
 
             <button
-              onClick={() => setPestana('parciales')}
+              onClick={() => navegarA('parciales')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
                 pestana === 'parciales'
                   ? 'bg-purple-600/20 text-purple-300 border-purple-500/40 shadow-sm'
@@ -1797,7 +1513,7 @@ export default function Home() {
             </button>
 
             <button
-              onClick={() => setPestana('ranking')}
+              onClick={() => navegarA('ranking')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
                 pestana === 'ranking'
                   ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 shadow-sm'
@@ -1883,7 +1599,7 @@ export default function Home() {
                       </span>
                       <span className="flex items-center gap-2">
                         {(() => {
-                          const resumen = obtenerResumenTareasAlumno(usuarioActual);
+                          const resumen = obtenerResumenTareasAlumno(usuarioActual, materias);
                           return (
                             <span className="flex flex-wrap justify-end gap-1.5 text-[11px] font-bold">
                               <span className={`px-2.5 py-1 rounded-full border ${resumen.pendientes.length === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
@@ -1948,7 +1664,7 @@ export default function Home() {
                                               type="button"
                                               onClick={() => irATareaEnMaterias(t.id)}
                                               title="Ver consigna y detalles en Materias"
-                                              className="text-sm sm:text-base text-slate-100 font-semibold leading-snug text-left hover:text-blue-300 hover:underline underline-offset-2 cursor-pointer transition-colors"
+                                              className="text-sm sm:text-base text-slate-100 font-semibold leading-snug text-left hover:text-blue-400 cursor-pointer transition-colors"
                                             >
                                               {t.nombre}
                                               {t.conNota && <span className="text-xs text-purple-300 font-normal"> (con nota)</span>}
@@ -2018,7 +1734,7 @@ export default function Home() {
                     {restoDeAlumnos.map((alumno) => {
                       const estaDesplegado = !!alumnosDesplegados[alumno];
 
-                      const resumenAlumno = obtenerResumenTareasAlumno(alumno);
+                      const resumenAlumno = obtenerResumenTareasAlumno(alumno, materias);
 
                       return (
                         <div
@@ -2093,7 +1809,7 @@ export default function Home() {
                                                     type="button"
                                                     onClick={() => irATareaEnMaterias(t.id)}
                                                     title="Ver consigna y detalles en Materias"
-                                                    className="text-xs text-slate-200 font-semibold text-left hover:text-blue-300 hover:underline underline-offset-2 cursor-pointer transition-colors"
+                                                    className="text-xs text-slate-200 font-semibold text-left hover:text-blue-400 cursor-pointer transition-colors"
                                                   >
                                                     • {t.nombre}
                                                     {tareaFaltaNota(t, alumno) && (
@@ -2127,1239 +1843,135 @@ export default function Home() {
 
               {/* VISTA 2: MATERIAS */}
               {pestana === 'materias' && (
-                <div className="space-y-6">
-                  {materias.length === 0 ? (
-                    <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
-                      Todavía no hay materias cargadas.
-                    </div>
-                  ) : (
-                    materias.map((m) => {
-                      const mostrarCompletadas = !!materiasDesplegadas[m.id];
-                      const tareasPendientes = m.tareas.filter(
-                        (t) => tareaPendienteAlumno(t, usuarioActual)
-                      );
-                      const tareasCompletadas = m.tareas.filter(
-                        (t) => tareaCompletadaPor(t, usuarioActual)
-                      );
-                      const gruposTareas = agruparTareasPorUnidad(
-                        mostrarCompletadas ? m.tareas : tareasPendientes
-                      );
-
-                      return (
-                        <div key={m.id} className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-5 border-b border-slate-800 pb-3 gap-3">
-                            <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-                              <span>{obtenerIconoMateria(m.nombre)}</span> {m.nombre}
-                            </h2>
-                            <div className="flex flex-wrap gap-2 sm:justify-end">
-                              {tareasCompletadas.length > 0 && (
-                                <button
-                                  onClick={() => toggleDesplegarMateria(m.id)}
-                                  className="text-xs text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
-                                >
-                                  {mostrarCompletadas
-                                    ? 'Ocultar completadas'
-                                    : `Mostrar ${tareasCompletadas.length} completada${tareasCompletadas.length === 1 ? '' : 's'}`}
-                                </button>
-                              )}
-                              {esAdmin && (
-                                <div className="flex gap-2">
-                                <button
-                                  onClick={() => setMateriaCondicionesEnEdicion({
-                                    id: m.id,
-                                    condiciones: m.condiciones || '',
-                                    notaMinimaRegularizar: m.notaMinimaRegularizar,
-                                    notaMinimaPromocionar: m.notaMinimaPromocionar,
-                                    reglaPromocion: m.reglaPromocion
-                                  })}
-                                  className="text-xs text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
-                                >
-                                  Condiciones
-                                </button>
-                                <button
-                                  onClick={() => setMateriaEnEdicion({ id: m.id, nombre: m.nombre })}
-                                  className="text-xs text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
-                                >
-                                  Editar
-                                </button>
-                                <button
-                                  onClick={() => handleEliminarMateria(m.id, m.nombre)}
-                                  className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
-                                >
-                                  Eliminar
-                                </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 gap-5">
-                            {gruposTareas.length === 0 ? (
-                              <p className="text-sm text-slate-500 italic">
-                                {m.tareas.length === 0
-                                  ? 'Sin consignas cargadas en esta materia.'
-                                  : 'Ya completaste todas las tareas de esta materia.'}
-                              </p>
-                            ) : (
-                              gruposTareas.map((grupo) => (
-                                <div key={grupo.unidad || 'sin-unidad'} className="space-y-3">
-                                  {grupo.unidad && (
-                                    <h3 className="border-b border-blue-500/20 pb-2 text-sm font-extrabold uppercase tracking-wider text-blue-300">
-                                      Unidad {formatearUnidad(grupo.unidad)}
-                                    </h3>
-                                  )}
-                                  {grupo.tareas.map((t) => {
-                                    const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
-                                    const diasParaAbrir = obtenerDiasHastaApertura(t.inicio);
-
-                                    return (
-                                      <div
-                                        key={t.id}
-                                        id={`tarea-${t.id}`}
-                                        className={`bg-[#0f141c] p-6 rounded-xl border flex flex-col lg:flex-row justify-between gap-6 transition-shadow ${
-                                          tareaFoco?.tareaId === t.id && tareaFocoVisible
-                                            ? 'border-blue-500/80 ring-2 ring-blue-500/50'
-                                            : 'border-slate-800/80'
-                                        }`}
-                                      >
-                                    <div className="space-y-3 flex-1">
-                                      <div className="flex items-center gap-3 flex-wrap">
-                                        <h3 className="font-bold text-blue-400 text-base sm:text-lg flex items-center gap-2">
-                                          <span>📝</span> {t.nombre}
-                                        </h3>
-
-                                        <span className={`text-xs px-3 py-1 rounded-md border ${semaforo.estilo}`}>
-                                          {semaforo.texto}
-                                        </span>
-                                        {t.conNota && (
-                                          <span className="text-xs px-3 py-1 rounded-md border bg-purple-500/10 text-purple-300 border-purple-500/30">
-                                            {tareaFaltaNota(t, usuarioActual) ? 'Entregada · falta nota' : 'Tarea con nota'}
-                                          </span>
-                                        )}
-
-                                        {esAdmin && (
-                                          <div className="flex gap-1.5 ml-auto sm:ml-2">
-                                            <button
-                                              onClick={() => setTareaEnEdicion({ materiaId: m.id, tarea: { ...t } })}
-                                              className="text-xs text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 rounded font-semibold cursor-pointer"
-                                            >
-                                              Editar
-                                            </button>
-                                            <button
-                                              onClick={() => handleEliminarTarea(t.id)}
-                                              className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-2.5 py-1 rounded font-semibold cursor-pointer"
-                                            >
-                                              Borrar
-                                            </button>
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      <div className="bg-[#161c26] border border-slate-800 rounded-xl p-4">
-                                        <span className="text-xs font-semibold text-slate-400 block mb-1">
-                                          📄 Detalle / Consigna:
-                                        </span>
-                                        <p className="text-sm sm:text-base text-slate-200 leading-relaxed whitespace-pre-wrap font-normal">
-                                          {t.detalles || 'Sin observaciones adicionales.'}
-                                        </p>
-                                      </div>
-
-                                      <div className="flex flex-wrap gap-5 text-xs sm:text-sm text-slate-400 pt-1 font-medium">
-                                        <span className="flex items-center gap-1.5">
-                                          📅 Abre: <strong className="text-slate-100">{formatearFechaDDMMAAAA(t.inicio)}</strong>
-                                        </span>
-                                        <span className="flex items-center gap-1.5">
-                                          ⏳ Vence: <strong className="text-slate-100">{formatearFechaDDMMAAAA(t.fin)}</strong>
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    <div className="lg:w-[260px] border-t lg:border-t-0 lg:border-l border-slate-800 pt-4 lg:pt-0 lg:pl-6 flex flex-col justify-between">
-                                      {t.conNota ? (
-                                        <div>
-                                          <label className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-300 mb-3">
-                                            <input
-                                              type="checkbox"
-                                              checked={tareaCompletadaPor(t, usuarioActual)}
-                                              disabled={!tareaPuedeGestionarse(t)}
-                                              onChange={() => toggleTareaDesdeCliente(t.id, usuarioActual, t)}
-                                              className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
-                                            />
-                                            Entregada
-                                          </label>
-                                          <label className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">
-                                            Tu nota (1 a 10)
-                                          </label>
-                                          <input
-                                            type="text"
-                                            inputMode="decimal"
-                                            pattern="[0-9]+([.,][0-9]+)?"
-                                            placeholder="-"
-                                            disabled={!tareaPuedeGestionarse(t)}
-                                            value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
-                                            onChange={(e) => handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
-                                            onBlur={() => handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
-                                            className="w-24 bg-[#161c26] border border-purple-500/50 rounded-lg p-2 text-center font-bold text-purple-300 focus:outline-none"
-                                          />
-                                        </div>
-                                      ) : (
-                                      <div>
-                                        <span className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">Completada por:</span>
-                                        <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">
-                                          {t.completadoPor.length > 0 ? (
-                                            t.completadoPor.map((u) => {
-                                              const puedoQuitar = u === usuarioActual || esAdmin;
-                                              return (
-                                                <span
-                                                  key={u}
-                                                  className="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1.5"
-                                                >
-                                                  ✓ {u}
-                                                  {puedoQuitar && (
-                                                    <button
-                                                      onClick={() => handleToggleTarea(t.id, u)}
-                                                      className="hover:text-red-400 font-bold ml-1 text-xs cursor-pointer"
-                                                    >
-                                                      ✕
-                                                    </button>
-                                                  )}
-                                                </span>
-                                              );
-                                            })
-                                          ) : (
-                                            <span className="text-xs text-slate-600 italic">Nadie entregó todavía</span>
-                                          )}
-                                        </div>
-                                      </div>
-                                      )}
-                                      {t.conNota && (
-                                        <details className="mt-4 border-t border-slate-800 pt-3">
-                                          <summary className="text-xs font-semibold text-blue-300 cursor-pointer select-none">
-                                            Ver notas de los demás
-                                          </summary>
-                                          <div className="mt-2 space-y-1.5">
-                                            {alumnos.filter((alumno) => alumno !== usuarioActual && t.notas?.[alumno] !== undefined).length > 0 ? (
-                                              alumnos
-                                                .filter((alumno) => alumno !== usuarioActual && t.notas?.[alumno] !== undefined)
-                                                .map((alumno) => (
-                                                  <div key={alumno} className="flex justify-between gap-3 text-xs text-slate-300">
-                                                    <span className="truncate">{alumno}</span>
-                                                    <strong className="text-purple-300">{t.notas[alumno]}</strong>
-                                                  </div>
-                                                ))
-                                            ) : (
-                                              <span className="text-xs text-slate-500 italic">Todavía no hay notas cargadas.</span>
-                                            )}
-                                          </div>
-                                        </details>
-                                      )}
-                                    </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+                <VistaMaterias
+                  materias={materias}
+                  alumnos={alumnos}
+                  usuarioActual={usuarioActual}
+                  esAdmin={esAdmin}
+                  materiasDesplegadas={materiasDesplegadas}
+                  toggleDesplegarMateria={toggleDesplegarMateria}
+                  setMateriaCondicionesEnEdicion={setMateriaCondicionesEnEdicion}
+                  setMateriaEnEdicion={setMateriaEnEdicion}
+                  handleEliminarMateria={handleEliminarMateria}
+                  setTareaEnEdicion={setTareaEnEdicion}
+                  handleEliminarTarea={handleEliminarTarea}
+                  toggleTareaDesdeCliente={toggleTareaDesdeCliente}
+                  handleToggleTarea={handleToggleTarea}
+                  notasTareasInputs={notasTareasInputs}
+                  handleNotaTareaChangeLocal={handleNotaTareaChangeLocal}
+                  handleGuardarNotaTareaOnBlur={handleGuardarNotaTareaOnBlur}
+                  tareaFoco={tareaFoco}
+                  tareaFocoVisible={tareaFocoVisible}
+                />
               )}
 
               {pestana === 'promocion' && (
-                <div className="space-y-6">
-                  <div className="border-b border-slate-800 pb-4">
-                    <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-                      <span>🎯</span> Promoción por materia
-                    </h2>
-                    <p className="text-sm text-slate-400 mt-1">Estado calculado con los trabajos prácticos y sus notas.</p>
-                  </div>
-                  {materias.length === 0 ? (
-                    <p className="text-sm text-slate-500 italic">Todavía no hay materias cargadas.</p>
-                  ) : (
-                    materias.map((materia) => (
-                      <section key={materia.id} className="bg-[#161c26] border border-slate-800 rounded-2xl p-5 sm:p-6">
-                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-800 pb-4">
-                          <div>
-                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                              <span>{obtenerIconoMateria(materia.nombre)}</span> {materia.nombre}
-                            </h3>
-                            <p className="text-xs text-slate-400 mt-1">
-                              Regulariza desde {materia.notaMinimaRegularizar}{['activos_porcentaje', 'tp_porcentaje_nota'].includes(materia.reglaPromocion) ? '%' : ''} · Promociona desde {materia.notaMinimaPromocionar}{materia.reglaPromocion === 'activos_porcentaje' ? '%' : ''}
-                            </p>
-                          </div>
-                          {esAdmin && (
-                            <button
-                              onClick={() => setMateriaCondicionesEnEdicion({
-                                id: materia.id,
-                                condiciones: materia.condiciones || '',
-                                notaMinimaRegularizar: materia.notaMinimaRegularizar,
-                                notaMinimaPromocionar: materia.notaMinimaPromocionar,
-                                reglaPromocion: materia.reglaPromocion
-                              })}
-                              className="text-xs text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
-                            >
-                              Editar condiciones
-                            </button>
-                          )}
-                        </div>
-                        <p className="text-sm text-slate-300 whitespace-pre-wrap mt-4">
-                          {materia.condiciones || 'Condiciones todavía no cargadas.'}
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-5">
-                          {alumnosOrdenadosPromocion.map((alumno) => {
-                            const estado = obtenerEstadoMateria(materia, alumno);
-                            return (
-                              <div key={alumno} className={`flex items-center justify-between gap-3 bg-[#0f141c] border rounded-xl p-3 ${
-                                alumno === usuarioActual ? 'border-emerald-500/60 ring-1 ring-emerald-500/30' : 'border-slate-800'
-                              }`}>
-                                <span className="text-sm font-semibold text-slate-200 truncate">{alumno}</span>
-                                {estado ? (
-                                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${estado.estilo}`}>{estado.texto}</span>
-                                ) : (
-                                  <span className="text-xs text-slate-500">Sin regla</span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </section>
-                    ))
-                  )}
-                </div>
+                <VistaPromocion
+                  materias={materias}
+                  esAdmin={esAdmin}
+                  usuarioActual={usuarioActual}
+                  alumnosOrdenadosPromocion={alumnosOrdenadosPromocion}
+                  obtenerEstadoMateria={obtenerEstadoMateria}
+                  setMateriaCondicionesEnEdicion={setMateriaCondicionesEnEdicion}
+                />
               )}
 
               {pestana === 'historial' && (
-                <div className="space-y-4">
-                  <div className="border-b border-slate-800 pb-4">
-                    <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-                      <span>🕘</span> Historial de entregas y notas
-                    </h2>
-                    <p className="text-sm text-slate-400 mt-1">Tareas realizadas y calificaciones registradas por alumno.</p>
-                  </div>
-
-                  {datosComparacion && (
-                    <div
-                      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
-                      onMouseDown={(evento) => {
-                        if (evento.target === evento.currentTarget) setAlumnoComparar('');
-                      }}
-                    >
-                    <div
-                      role="dialog"
-                      aria-modal="true"
-                      aria-labelledby="comparacion-titulo"
-                      className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-emerald-500/40 bg-[#101720] p-4 shadow-2xl sm:p-6"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 id="comparacion-titulo" className="text-base font-bold text-white">
-                            Comparación: {usuarioActual} vs. {alumnoComparar}
-                          </h3>
-                          <p className="mt-2 text-sm text-emerald-200">{datosComparacion.motivo}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setAlumnoComparar('')}
-                          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:border-slate-500 hover:text-white cursor-pointer"
-                        >
-                          Cerrar
-                        </button>
-                      </div>
-                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {[datosComparacion.usuarioRanking, datosComparacion.comparadoRanking].map((item) => (
-                          <div key={item.alumno} className="rounded-xl border border-slate-800/80 bg-[#0f141c] p-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-bold text-white">{item.alumno}</span>
-                              <strong className="text-emerald-300">{item.puntos.toFixed(1)} pts</strong>
-                            </div>
-                            <p className="mt-1 text-xs text-slate-500">
-                              {item.tareasConPuntaje.length + item.parcialesConPuntaje.length} registros con puntaje · {item.actividades} actividades
-                            </p>
-                            {item.alumno === usuarioActual && datosComparacion.ultimaTareaUsuario ? (
-                              <p className="mt-2 text-xs text-slate-400">
-                                Última tarea: {datosComparacion.ultimaTareaUsuario.nombre} · {formatearFechaHora(datosComparacion.ultimaTareaUsuario.fecha)}
-                              </p>
-                            ) : item.alumno === alumnoComparar && datosComparacion.ultimaTareaComparado ? (
-                              <p className="mt-2 text-xs text-slate-400">
-                                Última tarea: {datosComparacion.ultimaTareaComparado.nombre} · {formatearFechaHora(datosComparacion.ultimaTareaComparado.fecha)}
-                              </p>
-                            ) : (
-                              <p className="mt-2 text-xs text-slate-500">Sin tareas con fecha registrada.</p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-4 border-t border-slate-800/80 pt-4">
-                        <h4 className="text-sm font-bold text-white">
-                          {datosComparacion.puntosEmpatados ? 'Coincidencias y desempate' : 'Qué explica la diferencia'}
-                        </h4>
-                        {datosComparacion.razonesPuntos.length > 0 ? (
-                          <ul className="mt-2 space-y-2">
-                            {datosComparacion.razonesPuntos.map((razon) => (
-                              <li key={razon.id} className="text-xs text-slate-300">
-                                <span className={razon.diferencia > 0 ? 'text-emerald-300' : 'text-amber-300'}>
-                                  {razon.diferencia > 0 ? `${usuarioActual} gana` : `${alumnoComparar} gana`}
-                                </span>
-                                {' '}· {razon.texto}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="mt-2 text-xs text-slate-400">No hay diferencias de tareas, notas o parciales para explicar.</p>
-                        )}
-                        {datosComparacion.puntosEmpatados && (
-                          <p className="mt-2 text-xs text-slate-300">{datosComparacion.motivo}</p>
-                        )}
-                      </div>
-                    </div>
-                    </div>
-                  )}
-
-                  {alumnosDelHistorial.map((alumno) => {
-                    const estaDesplegado = alumno === usuarioActual
-                      ? historialPropioAbierto
-                      : !!alumnosDesplegados[`historial-${alumno}`];
-                    const historial = historialPorAlumno(alumno);
-                    const historialAgrupado = agruparHistorial(historial);
-
-                    return (
-                      <details
-                        key={alumno}
-                        open={estaDesplegado}
-                        onToggle={(evento) => {
-                          const abierto = evento.currentTarget.open;
-                          if (alumno === usuarioActual) {
-                            setHistorialPropioAbierto(abierto);
-                          } else {
-                            setAlumnosDesplegados((prev) => ({
-                              ...prev,
-                              [`historial-${alumno}`]: abierto
-                            }));
-                          }
-                        }}
-                        className={`bg-[#161c26] border rounded-2xl overflow-hidden ${
-                          alumno === usuarioActual ? 'border-blue-500/70' : 'border-slate-800/80'
-                        }`}
-                      >
-                        <summary className="cursor-pointer list-none p-4 sm:p-5 flex items-center justify-between gap-3 hover:bg-slate-800/40">
-                          <span className="font-bold text-white flex items-center gap-2">
-                            <span>👤</span> {alumno}
-                            {alumno === usuarioActual && <span className="text-xs font-semibold text-blue-300">(vos)</span>}
-                          </span>
-                          <span className="flex items-center gap-3 text-xs text-slate-400">
-                            {historial.length} registro{historial.length === 1 ? '' : 's'}
-                            <span aria-hidden="true">{estaDesplegado ? '▲' : '▼'}</span>
-                          </span>
-                        </summary>
-                        <div className="border-t border-slate-800/80 p-4 sm:p-5">
-                          {alumno !== usuarioActual && (
-                            <button
-                              type="button"
-                              onClick={() => setAlumnoComparar(alumno)}
-                              className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 cursor-pointer"
-                            >
-                              Comparar conmigo
-                            </button>
-                          )}
-                          {historial.length === 0 ? (
-                            <p className="text-sm text-slate-500 italic">Todavía no hay tareas realizadas ni notas registradas.</p>
-                          ) : (
-                            <div className="space-y-5">
-                              {historialAgrupado.map((grupoMateria) => (
-                                <section key={grupoMateria.materia} className="space-y-3">
-                                  <h3 className="border-b border-cyan-500/30 pb-2 text-sm font-extrabold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
-                                    <span className="normal-case">{obtenerIconoMateria(grupoMateria.materia)}</span>
-                                    {grupoMateria.materia}
-                                  </h3>
-                                  {grupoMateria.grupos.map((grupoUnidad) => (
-                                    <div key={grupoUnidad.unidad} className="space-y-2">
-                                      <h4 className="text-xs font-bold uppercase tracking-wider text-blue-300">
-                                        {grupoUnidad.unidad === 'Evaluaciones'
-                                          ? grupoUnidad.unidad
-                                          : grupoUnidad.unidad === 'Sin unidad'
-                                            ? grupoUnidad.unidad
-                                            : `Unidad ${formatearUnidad(grupoUnidad.unidad)}`}
-                                      </h4>
-                                      {grupoUnidad.registros.map((registro) => (
-                                        <div key={registro.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-[#0f141c] p-3">
-                                          <div className="min-w-0">
-                                            <p className="text-sm font-semibold text-slate-200 truncate">{registro.nombre}</p>
-                                            <p className="text-xs text-slate-500">{registro.tipo}</p>
-                                          </div>
-                                          <div className="flex items-center gap-3 shrink-0">
-                                            {registro.fechaCompletada && (
-                                              <span className="text-[11px] text-slate-500">
-                                                Completada: {formatearFechaHora(registro.fechaCompletada)}
-                                              </span>
-                                            )}
-                                            {registro.nota !== null && registro.nota !== undefined && (
-                                              <strong className="text-sm text-purple-300">Nota: {registro.nota}/10</strong>
-                                            )}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ))}
-                                </section>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </details>
-                    );
-                  })}
-                </div>
+                <VistaHistorial
+                  materias={materias}
+                  notas={notas}
+                  parciales={parciales}
+                  usuarioActual={usuarioActual}
+                  alumnoComparar={alumnoComparar}
+                  setAlumnoComparar={setAlumnoComparar}
+                  datosComparacion={datosComparacion}
+                  alumnosDelHistorial={alumnosDelHistorial}
+                  historialPropioAbierto={historialPropioAbierto}
+                  setHistorialPropioAbierto={setHistorialPropioAbierto}
+                  alumnosDesplegados={alumnosDesplegados}
+                  setAlumnosDesplegados={setAlumnosDesplegados}
+                />
               )}
 
               {pestana === 'plan' && (
-                <div className="space-y-6">
-                  <div className="flex flex-col gap-4 border-b border-slate-800 pb-4 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400">Tecnicatura Universitaria en Ciberseguridad</p>
-                      <h2 className="mt-1 text-2xl font-extrabold text-white">Plan de estudio</h2>
-                      <p className="mt-2 max-w-3xl text-sm text-slate-400">Materias, códigos y correlativas según el plan oficial.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setPlanModalAbierto(true)}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-extrabold text-cyan-200 transition hover:bg-cyan-400/20"
-                    >
-                      <span aria-hidden="true">◈</span>
-                      Ver mi camino
-                    </button>
-                  </div>
-                  {cuatrimestresPlan.map((cuatrimestre) => {
-                    const materiasDelCuatrimestre = planDeEstudio.filter((materia) => materia.cuatrimestre === cuatrimestre);
-                    return (
-                      <section key={cuatrimestre} className="space-y-3">
-                        <h3 className="border-b border-amber-500/30 pb-2 text-sm font-extrabold uppercase tracking-wider text-amber-300">
-                          {cuatrimestre}
-                        </h3>
-                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                          {materiasDelCuatrimestre.map((materia) => {
-                            const correlativasPendientes = obtenerCorrelativasPendientes(materia, usuarioActual);
-                            return (
-                            <article key={materia.codigo} className="rounded-xl border border-slate-800 bg-[#161c26] p-4">
-                              <div className="flex items-start gap-3">
-                                <span className="shrink-0 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs font-extrabold text-cyan-300">
-                                  {materia.codigo}
-                                </span>
-                                <div className="min-w-0">
-                                  <h4 className="font-bold leading-snug text-white">{materia.nombre}</h4>
-                                  <p className="mt-2 text-xs text-slate-400">
-                                    <span className="font-semibold text-slate-300">Correlativas:</span>{' '}
-                                    {materia.correlativas.length > 0
-                                      ? materia.correlativas.map((correlativa) => {
-                                        const materiaCorrelativa = obtenerMateriaPlan(correlativa);
-                                        return materiaCorrelativa
-                                          ? `${materiaCorrelativa.codigo} · ${materiaCorrelativa.nombre} · ${materiaCorrelativa.cuatrimestre}`
-                                          : correlativa;
-                                      }).join(' | ')
-                                      : 'Ninguna'}
-                                  </p>
-                                </div>
-                              </div>
-                              <p className={`mt-3 text-xs font-bold ${correlativasPendientes.length === 0 ? 'text-emerald-300' : 'text-amber-300'}`}>
-                                {correlativasPendientes.length === 0
-                                  ? '✓ Correlativas cumplidas'
-                                  : `Requiere: ${correlativasPendientes.map((correlativa) => obtenerMateriaPlan(correlativa)?.nombre || correlativa).join(' · ')}`}
-                              </p>
-                              <details className="mt-4 border-t border-slate-800 pt-3">
-                                <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300">
-                                  Ver estados por alumno
-                                </summary>
-                                <div className="mt-3 space-y-2">
-                                  {(esAdmin
-                                    ? [usuarioActual, ...alumnos.filter((alumno) => alumno !== usuarioActual)]
-                                    : [usuarioActual]
-                                  ).map((alumno) => {
-                                    const progreso = obtenerProgresoMateria(alumno, materia.codigo);
-                                    const puedeEditar = esAdmin || alumno === usuarioActual;
-                                    const claveProgreso = `${alumno}_${materia.codigo}`;
-                                    const edicion = progresoPlanEnEdicion[claveProgreso] || {
-                                      estado: progreso?.estado || 'pendiente',
-                                      nota: progreso?.nota || ''
-                                    };
-                                    const requiereNota = ['aprobada', 'promocionada'].includes(edicion.estado);
-                                    return (
-                                      <div
-                                        key={`${materia.codigo}-${alumno}`}
-                                        className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-2 py-1.5 text-xs ${
-                                          alumno === usuarioActual
-                                            ? 'border-cyan-500/40 bg-cyan-500/10'
-                                            : 'border-transparent'
-                                        }`}
-                                      >
-                                        <span className={`font-semibold ${alumno === usuarioActual ? 'text-cyan-200' : 'text-slate-300'}`}>
-                                          {alumno}{alumno === usuarioActual ? ' · vos' : ''}
-                                        </span>
-                                        {puedeEditar ? (
-                                          <div className="flex flex-wrap items-center justify-end gap-2">
-                                            <select
-                                              value={edicion.estado}
-                                              onChange={(evento) => setProgresoPlanEnEdicion((actual) => ({
-                                                ...actual,
-                                                [claveProgreso]: {
-                                                  estado: evento.target.value,
-                                                  nota: ['aprobada', 'promocionada'].includes(evento.target.value) ? edicion.nota : ''
-                                                }
-                                              }))}
-                                              className="rounded-lg border border-slate-700 bg-[#0f141c] px-2 py-1.5 font-semibold text-slate-200 outline-none focus:border-cyan-400"
-                                            >
-                                              <option value="pendiente">Pendiente</option>
-                                              {esAdmin && <option value="cursando">Cursando</option>}
-                                              <option value="aprobada">Aprobada</option>
-                                              <option value="promocionada">Promocionada</option>
-                                            </select>
-                                            {requiereNota && (
-                                              <input
-                                                type="number"
-                                                min="1"
-                                                max="10"
-                                                step="0.01"
-                                                value={edicion.nota}
-                                                onChange={(evento) => setProgresoPlanEnEdicion((actual) => ({
-                                                  ...actual,
-                                                  [claveProgreso]: { ...edicion, nota: evento.target.value }
-                                                }))}
-                                                placeholder="Nota"
-                                                aria-label={`Nota final de ${materia.nombre} para ${alumno}`}
-                                                className="w-20 rounded-lg border border-slate-700 bg-[#0f141c] px-2 py-1.5 font-semibold text-slate-200 outline-none focus:border-cyan-400"
-                                              />
-                                            )}
-                                            <button
-                                              type="button"
-                                              onClick={() => handleGuardarProgresoPlan(alumno, materia.codigo, edicion.estado, edicion.nota)}
-                                              className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-extrabold text-cyan-200 hover:bg-cyan-500/20"
-                                            >
-                                              Guardar
-                                            </button>
-                                          </div>
-                                        ) : (
-                                          <span className="rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-1 font-bold capitalize text-slate-300">
-                                            {progreso?.estado || 'pendiente'}{progreso?.nota ? ` · ${progreso.nota}` : ''}
-                                          </span>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </details>
-                            </article>
-                            );
-                          })}
-                        </div>
-                      </section>
-                    );
-                  })}
-
-                  {planModalAbierto && (
-                    <div className="calendar-modal-backdrop" role="presentation" onMouseDown={(evento) => {
-                      if (evento.target === evento.currentTarget) setPlanModalAbierto(false);
-                    }}>
-                      <section className="calendar-modal max-w-3xl" role="dialog" aria-modal="true" aria-labelledby="camino-plan-titulo">
-                        <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
-                          <div>
-                            <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Planificador personal</p>
-                            <h3 id="camino-plan-titulo" className="mt-1 text-xl font-extrabold text-white">Tu camino para adelantar</h3>
-                            <p className="mt-1 text-sm text-slate-400">Una simulación basada en tus aprobadas y las correlativas del plan.</p>
-                          </div>
-                          <button type="button" className="calendar-modal-close" aria-label="Cerrar camino del plan" onClick={() => setPlanModalAbierto(false)}>×</button>
-                        </div>
-
-                        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
-                            <p className="text-xs font-bold uppercase tracking-wider text-emerald-300">Aprobadas reales</p>
-                            <p className="mt-1 text-2xl font-extrabold text-white">{materiasAprobadasUsuario.length}<span className="text-sm font-semibold text-slate-400"> / {planDeEstudio.length}</span></p>
-                          </div>
-                          <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
-                            <p className="text-xs font-bold uppercase tracking-wider text-cyan-300">Avance</p>
-                            <p className="mt-1 text-2xl font-extrabold text-white">{Math.round((materiasAprobadasUsuario.length / planDeEstudio.length) * 100)}%</p>
-                          </div>
-                          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-                            <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Pendientes</p>
-                            <p className="mt-1 text-2xl font-extrabold text-white">{materiasPendientesUsuario.length}</p>
-                          </div>
-                        </div>
-
-                        <div className="mt-5 grid gap-4 border-b border-slate-800 pb-5 sm:grid-cols-2">
-                          <div className="text-sm font-semibold text-slate-300">
-                            Materias que suponés aprobar
-                            <p className="mt-1 text-xs font-normal text-slate-500">Marcá las materias hipotéticas. Las aprobadas reales ya están incluidas.</p>
-                            <div className="mt-3 max-h-48 space-y-2 overflow-y-auto pr-1">
-                              {materiasPendientesUsuario.map((materia) => {
-                                const seleccionada = materiasSimuladas.includes(materia.codigo);
-                                return (
-                                  <label key={materia.codigo} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2 text-xs transition ${seleccionada ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-100' : 'border-slate-800 bg-[#0f141c] text-slate-300 hover:border-slate-600'}`}>
-                                    <input
-                                      type="checkbox"
-                                      checked={seleccionada}
-                                      onChange={() => setMateriasSimuladas((actuales) => seleccionada ? actuales.filter((codigo) => codigo !== materia.codigo) : [...actuales, materia.codigo])}
-                                      className="mt-0.5 accent-cyan-400"
-                                    />
-                                    <span><strong>{materia.codigo}</strong> · {materia.nombre}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                            <button type="button" onClick={() => setMateriasSimuladas([])} className="mt-2 text-xs font-bold text-slate-500 hover:text-cyan-300">Limpiar selección ({materiasSimuladas.length})</button>
-                          </div>
-                          <label className="text-sm font-semibold text-slate-300">
-                            Cuatrimestre a planificar
-                            <select
-                              value={cuatrimestreActivo}
-                              onChange={(evento) => setCuatrimestreSimulado(evento.target.value)}
-                              className="mt-2 w-full rounded-lg border border-slate-700 bg-[#0f141c] px-3 py-2 text-white outline-none focus:border-cyan-400"
-                            >
-                              {cuatrimestresPlan.map((cuatrimestre) => <option key={cuatrimestre} value={cuatrimestre}>{cuatrimestre}</option>)}
-                            </select>
-                            <span className="mt-1 block text-xs font-normal text-slate-500">Sugerido por tu avance: {cuatrimestreSugerido}.</span>
-                          </label>
-                        </div>
-
-                        <div className="mt-5 space-y-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <h4 className="text-sm font-extrabold uppercase tracking-wider text-white">Para ese cuatrimestre</h4>
-                            <span className="text-xs text-slate-500">{materiasDelSimulador.length} pendientes</span>
-                          </div>
-                          {materiasDelSimulador.length === 0 ? (
-                            <p className="rounded-xl border border-slate-800 bg-[#0f141c] p-4 text-sm text-slate-400">No quedan materias pendientes en este cuatrimestre.</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {materiasDelSimulador.map((materia) => {
-                                const correlativasPendientes = obtenerCorrelativasPendientesSimuladas(materia);
-                                const puedeCursar = correlativasPendientes.length === 0;
-                                return (
-                                  <div key={materia.codigo} className={`rounded-xl border p-3 ${puedeCursar ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div>
-                                        <p className="text-sm font-bold text-white">{materia.nombre}</p>
-                                        <p className="mt-1 text-xs text-slate-400">{materia.codigo}</p>
-                                      </div>
-                                      <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider ${puedeCursar ? 'border-emerald-400/40 text-emerald-300' : 'border-amber-400/40 text-amber-300'}`}>
-                                        {puedeCursar ? 'Podés cursar' : 'Bloqueada'}
-                                      </span>
-                                    </div>
-                                    {!puedeCursar && <p className="mt-2 text-xs text-amber-200">Falta: {correlativasPendientes.map((correlativa) => obtenerMateriaPlan(correlativa)?.nombre || correlativa).join(' · ')}</p>}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                          <p className="text-sm font-bold text-cyan-200">Resultado: {materiasRecomendadas.length} {materiasRecomendadas.length === 1 ? 'materia habilitada' : 'materias habilitadas'} para priorizar.</p>
-                          {materiasExtraDisponibles.length > 0 && (
-                            <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <h5 className="text-xs font-extrabold uppercase tracking-wider text-purple-200">Extras que podés adelantar</h5>
-                                  <p className="mt-1 text-xs text-purple-100/70">No pertenecen a este cuatrimestre, pero ya tenés las correlativas para cursarlas.</p>
-                                </div>
-                                <span className="text-xs font-bold text-purple-200">{materiasExtraDisponibles.length} disponibles</span>
-                              </div>
-                              <div className="mt-3 space-y-2">
-                                {materiasExtraDisponibles.slice(0, 5).map(({ materia, habilita }) => (
-                                  <div key={materia.codigo} className="flex items-center justify-between gap-3 rounded-lg border border-purple-400/20 bg-[#0f141c]/50 p-2.5 text-sm">
-                                    <div className="min-w-0">
-                                      <p className="truncate font-semibold text-white">{materia.nombre}</p>
-                                      <p className="text-xs text-purple-100/60">{materia.codigo} · {materia.cuatrimestre}</p>
-                                    </div>
-                                    <span className="shrink-0 text-right text-xs font-bold text-purple-200">{habilita > 0 ? `desbloquea ${habilita}` : 'suma avance'}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {(materiasRecomendadas.length > 0 || materiasExtraDisponibles.length > 0) && (
-                            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-                              <h5 className="text-xs font-extrabold uppercase tracking-wider text-emerald-200">Cómo te conviene cursar</h5>
-                              <p className="mt-2 text-sm text-emerald-50/90">
-                                Priorizá las {materiasRecomendadas.length} materias habilitadas del cuatrimestre y sumá {Math.min(2, materiasExtraDisponibles.length)} extra{Math.min(2, materiasExtraDisponibles.length) === 1 ? '' : 's'} con mayor desbloqueo.
-                              </p>
-                              <p className="mt-2 text-xs text-emerald-100/70">La sugerencia busca adelantar correlativas sin reemplazar la decisión final de carga, horarios o disponibilidad.</p>
-                            </div>
-                          )}
-                          {materiasPriorizadas.length > 0 && (
-                            <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4">
-                              <h5 className="text-xs font-extrabold uppercase tracking-wider text-cyan-200">Qué te conviene priorizar</h5>
-                              <div className="mt-3 space-y-2">
-                                {materiasPriorizadas.slice(0, 3).map(({ materia, habilita }) => (
-                                  <div key={materia.codigo} className="flex items-center justify-between gap-3 text-sm">
-                                    <span className="font-semibold text-white">{materia.nombre}</span>
-                                    <span className="shrink-0 text-xs font-bold text-cyan-200">{habilita > 0 ? `desbloquea ${habilita}` : 'habilitada ahora'}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </section>
-                    </div>
-                  )}
-                </div>
+                <VistaPlan
+                  planDeEstudio={planDeEstudio}
+                  cuatrimestresPlan={cuatrimestresPlan}
+                  alumnos={alumnos}
+                  usuarioActual={usuarioActual}
+                  esAdmin={esAdmin}
+                  planModalAbierto={planModalAbierto}
+                  setPlanModalAbierto={setPlanModalAbierto}
+                  obtenerCorrelativasPendientes={obtenerCorrelativasPendientes}
+                  obtenerMateriaPlan={obtenerMateriaPlan}
+                  obtenerCorrelativasPendientesSimuladas={obtenerCorrelativasPendientesSimuladas}
+                  obtenerProgresoMateria={obtenerProgresoMateria}
+                  progresoPlanEnEdicion={progresoPlanEnEdicion}
+                  setProgresoPlanEnEdicion={setProgresoPlanEnEdicion}
+                  handleGuardarProgresoPlan={handleGuardarProgresoPlan}
+                  materiasAprobadasUsuario={materiasAprobadasUsuario}
+                  materiasPendientesUsuario={materiasPendientesUsuario}
+                  materiasSimuladas={materiasSimuladas}
+                  setMateriasSimuladas={setMateriasSimuladas}
+                  cuatrimestreActivo={cuatrimestreActivo}
+                  setCuatrimestreSimulado={setCuatrimestreSimulado}
+                  cuatrimestreSugerido={cuatrimestreSugerido}
+                  materiasDelSimulador={materiasDelSimulador}
+                  materiasRecomendadas={materiasRecomendadas}
+                  materiasExtraDisponibles={materiasExtraDisponibles}
+                  materiasPriorizadas={materiasPriorizadas}
+                />
               )}
 
               {/* VISTA NUEVA: PARCIALES Y NOTAS */}
               {pestana === 'parciales' && (
-                <div className="space-y-6">
-                  {parciales.length === 0 ? (
-                    <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
-                      Aún no se han programado parciales.
-                    </div>
-                  ) : (
-                    parcialesAgrupados.map((grupo) => (
-                      <section key={grupo.id} className="space-y-4">
-                        <div className="flex items-center gap-3 border-b border-slate-800 pb-2">
-                          <span className="text-lg">{obtenerIconoMateria(grupo.nombre)}</span>
-                          <h2 className="text-lg sm:text-xl font-extrabold text-white">{grupo.nombre}</h2>
-                        </div>
-
-                        <div className="space-y-4">
-                          {grupo.parciales.map((p) => {
-                      const parcialDisponible = parcialEstaHabilitado(p.fecha);
-
-                      return (
-                        <div key={p.id} className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 border-b border-slate-800 pb-3 gap-3">
-                            <div>
-                              <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-                                <span>📋</span> {p.nombre}
-                              </h2>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs sm:text-sm bg-purple-500/10 text-purple-300 border border-purple-500/30 px-3.5 py-1.5 rounded-xl font-semibold">
-                                📅 {formatearFechaDDMMAAAA(p.fecha)}
-                              </span>
-                              {esAdmin && (
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => iniciarEdicionParcial(p)}
-                                    className="text-xs text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
-                                  >
-                                    Editar
-                                  </button>
-                                  <button
-                                    onClick={() => handleEliminarParcial(p.id)}
-                                    className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
-                                  >
-                                    Borrar
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {p.detalles && (
-                            <p className="text-sm text-slate-300 mb-6 bg-[#0f141c] p-3.5 rounded-xl border border-slate-800/80">
-                              ℹ️ {p.detalles}
-                            </p>
-                          )}
-
-                          {/* SECCIÓN CARGA DE NOTAS */}
-                          <div className="border-t border-slate-800/80 pt-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                              <div>
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                                  {esAdmin ? 'Cargar notas' : 'Tu nota'}
-                                </h3>
-                                {!parcialDisponible && (
-                                  <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-300 bg-blue-500/10 border border-blue-500/30 rounded-full px-2.5 py-1">
-                                    <span>⏰</span>
-                                    {(() => {
-                                      const diasParaAbrir = obtenerDiasHastaFecha(p.fecha);
-                                      return diasParaAbrir === 0 ? 'Abre hoy' : `Abre en ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'}`;
-                                    })()}
-                                  </p>
-                                )}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => toggleNotasParcial(p.id)}
-                                className="text-xs text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-lg font-semibold cursor-pointer"
-                              >
-                                {notasDesplegadas[p.id]
-                                  ? 'Ocultar notas'
-                                  : esAdmin && parcialDisponible
-                                    ? 'Cargar notas'
-                                    : 'Ver notas'}
-                              </button>
-                            </div>
-
-                            {usuarioActual && (() => {
-                              const claveMiNota = `${p.id}_${usuarioActual}`;
-                              const valorMiNota = notasInputs[claveMiNota] || '';
-
-                              return (
-                                <div className="bg-purple-950/20 border border-purple-500/40 p-3 rounded-xl flex items-center justify-between gap-3">
-                                  <span className="text-sm font-semibold text-slate-200 flex items-center gap-2 truncate">
-                                    <span>👤</span> Tu nota ({usuarioActual})
-                                  </span>
-                                  <input
-                                    type="text"
-                                    inputMode="decimal"
-                                    pattern="[0-9]+([.,][0-9]+)?"
-                                    placeholder="-"
-                                    disabled={!parcialDisponible}
-                                    value={valorMiNota}
-                                    onChange={(e) => handleNotaChangeLocal(p.id, usuarioActual, e.target.value)}
-                                    onBlur={() => handleGuardarNotaOnBlur(p.id, usuarioActual)}
-                                    className={`w-16 text-center font-bold text-sm py-1 px-2 rounded-lg border focus:outline-none transition-all ${
-                                      parcialDisponible
-                                        ? 'bg-[#161c26] text-purple-300 border-purple-500/50 focus:border-purple-400'
-                                        : 'bg-transparent text-slate-400 border-transparent cursor-not-allowed'
-                                    }`}
-                                  />
-                                </div>
-                              );
-                            })()}
-
-                            {notasDesplegadas[p.id] && (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
-                                {alumnos.filter((alum) => alum !== usuarioActual).map((alum) => {
-                                  const claveInput = `${p.id}_${alum}`;
-                                  const valorNota = notasInputs[claveInput] || '';
-
-                                  return (
-                                    <div
-                                      key={alum}
-                                      className="p-3 rounded-xl border flex items-center justify-between gap-3 bg-[#0f141c] border-slate-800/80"
-                                    >
-                                      <span className="text-sm font-semibold text-slate-200 flex items-center gap-2 truncate">
-                                        <span>👤</span> {alum}
-                                      </span>
-                                      <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        pattern="[0-9]+([.,][0-9]+)?"
-                                        placeholder="-"
-                                        disabled={!esAdmin || !parcialDisponible}
-                                        value={valorNota}
-                                        onChange={(e) => handleNotaChangeLocal(p.id, alum, e.target.value)}
-                                        onBlur={() => handleGuardarNotaOnBlur(p.id, alum)}
-                                        className={`w-16 text-center font-bold text-sm py-1 px-2 rounded-lg border focus:outline-none transition-all ${
-                                          esAdmin && parcialDisponible
-                                            ? 'bg-[#161c26] text-purple-300 border-purple-500/50 focus:border-purple-400'
-                                            : 'bg-transparent text-slate-400 border-transparent cursor-not-allowed'
-                                        }`}
-                                      />
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                          })}
-                        </div>
-                      </section>
-                    ))
-                  )}
-                </div>
+                <VistaParciales
+                  parciales={parciales}
+                  parcialesAgrupados={parcialesAgrupados}
+                  esAdmin={esAdmin}
+                  usuarioActual={usuarioActual}
+                  alumnos={alumnos}
+                  iniciarEdicionParcial={iniciarEdicionParcial}
+                  handleEliminarParcial={handleEliminarParcial}
+                  toggleNotasParcial={toggleNotasParcial}
+                  notasDesplegadas={notasDesplegadas}
+                  notasInputs={notasInputs}
+                  handleNotaChangeLocal={handleNotaChangeLocal}
+                  handleGuardarNotaOnBlur={handleGuardarNotaOnBlur}
+                />
               )}
 
               {pestana === 'ranking' && (
-                <div className="space-y-6">
-                  <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
-                    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6 border-b border-slate-800 pb-4">
-                      <div>
-                        <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-                          <span>🏆</span> Ranking de la cursada
-                        </h2>
-                        <p className="text-sm text-slate-400 mt-1">Puntaje acumulado de tareas, foros y parciales.</p>
-                      </div>
-                      <div className="flex flex-col items-stretch gap-2 sm:items-end">
-                        <label htmlFor="materia-ranking" className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                          Vista del ranking
-                        </label>
-                        <select
-                          id="materia-ranking"
-                          value={materiaRanking}
-                          onChange={(e) => setMateriaRanking(e.target.value)}
-                          className="rounded-xl border border-slate-700 bg-[#0f141c] px-3 py-2 text-sm font-semibold text-white outline-none transition-colors focus:border-emerald-400 cursor-pointer"
-                        >
-                          <option value="general">Todas las materias</option>
-                          {materias.map((materia) => (
-                            <option key={materia.id} value={materia.id}>{etiquetaMateria(materia.nombre)}</option>
-                          ))}
-                        </select>
-                        <span className="text-xs text-slate-500">Se actualiza al marcar tareas</span>
-                      </div>
-                    </div>
-
-                    {ranking.length === 0 ? (
-                      <p className="text-sm text-slate-500 italic">Todavía no hay alumnos cargados.</p>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {rankingPodio.map((item, indice) => {
-                            const iconosPodio = ['🥇', '🥈', '🥉'];
-                            const estilosPodio = [
-                              'border-amber-400/60 bg-amber-500/10',
-                              'border-slate-400/60 bg-slate-400/10',
-                              'border-orange-700/60 bg-orange-700/10'
-                            ];
-
-                            return (
-                              <div
-                                key={item.alumno}
-                                className={`flex flex-col items-center text-center gap-2 p-5 rounded-2xl border ${
-                                  item.alumno === usuarioActual
-                                    ? 'ring-2 ring-emerald-400/60'
-                                    : ''
-                                } ${estilosPodio[indice]}`}
-                              >
-                                <span className="text-4xl">{iconosPodio[indice]}</span>
-                                <span className="text-xs font-extrabold uppercase tracking-wider text-slate-300">{indice + 1}° puesto</span>
-                                <p className="font-extrabold text-white text-lg truncate max-w-full">{item.alumno}</p>
-                                <strong className="text-2xl font-extrabold text-emerald-300">{item.puntos.toFixed(1)}</strong>
-                                <span className="text-[10px] uppercase tracking-wider text-slate-400">puntos</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {restoRanking.length > 0 && (
-                          <div className="mt-6 space-y-3">
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Resto de la cursada</h3>
-                            {restoRanking.map((item, indice) => (
-                              <div
-                                key={item.alumno}
-                                className={`flex items-center gap-3 sm:gap-4 p-4 rounded-xl border ${
-                                  item.alumno === usuarioActual
-                                    ? 'bg-emerald-500/10 border-emerald-500/40'
-                                    : 'bg-[#0f141c] border-slate-800/80'
-                                }`}
-                              >
-                                <span className="w-8 text-center text-lg font-extrabold text-slate-400">#{indice + 4}</span>
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-bold text-white truncate">{item.alumno}</p>
-                                </div>
-                                <span className="text-right">
-                                  <strong className="block text-xl font-extrabold text-emerald-300">{item.puntos.toFixed(1)}</strong>
-                                  <small className="text-[10px] uppercase tracking-wider text-slate-500">puntos</small>
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
+                <VistaRanking
+                  materias={materias}
+                  usuarioActual={usuarioActual}
+                  materiaRanking={materiaRanking}
+                  setMateriaRanking={setMateriaRanking}
+                  ranking={ranking}
+                  rankingPodio={rankingPodio}
+                  restoRanking={restoRanking}
+                />
               )}
 
               {pestana === 'horarios' && (
-                <div className="space-y-5">
-                  <div className="flex flex-col gap-4 border-b border-slate-800 pb-4 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">Cronograma de cursada</p>
-                      <h2 className="mt-1 text-2xl font-extrabold text-white">Calendario mensual</h2>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setMesCalendario(new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() - 1, 1))}
-                        aria-label="Mes anterior"
-                        className="calendar-nav-button"
-                      >
-                        ←
-                      </button>
-                      <h3 className="min-w-40 text-center text-lg font-extrabold capitalize text-white">
-                        {nombresMeses[mesCalendario.getMonth()]} {mesCalendario.getFullYear()}
-                      </h3>
-                      <button
-                        type="button"
-                        onClick={() => setMesCalendario(new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() + 1, 1))}
-                        aria-label="Mes siguiente"
-                        className="calendar-nav-button"
-                      >
-                        →
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const hoy = new Date();
-                          setMesCalendario(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
-                        }}
-                        className="calendar-today-button"
-                      >
-                        Hoy
-                      </button>
-                    </div>
-                  </div>
-                  {horarios.length === 0 && parciales.length === 0 && tareasCalendario.length === 0 && cronograma.length === 0 ? (
-                    <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
-                      Todavía no hay eventos ni horarios cargados.
-                    </div>
-                  ) : (
-                    <div className="monthly-calendar rounded-2xl border border-slate-800 bg-[#111821] p-2 sm:p-4">
-                      <div className="grid grid-cols-7 border-b border-slate-800 pb-2 text-center">
-                        {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((dia) => (
-                          <span key={dia} className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 sm:text-xs">{dia}</span>
-                        ))}
-                      </div>
-                      <div className="calendar-grid mt-2 grid grid-cols-7 gap-1 sm:gap-2">
-                        {diasCalendario.map((fecha, indice) => {
-                          if (!fecha) return <div key={`vacio-${indice}`} className="calendar-empty" />;
-
-                          const eventos = eventosDelDiaCalendario(fecha);
-                          const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
-                          const esHoy = claveDia === claveHoyCalendario;
-                          const cantidadEventos = eventos.horarios.length + eventos.parciales.length + eventos.tareas.length + eventos.cronograma.length;
-                          return (
-                            <button
-                              type="button"
-                              key={claveDia}
-                              onClick={() => setDiaCalendarioSeleccionado(fecha)}
-                              className={`calendar-day text-left ${cantidadEventos === 0 ? 'calendar-day-empty' : ''} ${esHoy ? 'calendar-day-today' : ''}`}
-                              aria-label={`Ver eventos del ${fecha.toLocaleDateString('es-AR', { dateStyle: 'full' })}`}
-                            >
-                              <div className="flex items-center justify-between gap-1">
-                                <span className={`calendar-date ${esHoy ? 'calendar-date-today' : ''}`}>{fecha.getDate()}</span>
-                                {cantidadEventos > 0 && (
-                                  <span className="text-[9px] font-bold text-slate-500">
-                                    {cantidadEventos}
-                                  </span>
-                                )}
-                              </div>
-                              {cantidadEventos > 0 && <div className="mt-2 space-y-1.5">
-                                {eventos.horarios.map((horario) => {
-                                  const materia = materias.find((item) => item.id === horario.materia_id);
-                                  return (
-                                    <div key={`${claveDia}-${horario.id}`} className="calendar-event calendar-class" title={`${materia?.nombre || 'Materia'} · ${horario.hora_inicio} - ${horario.hora_fin}`}>
-                                      <span className="font-bold">{horario.hora_inicio}</span> {materia?.nombre || 'Materia'}
-                                    </div>
-                                  );
-                                })}
-                                {eventos.parciales.map((parcial) => {
-                                  const materia = materias.find((item) => item.id === parcial.materia_id);
-                                  return (
-                                    <div key={parcial.id} className="calendar-event calendar-exam" title={`${parcial.nombre} · ${materia?.nombre || 'Materia'}`}>
-                                      <span className="font-bold">Parcial</span> {materia?.nombre || 'Materia'}
-                                      {parcial.detalles && <span className="block truncate opacity-75">{parcial.detalles}</span>}
-                                    </div>
-                                  );
-                                })}
-                                {eventos.tareas.map(({ tarea, materia }) => (
-                                  <div key={tarea.id} className="calendar-event calendar-task" title={`Entrega: ${tarea.nombre} · ${materia.nombre}`}>
-                                    <span className="font-bold">Entrega</span> {tarea.nombre}
-                                  </div>
-                                ))}
-                                {eventos.cronograma.map((evento) => {
-                                  const materia = materias.find((item) => item.id === evento.materia_id);
-                                  const esAsincronico = evento.modalidad === 'asincrónico';
-                                  const esSinClases = evento.modalidad === 'sin_clases';
-                                  const diaSemana = obtenerDiaSemanaHorario(new Date(`${evento.fecha}T00:00:00`));
-                                  const horarioMateria = horarios.find((h) => h.materia_id === evento.materia_id && Number(h.dia) === diaSemana);
-                                  return (
-                                    <div key={evento.id} className={`calendar-event ${esAsincronico ? 'calendar-async' : 'calendar-academic'}`} title={`${evento.titulo} · ${materia?.nombre || 'Materia'}`}>
-                                      <span className="font-bold">{esAsincronico ? 'Asíncrono' : esSinClases ? 'Sin clases' : 'Clase'}</span> {esAsincronico ? (horarioMateria ? `${horarioMateria.hora_inicio} - ${horarioMateria.hora_fin}` : '') : esSinClases ? 'Sin clases' : evento.titulo}
-                                    </div>
-                                  );
-                                })}
-                              </div>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-800 pt-3 text-[11px] font-semibold text-slate-400">
-                        <span><i className="calendar-legend-dot bg-cyan-400" /> Cursada</span>
-                        <span><i className="calendar-legend-dot bg-purple-400" /> Parcial</span>
-                        <span><i className="calendar-legend-dot bg-amber-400" /> Entrega</span>
-                        <span><i className="calendar-legend-dot bg-emerald-400" /> Cronograma</span>
-                        <span><i className="calendar-legend-dot bg-orange-400" /> Asincrónico</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <VistaHorarios
+                  mesCalendario={mesCalendario}
+                  setMesCalendario={setMesCalendario}
+                  nombresMeses={nombresMeses}
+                  horarios={horarios}
+                  parciales={parciales}
+                  tareasCalendario={tareasCalendario}
+                  cronograma={cronograma}
+                  materias={materias}
+                  diasCalendario={diasCalendario}
+                  claveHoyCalendario={claveHoyCalendario}
+                  eventosDelDiaCalendario={eventosDelDiaCalendario}
+                  obtenerDiaSemanaHorario={obtenerDiaSemanaHorario}
+                  diaCalendarioSeleccionado={diaCalendarioSeleccionado}
+                  setDiaCalendarioSeleccionado={setDiaCalendarioSeleccionado}
+                />
               )}
 
-              {diaCalendarioSeleccionado && (() => {
-                const eventos = eventosDelDiaCalendario(diaCalendarioSeleccionado);
-                const fechaTexto = diaCalendarioSeleccionado.toLocaleDateString('es-AR', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric'
-                });
-
-                return (
-                  <div className="calendar-modal-backdrop" role="presentation" onMouseDown={(evento) => {
-                    if (evento.target === evento.currentTarget) setDiaCalendarioSeleccionado(null);
-                  }}>
-                    <section className="calendar-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-modal-title">
-                      <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
-                        <div>
-                          <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">Detalle del día</p>
-                          <h2 id="calendar-modal-title" className="mt-1 text-xl font-extrabold capitalize text-white">{fechaTexto}</h2>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setDiaCalendarioSeleccionado(null)}
-                          aria-label="Cerrar detalle del día"
-                          className="calendar-modal-close"
-                        >
-                          ×
-                        </button>
-                      </div>
-
-                      {eventos.horarios.length === 0 && eventos.parciales.length === 0 && eventos.tareas.length === 0 && eventos.cronograma.length === 0 ? (
-                        <p className="py-8 text-center text-sm text-slate-400">No hay eventos programados para este día.</p>
-                      ) : (
-                        <div className="mt-5 space-y-3">
-                          {eventos.horarios.map((horario) => {
-                            const materia = materias.find((item) => item.id === horario.materia_id);
-                            return (
-                              <div key={`modal-${horario.id}`} className="calendar-modal-event calendar-class">
-                                <p className="text-sm font-extrabold">Cursada · {horario.hora_inicio} - {horario.hora_fin}</p>
-                                <p className="mt-1 text-sm">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
-                                {horario.aula && <p className="mt-1 text-xs opacity-75">Aula {horario.aula}</p>}
-                              </div>
-                            );
-                          })}
-                          {eventos.parciales.map((parcial) => {
-                            const materia = materias.find((item) => item.id === parcial.materia_id);
-                            return (
-                              <div key={`modal-${parcial.id}`} className="calendar-modal-event calendar-exam">
-                                <p className="text-sm font-extrabold">Parcial · {parcial.nombre}</p>
-                                <p className="mt-1 text-sm">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
-                                {parcial.detalles && <p className="mt-2 text-sm opacity-85">{parcial.detalles}</p>}
-                              </div>
-                            );
-                          })}
-                          {eventos.tareas.map(({ tarea, materia }) => (
-                            <div key={`modal-${tarea.id}`} className="calendar-modal-event calendar-task">
-                              <p className="text-sm font-extrabold">Entrega · {tarea.nombre}</p>
-                              <p className="mt-1 text-sm">{etiquetaMateria(materia.nombre)}</p>
-                              {tarea.detalles && <p className="mt-2 text-sm opacity-85">{tarea.detalles}</p>}
-                            </div>
-                          ))}
-                          {eventos.cronograma.map((evento) => {
-                            const materia = materias.find((item) => item.id === evento.materia_id);
-                            const esAsincronico = evento.modalidad === 'asincrónico';
-                            const esSinClases = evento.modalidad === 'sin_clases';
-                            const diaSemana = obtenerDiaSemanaHorario(new Date(`${evento.fecha}T00:00:00`));
-                            const horarioMateria = horarios.find((h) => h.materia_id === evento.materia_id && Number(h.dia) === diaSemana);
-                            return (
-                              <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esAsincronico ? 'calendar-async' : 'calendar-academic'}`}>
-                                <p className="text-sm font-extrabold">{esAsincronico ? 'Clase asincrónica' : esSinClases ? 'Sin clases' : 'Cronograma'} · {esAsincronico ? (horarioMateria ? `${horarioMateria.hora_inicio} - ${horarioMateria.hora_fin}` : '') : esSinClases ? 'Sin clases' : evento.titulo}</p>
-                                <p className="mt-1 text-sm">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
-                                {esAsincronico && evento.titulo && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
-                                {esSinClases && evento.titulo && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
-                                {evento.detalles && <p className="mt-2 text-sm opacity-85">{evento.detalles}</p>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </section>
-                  </div>
-                );
-              })()}
 
               {/* VISTA 4: ADMIN PANEL */}
               {pestana === 'admin' && esAdmin && (
