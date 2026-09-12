@@ -78,6 +78,9 @@ export default function Home() {
   const [historialPropioAbierto, setHistorialPropioAbierto] = useState(true);
   const [alumnoComparar, setAlumnoComparar] = useState('');
   const [materiaRanking, setMateriaRanking] = useState('general');
+  // Foco de tarea al llegar desde "Estado por Alumno" hacia Materias (scroll + resaltado)
+  const [tareaFoco, setTareaFoco] = useState(null); // { materiaId, tareaId }
+  const [tareaFocoVisible, setTareaFocoVisible] = useState(false);
 
   // Form Login
   const [inputUser, setInputUser] = useState('');
@@ -216,6 +219,26 @@ export default function Home() {
     document.addEventListener('pointerdown', cerrarAlHacerClickAfuera);
     return () => document.removeEventListener('pointerdown', cerrarAlHacerClickAfuera);
   }, [notificacionesAbiertas]);
+
+  useEffect(() => {
+    if (!tareaFoco || !tareaFocoVisible) return undefined;
+
+    const temporizadorScroll = setTimeout(() => {
+      const elemento = document.getElementById(`tarea-${tareaFoco.tareaId}`);
+      if (elemento) {
+        elemento.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 150);
+
+    const apagarFoco = setTimeout(() => {
+      setTareaFocoVisible(false);
+    }, 2500);
+
+    return () => {
+      clearTimeout(temporizadorScroll);
+      clearTimeout(apagarFoco);
+    };
+  }, [tareaFoco, tareaFocoVisible]);
 
   useEffect(() => {
     if (!usuarioActual || cargando) return;
@@ -679,6 +702,23 @@ export default function Home() {
       ...prev,
       [materiaId]: !prev[materiaId]
     }));
+  };
+
+  // Navega desde "Estado por Alumno" hasta la tarea en "Materias" (scroll + resaltado)
+  const irATareaEnMaterias = (tareaId) => {
+    const materia = materias.find((m) => m.tareas.some((t) => t.id === tareaId));
+    if (!materia) return;
+
+    const tarea = materia.tareas.find((t) => t.id === tareaId);
+    // Si la tarea no es "pendiente" para el usuario actual, en Materias está oculta
+    // tras el filtro de completadas: la expandimos para que quede visible.
+    if (tarea && !tareaPendienteAlumno(tarea, usuarioActual) && !materiasDesplegadas[materia.id]) {
+      setMateriasDesplegadas((prev) => ({ ...prev, [materia.id]: true }));
+    }
+
+    setTareaFoco({ materiaId: materia.id, tareaId });
+    setTareaFocoVisible(true);
+    setPestana('materias');
   };
 
   const handleCrearAlumno = async (e) => {
@@ -1904,12 +1944,18 @@ export default function Home() {
                                               aria-label={`Marcar entregada: ${t.nombre}`}
                                               className="mt-0.5 h-5 w-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
                                             />
-                                            <span className="text-sm sm:text-base text-slate-100 font-semibold leading-snug">
-                                              {t.nombre}{t.conNota && <span className="text-xs text-purple-300 font-normal"> (con nota)</span>}
+                                            <button
+                                              type="button"
+                                              onClick={() => irATareaEnMaterias(t.id)}
+                                              title="Ver consigna y detalles en Materias"
+                                              className="text-sm sm:text-base text-slate-100 font-semibold leading-snug text-left hover:text-blue-300 hover:underline underline-offset-2 cursor-pointer transition-colors"
+                                            >
+                                              {t.nombre}
+                                              {t.conNota && <span className="text-xs text-purple-300 font-normal"> (con nota)</span>}
                                               {tareaFaltaNota(t, usuarioActual) && (
                                                 <span className="ml-2 text-xs text-amber-300 font-normal">Entregada · falta nota</span>
                                               )}
-                                            </span>
+                                            </button>
                                           </div>
                                           <div className="pl-7 flex items-end justify-between gap-3">
                                             <span className={`text-xs px-2.5 py-0.5 rounded-md border ${semaforo.estilo}`}>
@@ -2043,12 +2089,17 @@ export default function Home() {
                                               const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
                                               return (
                                                 <li key={t.id} className="bg-[#161c26]/60 p-2.5 rounded-lg border border-slate-800/50 flex flex-col gap-1">
-                                                  <span className="text-xs text-slate-200 font-semibold">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => irATareaEnMaterias(t.id)}
+                                                    title="Ver consigna y detalles en Materias"
+                                                    className="text-xs text-slate-200 font-semibold text-left hover:text-blue-300 hover:underline underline-offset-2 cursor-pointer transition-colors"
+                                                  >
                                                     • {t.nombre}
                                                     {tareaFaltaNota(t, alumno) && (
                                                       <span className="ml-2 text-amber-300 font-normal">Entregada · falta nota</span>
                                                     )}
-                                                  </span>
+                                                  </button>
                                                   <span className={`text-[10px] w-fit px-2 py-0.5 rounded border ${semaforo.estilo}`}>
                                                     {semaforo.texto}
                                                   </span>
@@ -2162,7 +2213,15 @@ export default function Home() {
                                     const diasParaAbrir = obtenerDiasHastaApertura(t.inicio);
 
                                     return (
-                                      <div key={t.id} className="bg-[#0f141c] p-6 rounded-xl border border-slate-800/80 flex flex-col lg:flex-row justify-between gap-6">
+                                      <div
+                                        key={t.id}
+                                        id={`tarea-${t.id}`}
+                                        className={`bg-[#0f141c] p-6 rounded-xl border flex flex-col lg:flex-row justify-between gap-6 transition-shadow ${
+                                          tareaFoco?.tareaId === t.id && tareaFocoVisible
+                                            ? 'border-blue-500/80 ring-2 ring-blue-500/50'
+                                            : 'border-slate-800/80'
+                                        }`}
+                                      >
                                     <div className="space-y-3 flex-1">
                                       <div className="flex items-center gap-3 flex-wrap">
                                         <h3 className="font-bold text-blue-400 text-base sm:text-lg flex items-center gap-2">
