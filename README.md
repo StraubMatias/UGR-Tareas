@@ -146,7 +146,35 @@ npm run build
 npm run start
 npm run lint
 npm run migrate
+npm run ugr:login        # inicia sesión en UGR Virtual y guarda la sesión
+npm run ugr:sync         # detecta tareas nuevas y sugiere agregarlas
+npm run ugr:sync -- --dry   # solo mostrar (no escribe nada)
+npm run ugr:sync -- --yes   # insertar todo sin preguntar
 ```
+
+### Sincronización con UGR Virtual (campus Moodle)
+
+Los scripts `ugr:login` y `ugr:sync` traen tareas nuevas desde `virtual.ugr.edu.ar` usando tu sesión (login clásico de Moodle, sin API pública). Resumen:
+
+1. Agregá en `.env.local` (nunca en git):
+
+   ```env
+   UGRVIRTUAL_USER=tu_usuario
+   UGRVIRTUAL_PASSWORD=tu_contrasena
+   ```
+
+2. `npm run ugr:login` guarda la sesión en `data/ugr-sesion.json` (no se commitea).
+3. `npm run ugr:sync` mapea los cursos del campus contra tus materias locales, detecta las tareas que no están cargadas y pregunta antes de insertarlas.
+
+   El mapeo de cursos es por **nombre literal**: los cursos de UGR Virtual se llaman igual que las materias del periodo, con un prefijo de versión tipo `(V.TUCS.1.07.2)` que el script ignora automáticamente. Si el campus sirve el nombre truncado en el listado, el sync abre la página del curso para recuperar el nombre completo.
+
+   Por tarea se trae además la **unidad** (del índice, p. ej. «Unidad II») y la **fecha de apertura** (del detalle de la tarea, bloque «Apertura»/«Cierre»), así quedan cargadas como inicio/fin en la app.
+
+4. En el panel también hay un botón **🔄 Sincronizar UGR** (visible solo para el admin, junto a «Panel de Carga»): abre una ventana con lo que encontró y, si está todo bien, se dan a «Cargar» para insertarlas sin tocar la terminal.
+
+Toda la lógica vive en `src/lib/ugr/` (autenticación, parsers de Moodle y normalización) y está cubierta por tests en `tests/ugr/`. El núcleo compartido está en `src/lib/ugr/sync-core.mjs`.
+
+> Nota: como el campus no habilita tokens de API para estudiantes, el script reutiliza la sesión HTTP (cookies de Moodle). Si Moodle cambia el HTML del índice de tareas, puede requerir un ajuste menor en los parsers.
 
 ## Motivación
 

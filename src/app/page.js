@@ -25,7 +25,8 @@ import {
   eliminarParcialAction,
   guardarNotaParcialAction,
   crearHorarioAction,
-  eliminarHorarioAction
+  eliminarHorarioAction,
+  syncUgrAction
 } from './actions';
 import {
   parcialHabilitado as parcialEstaHabilitado,
@@ -91,6 +92,12 @@ export default function Home() {
   const refrescandoRef = useRef(false);
   const [mostrarAvisoInicio, setMostrarAvisoInicio] = useState(false);
   const [novedades, setNovedades] = useState([]);
+
+  // Estado del modal de sincronización con UGR Virtual (solo admin)
+  const [syncAbierto, setSyncAbierto] = useState(false);
+  const [syncEstado, setSyncEstado] = useState('idle'); // idle | cargando | listo | error
+  const [syncDatos, setSyncDatos] = useState(null);
+  const [syncMensaje, setSyncMensaje] = useState('');
 
   // Estado para Parciales y Notas
   const [parciales, setParciales] = useState([]);
@@ -736,6 +743,33 @@ export default function Home() {
     }
   };
 
+  const ejecutarSyncUGR = async (confirmar = false) => {
+    setSyncEstado('cargando');
+    setSyncMensaje('');
+    try {
+      const res = await syncUgrAction({ confirmar });
+      if (!res?.exito) {
+        setSyncEstado('error');
+        setSyncMensaje(res?.mensaje || 'No se pudo sincronizar.');
+        return;
+      }
+      setSyncDatos(res);
+      setSyncEstado('listo');
+      if (confirmar && res.insertadas > 0) {
+        await cargarBD(false);
+      }
+    } catch (error) {
+      setSyncEstado('error');
+      setSyncMensaje(error?.message || 'Error inesperado al sincronizar con UGR.');
+    }
+  };
+
+  const abrirSyncUGR = () => {
+    setSyncDatos(null);
+    setSyncAbierto(true);
+    ejecutarSyncUGR(false);
+  };
+
   const handleNotaTareaChangeLocal = (tareaId, alumno, valor) => {
     setNotasTareasInputs((prev) => ({
       ...prev,
@@ -1334,6 +1368,15 @@ export default function Home() {
             >
               🔑 Cambiar Clave
             </button>
+            {esAdmin && (
+              <button
+                onClick={abrirSyncUGR}
+                title="Busca tareas nuevas en UGR Virtual y las carga en la página"
+                className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+              >
+                🔄 Sincronizar UGR
+              </button>
+            )}
             {esAdmin && (
               <button
                 onClick={() => navegarA('admin')}
@@ -2683,6 +2726,85 @@ export default function Home() {
                 <button type="submit" className="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer">Guardar condiciones</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Sincronización con UGR Virtual (solo admin) */}
+      {syncAbierto && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl max-h-[85vh] overflow-y-auto">
+            <h3 className="text-base font-bold text-white mb-1">🔄 Sincronizar con UGR Virtual</h3>
+            <p className="text-xs text-slate-400 mb-4">Busca las tareas nuevas del campus y te las muestra antes de cargarlas.</p>
+
+            {syncEstado === 'cargando' && (
+              <div className="text-center py-8">
+                <span className="text-3xl animate-spin inline-block">⏳</span>
+                <p className="mt-3 text-sm text-slate-300">Consultando UGR Virtual...</p>
+              </div>
+            )}
+
+            {syncEstado === 'error' && (
+              <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">{syncMensaje}</div>
+            )}
+
+            {syncEstado === 'listo' && syncDatos && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2 text-[11px] font-bold">
+                  <span className="rounded-lg bg-slate-800 border border-slate-700 px-2.5 py-1 text-slate-300">{syncDatos.cursos} curso(s)</span>
+                  <span className="rounded-lg bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-1 text-cyan-300">{syncDatos.mapeos.length} materia(s) mapeada(s)</span>
+                </div>
+
+                {syncDatos.detectadas.length === 0 ? (
+                  <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+                    ✅ No hay tareas nuevas para importar.
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                      {syncDatos.detectadas.map((tarea, i) => (
+                        <div key={`${tarea.idMoodle || tarea.nombre}-${i}`} className="rounded-xl border border-slate-700 bg-[#0f141c] p-3">
+                          <p className="text-sm font-semibold text-white">{tarea.nombre}</p>
+                          <p className="text-xs text-cyan-300 mt-0.5">{tarea.materiaNombre}</p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Unidad: {tarea.unidad || '—'} · Inicio: {tarea.inicio} · Fin: {tarea.fin} · Tipo: {tarea.tipo}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Revisá la lista y, si está todo bien, dale a «Cargar» para agregarlas a la página.
+                    </p>
+                  </>
+                )}
+
+                {syncDatos.insertadas > 0 && (
+                  <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+                    ✅ Se cargaron {syncDatos.insertadas} tarea(s) en la página.
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSyncAbierto(false)}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs cursor-pointer"
+                  >
+                    Cerrar
+                  </button>
+                  {syncDatos.detectadas.length > 0 && syncDatos.insertadas === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => ejecutarSyncUGR(true)}
+                      disabled={syncEstado === 'cargando'}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer disabled:opacity-50"
+                    >
+                      Cargar {syncDatos.detectadas.length} tarea(s)
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

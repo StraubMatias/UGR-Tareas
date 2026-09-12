@@ -45,3 +45,6 @@ AGENTS.md
 CLAUDE.md
 **/.claude/
 .aider*
+
+# datos locales generados (sesión UGR, etc.)
+/data/

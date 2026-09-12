@@ -6,9 +6,10 @@ import { cookies, headers } from 'next/headers';
 import { db } from './turso';
 import { PLAN_DE_ESTUDIO } from './plan-utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
+import { conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../lib/ugr/sync-core.mjs';
 
 const COOKIE_SESION = 'ugr_sesion';
-const DURACION_SESION_SEGUNDOS = 10 * 60;
+const DURACION_SESION_SEGUNDOS = 30 * 60;
 const scryptAsync = promisify(scrypt);
 
 const MENSAJE_LOGIN_INVALIDO = 'Usuario o contraseña incorrectos.';
@@ -1026,6 +1027,50 @@ export async function eliminarTareaAction(id) {
   } catch (error) {
     console.error('Error en eliminarTareaAction:', error);
     return { exito: false, mensaje: 'No se pudo eliminar la tarea.' };
+  }
+}
+
+// Sincroniza tareas nuevas desde UGR Virtual. Con `confirmar: false` solo
+// detecta (vista previa); con `confirmar: true` además inserta las detectadas.
+export async function syncUgrAction({ confirmar = false } = {}) {
+  try {
+    if (!await verificarAdmin()) {
+      return { exito: false, mensaje: 'Solo el administrador puede sincronizar con UGR.' };
+    }
+    const usuarioSesion = await obtenerUsuarioSesion();
+    const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
+    if (!rateLimit.exito) return rateLimit;
+
+    const cliente = await conectarUGR();
+    const { materiasLocales, cursos, mapeos, detectadas } = await detectarTareasNuevas({ db, cliente });
+
+    let insertadas = 0;
+    if (confirmar && detectadas.length > 0) {
+      insertadas = await insertarTareasDetectadas({ db, detectadas });
+      await registrarAuditoria({
+        accion: 'sync_ugr',
+        usuario: usuarioSesion,
+        detalle: `Sincronizó UGR: insertó ${insertadas} tarea(s) en ${mapeos.length} materia(s)`,
+        ip: await obtenerIPReal()
+      });
+    }
+
+    return {
+      exito: true,
+      confirmar,
+      materiasLocales: materiasLocales?.length || 0,
+      cursos: cursos?.length || 0,
+      mapeos: (mapeos || []).map(({ curso, coincidencia }) => ({
+        id: curso?.id,
+        curso: curso?.nombre,
+        materia: coincidencia?.materia?.nombre
+      })),
+      detectadas,
+      insertadas
+    };
+  } catch (error) {
+    console.error('Error en syncUgrAction:', error);
+    return { exito: false, mensaje: error?.message || 'No se pudo sincronizar con UGR Virtual.' };
   }
 }
 
