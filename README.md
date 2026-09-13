@@ -183,6 +183,40 @@ UGRVIRTUAL_PASSWORD=
 | `npm run ugr:login` | Inicia sesión en UGR Virtual y guarda la cookie |
 | `npm run ugr:sync` | Detecta tareas nuevas en el campus y sugiere importarlas |
 
+## 🤝 Convenciones de git
+
+El repo se maneja con commits descriptivos y un solo flujo en `main`.
+
+### Identidad
+
+Los commits deben salir con la identidad real (ya seteada en la config local del repo):
+
+```bash
+git config user.name "Matute2004"
+git config user.email "straubmatias14@gmail.com"
+```
+
+> Chequeá que ese correo esté verificado en tu cuenta de GitHub, así los commits quedan atribuidos correctamente (los anteriores con `Your Name <you@example.com>` salen sin avatar de esa persona).
+
+### Mensajes de commit
+
+Evitá mensajes genéricos tipo «act general» y usá prefijos que describan el cambio:
+
+| Prefijo | Uso | Ejemplo |
+|---|---|---|
+| `feat:` | Nueva funcionalidad | `feat: botón de sincronización desde el panel` |
+| `fix:` | Corrección de un error | `fix: guardar la sesión de Moodle en /tmp en Vercel` |
+| `docs:` | Documentación (README, comentarios) | `docs: convenciones de git y autenticación` |
+| `refactor:` | Código reorganizado sin cambiar comportamiento | `refactor: mover parsers de Moodle a ugr-sync/lib` |
+| `test:` | Tests | `test: cubrir mapeo de materias de 2° año 1° cuatri` |
+| `chore:` | Config, dependencias, mantenimiento | `chore: ignorar .aider y data/` |
+
+Consejos:
+
+- **Un commit = un cambio lógico.** Si tocaste tres cosas distintas, hacé tres commits.
+- El *body* es opcional para explicar el «por qué» cuando el título solo no alcanza.
+- Antes de commitear, corré `npm run test` (y `npm run lint` si tocaste JS).
+
 ## 🔄 Sincronización con UGR Virtual
 
 La app trae un **sincronizador propio** que se conecta al campus [`virtual.ugr.edu.ar`](https://virtual.ugr.edu.ar) (Moodle) y trae las tareas nuevas de tus materias a la app, sin copiar y pegar a mano.
