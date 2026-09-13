@@ -1031,8 +1031,9 @@ export async function eliminarTareaAction(id) {
 }
 
 // Sincroniza tareas nuevas desde UGR Virtual. Con `confirmar: false` solo
-// detecta (vista previa); con `confirmar: true` además inserta las detectadas.
-export async function syncUgrAction({ confirmar = false } = {}) {
+// detecta (vista previa); con `confirmar: true` inserta únicamente las tareas
+// cuyo `idMoodle` esté en `ids` (el admin las tilda una por una en el modal).
+export async function syncUgrAction({ confirmar = false, ids = [] } = {}) {
   try {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede sincronizar con UGR.' };
@@ -1046,7 +1047,13 @@ export async function syncUgrAction({ confirmar = false } = {}) {
 
     let insertadas = 0;
     if (confirmar && detectadas.length > 0) {
-      insertadas = await insertarTareasDetectadas({ db, detectadas });
+      // Nunca insertamos algo que no esté en la detección recién realizada:
+      // el front solo puede indicar cuáles de estas quiere cargar.
+      const pedidas = new Set(Array.isArray(ids) ? ids : []);
+      const seleccionadas = detectadas.filter((t) => pedidas.has(t.idMoodle));
+      if (seleccionadas.length > 0) {
+        insertadas = await insertarTareasDetectadas({ db, detectadas: seleccionadas });
+      }
       await registrarAuditoria({
         accion: 'sync_ugr',
         usuario: usuarioSesion,

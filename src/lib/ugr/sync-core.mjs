@@ -15,13 +15,33 @@ import {
 } from './normalizar.mjs';
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 
+// Carga explícita de .env.local, igual que hace el CLI con node: el bundler de
+// Next (Turbopack) reemplaza `process.env.VARIABLE` por su valor en el momento
+// de compilar y cachea el resultado, así que si el archivo cambia después (o el
+// servidor arrancó antes de que existieran las claves) la credencial queda
+// vieja/incompleta aunque ya esté en .env.local. Este pasaje lo refresca en
+// runtime cada vez que se importa el módulo.
+try {
+  process.loadEnvFile?.('.env.local');
+} catch {
+  // Si no existe el archivo, usamos las variables del entorno tal cual.
+}
+
+// Indirección a propósito: `process.env['UGRVIRTUAL_USER']` con el nombre en una
+// variable de runtime no puede ser reemplazado por el bundler en compilación,
+// garantizando que la lectura ocurra contra el entorno real.
+function variableEntorno(nombre) {
+  return process.env[nombre] || '';
+}
+
 // Crea el cliente HTTP con las credenciales del entorno.
 export async function conectarUGR() {
-  const { UGRVIRTUAL_USER, UGRVIRTUAL_PASSWORD } = process.env;
-  if (!UGRVIRTUAL_USER || !UGRVIRTUAL_PASSWORD) {
+  const usuario = variableEntorno('UGRVIRTUAL_USER');
+  const contrasena = variableEntorno('UGRVIRTUAL_PASSWORD');
+  if (!usuario || !contrasena) {
     throw new Error('Faltan UGRVIRTUAL_USER / UGRVIRTUAL_PASSWORD en .env.local.');
   }
-  return crearCliente({ usuario: UGRVIRTUAL_USER, contrasena: UGRVIRTUAL_PASSWORD });
+  return crearCliente({ usuario, contrasena });
 }
 
 async function fechasDeDetalle({ cliente, tarea }) {

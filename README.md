@@ -170,7 +170,9 @@ Los scripts `ugr:login` y `ugr:sync` traen tareas nuevas desde `virtual.ugr.edu.
 
    Por tarea se trae además la **unidad** (del índice, p. ej. «Unidad II») y la **fecha de apertura** (del detalle de la tarea, bloque «Apertura»/«Cierre»), así quedan cargadas como inicio/fin en la app.
 
-4. En el panel también hay un botón **🔄 Sincronizar UGR** (visible solo para el admin, junto a «Panel de Carga»): abre una ventana con lo que encontró y, si está todo bien, se dan a «Cargar» para insertarlas sin tocar la terminal.
+4. En el panel también hay un botón **🔄 Sincronizar UGR** (visible solo para el admin, junto a «Panel de Carga»): abre una ventana con lo que encontró y cada tarea aparece con un **check** para elegir cuáles importar. Nada se carga automáticamente: solo las tareas tildadas se insertan al apretar «Importar seleccionadas» (con «Tildar/Destildar todas» para cambiar el lote completo).
+
+> Las credenciales se leen de `.env.local` también en el panel: el servidor vuelve a leer el archivo al ejecutar la acción, así que no hace falta reiniciar `npm run dev` si agregás `UGRVIRTUAL_USER`/`UGRVIRTUAL_PASSWORD` con el servidor ya corriendo. Igual conviene reiniciar una vez para que Next arranque con el entorno completo.
 
 Toda la lógica vive en `src/lib/ugr/` (autenticación, parsers de Moodle y normalización) y está cubierta por tests en `tests/ugr/`. El núcleo compartido está en `src/lib/ugr/sync-core.mjs`.
 

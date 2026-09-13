@@ -98,6 +98,8 @@ export default function Home() {
   const [syncEstado, setSyncEstado] = useState('idle'); // idle | cargando | listo | error
   const [syncDatos, setSyncDatos] = useState(null);
   const [syncMensaje, setSyncMensaje] = useState('');
+  // Tareas detectadas que el admin dejó tildadas en la vista previa (idMoodle).
+  const [syncSeleccionados, setSyncSeleccionados] = useState(() => new Set());
 
   // Estado para Parciales y Notas
   const [parciales, setParciales] = useState([]);
@@ -743,11 +745,11 @@ export default function Home() {
     }
   };
 
-  const ejecutarSyncUGR = async (confirmar = false) => {
+  const ejecutarSyncUGR = async (confirmar = false, ids = []) => {
     setSyncEstado('cargando');
     setSyncMensaje('');
     try {
-      const res = await syncUgrAction({ confirmar });
+      const res = await syncUgrAction({ confirmar, ids });
       if (!res?.exito) {
         setSyncEstado('error');
         setSyncMensaje(res?.mensaje || 'No se pudo sincronizar.');
@@ -755,6 +757,10 @@ export default function Home() {
       }
       setSyncDatos(res);
       setSyncEstado('listo');
+      if (!confirmar) {
+        // Vista previa: arrancamos con todas las tareas tildadas.
+        setSyncSeleccionados(new Set(res.detectadas.map((t) => t.idMoodle)));
+      }
       if (confirmar && res.insertadas > 0) {
         await cargarBD(false);
       }
@@ -764,8 +770,23 @@ export default function Home() {
     }
   };
 
+  const toggleSyncTarea = (id) => {
+    setSyncSeleccionados((prev) => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(id)) nuevo.delete(id);
+      else nuevo.add(id);
+      return nuevo;
+    });
+  };
+
+  const marcarTodasSync = (marcadas) => {
+    if (!syncDatos) return;
+    setSyncSeleccionados(marcadas ? new Set(syncDatos.detectadas.map((t) => t.idMoodle)) : new Set());
+  };
+
   const abrirSyncUGR = () => {
     setSyncDatos(null);
+    setSyncSeleccionados(new Set());
     setSyncAbierto(true);
     ejecutarSyncUGR(false);
   };
@@ -2761,19 +2782,66 @@ export default function Home() {
                   </div>
                 ) : (
                   <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-300">
+                        {syncSeleccionados.size} de {syncDatos.detectadas.length} seleccionada(s)
+                      </span>
+                      <div className="flex gap-2 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => marcarTodasSync(true)}
+                          className="text-slate-400 hover:text-emerald-300 cursor-pointer underline"
+                        >
+                          Tildar todas
+                        </button>
+                        <span className="text-slate-600">·</span>
+                        <button
+                          type="button"
+                          onClick={() => marcarTodasSync(false)}
+                          className="text-slate-400 hover:text-red-300 cursor-pointer underline"
+                        >
+                          Destildar todas
+                        </button>
+                      </div>
+                    </div>
                     <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                      {syncDatos.detectadas.map((tarea, i) => (
-                        <div key={`${tarea.idMoodle || tarea.nombre}-${i}`} className="rounded-xl border border-slate-700 bg-[#0f141c] p-3">
-                          <p className="text-sm font-semibold text-white">{tarea.nombre}</p>
-                          <p className="text-xs text-cyan-300 mt-0.5">{tarea.materiaNombre}</p>
-                          <p className="text-xs text-slate-400 mt-1">
-                            Unidad: {tarea.unidad || '—'} · Inicio: {tarea.inicio} · Fin: {tarea.fin} · Tipo: {tarea.tipo}
-                          </p>
-                        </div>
-                      ))}
+                      {syncDatos.detectadas.map((tarea, i) => {
+                        const tildada = syncSeleccionados.has(tarea.idMoodle);
+                        return (
+                          <div
+                            key={`${tarea.idMoodle || tarea.nombre}-${i}`}
+                            onClick={(e) => {
+                              if (e.target.tagName === 'INPUT') return;
+                              toggleSyncTarea(tarea.idMoodle);
+                            }}
+                            aria-hidden="true"
+                            className={`rounded-xl border p-3 cursor-pointer transition-colors ${
+                              tildada
+                                ? 'border-emerald-500/50 bg-emerald-500/5'
+                                : 'border-slate-700 bg-[#0f141c] opacity-60'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <input
+                                type="checkbox"
+                                checked={tildada}
+                                onChange={() => toggleSyncTarea(tarea.idMoodle)}
+                                className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-500 cursor-pointer"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-white">{tarea.nombre}</p>
+                                <p className="text-xs text-cyan-300 mt-0.5">{tarea.materiaNombre}</p>
+                                <p className="text-xs text-slate-400 mt-1">
+                                  Unidad: {tarea.unidad || '—'} · Inicio: {tarea.inicio} · Fin: {tarea.fin} · Tipo: {tarea.tipo}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                     <p className="text-xs text-slate-400">
-                      Revisá la lista y, si está todo bien, dale a «Cargar» para agregarlas a la página.
+                      Tildá con el check cuáles querés importar y dale a «Importar seleccionadas». Nada se carga solo.
                     </p>
                   </>
                 )}
@@ -2795,11 +2863,13 @@ export default function Home() {
                   {syncDatos.detectadas.length > 0 && syncDatos.insertadas === 0 && (
                     <button
                       type="button"
-                      onClick={() => ejecutarSyncUGR(true)}
-                      disabled={syncEstado === 'cargando'}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer disabled:opacity-50"
+                      onClick={() => ejecutarSyncUGR(true, [...syncSeleccionados])}
+                      disabled={syncEstado === 'cargando' || syncSeleccionados.size === 0}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Cargar {syncDatos.detectadas.length} tarea(s)
+                      {syncSeleccionados.size > 0
+                        ? `Importar ${syncSeleccionados.size} seleccionada(s)`
+                        : 'Ninguna tarea seleccionada'}
                     </button>
                   )}
                 </div>
