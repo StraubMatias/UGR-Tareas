@@ -79,7 +79,15 @@ async function main() {
       )
     `);
 
-    await db.execute("UPDATE alumnos SET rol = 'admin' WHERE LOWER(nombre) = 'matute'");
+    // El administrador se define por entorno (ADMIN_USUARIO) y nunca queda
+    // hardcodeado en el repo. Si no está definido, no se promueve a nadie.
+    const adminUsuario = (process.env.ADMIN_USUARIO || '').trim();
+    if (adminUsuario) {
+      await db.execute({
+        sql: "UPDATE alumnos SET rol = 'admin' WHERE LOWER(nombre) = LOWER(?)",
+        args: [adminUsuario]
+      });
+    }
     await db.execute("UPDATE alumnos SET rol = 'alumno' WHERE rol IS NULL OR rol NOT IN ('admin', 'alumno')");
 
     const alumnosIniciales = await db.execute('SELECT nombre FROM alumnos');
@@ -342,6 +350,24 @@ async function main() {
 
   await ejecutarMigracion(10, 'enlace de UGR Virtual en parciales', async () => {
     await agregarColumnaSiFalta('parciales', 'url', "TEXT NOT NULL DEFAULT ''");
+  });
+
+  await ejecutarMigracion(11, 'asignar rol admin desde ADMIN_USUARIO (env)', async () => {
+    // Para bases ya migradas: promueve a admin el usuario indicado en el
+    // entorno, sin hardcodear nombres en el código. No degrada a nadie más.
+    const adminUsuario = (process.env.ADMIN_USUARIO || '').trim();
+    if (!adminUsuario) return;
+    const existe = await db.execute({
+      sql: 'SELECT nombre FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+      args: [adminUsuario]
+    });
+    if (existe.rows.length > 0) {
+      await db.execute({
+        sql: "UPDATE alumnos SET rol = 'admin' WHERE LOWER(nombre) = LOWER(?)",
+        args: [adminUsuario]
+      });
+      console.log(`Admin configurado: ${adminUsuario}`);
+    }
   });
 
   await db.close?.();

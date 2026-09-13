@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "migrate": "node database/migrate.mjs",
+    "admin:reset-password": "node database/reset-admin-password.mjs",
     "ugr:login": "node ugr-sync/scripts/login.mjs",
     "ugr:sync": "node ugr-sync/scripts/sync.mjs",
     "test": "node --test tests/**/*.test.mjs ugr-sync/test/**/*.test.mjs"
@@ -16,7 +17,7 @@
   "dependencies": {
     "@libsql/client": "^0.17.4",
     "cheerio": "^1.2.0",
-    "next": "16.3.2",
+    "next": "16.3.5",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
