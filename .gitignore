@@ -48,3 +48,7 @@ CLAUDE.md
 
 # datos locales generados (sesión UGR, etc.)
 /data/
+
+# cajón de sastre: cosas de herramientas que no son del proyecto
+# (aider, vscode, claude, etc.) — no se versionan ni se comparten
+/varios/

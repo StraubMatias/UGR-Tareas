@@ -1,208 +1,250 @@
-# Tareas UGR
+# 📚 Tareas UGR
 
-Portal de gestión de cursada para un grupo de compañeros y amigos que quieren organizar la carrera sin perder tareas, fechas ni notas.
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4-38bdf8?logo=tailwindcss&logoColor=white)
+![Turso](https://img.shields.io/badge/Turso-libSQL-2b6cb0?logo=sqlite&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white)
+![Estado](https://img.shields.io/badge/estado-en%20uso%20real%20🟢-22c55e)
 
-## ¿Qué es Tareas UGR?
+> 🎓 **Portal de gestión de cursada** para una comisión real: materias, tareas, parciales, horarios, notas, plan de estudio y ranking, todo en un solo lugar.
 
-Tareas UGR es una herramienta para acompañar la cursada de forma práctica y clara. La idea principal es centralizar todo lo importante de una comisión o grupo de estudiantes en un solo lugar: materias, tareas, entregas, parciales, horarios, notas, avances y comparaciones con el resto del grupo.
+---
 
-Es un proyecto pensado para uso real entre compañeros, no como una demo abstracta. La app nació para resolver un problema muy concreto: cuando cada uno guarda la información en distintos lados, es fácil perder una entrega, no enterarse de una fecha importante o no saber cómo viene el grupo.
+## 📑 Índice
 
-## ¿Qué hace exactamente?
+- [🤔 ¿Qué es?](#-qué-es-tareas-ugr)
+- [✨ Funcionalidades](#-funcionalidades)
+- [🖼️ Capturas de la app](#️-capturas-de-la-app)
+- [🛠️ Tecnologías](#️-tecnologías)
+- [🧱 Estructura del proyecto](#-estructura-del-proyecto)
+- [🚀 Puesta en marcha](#-puesta-en-marcha)
+- [📜 Scripts disponibles](#-scripts-disponibles)
+- [🔄 Sincronización con UGR Virtual](#-sincronización-con-ugr-virtual)
+- [🧪 Tests](#-tests)
+- [💡 Motivación](#-motivación)
+- [✍️ En resumen](#️-en-resumen)
 
-### Gestión de materias y tareas
-- Crear y editar materias
-- Organizar tareas por materia, unidad y tipo
-- Definir fechas de inicio y fin
-- Marcar qué tareas completó cada alumno
-- Diferenciar tareas pendientes, entregadas, futuras y con nota faltante
+---
 
-### Estado personal y del grupo
-- Ver el avance individual por alumno
-- Consultar qué tareas faltan completar
-- Revisar qué ya fue entregado y qué todavía necesita nota
-- Mantener un historial de entregas y actividades por estudiante
+## 🤔 ¿Qué es Tareas UGR?
 
-### Parciales, notas y evaluaciones
-- Registrar parciales por materia y fecha
-- Cargar notas por alumno
-- Mantener el seguimiento de evaluaciones y tareas con nota
-- Ver el progreso y la evolución de cada materia
+Tareas UGR es una herramienta para acompañar la cursada de forma **práctica y clara**. La idea principal es centralizar todo lo importante de una comisión o grupo de estudiantes en un solo lugar: materias, tareas, entregas, parciales, horarios, notas, avances y comparaciones con el resto del grupo.
 
-### Horarios y calendario
-- Agregar horarios de cursada por materia y día
-- Visualizar el calendario mensual del curso
-- Ver fechas clave de tareas y parciales en un mismo espacio
-- Tener una referencia rápida del cronograma académico
+No es una demo ni un prototipo: es un proyecto **pensado para uso real entre compañeros**. Nació para resolver un problema muy concreto — cuando cada uno guarda la información en distintos lados, es fácil perder una entrega, no enterarse de una fecha importante o no saber cómo viene el grupo.
 
-### Notificaciones y recordatorios
-- Avisar sobre vencimientos cercanos
-- Recordar tareas que se habilitan pronto
-- Mostrar nuevas entregas o parciales cargados
-- Mantener actualizados a los alumnos con lo más importante del curso
+## ✨ Funcionalidades
 
-### Plan de estudio y comparación
-- Rastrear el progreso del plan de estudios por alumno
-- Ver estados de correlatividades y materias aprobadas o pendientes
-- Comparar el avance del grupo
-- Mostrar un ranking con puntaje por tareas, actividades y parciales
+### 📚 Gestión de materias y tareas
+- Crear y editar materias, y organizar tareas por **materia, unidad y tipo**
+- Definir fechas de inicio y fin, y marcar qué tareas completó cada alumno
+- Diferenciar tareas **pendientes, entregadas, futuras y con nota faltante**
 
-### Administración del curso
-- Dar de alta alumnos
-- Crear y modificar tareas, materias, horarios y parciales
-- Actualizar datos del grupo desde un panel centralizado
-- Mantener la información del curso ordenada y visible para todos
+### 📊 Estado personal y del grupo
+- Avance individual por alumno y qué tareas faltan completar
+- Historial de entregas y actividades por estudiante
+- Revisión rápida de lo ya entregado y lo que todavía necesita nota
 
-## Funcionalidades nuevas que lo hacen más útil
+### 📝 Parciales, notas y evaluaciones
+- Registrar parciales por materia y fecha, y cargar notas por alumno
+- Seguimiento de evaluaciones y tareas con nota
+- Progreso y evolución de cada materia
 
-Además de la organización básica, la aplicación incluye herramientas que la vuelven mucho más completa para una comisión real:
+### 🗓️ Horarios y calendario
+- Horarios de cursada por materia y día
+- Calendario mensual del curso con las fechas clave de tareas y parciales en un mismo espacio
 
-- Ranking de la cursada con comparación entre compañeros
-- Historial de entregas y notas por alumno
-- Vista del plan de estudio con correlatividades y estados
-- Calendario de tareas, parciales y entregas
-- Sistema de notificaciones por vencimientos y fechas importantes
-- Panel de administración para cargar contenido del curso
-- Diferenciación clara entre actividades, tareas con nota, foros y evaluaciones
+### 🔔 Notificaciones y recordatorios
+- Avisos de vencimientos cercanos y tareas que se habilitan pronto
+- Alertas de nuevas entregas o parciales cargados por los administradores
 
-## Cómo se ve en la práctica
+### 🎯 Plan de estudio y comparación
+- Rastreo del plan de estudios por alumno, con correlatividades y estados
+- Comparación del avance del grupo y **ranking con puntaje** por tareas, actividades y parciales
 
-La app está pensada para que cada alumno pueda entrar y ver, de un vistazo:
-- su situación actual
-- qué tareas tiene pendientes
-- qué materias o parciales están próximos
-- cómo va comparado con sus compañeros
-- qué actividades y notas ya quedaron registradas
+### 🛠️ Administración del curso
+- Alta de alumnos y carga de tareas, materias, horarios y parciales
+- Panel centralizado para mantener la información del curso ordenada y visible para todos
 
-También existe una vista para el admin que permite cargar todo el contenido del curso y mantenerlo actualizado.
+### 🧩 Extras que suman
+- Distinción clara entre **actividades, tareas con nota, foros y evaluaciones**
+- Botón **🔄 Sincronizar UGR** para importar tareas nuevas directo desde el campus virtual
+- Cada alumno entra y ve de un vistazo su situación, lo pendiente, lo próximo y cómo va comparado con sus compañeros
 
-## Capturas de la app
+## 🖼️ Capturas de la app
 
-Las vistas principales del proyecto son estas:
+Las vistas principales del proyecto:
 
-### Estado del Alumno
+#### 📊 Estado del Alumno
 
 ![Estado del Alumno](./screenshots/Screenshot_2026-09-07-215924.png)
 
-### Cronograma
+#### 🗓️ Cronograma
 
 ![Cronograma](./screenshots/Screenshot_2026-09-07-215958.png)
 
-### Plan de Estudio
+#### 🎓 Plan de Estudio
 
 ![Plan de Estudio](./screenshots/Screenshot_2026-09-07-220030.png)
 
-### Historial
+#### 📜 Historial
 
 ![Historial](./screenshots/Screenshot_2026-09-07-220050.png)
 
-### Ranking
+#### 🏆 Ranking
 
 ![Ranking](./screenshots/Screenshot_2026-09-07-220103.png)
 
-## Estado del proyecto
+## 🛠️ Tecnologías
 
-Este proyecto ya está funcional y siendo utilizado por un grupo de compañeros y amigos para organizar la cursada de manera real. No es solo una maqueta ni un prototipo conceptual: es una herramienta práctica que se usa para seguir tareas, notas, fechas y progreso del curso en la vida diaria.
+| Tecnología | Para qué se usa |
+|---|---|
+| [Next.js](https://nextjs.org/) 16 | Framework (App Router + Server Actions) |
+| React 19 | UI de la app |
+| [Tailwind CSS](https://tailwindcss.com/) 4 | Estilos |
+| [Turso](https://turso.tech/) / libSQL | Base de datos |
+| [Cheerio](https://cheerio.js.org/) | Parsing del HTML de Moodle (solo en `ugr-sync`) |
+| Node.js 20+ | Runtime |
 
-En otras palabras, el proyecto está en desarrollo activo, pero con una base sólida y con uso real en la práctica.
+## 🧱 Estructura del proyecto
 
-## Tecnologías
+```text
+tareasUGR/
+├── src/                    # app Next.js (panel, estado del alumno, plan de estudio…)
+│   ├── app/                #   rutas, server actions, plan-utils y acceso a Turso
+│   ├── components/         #   vistas .jsx
+│   └── lib/                #   lógica pura de la cursada
+├── ugr-sync/               # sincronizador con UGR Virtual (módulo independiente)
+│   ├── lib/                #   red, autenticación, parsers de Moodle, sync-core
+│   ├── scripts/            #   CLI: sync.mjs y login.mjs
+│   ├── test/               #   tests + fixtures HTML reales de Moodle
+│   └── README.md           #   documentación técnica del módulo
+├── database/migrate.mjs    # migraciones de la base (Turso / libSQL)
+├── tests/                  # tests de la app (node:test)
+├── screenshots/            # capturas de las vistas
+├── .env.example            # variables de entorno de ejemplo
+└── README.md               # este archivo
 
-- [Next.js](https://nextjs.org/)
-- React
-- Tailwind CSS
-- [Turso](https://turso.tech/) con libSQL
-- Node.js
-
-## Requisitos
-
-- Node.js 20 o superior
-- Base de datos compatible con Turso/libSQL
-- Variables de entorno para la conexión a la base de datos y la sesión
-
-## Para correrlo localmente (opcional)
-
-Si querés probarlo en tu entorno local, lo más simple es:
-
-1. Cloná el proyecto y entrá a la carpeta.
-2. Instalá dependencias con npm install.
-3. Copiá `.env.example` como `.env.local` y completá tus variables de entorno. `SESSION_SECRET` es obligatorio y no puede reutilizar el token de Turso.
-4. Ejecutá `npm run migrate` para preparar o actualizar la base de datos (incluye hashear contraseñas que todavía estén en texto plano).
-5. Ejecutá npm run dev y abrí la app en tu navegador.
-
-Ejemplo de variables:
-
-```env
-TURSO_DATABASE_URL=tu_url_de_turso
-TURSO_AUTH_TOKEN=tu_token_de_turso
-SESSION_SECRET=una_clave_larga_y_secreta
+# carpetas locales, NO versionadas (ver .gitignore)
+data/                       # datos generados en runtime (sesión UGR, …)
+varios/                     # cajón de sastre: archivos de herramientas (aider, vscode, claude)
 ```
 
-## Estructura del proyecto
+> 💡 `data/` y `varios/` están en `.gitignore`: son locales de cada persona y nunca se comparten por git.
 
-```
-dashboard-tareas/
-├── src/                  # app Next.js (panel, estado del alumno, plan de estudio…)
-│   ├── app/              #   rutas, server actions, plan-utils y acceso a Turso
-│   ├── components/       #   vistas .jsx
-│   └── lib/              #   lógica pura de la cursada
-├── ugr-sync/             # sincronizador con UGR Virtual (módulo independiente)
-│   ├── lib/              #   red, autenticación, parsers de Moodle, sync-core
-│   ├── scripts/          #   CLI: sync.mjs y login.mjs
-│   ├── test/             #   tests + fixtures HTML reales
-│   └── README.md         #   documentación del módulo
-├── database/migrate.mjs  # migraciones de la base (Turso / libSQL)
-├── tests/                # tests de la app
-└── screenshots/          # capturas de las vistas
-```
+## 🚀 Puesta en marcha
 
-## Scripts disponibles
+### 📋 Requisitos
+
+- **Node.js 20 o superior**
+- Una base de datos compatible con **Turso / libSQL**
+- Variables de entorno para la conexión y la sesión (ver `.env.example`)
+
+### 🔧 Instalación
 
 ```bash
-npm run dev
-npm run build
-npm run start
-npm run lint
+# 1. Instalá dependencias
+npm install
+
+# 2. Copiá las variables de entorno y completalas
+cp .env.example .env.local
+
+# 3. Prepará la base de datos (crea esquema, índices y hashea contraseñas planas)
 npm run migrate
-npm run ugr:login        # inicia sesión en UGR Virtual y guarda la sesión
-npm run ugr:sync         # detecta tareas nuevas y sugiere agregarlas
-npm run ugr:sync -- --dry   # solo mostrar (no escribe nada)
-npm run ugr:sync -- --yes   # insertar todo sin preguntar
+
+# 4. Levantá la app en modo desarrollo
+npm run dev
 ```
 
-### Sincronización con UGR Virtual (campus Moodle)
+### 🔐 Variables de entorno
 
-Los scripts `ugr:login` y `ugr:sync` traen tareas nuevas desde `virtual.ugr.edu.ar` usando tu sesión (login clásico de Moodle, sin API pública). Resumen:
+```env
+TURSO_DATABASE_URL=libsql://tu-base.turso.io
+TURSO_AUTH_TOKEN=tu_token_de_turso
+SESSION_SECRET=una_clave_larga_y_aleatoria
 
-1. Agregá en `.env.local` (nunca en git):
+# Opcionales: credenciales del campus virtual para el sincronizador (ugr-sync)
+UGRVIRTUAL_USER=
+UGRVIRTUAL_PASSWORD=
+```
 
-   ```env
-   UGRVIRTUAL_USER=tu_usuario
-   UGRVIRTUAL_PASSWORD=tu_contrasena
-   ```
+> ⚠️ `SESSION_SECRET` es obligatorio y **no debe reutilizar el token de Turso**. Las credenciales de `UGRVIRTUAL_*` solo van en `.env.local`, nunca en git.
 
-2. `npm run ugr:login` guarda la sesión en `data/ugr-sesion.json` (no se commitea).
-3. `npm run ugr:sync` mapea los cursos del campus contra tus materias locales, detecta las tareas que no están cargadas y pregunta antes de insertarlas.
+## 📜 Scripts disponibles
 
-   El mapeo de cursos es por **nombre literal**: los cursos de UGR Virtual se llaman igual que las materias del periodo, con un prefijo de versión tipo `(V.TUCS.1.07.2)` que el script ignora automáticamente. Si el campus sirve el nombre truncado en el listado, el sync abre la página del curso para recuperar el nombre completo.
+| Comando | Descripción |
+|---|---|
+| `npm run dev` | Servidor de desarrollo |
+| `npm run build` | Compila la app para producción |
+| `npm run start` | Sirve el build de producción |
+| `npm run lint` | Ejecuta ESLint |
+| `npm run migrate` | Aplica las migraciones de la base |
+| `npm run test` | Corré los tests de la app y de `ugr-sync` |
+| `npm run ugr:login` | Inicia sesión en UGR Virtual y guarda la cookie |
+| `npm run ugr:sync` | Detecta tareas nuevas en el campus y sugiere importarlas |
 
-   Por tarea se trae además la **unidad** (del índice, p. ej. «Unidad II») y la **fecha de apertura** (del detalle de la tarea, bloque «Apertura»/«Cierre»), así quedan cargadas como inicio/fin en la app.
+## 🔄 Sincronización con UGR Virtual
 
-4. En el panel también hay un botón **🔄 Sincronizar UGR** (visible solo para el admin, junto a «Panel de Carga»): abre una ventana con lo que encontró y cada tarea aparece con un **check** para elegir cuáles importar. Nada se carga automáticamente: solo las tareas tildadas se insertan al apretar «Importar seleccionadas» (con «Tildar/Destildar todas» para cambiar el lote completo).
+La app trae un **sincronizador propio** que se conecta al campus [`virtual.ugr.edu.ar`](https://virtual.ugr.edu.ar) (Moodle) y trae las tareas nuevas de tus materias a la app, sin copiar y pegar a mano.
 
-> Las credenciales se leen de `.env.local` también en el panel: el servidor vuelve a leer el archivo al ejecutar la acción, así que no hace falta reiniciar `npm run dev` si agregás `UGRVIRTUAL_USER`/`UGRVIRTUAL_PASSWORD` con el servidor ya corriendo. Igual conviene reiniciar una vez para que Next arranque con el entorno completo.
+El módulo vive en [`ugr-sync/`](ugr-sync/README.md) y es **independiente de la interfaz**: se puede usar desde el **CLI**, desde el **botón del panel** o como **librería**. Usa tu sesión (login clásico de Moodle), porque el campus no ofrece API pública para estudiantes.
 
-Toda la lógica del sincronizador vive en la carpeta [`ugr-sync/`](ugr-sync/README.md), como módulo independiente de la app (autenticación, parsers de Moodle, normalización y el núcleo compartido `ugr-sync/lib/sync-core.mjs`). Está cubierta por tests en `ugr-sync/test/`.
+### ⚙️ Configuración
 
-> Nota: como el campus no habilita tokens de API para estudiantes, el script reutiliza la sesión HTTP (cookies de Moodle). Si Moodle cambia el HTML del índice de tareas, puede requerir un ajuste menor en los parsers.
+Agregá tus credenciales en `.env.local` (**nunca en git**):
 
-## Motivación
+```env
+UGRVIRTUAL_USER=tu_usuario
+UGRVIRTUAL_PASSWORD=tu_contrasena
+```
 
-La idea no es reemplazar plataformas universitarias ni crear una herramienta académica compleja. La intención es ayudar a un grupo de estudiantes a organizarse mejor, no perder fechas ni tareas, y tener la cursada clara y ordenada desde un solo lugar.
+> ℹ️ Las credenciales se leen cada vez que se ejecuta una acción, incluso con el servidor ya levantado: no hace falta reiniciar `npm run dev` tras agregarlas. Igual, conviene reiniciar una vez para que Next arranque con el entorno completo.
 
-La parte del ranking funciona como motivación extra, pero la verdadera utilidad es que el grupo sepa en todo momento qué falta, qué viene, y cómo avanza la carrera en conjunto.
+### 🖥️ Desde la terminal (CLI)
 
-## En resumen
+```bash
+# 1. Iniciar sesión y guardar la cookie (data/ugr-sesion.json, no se versiona)
+npm run ugr:login
 
-Tareas UGR es una app hecha para una comisión real de estudiantes que necesita un lugar central para organizar la cursada. Tiene gestión de tareas, notas, horarios, parciales, historial, plan de estudio y comparación entre compañeros, y ya está más allá de una versión básica: es una herramienta útil, funcional y pensada para ser usada todos los días.
+# 2. Sincronizar: detecta tareas nuevas y pregunta antes de insertar
+npm run ugr:sync
 
+# 2b. Variantes útiles
+npm run ugr:sync -- --dry   # solo muestra lo que encontró, no escribe nada
+npm run ugr:sync -- --yes   # inserta todo sin preguntar
+```
+
+### 🖥️ Desde el panel
+
+También hay un botón **🔄 Sincronizar UGR** en la app (visible solo para el admin, junto a «Panel de Carga»). Abre una ventana con lo que encontró el sync y muestra cada tarea con un **check**: solo las tildadas se importan al apretar «Importar seleccionadas» (con «Tildar/Destildar todas» para cambiar el lote completo). **Nada se carga automáticamente.**
+
+### ⚙️ Qué hace el sync, por dentro
+
+1. **Mapea cursos → materias**: lista los cursos del campus (`/course/index.php`) y los empareja con las materias locales por **nombre literal**, ignorando el prefijo de versión tipo `(V.TUCS.1.07.2)`. Si Moodle sirve el nombre truncado en el listado, abre la página del curso para recuperar el nombre completo.
+2. **Detecta tareas nuevas** leyendo el overview de cada curso (`/course/overview.php`): tareas, foros y cuestionarios. Por cada tarea trae también la **unidad** (del índice, p. ej. «Unidad II») y la **fecha de apertura** (del detalle, bloque «Apertura»/«Cierre»), que quedan cargadas como inicio/fin en la app.
+3. **No duplica**: una actividad no se propone si ya existe una tarea local con el mismo nombre (núcleo igual o tolerando sufijos), o si ya está cargada como **parcial** en esa materia (`coincidirParcial()` la empareja por el núcleo del nombre o por la misma fecha de vencimiento). Así, los parciales del cronograma no se importan dos veces.
+4. **Completa enlaces pendientes**: tanto tareas como parciales que nacieron sin URL (los del cronograma) reciben el link real a Moodle cuando la actividad aparece en el campus. Solo escribe si la columna `url` está vacía: **nunca pisa un enlace existente**.
+
+### ⚠️ Notas
+
+- El campus no ofrece API pública para estudiantes: se reutiliza la **sesión HTTP** (cookies de Moodle). Si Moodle cambia el HTML de los índices, puede requerir un ajuste menor en los parsers (`ugr-sync/lib/materias.mjs`, `ugr-sync/lib/tareas.mjs`).
+- Las migraciones de base (incluida la columna `parciales.url`) viven en `database/migrate.mjs` y se aplican con `npm run migrate`.
+- La documentación técnica completa del módulo está en [`ugr-sync/README.md`](ugr-sync/README.md).
+
+## 🧪 Tests
+
+El proyecto corre tests con el runner nativo de Node (`node:test`), tanto para la lógica de la app (`tests/`) como para el sincronizador (`ugr-sync/test/`, con fixtures HTML reales del campus):
+
+```bash
+npm run test
+```
+
+## 💡 Motivación
+
+La idea no es reemplazar plataformas universitarias ni crear una herramienta académica compleja. La intención es ayudar a un grupo de estudiantes a **organizarse mejor**: no perder fechas ni tareas, y tener la cursada clara y ordenada desde un solo lugar.
+
+El ranking funciona como motivación extra, pero la verdadera utilidad es que el grupo sepa en todo momento qué falta, qué viene y cómo avanza la carrera en conjunto.
+
+## ✍️ En resumen
+
+Tareas UGR es una app hecha para una comisión real de estudiantes que necesita un lugar central para organizar la cursada. Tiene gestión de tareas, notas, horarios, parciales, historial, plan de estudio, comparación entre compañeros y sincronización con el campus virtual — una herramienta útil, funcional y pensada para usarse todos los días. 🚀
