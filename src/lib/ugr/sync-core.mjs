@@ -15,16 +15,18 @@ import {
 } from './normalizar.mjs';
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 
-// Credenciales de UGR: si el proceso de Next arranca antes de que existan
-// UGRVIRTUAL_USER / UGRVIRTUAL_PASSWORD en .env.local, Node no las carga en
-// process.env (los `.env*` se leen al iniciar) y quedan ausentes aunque después
-// se agreguen al archivo. Además Turbopack reemplaza `process.env.VARIABLE` por
-// su valor al compilar y cachea. Por eso:
-//   * la lectura es dinámica, vía process.env[nombre] con el nombre en una
-//     variable de runtime (imposible de «inlinar» en el bundle);
-//   * justo antes de conectar se recarga .env.local con ruta absoluta, sin
-//     depender del directorio de trabajo ni del momento en que arrancó el
-//     proceso (idempotente y barato si las claves ya están cargadas).
+// Credenciales de UGR: se leen en el momento de conectar directamente de
+// process.env, igual que las variables TURSO_* en src/app/turso.js. Por lo
+// tanto funcionan donde quiera que corra la app:
+//   * en Vercel / plataformas: llegan solas por las Environment Variables que
+//     el despliegue inyecta en process.env; no hace falta ningún archivo;
+//   * en desarrollo local: Next las carga de .env.local al iniciar; si el
+//     proceso arrancó antes de que existieran, justo antes de conectar se
+//     recarga el archivo con ruta absoluta (idempotente y barato si las claves
+//     ya están cargadas), sin depender del cwd ni del momento del arranque.
+// La lectura es dinámica — process.env[nombre] con el nombre en una variable —
+// a propósito: Turbopack no puede «inlinar» ese acceso en el bundle, así que en
+// el runtime siempre se consulta el entorno real.
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,24 +35,43 @@ let candidatasEnvLocalCacheadas = null;
 let rutaCredencialesUGR = null;
 let ultimoArchivoEnvLocal = null;
 
-// Lista de ubicaciones plausibles para .env.local: primero el directorio de
+// Nombres de archivos de entorno probados, en orden de prioridad. En Vercel u
+// otras plataformas no existe ninguno: las variables llegan solas por
+// process.env (igual que TURSO_*). El listado es solo el respaldo para
+// desarrollo local y para `vercel dev` (que escribe .vercel/.env.*).
+const NOMBRES_ARCHIVOS_ENV = [
+  '.env.local',
+  '.env',
+  '.env.production.local',
+  '.env.production',
+  '.vercel/.env.production.local',
+  '.vercel/.env.development.local'
+];
+
+// Lista de ubicaciones plausibles para los .env*: primero el directorio de
 // trabajo actual (caso normal) y después subiendo desde el módulo compilado
 // hacia la raíz del proyecto (cubre un server lanzado desde otro cwd o un
-// bundle compilado dentro de .next/).
+// bundle compilado dentro de .next/). Se deduplica con un Set.
 function candidatosEnvLocal() {
   if (!candidatasEnvLocalCacheadas) {
-    const lista = [join(process.cwd(), '.env.local')];
+    const lista = new Set();
+    const agregarDesde = (directorio) => {
+      for (const nombre of NOMBRES_ARCHIVOS_ENV) {
+        lista.add(join(directorio, nombre));
+      }
+    };
+    agregarDesde(process.cwd());
     try {
       let directorio = dirname(fileURLToPath(import.meta.url));
       for (let nivel = 0; nivel < 10; nivel += 1) {
-        lista.push(join(directorio, '.env.local'));
+        agregarDesde(directorio);
         if (existsSync(join(directorio, 'package.json'))) break;
         directorio = dirname(directorio);
       }
     } catch {
-      // import.meta.url no resoluble: nos quedamos con la ruta del cwd.
+      // import.meta.url no resoluble: nos quedamos con las rutas del cwd.
     }
-    candidatasEnvLocalCacheadas = lista;
+    candidatasEnvLocalCacheadas = [...lista];
   }
   return candidatasEnvLocalCacheadas;
 }
@@ -87,7 +108,8 @@ function aplicarVariables(mapa) {
 // de runtime no puede ser reemplazado por el bundler en compilación, así la
 // lectura ocurre siempre contra el entorno real.
 function variableEntorno(nombre) {
-  return process.env[nombre] || '';
+  // Trim como en turso.js, para tolerar espacios accidentales al pegar valores.
+  return (process.env[nombre] || '').trim();
 }
 
 // Recarga las credenciales en el momento de usarlas. Si ya están en el
@@ -143,8 +165,21 @@ export async function conectarUGR() {
   const usuario = variableEntorno('UGRVIRTUAL_USER');
   const contrasena = variableEntorno('UGRVIRTUAL_PASSWORD');
   if (!usuario || !contrasena) {
+    if (process.env.VERCEL === '1') {
+      // En Vercel no hay .env.local en el despliegue: las credenciales tienen
+      // que estar en el panel y llegar por process.env, como las de Turso.
+      throw new Error(
+        'Faltan UGRVIRTUAL_USER / UGRVIRTUAL_PASSWORD en el entorno de Vercel ' +
+        '(las variables de entorno no llegaron al proceso del server). ' +
+        'Añadí ambas en Vercel → Project Settings → Environment Variables ' +
+        '(entorno Production) y hacé un nuevo deploy.'
+      );
+    }
     const fuente = rutaCredencialesUGR || ultimoArchivoEnvLocal || 'ningún .env.local encontrado';
-    throw new Error(`Faltan UGRVIRTUAL_USER / UGRVIRTUAL_PASSWORD en .env.local (revisé ${fuente}).`);
+    throw new Error(
+      `Faltan UGRVIRTUAL_USER / UGRVIRTUAL_PASSWORD (revisé ${fuente}). ` +
+      'Agregalas a .env.local en la raíz del proyecto y reiniciá `npm run dev`.'
+    );
   }
   return crearCliente({ usuario, contrasena });
 }
