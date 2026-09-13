@@ -29,31 +29,30 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-let rutaEnvLocalCacheada = null;
+let candidatasEnvLocalCacheadas = null;
+let rutaCredencialesUGR = null;
+let ultimoArchivoEnvLocal = null;
 
-// Ubica .env.local: primero relativo al cwd (arranque normal) y como respaldo
-// subiendo desde el módulo compilado hacia la raíz del proyecto (cubre un
-// server lanzado con otro directorio de trabajo).
-function rutaEnvLocal() {
-  if (rutaEnvLocalCacheada) return rutaEnvLocalCacheada;
-  const candidatas = [join(process.cwd(), '.env.local')];
-  try {
-    let directorio = dirname(fileURLToPath(import.meta.url));
-    for (let nivel = 0; nivel < 10; nivel += 1) {
-      candidatas.push(join(directorio, '.env.local'));
-      if (existsSync(join(directorio, 'package.json'))) break;
-      directorio = dirname(directorio);
+// Lista de ubicaciones plausibles para .env.local: primero el directorio de
+// trabajo actual (caso normal) y después subiendo desde el módulo compilado
+// hacia la raíz del proyecto (cubre un server lanzado desde otro cwd o un
+// bundle compilado dentro de .next/).
+function candidatosEnvLocal() {
+  if (!candidatasEnvLocalCacheadas) {
+    const lista = [join(process.cwd(), '.env.local')];
+    try {
+      let directorio = dirname(fileURLToPath(import.meta.url));
+      for (let nivel = 0; nivel < 10; nivel += 1) {
+        lista.push(join(directorio, '.env.local'));
+        if (existsSync(join(directorio, 'package.json'))) break;
+        directorio = dirname(directorio);
+      }
+    } catch {
+      // import.meta.url no resoluble: nos quedamos con la ruta del cwd.
     }
-  } catch {
-    // import.meta.url no resoluble: nos quedamos con la ruta del cwd.
+    candidatasEnvLocalCacheadas = lista;
   }
-  for (const ruta of candidatas) {
-    if (existsSync(/* turbopackIgnore: true */ ruta)) {
-      rutaEnvLocalCacheada = ruta;
-      return ruta;
-    }
-  }
-  return null;
+  return candidatasEnvLocalCacheadas;
 }
 
 // Parser mínimo de KEY=VALOR: ignora vacíos y comentarios, y quita comillas
@@ -91,24 +90,47 @@ function variableEntorno(nombre) {
   return process.env[nombre] || '';
 }
 
-// Recarga las credenciales en el momento de usarlas. Si ya están en el entorno,
-// no toca nada. Primero intenta con process.loadEnvFile (Node >= 20.12) y, si
-// falta o falla, parsea el archivo a mano y lo aplica en process.env.
+// Recarga las credenciales en el momento de usarlas. Si ya están en el
+// entorno, no toca nada. Prueba los candidatos en orden y usa el primero que
+// exista Y traiga las claves: si el .env.local más cercano no las tiene
+// (p. ej. un cwd con un archivo suelto sin UGRVIRTUAL_*), sigue con el de la
+// raíz del proyecto en lugar de rendirse.
 function cargarCredencialesUGR() {
-  if (variableEntorno('UGRVIRTUAL_USER') && variableEntorno('UGRVIRTUAL_PASSWORD')) return;
-  const ruta = rutaEnvLocal();
-  if (!ruta) return;
+  if (tieneCredencialesUGR()) return;
+  for (const ruta of candidatosEnvLocal()) {
+    if (!existsSync(/* turbopackIgnore: true */ ruta)) continue;
+    ultimoArchivoEnvLocal = ruta;
+    if (cargarVariablesDe(ruta)) return;
+  }
+}
+
+function tieneCredencialesUGR() {
+  return Boolean(variableEntorno('UGRVIRTUAL_USER') && variableEntorno('UGRVIRTUAL_PASSWORD'));
+}
+
+// Carga un .env.local concreto: primero con process.loadEnvFile (Node >= 20.12)
+// y, si falta o falla, parseando el archivo a mano. Devuelve true cuando las
+// credenciales UGR quedaron disponibles tras ese archivo.
+function cargarVariablesDe(ruta) {
   try {
-    if (typeof process.loadEnvFile === 'function') process.loadEnvFile(ruta);
+    if (typeof process.loadEnvFile === 'function') process.loadEnvFile(/* turbopackIgnore: true */ ruta);
   } catch {
     // Parseo manual por debajo si loadEnvFile falla o no existe.
   }
-  if (variableEntorno('UGRVIRTUAL_USER') && variableEntorno('UGRVIRTUAL_PASSWORD')) return;
+  if (tieneCredencialesUGR()) {
+    rutaCredencialesUGR = ruta;
+    return true;
+  }
   try {
     aplicarVariables(parsearEnvLocal(readFileSync(/* turbopackIgnore: true */ ruta, 'utf8')));
   } catch {
-    // Sin credenciales disponibles: conectarUGR dará su mensaje claro.
+    return false;
   }
+  if (tieneCredencialesUGR()) {
+    rutaCredencialesUGR = ruta;
+    return true;
+  }
+  return false;
 }
 
 // También al importar el módulo (por ejemplo para el CLI y para arranques en
@@ -121,7 +143,8 @@ export async function conectarUGR() {
   const usuario = variableEntorno('UGRVIRTUAL_USER');
   const contrasena = variableEntorno('UGRVIRTUAL_PASSWORD');
   if (!usuario || !contrasena) {
-    throw new Error('Faltan UGRVIRTUAL_USER / UGRVIRTUAL_PASSWORD en .env.local.');
+    const fuente = rutaCredencialesUGR || ultimoArchivoEnvLocal || 'ningún .env.local encontrado';
+    throw new Error(`Faltan UGRVIRTUAL_USER / UGRVIRTUAL_PASSWORD en .env.local (revisé ${fuente}).`);
   }
   return crearCliente({ usuario, contrasena });
 }
