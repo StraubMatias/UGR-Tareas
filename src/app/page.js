@@ -1737,9 +1737,21 @@ export default function Home() {
                                               )}
                                             </button>
                                           </div>
-                                          <div className="pl-7 flex items-end justify-between gap-3">
-                                            <span className={`text-xs px-2.5 py-0.5 rounded-md border ${semaforo.estilo}`}>
-                                              {semaforo.texto}
+                                          <div className="pl-7 flex items-end justify-between gap-3 flex-wrap">
+                                            <span className="flex items-center gap-2">
+                                              <span className={`text-xs px-2.5 py-0.5 rounded-md border ${semaforo.estilo}`}>
+                                                {semaforo.texto}
+                                              </span>
+                                              {t.url && (
+                                                <a
+                                                  href={t.url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline"
+                                                >
+                                                  Ver en UGR ↗
+                                                </a>
+                                              )}
                                             </span>
                                             {t.conNota && (
                                               <input
@@ -1880,6 +1892,16 @@ export default function Home() {
                                                       <span className="ml-2 text-amber-300 font-normal">Entregada · falta nota</span>
                                                     )}
                                                   </button>
+                                                  {t.url && (
+                                                    <a
+                                                      href={t.url}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      className="text-[10px] font-semibold text-blue-300 hover:text-blue-200 hover:underline w-fit"
+                                                    >
+                                                      Ver en UGR ↗
+                                                    </a>
+                                                  )}
                                                   <span className={`text-[10px] w-fit px-2 py-0.5 rounded border ${semaforo.estilo}`}>
                                                     {semaforo.texto}
                                                   </span>
