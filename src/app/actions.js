@@ -6,7 +6,7 @@ import { cookies, headers } from 'next/headers';
 import { db } from './turso';
 import { PLAN_DE_ESTUDIO } from './plan-utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
-import { actualizarUrlsTareas, conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../lib/ugr/sync-core.mjs';
+import { actualizarUrlsParciales, actualizarUrlsTareas, conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../lib/ugr/sync-core.mjs';
 
 const COOKIE_SESION = 'ugr_sesion';
 const DURACION_SESION_SEGUNDOS = 30 * 60;
@@ -1044,12 +1044,14 @@ export async function syncUgrAction({ confirmar = false, ids = [] } = {}) {
     if (!rateLimit.exito) return rateLimit;
 
     const cliente = await conectarUGR();
-    const { materiasLocales, cursos, mapeos, detectadas, urlsActualizar } = await detectarTareasNuevas({ db, cliente });
+    const { materiasLocales, cursos, mapeos, detectadas, urlsActualizar, urlsParcialesActualizar } = await detectarTareasNuevas({ db, cliente });
 
     // Backfill de enlaces: completamos los URLs que faltan en tareas que ya
     // estaban importadas. No agrega nada nuevo, solo deja listo el botón de
-    // «Ver en UGR» para las tareas existentes.
+    // «Ver en UGR» para las tareas existentes. Lo mismo para los parciales
+    // cargados desde el cronograma, que nacen sin enlace a UGR.
     const urlsActualizadas = await actualizarUrlsTareas({ db, urlsActualizar });
+    const urlsParcialesActualizadas = await actualizarUrlsParciales({ db, urlsParcialesActualizar });
 
     let insertadas = 0;
     if (confirmar && detectadas.length > 0) {
@@ -1063,7 +1065,7 @@ export async function syncUgrAction({ confirmar = false, ids = [] } = {}) {
       await registrarAuditoria({
         accion: 'sync_ugr',
         usuario: usuarioSesion,
-        detalle: `Sincronizó UGR: insertó ${insertadas} tarea(s) en ${mapeos.length} materia(s) y actualizó ${urlsActualizadas} enlace(s)`,
+        detalle: `Sincronizó UGR: insertó ${insertadas} tarea(s) en ${mapeos.length} materia(s); actualizó ${urlsActualizadas} enlace(s) de tareas y ${urlsParcialesActualizadas} de parciales`,
         ip: await obtenerIPReal()
       });
     }
@@ -1080,7 +1082,8 @@ export async function syncUgrAction({ confirmar = false, ids = [] } = {}) {
       })),
       detectadas,
       insertadas,
-      urlsActualizadas
+      urlsActualizadas,
+      urlsParcialesActualizadas
     };
   } catch (error) {
     console.error('Error en syncUgrAction:', error);
@@ -1185,10 +1188,10 @@ export async function obtenerParcialesAction(periodoId = null) {
     const [resParciales, resNotas] = await Promise.all([
       db.execute(consultaPeriodo(
         periodoId,
-        `SELECT p.id, p.materia_id, p.nombre, p.fecha, p.detalles
+        `SELECT p.id, p.materia_id, p.nombre, p.fecha, p.detalles, p.url
          FROM parciales p JOIN materias m ON m.id = p.materia_id
          WHERE m.periodo_id = ? ORDER BY p.fecha ASC`,
-        `SELECT id, materia_id, nombre, fecha, detalles FROM parciales ORDER BY fecha ASC`
+        `SELECT id, materia_id, nombre, fecha, detalles, url FROM parciales ORDER BY fecha ASC`
       )),
       db.execute(consultaPeriodo(
         periodoId,

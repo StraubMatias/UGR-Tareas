@@ -157,6 +157,29 @@ export function claveParcialParaEmparejar(nombre) {
     .trim();
   return sinFecha || limpio;
 }
+// Devuelve el parcial que ya está cargado correspondiente a una actividad
+// detectada en UGR, o null. Busca en dos pasos:
+//   1) Por el núcleo del nombre (claveParcialParaEmparejar): cubre exámenes
+//      cuyo rótulo de Moodle lleva adjunta la fecha del anuncio.
+//   2) Por la misma fecha de fin (vence) del candidato en la misma materia:
+//      cubre los parciales cargados por cronograma cuyo nombre no dice nada de
+//      la actividad real de Moodle (p. ej. «1er parcialito» vs «Evaluación de
+//      avance de medio cursado»). Como el listado de parciales ya viene filtrado
+//      por materia, que la fecha coincida es señal de que ya está cargado.
+// Devuelve el parcial original (con su `id`, `nombre`, `fecha` y `url`).
+export function coincidirParcial({ parciales, nombre, fin }) {
+  const lista = Array.isArray(parciales) ? parciales : [];
+  const clave = claveParcialParaEmparejar(nombre);
+  if (clave) {
+    const porNombre = lista.find((p) => claveParcialParaEmparejar(p.nombre) === clave);
+    if (porNombre) return porNombre;
+  }
+  const finLimpio = String(fin || '').trim();
+  if (finLimpio && finLimpio !== 'Sin fecha') {
+    return lista.find((p) => p.fecha === finLimpio) || null;
+  }
+  return null;
+}
 
 // Inferir el tipo de tarea según el nombre, igual que hace la app
 // (actividad | foro | trabajo_practico).

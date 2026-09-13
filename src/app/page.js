@@ -1618,6 +1618,17 @@ export default function Home() {
                         <p className="text-xs font-semibold text-purple-300 border-t border-purple-500/20 pt-3">
                           Fecha: {formatearFechaDDMMAAAA(proximoParcial.fecha)}
                         </p>
+                        {proximoParcial.url && (
+                          <a
+                            href={proximoParcial.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Abrir el parcial en UGR Virtual"
+                            className="text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-2 inline-block"
+                          >
+                            Ver en UGR ↗
+                          </a>
+                        )}
                         <div className="border-t border-purple-500/20 pt-3">
                           <p className="text-xs font-bold uppercase tracking-wider text-purple-300 mb-2">Cursada</p>
                           {horariosProximoParcial.length === 0 ? (

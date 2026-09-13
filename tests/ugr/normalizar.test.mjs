@@ -5,6 +5,7 @@ import {
   claveTareaParaEmparejar,
   coincidirMateria,
   coincidirNombreTarea,
+  coincidirParcial,
   inferirTipoTarea,
   limpiarNombreCursoParaBusqueda,
   limpiarTextoParaBusqueda,
@@ -105,6 +106,50 @@ test('claveParcialParaEmparejar ignora el día/hora que Moodle etiqueta en el an
   assert.equal(claveParcialParaEmparejar('Parcial de la Unidad 1'), 'parcial de la unidad 1');
   assert.equal(claveParcialParaEmparejar('Parcial integrador'), 'parcial integrador');
   assert.equal(claveParcialParaEmparejar(''), '');
+});
+
+test('coincidirParcial empareja un parcial ya cargado desde UGR', () => {
+  // Caso Auditorías: el parcial está cargado con la fecha real, pero Moodle
+  // etiqueta el nombre con la fecha del anuncio. Empareja por el núcleo.
+  const parcialAuditorias = {
+    id: 'parcial_aud',
+    nombre: 'Examen PARCIAL de Auditorías, martes 10 de Noviembre 18hs.',
+    fecha: '2026-11-10',
+    url: ''
+  };
+  const porNombre = coincidirParcial({
+    parciales: [parcialAuditorias],
+    nombre: 'Examen PARCIAL de Auditorías, martes 9 de Junio 18hs.',
+    fin: '2026-11-10'
+  });
+  assert.equal(porNombre, parcialAuditorias);
+
+  // Caso parcialito: el parcial se cargó por cronograma con otro nombre y el
+  // mismo vence que la actividad de Moodle. Empareja por fecha de fin.
+  const parcialActivos = {
+    id: 'parcial_act',
+    nombre: '1er parcialito (como lo llama el profe)',
+    fecha: '2026-09-28',
+    url: ''
+  };
+  const porFecha = coincidirParcial({
+    parciales: [parcialActivos],
+    nombre: 'Evaluación de avance de medio cursado',
+    fin: '2026-09-28'
+  });
+  assert.equal(porFecha, parcialActivos);
+
+  // Sin coincidencia: otra fecha y otro nombre → null.
+  const sinMatch = coincidirParcial({
+    parciales: [parcialActivos],
+    nombre: 'Evaluación de avance de medio cursado',
+    fin: '2026-10-12'
+  });
+  assert.equal(sinMatch, null);
+
+  // La coincidencia por fecha respeta la materia: acá se pasa solo el listado
+  // de la materia ya filtrada, así que también cubre ese caso por construcción.
+  assert.equal(coincidirParcial({ parciales: [], nombre: 'Evaluación de avance', fin: '2026-09-28' }), null);
 });
 
 test('limpiarTextoParaBusqueda normaliza mayúsculas y acentos', () => {

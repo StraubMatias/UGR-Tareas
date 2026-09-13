@@ -340,6 +340,10 @@ async function main() {
     await agregarColumnaSiFalta('tareas', 'url', "TEXT NOT NULL DEFAULT ''");
   });
 
+  await ejecutarMigracion(10, 'enlace de UGR Virtual en parciales', async () => {
+    await agregarColumnaSiFalta('parciales', 'url', "TEXT NOT NULL DEFAULT ''");
+  });
+
   await db.close?.();
 }
 

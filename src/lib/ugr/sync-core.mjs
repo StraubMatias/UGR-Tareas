@@ -8,10 +8,10 @@ import { crearCliente } from './red.mjs';
 import { extraerCursos, extraerNombreCursoDesdePagina } from './materias.mjs';
 import { extraerFechasActividad, extraerActividadesOverview } from './tareas.mjs';
 import {
-  claveParcialParaEmparejar,
   claveTareaParaEmparejar,
   coincidirMateria,
   coincidirNombreTarea,
+  coincidirParcial,
   inferirTipoTarea,
   normalizarNombre
 } from './normalizar.mjs';
@@ -231,6 +231,9 @@ export async function detectarTareasNuevas({ db, cliente }) {
   // Tareas locales que ya existen pero quedaron sin enlace: las cargamos en
   // esta misma pasada (backfill de la columna `url`).
   const urlsActualizar = [];
+  // Parciales ya cargados que también quedaron sin enlace (los que se cargan
+  // desde el cronograma no traen URL de UGR): se completan acá mismo.
+  const urlsParcialesActualizar = [];
   for (const { curso, coincidencia } of mapeos) {
     // Vista unificada de Moodle 4.5: /course/overview.php agrupa por tipo los
     // módulos del curso (assigns, foros, cuestionarios, feedback, …). Se piden
@@ -263,15 +266,13 @@ export async function detectarTareasNuevas({ db, cliente }) {
     // Exámenes ya cargados como parcial en VistaParciales: no son tareas a
     // insertar de nuevo. Moodle suele etiquetar el examen con la fecha del
     // anuncio («martes 9 de Junio …») que puede no ser la fecha real del evento
-    // (martes 10 de Noviembre); claveParcialParaEmparejar compara solo el
-    // núcleo del nombre para que la dedup también aplique en ese caso.
+    // (martes 10 de Noviembre); y los parciales cargados por cronograma suelen
+    // tener otro nombre que la actividad de Moodle. coincidirParcial() cubre
+    // ambos casos (núcleo del nombre y misma fecha de fin en la misma materia).
     const resParciales = await db.execute({
-      sql: 'SELECT nombre FROM parciales WHERE materia_id = ?',
+      sql: 'SELECT id, nombre, fecha, url FROM parciales WHERE materia_id = ?',
       args: [coincidencia.materia.id]
     });
-    const clavesParciales = new Set(
-      resParciales.rows.map((p) => claveParcialParaEmparejar(p.nombre)).filter(Boolean)
-    );
 
     for (const tarea of tareasUnicas) {
       // La apertura no viene en el índice: se lee del detalle de la tarea.
@@ -289,9 +290,19 @@ export async function detectarTareasNuevas({ db, cliente }) {
         }
         continue;
       }
-      // Ya está resuelto como parcial en VistaParciales (p. ej. el «Examen
-      // PARCIAL …»): no se ofrece como tarea nueva ni se intenta insertar.
-      if (clavesParciales.size && clavesParciales.has(claveParcialParaEmparejar(nombreFinal))) {
+      // Ya está resuelto como parcial en VistaParciales: no se ofrece como tarea
+      // nueva ni se intenta insertar. Además, si ese parcial quedó sin enlace
+      // (los cargados por cronograma no traen URL), aprovechamos para completarlo
+      // con el link real a UGR Virtual. El match es por núcleo del nombre (cubre
+      // el «Examen PARCIAL …» con la fecha del anuncio en el rótulo) o, si no,
+      // por la misma fecha de fin en la misma materia (cubre los parcialitos
+      // cargados desde el cronograma con otro nombre, como el «Avance de medio
+      // cursado» de Gestión de Activos).
+      const parcial = coincidirParcial({ parciales: resParciales.rows, nombre: nombreFinal, fin });
+      if (parcial) {
+        if (!parcial.url && tarea.url) {
+          urlsParcialesActualizar.push({ id: parcial.id, url: tarea.url });
+        }
         continue;
       }
       detectadas.push({
@@ -311,7 +322,7 @@ export async function detectarTareasNuevas({ db, cliente }) {
     }
   }
 
-  return { materiasLocales, cursos, mapeos, detectadas, urlsActualizar };
+  return { materiasLocales, cursos, mapeos, detectadas, urlsActualizar, urlsParcialesActualizar };
 }
 
 // Inserta las tareas detectadas en la base. Devuelve cuántas insertó.
@@ -346,6 +357,24 @@ export async function actualizarUrlsTareas({ db, urlsActualizar }) {
     .filter(({ id, url }) => id && url)
     .map(({ id, url }) => ({
       sql: 'UPDATE tareas SET url = ? WHERE id = ? AND url = ?',
+      args: [url, id, '']
+    }));
+  if (updates.length === 0) return 0;
+  await db.batch(updates, 'write');
+  return updates.length;
+}
+
+// Completa la columna `url` de parciales que ya existían en la base. Los
+// parciales que se cargan desde el cronograma nacen sin enlace a UGR; el sync
+// los detecta cuando la misma actividad aparece en Moodle y completa el link
+// para que «Ver en UGR» funcione también en Parciales y en Estado por Alumno.
+// Acepta una lista de { id, url } y devuelve cuántas actualizó.
+export async function actualizarUrlsParciales({ db, urlsParcialesActualizar }) {
+  if (!Array.isArray(urlsParcialesActualizar) || urlsParcialesActualizar.length === 0) return 0;
+  const updates = urlsParcialesActualizar
+    .filter(({ id, url }) => id && url)
+    .map(({ id, url }) => ({
+      sql: 'UPDATE parciales SET url = ? WHERE id = ? AND url = ?',
       args: [url, id, '']
     }));
   if (updates.length === 0) return 0;

@@ -8,7 +8,7 @@
 // en .env.local.
 import { createInterface } from 'node:readline/promises';
 import { createClient } from '@libsql/client';
-import { actualizarUrlsTareas, conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../src/lib/ugr/sync-core.mjs';
+import { actualizarUrlsParciales, actualizarUrlsTareas, conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../src/lib/ugr/sync-core.mjs';
 
 process.loadEnvFile?.('.env.local');
 
@@ -46,7 +46,7 @@ async function main() {
   await cliente.autenticar();
   console.log('✅ Sesión lista.');
 
-  const { materiasLocales, cursos, mapeos, detectadas, urlsActualizar } = await detectarTareasNuevas({ db, cliente });
+  const { materiasLocales, cursos, mapeos, detectadas, urlsActualizar, urlsParcialesActualizar } = await detectarTareasNuevas({ db, cliente });
 
   console.log(`\n🗂  ${materiasLocales.length} materias locales cargadas.`);
   console.log(`📚 ${cursos.length} curso(s) encontrados en UGR Virtual.`);
@@ -59,12 +59,16 @@ async function main() {
   if (urlsActualizar.length > 0) {
     console.log(`🔗 ${urlsActualizar.length} tarea(s) ya existente(s) con enlace de UGR pendiente.`);
   }
+  if (urlsParcialesActualizar.length > 0) {
+    console.log(`📋 ${urlsParcialesActualizar.length} parcial(es) ya cargado(s) que coinciden con una actividad de UGR (misma materia y fecha); se completará su enlace.`);
+  }
 
   if (detectadas.length === 0) {
-    if (!flags.soloSeco && urlsActualizar.length > 0) {
-      const actualizadas = await actualizarUrlsTareas({ db, urlsActualizar });
-      console.log(`✅ Enlace(s) completado(s): ${actualizadas}.`);
-    } else if (flags.soloSeco && urlsActualizar.length > 0) {
+    if (!flags.soloSeco && (urlsActualizar.length + urlsParcialesActualizar.length) > 0) {
+      const actualizadasTareas = await actualizarUrlsTareas({ db, urlsActualizar });
+      const actualizadosParciales = await actualizarUrlsParciales({ db, urlsParcialesActualizar });
+      console.log(`✅ Enlace(s) completado(s): ${actualizadasTareas} en tareas y ${actualizadosParciales} en parciales.`);
+    } else if (flags.soloSeco && (urlsActualizar.length + urlsParcialesActualizar.length) > 0) {
       console.log('📋 Modo seco: no se escribió nada.');
     }
     console.log('✅ No hay tareas nuevas para agregar.');
@@ -97,9 +101,13 @@ async function main() {
 
   const insertadas = await insertarTareasDetectadas({ db, detectadas });
   const enlacesActualizados = await actualizarUrlsTareas({ db, urlsActualizar });
+  const enlacesParcialesActualizados = await actualizarUrlsParciales({ db, urlsParcialesActualizar });
   console.log(`✅ ${insertadas} tarea(s) insertada(s) correctamente.`);
   if (enlacesActualizados > 0) {
     console.log(`🔗 Se completó el enlace de ${enlacesActualizados} tarea(s) existente(s).`);
+  }
+  if (enlacesParcialesActualizados > 0) {
+    console.log(`🔗 Se completó el enlace de ${enlacesParcialesActualizados} parcial(es) existente(s).`);
   }
   await db.close?.();
 }

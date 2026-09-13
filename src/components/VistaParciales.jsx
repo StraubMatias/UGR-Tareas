@@ -48,6 +48,17 @@ export default function VistaParciales({
                         <span className="text-xs sm:text-sm bg-purple-500/10 text-purple-300 border border-purple-500/30 px-3.5 py-1.5 rounded-xl font-semibold">
                           📅 {formatearFechaDDMMAAAA(p.fecha)}
                         </span>
+                        {p.url && (
+                          <a
+                            href={p.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Abrir el parcial en UGR Virtual"
+                            className="text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline"
+                          >
+                            Ver en UGR ↗
+                          </a>
+                        )}
                         {esAdmin && (
                           <div className="flex items-center gap-2">
                             <button
