@@ -336,6 +336,10 @@ async function main() {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_auditoria_creada_en ON auditoria(creada_en)');
   });
 
+  await ejecutarMigracion(9, 'enlace de UGR Virtual en tareas', async () => {
+    await agregarColumnaSiFalta('tareas', 'url', "TEXT NOT NULL DEFAULT ''");
+  });
+
   await db.close?.();
 }
 

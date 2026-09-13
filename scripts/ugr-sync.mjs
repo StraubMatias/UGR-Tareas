@@ -8,7 +8,7 @@
 // en .env.local.
 import { createInterface } from 'node:readline/promises';
 import { createClient } from '@libsql/client';
-import { conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../src/lib/ugr/sync-core.mjs';
+import { actualizarUrlsTareas, conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../src/lib/ugr/sync-core.mjs';
 
 process.loadEnvFile?.('.env.local');
 
@@ -46,7 +46,7 @@ async function main() {
   await cliente.autenticar();
   console.log('✅ Sesión lista.');
 
-  const { materiasLocales, cursos, mapeos, detectadas } = await detectarTareasNuevas({ db, cliente });
+  const { materiasLocales, cursos, mapeos, detectadas, urlsActualizar } = await detectarTareasNuevas({ db, cliente });
 
   console.log(`\n🗂  ${materiasLocales.length} materias locales cargadas.`);
   console.log(`📚 ${cursos.length} curso(s) encontrados en UGR Virtual.`);
@@ -56,7 +56,17 @@ async function main() {
   }
 
   console.log(`\n════════════════════════════════════════`);
+  if (urlsActualizar.length > 0) {
+    console.log(`🔗 ${urlsActualizar.length} tarea(s) ya existente(s) con enlace de UGR pendiente.`);
+  }
+
   if (detectadas.length === 0) {
+    if (!flags.soloSeco && urlsActualizar.length > 0) {
+      const actualizadas = await actualizarUrlsTareas({ db, urlsActualizar });
+      console.log(`✅ Enlace(s) completado(s): ${actualizadas}.`);
+    } else if (flags.soloSeco && urlsActualizar.length > 0) {
+      console.log('📋 Modo seco: no se escribió nada.');
+    }
     console.log('✅ No hay tareas nuevas para agregar.');
     await db.close?.();
     return;
@@ -69,6 +79,7 @@ async function main() {
     console.log(`     Unidad: ${t.unidad ?? '—'}`);
     console.log(`     Inicio: ${t.inicio}   |   Fin: ${t.fin}`);
     console.log(`     Tipo: ${t.tipo}   |   Con nota: ${t.conNota}`);
+    console.log(`     UGR: ${t.url || '—'}`);
   });
 
   if (flags.soloSeco) {
@@ -85,7 +96,11 @@ async function main() {
   }
 
   const insertadas = await insertarTareasDetectadas({ db, detectadas });
+  const enlacesActualizados = await actualizarUrlsTareas({ db, urlsActualizar });
   console.log(`✅ ${insertadas} tarea(s) insertada(s) correctamente.`);
+  if (enlacesActualizados > 0) {
+    console.log(`🔗 Se completó el enlace de ${enlacesActualizados} tarea(s) existente(s).`);
+  }
   await db.close?.();
 }
 

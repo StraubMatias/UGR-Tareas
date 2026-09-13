@@ -6,7 +6,7 @@ import { cookies, headers } from 'next/headers';
 import { db } from './turso';
 import { PLAN_DE_ESTUDIO } from './plan-utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
-import { conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../lib/ugr/sync-core.mjs';
+import { actualizarUrlsTareas, conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../lib/ugr/sync-core.mjs';
 
 const COOKIE_SESION = 'ugr_sesion';
 const DURACION_SESION_SEGUNDOS = 30 * 60;
@@ -580,9 +580,9 @@ export async function obtenerDatos(periodoId = null) {
       )),
       db.execute(consultaPeriodo(
         periodoId,
-        `SELECT t.id, t.materia_id, t.nombre, t.inicio, t.fin, t.detalles, t.unidad, t.con_nota, t.tipo
+        `SELECT t.id, t.materia_id, t.nombre, t.inicio, t.fin, t.detalles, t.unidad, t.con_nota, t.tipo, t.url
          FROM tareas t JOIN materias m ON m.id = t.materia_id WHERE m.periodo_id = ?`,
-        `SELECT id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo FROM tareas`
+        `SELECT id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, url FROM tareas`
       )),
       db.execute(consultaPeriodo(
         periodoId,
@@ -655,6 +655,7 @@ export async function obtenerDatos(periodoId = null) {
           unidad: t.unidad || '',
           conNota: Number(t.con_nota) === 1,
           tipo: t.tipo || 'actividad',
+          url: t.url || '',
           completadoPor,
           completadoEn,
           notas,
@@ -1043,7 +1044,12 @@ export async function syncUgrAction({ confirmar = false, ids = [] } = {}) {
     if (!rateLimit.exito) return rateLimit;
 
     const cliente = await conectarUGR();
-    const { materiasLocales, cursos, mapeos, detectadas } = await detectarTareasNuevas({ db, cliente });
+    const { materiasLocales, cursos, mapeos, detectadas, urlsActualizar } = await detectarTareasNuevas({ db, cliente });
+
+    // Backfill de enlaces: completamos los URLs que faltan en tareas que ya
+    // estaban importadas. No agrega nada nuevo, solo deja listo el botón de
+    // «Ver en UGR» para las tareas existentes.
+    const urlsActualizadas = await actualizarUrlsTareas({ db, urlsActualizar });
 
     let insertadas = 0;
     if (confirmar && detectadas.length > 0) {
@@ -1057,7 +1063,7 @@ export async function syncUgrAction({ confirmar = false, ids = [] } = {}) {
       await registrarAuditoria({
         accion: 'sync_ugr',
         usuario: usuarioSesion,
-        detalle: `Sincronizó UGR: insertó ${insertadas} tarea(s) en ${mapeos.length} materia(s)`,
+        detalle: `Sincronizó UGR: insertó ${insertadas} tarea(s) en ${mapeos.length} materia(s) y actualizó ${urlsActualizadas} enlace(s)`,
         ip: await obtenerIPReal()
       });
     }
@@ -1073,7 +1079,8 @@ export async function syncUgrAction({ confirmar = false, ids = [] } = {}) {
         materia: coincidencia?.materia?.nombre
       })),
       detectadas,
-      insertadas
+      insertadas,
+      urlsActualizadas
     };
   } catch (error) {
     console.error('Error en syncUgrAction:', error);

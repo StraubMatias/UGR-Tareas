@@ -226,15 +226,23 @@ export async function detectarTareasNuevas({ db, cliente }) {
 
   // 3) Tareas de cada curso mapeado y detección de faltantes.
   const detectadas = [];
+  // Tareas locales que ya existen pero quedaron sin enlace: las cargamos en
+  // esta misma pasada (backfill de la columna `url`).
+  const urlsActualizar = [];
   for (const { curso, coincidencia } of mapeos) {
     const pagina = await cliente.pedir(UGR_RUTAS.tareasDeCurso(curso.id));
     const tareas = extraerTareas(pagina.html, UGR_BASE_URL);
 
+    // Las tareas ya importadas no se vuelven a insertar; pero las de antes de
+    // que existiera la columna `url` quedaron sin enlace, así que los
+    // aprovechamos para completarlos con el link real a UGR Virtual.
     const resExistentes = await db.execute({
-      sql: 'SELECT nombre FROM tareas WHERE materia_id = ?',
+      sql: 'SELECT id, nombre, url FROM tareas WHERE materia_id = ?',
       args: [coincidencia.materia.id]
     });
-    const nombresExistentes = new Set(resExistentes.rows.map((t) => limpiarTextoParaBusqueda(t.nombre)));
+    const existentesPorClave = new Map(
+      resExistentes.rows.map((t) => [limpiarTextoParaBusqueda(t.nombre), t])
+    );
 
     for (const tarea of tareas) {
       // La apertura no viene en el índice: se lee del detalle de la tarea.
@@ -244,7 +252,13 @@ export async function detectarTareasNuevas({ db, cliente }) {
 
       const nombreFinal = normalizarNombre({ nombre: tarea.nombre, cursoNombre: curso.nombre });
       const clave = limpiarTextoParaBusqueda(nombreFinal);
-      if (nombresExistentes.has(clave)) continue;
+      const existente = existentesPorClave.get(clave);
+      if (existente) {
+        if (!existente.url && tarea.url) {
+          urlsActualizar.push({ id: existente.id, url: tarea.url });
+        }
+        continue;
+      }
       detectadas.push({
         materiaId: coincidencia.materia.id,
         materiaNombre: coincidencia.materia.nombre,
@@ -262,13 +276,13 @@ export async function detectarTareasNuevas({ db, cliente }) {
     }
   }
 
-  return { materiasLocales, cursos, mapeos, detectadas };
+  return { materiasLocales, cursos, mapeos, detectadas, urlsActualizar };
 }
 
 // Inserta las tareas detectadas en la base. Devuelve cuántas insertó.
 export async function insertarTareasDetectadas({ db, detectadas }) {
   const inserts = detectadas.map((t) => ({
-    sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     args: [
       `t_${randomUUID()}`,
       t.materiaId,
@@ -278,11 +292,28 @@ export async function insertarTareasDetectadas({ db, detectadas }) {
       t.detalles || 'Importada desde UGR Virtual',
       t.unidad ?? null,
       t.conNota ? 1 : 0,
-      t.tipo || 'actividad'
+      t.tipo || 'actividad',
+      t.url || ''
     ]
   }));
 
   if (inserts.length === 0) return 0;
   await db.batch(inserts, 'write');
   return inserts.length;
+}
+
+// Completa la columna `url` de tareas que ya existían en la base (por ejemplo,
+// importadas con una versión anterior que todavía no guardaba el enlace).
+// Acepta una lista de { id, url } y devuelve cuántas actualizó.
+export async function actualizarUrlsTareas({ db, urlsActualizar }) {
+  if (!Array.isArray(urlsActualizar) || urlsActualizar.length === 0) return 0;
+  const updates = urlsActualizar
+    .filter(({ id, url }) => id && url)
+    .map(({ id, url }) => ({
+      sql: 'UPDATE tareas SET url = ? WHERE id = ? AND url = ?',
+      args: [url, id, '']
+    }));
+  if (updates.length === 0) return 0;
+  await db.batch(updates, 'write');
+  return updates.length;
 }

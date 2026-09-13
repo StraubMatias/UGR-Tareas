@@ -2831,6 +2831,17 @@ export default function Home() {
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-semibold text-white">{tarea.nombre}</p>
                                 <p className="text-xs text-cyan-300 mt-0.5">{tarea.materiaNombre}</p>
+                                {tarea.url && (
+                                  <a
+                                    href={tarea.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-1"
+                                  >
+                                    Abrir página en UGR ↗
+                                  </a>
+                                )}
                                 <p className="text-xs text-slate-400 mt-1">
                                   Unidad: {tarea.unidad || '—'} · Inicio: {tarea.inicio} · Fin: {tarea.fin} · Tipo: {tarea.tipo}
                                 </p>
@@ -2849,6 +2860,12 @@ export default function Home() {
                 {syncDatos.insertadas > 0 && (
                   <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
                     ✅ Se cargaron {syncDatos.insertadas} tarea(s) en la página.
+                  </div>
+                )}
+
+                {syncDatos.urlsActualizadas > 0 && (
+                  <div className="rounded-xl border border-blue-500/40 bg-blue-500/10 p-4 text-sm text-blue-200">
+                    🔗 Se actualizó el enlace de {syncDatos.urlsActualizadas} tarea(s) ya existente(s).
                   </div>
                 )}
 

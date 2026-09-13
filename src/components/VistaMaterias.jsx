@@ -135,6 +135,18 @@ export default function VistaMaterias({
                             <h3 className="font-bold text-blue-400 text-base sm:text-lg flex items-center gap-2">
                               <span>📝</span> {t.nombre}
                             </h3>
+
+                            {t.url && (
+                              <a
+                                href={t.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Abrir la página de la tarea en UGR Virtual"
+                                className="text-xs px-2.5 py-1 rounded-md border bg-blue-500/10 text-cyan-300 border-blue-500/30 hover:bg-blue-500/20 font-semibold inline-flex items-center gap-1.5 transition-colors"
+                              >
+                                Ver en UGR ↗
+                              </a>
+                            )}
     
                             <span className={`text-xs px-3 py-1 rounded-md border ${semaforo.estilo}`}>
                               {semaforo.texto}
