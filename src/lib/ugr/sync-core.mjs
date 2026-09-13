@@ -6,11 +6,11 @@
 import { randomUUID } from 'node:crypto';
 import { crearCliente } from './red.mjs';
 import { extraerCursos, extraerNombreCursoDesdePagina } from './materias.mjs';
-import { extraerFechasActividad, extraerTareas } from './tareas.mjs';
+import { extraerFechasActividad, extraerForos, extraerTareas } from './tareas.mjs';
 import {
+  claveTareaParaEmparejar,
   coincidirMateria,
   inferirTipoTarea,
-  limpiarTextoParaBusqueda,
   normalizarNombre
 } from './normalizar.mjs';
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
@@ -230,28 +230,46 @@ export async function detectarTareasNuevas({ db, cliente }) {
   // esta misma pasada (backfill de la columna `url`).
   const urlsActualizar = [];
   for (const { curso, coincidencia } of mapeos) {
-    const pagina = await cliente.pedir(UGR_RUTAS.tareasDeCurso(curso.id));
-    const tareas = extraerTareas(pagina.html, UGR_BASE_URL);
+    // Tareas (assign) del curso + foros. Moodle los sirve en páginas
+    // distintas (/mod/assign/index.php y /mod/forum/index.php). Aunque la
+    // tabla de asignaciones puede traer alguna fila de foro suelta, al
+    // fusionar deduplicamos por id de módulo para no cargarlos dos veces.
+    const [pagina, paginaForos] = await Promise.all([
+      cliente.pedir(UGR_RUTAS.tareasDeCurso(curso.id)),
+      cliente.pedir(UGR_RUTAS.forosDeCurso(curso.id))
+    ]);
+    const tareas = [
+      ...extraerTareas(pagina.html, UGR_BASE_URL),
+      ...extraerForos(paginaForos.html, UGR_BASE_URL)
+    ];
+    const idsVistos = new Set();
+    const tareasUnicas = tareas.filter((t) => {
+      if (!t.id || idsVistos.has(t.id)) return false;
+      idsVistos.add(t.id);
+      return true;
+    });
 
     // Las tareas ya importadas no se vuelven a insertar; pero las de antes de
     // que existiera la columna `url` quedaron sin enlace, así que los
-    // aprovechamos para completarlos con el link real a UGR Virtual.
+    // aprovechamos para completarlos con el link real a UGR Virtual. La clave
+    // ignora el sufijo «(FORO)» que el usuario agrega a mano a los foros, para
+    // que el backfill también alcance a los foros ya cargados.
     const resExistentes = await db.execute({
       sql: 'SELECT id, nombre, url FROM tareas WHERE materia_id = ?',
       args: [coincidencia.materia.id]
     });
     const existentesPorClave = new Map(
-      resExistentes.rows.map((t) => [limpiarTextoParaBusqueda(t.nombre), t])
+      resExistentes.rows.map((t) => [claveTareaParaEmparejar(t.nombre), t])
     );
 
-    for (const tarea of tareas) {
+    for (const tarea of tareasUnicas) {
       // La apertura no viene en el índice: se lee del detalle de la tarea.
       const fechas = await fechasDeDetalle({ cliente, tarea });
       const inicio = fechas.inicio || (tarea.inicio && tarea.inicio !== 'Sin fecha' ? tarea.inicio : 'Sin fecha');
       const fin = fechas.fin || (tarea.fin && tarea.fin !== 'Sin fecha' ? tarea.fin : 'Sin fecha');
 
       const nombreFinal = normalizarNombre({ nombre: tarea.nombre, cursoNombre: curso.nombre });
-      const clave = limpiarTextoParaBusqueda(nombreFinal);
+      const clave = claveTareaParaEmparejar(nombreFinal);
       const existente = existentesPorClave.get(clave);
       if (existente) {
         if (!existente.url && tarea.url) {
@@ -269,7 +287,7 @@ export async function detectarTareasNuevas({ db, cliente }) {
         fin,
         unidad: tarea.unidad ?? null,
         conNota: tarea.conNota,
-        tipo: inferirTipoTarea(nombreFinal),
+        tipo: tarea.tipo || inferirTipoTarea(nombreFinal),
         url: tarea.url || '',
         detalles: 'Importada desde UGR Virtual'
       });

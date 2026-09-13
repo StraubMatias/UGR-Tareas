@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerNombreCursoDesdePagina } from '../../src/lib/ugr/materias.mjs';
-import { extraerFechasActividad, extraerTareas } from '../../src/lib/ugr/tareas.mjs';
+import { esForoInformativo, extraerFechasActividad, extraerForos, extraerTareas } from '../../src/lib/ugr/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -58,13 +58,27 @@ test('extraerTareas parsea nombre y fechas del índice de asignaciones', async (
   const html = await readFile(path.join(DIR, 'tareas.html'), 'utf8');
   const tareas = extraerTareas(html, 'https://virtual.ugr.edu.ar');
 
-  assert.equal(tareas.length, 2); // el foro no es un assign
+  assert.equal(tareas.length, 3); // 2 assigns + el foro que también lista la página
   assert.equal(tareas[0].id, '7001');
   assert.equal(tareas[0].nombre, 'Contexto organizacional y activos de información');
   assert.equal(tareas[0].inicio, '2026-09-04');
   assert.equal(tareas[0].fin, '2026-10-02');
   assert.equal(tareas[1].inicio, '2026-10-08');
   assert.equal(tareas[1].fin, '2026-10-29');
+});
+
+test('extraerTareas también captura los foros y les arma el enlace de forum', async () => {
+  const html = await readFile(path.join(DIR, 'tareas.html'), 'utf8');
+  const tareas = extraerTareas(html, 'https://virtual.ugr.edu.ar');
+  const foro = tareas.find((t) => t.id === '7003');
+
+  assert.ok(foro, 'debería existir la fila del foro');
+  assert.equal(foro.nombre, 'Foro de presentación');
+  assert.equal(foro.tipo, 'foro');
+  assert.equal(foro.conNota, false); // un foro no llega automáticamente como calificable
+  assert.equal(foro.inicio, 'Sin fecha');
+  assert.equal(foro.fin, 'Sin fecha');
+  assert.ok(foro.url.includes('/mod/forum/view.php?id=7003'));
 });
 
 test('extraerTareas completa URL del detalle', async () => {
@@ -87,6 +101,48 @@ test('extraerTareas parsea el formato overview de Moodle 4.5 (Auditorías)', asy
   assert.equal(tareas[1].nombre, 'Trabajo nro. 2, UII.');
   assert.equal(tareas[1].fin, '2026-10-16');
   assert.equal(tareas[1].unidad, 2);
+});
+
+test('extraerForos captura los foros del índice de foros con su sección', async () => {
+  const html = await readFile(path.join(DIR, 'foros.html'), 'utf8');
+  const foros = extraerForos(html, 'https://virtual.ugr.edu.ar');
+
+  // «Avisos» es un foro informativo: no es una consigna, así que se descarta.
+  assert.equal(foros.length, 2);
+  assert.equal(foros.some((f) => f.nombre === 'Avisos'), false);
+  for (const foro of foros) {
+    assert.equal(foro.tipo, 'foro');
+    assert.equal(foro.conNota, false);
+    assert.equal(foro.inicio, 'Sin fecha');
+    assert.equal(foro.fin, 'Sin fecha');
+  }
+
+  const hallazgos = foros.find((f) => f.id === '267799');
+  assert.equal(hallazgos.nombre, 'Hallazgos de la Semana');
+  assert.ok(hallazgos.url.includes('/mod/forum/view.php?id=267799'));
+  assert.equal(hallazgos.unidad, null); // sección «General»
+
+  const wifi = foros.find((f) => f.id === '336671');
+  assert.equal(wifi.nombre, 'Descubramos activos en nuestro WiFi hogareño');
+  assert.equal(wifi.unidad, 1); // sección «Unidad 1»
+});
+
+test('esForoInformativo descarta avisos y foros de consultas, conserva consignas', () => {
+  assert.equal(esForoInformativo('Avisos'), true);
+  assert.equal(esForoInformativo('Novedades'), true);
+  assert.equal(esForoInformativo('Foro de Consultas'), true);
+  assert.equal(esForoInformativo('Foro interactivo Consultas'), true);
+  assert.equal(esForoInformativo('Foro de Consulta Módulo II'), true);
+  assert.equal(esForoInformativo('Foro general'), true);
+
+  assert.equal(esForoInformativo('Hallazgos de la Semana'), false);
+  assert.equal(esForoInformativo('Presentación individual'), false);
+  assert.equal(esForoInformativo('Casos de exfiltración por Metadatos y Borrado (in)seguro'), false);
+});
+
+test('extraerForos no captura nada sin índice o sin foros', () => {
+  assert.deepEqual(extraerForos(''), []);
+  assert.deepEqual(extraerForos('<html><body><table><tr><td>sin foros</td></tr></table></body></html>'), []);
 });
 
 test('extraerFechasActividad lee la apertura y el cierre del detalle de la tarea', async () => {

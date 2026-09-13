@@ -1,4 +1,7 @@
 // Parser de la página /mod/assign/index.php?id=ID (Tareas del curso).
+// La misma tabla de UGR Virtual lista también los foros del curso (enlaces a
+// /mod/forum/view.php): se parsan igual y se marcan con tipo 'foro' para que la
+// app los distinga de las tareas (assign).
 // Soporta dos formatos que sirve Moodle:
 //   1. Clásico: tabla con encabezados «Tarea», «Vencimiento», «Disponible desde»
 //      y fechas en <time datetime="..."> o texto «viernes, 25 de septiembre…».
@@ -6,7 +9,7 @@
 //      id en data-mdl-overview-cmid y fechas como <span data-timestamp="...">.
 import { load } from 'cheerio';
 import { ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE } from './constantes.mjs';
-import { parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle } from './normalizar.mjs';
+import { limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle } from './normalizar.mjs';
 
 function indiceColumna(encabezados, rotulos) {
   for (let i = 0; i < encabezados.length; i += 1) {
@@ -82,8 +85,10 @@ export function extraerTareas(html, baseUrl = '') {
 
     $(tabla).find('tbody tr').each((_, fila) => {
       const celdas = $(fila).find('td').map((_, td) => limpiarTexto($(td).text())).get();
-      const enlace = $(fila).find('a[href*="mod/assign/view.php"]').first();
+      const enlace = $(fila).find('a[href*="mod/assign/view.php"], a[href*="mod/forum/view.php"]').first();
       const href = $(enlace).attr('href') || '';
+      const matchModulo = href.match(/mod\/(assign|forum)\/view\.php/);
+      const esForo = matchModulo?.[1] === 'forum';
       const matchId = href.match(/[?&]id=(\d+)/) || [null, $(fila).attr('data-mdl-overview-cmid')];
       if (!matchId[1]) return;
 
@@ -127,16 +132,78 @@ export function extraerTareas(html, baseUrl = '') {
       tareas.push({
         id: matchId[1],
         nombre: nombreTarea,
-        url: completarUrl(href, baseUrl) || completarUrl(`/mod/assign/view.php?id=${matchId[1]}`, baseUrl),
+        url: completarUrl(href, baseUrl) || completarUrl(`/mod/${esForo ? 'forum' : 'assign'}/view.php?id=${matchId[1]}`, baseUrl),
         inicio: inicio || 'Sin fecha',
         fin: fin || 'Sin fecha',
         unidad,
-        conNota: true // Las tareas de Moodle llegan con nota en el sistema.
+        tipo: esForo ? 'foro' : undefined,
+        // Las tareas (assign) llegan calificadas en el sistema; un foro puede o
+        // no evaluarse, así que se importa sin nota y el admin la tilda al
+        // editarla si el foro se califica.
+        conNota: !esForo
       });
     });
   });
 
   return tareas;
+}
+
+// Parser de la página /mod/forum/index.php?id=ID (Foros del curso).
+// Moodle 4.x la sirve con la misma estructura del overview de asignaciones:
+// filas tr[data-mdl-overview-cmid], celda de nombre con enlace activityname a
+// /mod/forum/view.php?id=N y la sección del curso («General», «Unidad 1», …)
+// en un sub-bloque `.small`. No trae fechas: los foros se importan como
+// «Sin fecha» y el admin las completa si el foro tiene plazo de entrega.
+// Los foros meramente informativos (Avisos, foros de consultas generales) no
+// son consignas: se descartan para no ensuciar el tablero (ver
+// esForoInformativo).
+const PATRONES_FORO_INFORMATIVO = [
+  /^(avisos?|novedades?|noticias?|anuncios?)$/,
+  /consulta(s)?/,
+  /^foro\s+(general|principal)$/
+];
+
+export function esForoInformativo(nombre) {
+  const n = limpiarTextoParaBusqueda(nombre);
+  return PATRONES_FORO_INFORMATIVO.some((patron) => patron.test(n));
+}
+
+export function extraerForos(html, baseUrl = '') {
+  const $ = load(html);
+  const foros = [];
+
+  $('tr[data-mdl-overview-cmid], tr').each((_, fila) => {
+    const enlace = $(fila).find('a[href*="mod/forum/view.php"]').first();
+    if (!enlace.length) return;
+    const href = $(enlace).attr('href') || '';
+    const matchId = href.match(/[?&]id=(\d+)/) || [null, $(fila).attr('data-mdl-overview-cmid')];
+    if (!matchId[1]) return;
+
+    const celdaNombre = $(fila).find('td[data-mdl-overview-item="name"], td.cell.c0').first();
+    const nombreForo = limpiarTexto($(enlace).text())
+      || $(celdaNombre).attr('data-mdl-overview-value')
+      || 'Foro sin nombre';
+    if (esForoInformativo(nombreForo)) return;
+
+    let unidad = null;
+    if (celdaNombre.length) {
+      unidad = parsearUnidadMoodle(limpiarTexto($(celdaNombre).find('.small').first().text()));
+    }
+    if (!unidad) unidad = parsearUnidadMoodle(nombreForo);
+
+    foros.push({
+      id: matchId[1],
+      nombre: nombreForo,
+      url: completarUrl(href, baseUrl) || completarUrl(`/mod/forum/view.php?id=${matchId[1]}`, baseUrl),
+      inicio: 'Sin fecha',
+      fin: 'Sin fecha',
+      unidad,
+      tipo: 'foro',
+      conNota: false
+    });
+  });
+
+  return foros;
 }
 
 // Extrae «Apertura» (disponibilidad) y «Cierre» (vencimiento) de la página de una

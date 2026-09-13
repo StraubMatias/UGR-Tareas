@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  claveTareaParaEmparejar,
   coincidirMateria,
   inferirTipoTarea,
   limpiarNombreCursoParaBusqueda,
@@ -47,6 +48,21 @@ test('inferirTipoTarea detecta foros, TPs y actividades', () => {
   assert.equal(inferirTipoTarea('TP 1: contexto organizacional'), 'trabajo_practico');
   assert.equal(inferirTipoTarea('Trabajo práctico integrador'), 'trabajo_practico');
   assert.equal(inferirTipoTarea('Actividad de repaso'), 'actividad');
+});
+
+test('claveTareaParaEmparejar ignora el sufijo (FORO) que agrega el usuario', () => {
+  assert.equal(
+    claveTareaParaEmparejar('Hallazgos de la Semana (FORO)'),
+    claveTareaParaEmparejar('Hallazgos de la Semana')
+  );
+  // El sufijo puede ir con mayúsculas/minúsculas y/o espacios internos.
+  assert.equal(
+    claveTareaParaEmparejar('Gobierno de Internet ( FORO )'),
+    claveTareaParaEmparejar('Gobierno de Internet')
+  );
+  // No altera nombres de assigns ni foros cuyo título no termina en (FORO).
+  assert.equal(claveTareaParaEmparejar('Contexto organizacional y activos de información'), 'contexto organizacional y activos de informacion');
+  assert.equal(claveTareaParaEmparejar('Foro de presentación'), 'foro de presentacion');
 });
 
 test('limpiarTextoParaBusqueda normaliza mayúsculas y acentos', () => {

@@ -105,6 +105,17 @@ export function parsearUnidadMoodle(texto) {
   return null;
 }
 
+// Clave para emparejar tareas importadas de Moodle con las locales en la
+// dedup/backfill (sync-core): además de la limpieza estándar, ignora el sufijo
+// «(FORO)» que el usuario suele agregar a mano a los nombres de foro
+// («Hallazgos de la Semana (FORO)»), para que coincida con el foro real de
+// Moodle («Hallazgos de la Semana»).
+export function claveTareaParaEmparejar(nombre) {
+  return limpiarTextoParaBusqueda(
+    String(nombre || '').replace(/\s*\(\s*foro\s*\)\s*$/i, ' ')
+  );
+}
+
 // Inferir el tipo de tarea según el nombre, igual que hace la app
 // (actividad | foro | trabajo_practico).
 export function inferirTipoTarea(nombre) {
