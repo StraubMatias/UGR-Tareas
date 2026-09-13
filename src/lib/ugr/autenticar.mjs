@@ -8,7 +8,20 @@ import { fileURLToPath } from 'node:url';
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 
 const DIR_MODULO = path.dirname(fileURLToPath(import.meta.url));
-export const RUTA_SESION = path.join(DIR_MODULO, '..', '..', '..', 'data', 'ugr-sesion.json');
+
+// Dónde persistir la sesión de Moodle:
+//   * local (dev/prod): data/ del proyecto, persistente entre ejecuciones;
+//   * Vercel (serverless): el filesystem es de solo lectura salvo /tmp/, así
+//     que la cookie de sesión se guarda ahí. Es efímera (se pierde entre
+//     invocaciones) pero el cliente de red re-autentica solo cuando hace falta.
+function calcularRutaSesion() {
+  if (process.env.VERCEL === '1') {
+    return path.join(process.env.TMPDIR || '/tmp', 'ugr-sesion.json');
+  }
+  return path.join(DIR_MODULO, '..', '..', '..', 'data', 'ugr-sesion.json');
+}
+
+export const RUTA_SESION = calcularRutaSesion();
 
 // --- Parsers puros (fáciles de testear) ---
 

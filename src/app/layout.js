@@ -16,6 +16,11 @@ export const metadata = {
   description: "Control de tareas, parciales y notas entre amigos",
 };
 
+// La sincronización con UGR encadena varios pedidos HTTP a Moodle (login,
+// cursos, tareas, detalles). Vercel usa este límite para la función que
+// ejecuta las Server Actions de esta ruta: 60s es el tope del plan Hobby.
+export const maxDuration = 60;
+
 export default function RootLayout({ children }) {
   return (
     <html
