@@ -18,7 +18,7 @@ function calcularRutaSesion() {
   if (process.env.VERCEL === '1') {
     return path.join(process.env.TMPDIR || '/tmp', 'ugr-sesion.json');
   }
-  return path.join(DIR_MODULO, '..', '..', '..', 'data', 'ugr-sesion.json');
+  return path.join(DIR_MODULO, '..', '..', 'data', 'ugr-sesion.json');
 }
 
 export const RUTA_SESION = calcularRutaSesion();

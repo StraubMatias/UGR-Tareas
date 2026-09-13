@@ -138,6 +138,24 @@ TURSO_AUTH_TOKEN=tu_token_de_turso
 SESSION_SECRET=una_clave_larga_y_secreta
 ```
 
+## Estructura del proyecto
+
+```
+dashboard-tareas/
+├── src/                  # app Next.js (panel, estado del alumno, plan de estudio…)
+│   ├── app/              #   rutas, server actions, plan-utils y acceso a Turso
+│   ├── components/       #   vistas .jsx
+│   └── lib/              #   lógica pura de la cursada
+├── ugr-sync/             # sincronizador con UGR Virtual (módulo independiente)
+│   ├── lib/              #   red, autenticación, parsers de Moodle, sync-core
+│   ├── scripts/          #   CLI: sync.mjs y login.mjs
+│   ├── test/             #   tests + fixtures HTML reales
+│   └── README.md         #   documentación del módulo
+├── database/migrate.mjs  # migraciones de la base (Turso / libSQL)
+├── tests/                # tests de la app
+└── screenshots/          # capturas de las vistas
+```
+
 ## Scripts disponibles
 
 ```bash
@@ -174,7 +192,7 @@ Los scripts `ugr:login` y `ugr:sync` traen tareas nuevas desde `virtual.ugr.edu.
 
 > Las credenciales se leen de `.env.local` también en el panel: el servidor vuelve a leer el archivo al ejecutar la acción, así que no hace falta reiniciar `npm run dev` si agregás `UGRVIRTUAL_USER`/`UGRVIRTUAL_PASSWORD` con el servidor ya corriendo. Igual conviene reiniciar una vez para que Next arranque con el entorno completo.
 
-Toda la lógica vive en `src/lib/ugr/` (autenticación, parsers de Moodle y normalización) y está cubierta por tests en `tests/ugr/`. El núcleo compartido está en `src/lib/ugr/sync-core.mjs`.
+Toda la lógica del sincronizador vive en la carpeta [`ugr-sync/`](ugr-sync/README.md), como módulo independiente de la app (autenticación, parsers de Moodle, normalización y el núcleo compartido `ugr-sync/lib/sync-core.mjs`). Está cubierta por tests en `ugr-sync/test/`.
 
 > Nota: como el campus no habilita tokens de API para estudiantes, el script reutiliza la sesión HTTP (cookies de Moodle). Si Moodle cambia el HTML del índice de tareas, puede requerir un ajuste menor en los parsers.
 

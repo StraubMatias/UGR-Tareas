@@ -6,7 +6,7 @@ import { cookies, headers } from 'next/headers';
 import { db } from './turso';
 import { PLAN_DE_ESTUDIO } from './plan-utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
-import { actualizarUrlsParciales, actualizarUrlsTareas, conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../lib/ugr/sync-core.mjs';
+import { actualizarUrlsParciales, actualizarUrlsTareas, conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../../ugr-sync/lib/sync-core.mjs';
 
 const COOKIE_SESION = 'ugr_sesion';
 const DURACION_SESION_SEGUNDOS = 30 * 60;

@@ -13,7 +13,7 @@ import {
   parsearFechaMoodle,
   parsearTimestampMoodle,
   parsearUnidadMoodle
-} from '../../src/lib/ugr/normalizar.mjs';
+} from '../lib/normalizar.mjs';
 
 test('parsearFechaMoodle convierte fechas ISO y en español', () => {
   assert.equal(parsearFechaMoodle('2026-09-25T23:55:00+00:00'), '2026-09-25');

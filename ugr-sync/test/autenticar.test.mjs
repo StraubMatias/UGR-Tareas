@@ -13,7 +13,7 @@ import {
   extraerAccionLogin,
   extraerLogintoken,
   normalizarCookie
-} from '../../src/lib/ugr/autenticar.mjs';
+} from '../lib/autenticar.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 

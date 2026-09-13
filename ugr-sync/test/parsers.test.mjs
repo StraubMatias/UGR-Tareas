@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extraerCursos, extraerNombreCursoDesdePagina } from '../../src/lib/ugr/materias.mjs';
-import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerTareas } from '../../src/lib/ugr/tareas.mjs';
+import { extraerCursos, extraerNombreCursoDesdePagina } from '../lib/materias.mjs';
+import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerTareas } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 

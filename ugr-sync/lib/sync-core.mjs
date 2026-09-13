@@ -1,5 +1,5 @@
 // Núcleo de la sincronización con UGR Virtual, compartido entre el CLI
-// (scripts/ugr-sync.mjs) y la acción de servidor del panel (src/app/actions.js).
+// (ugr-sync/scripts/sync.mjs) y la acción de servidor del panel (src/app/actions.js).
 // Toda la lógica de descubrimiento de cursos, mapeo a materias locales y
 // detección de tareas nuevas vive acá; las inserciones en la base se hacen con
 // el objeto `db` que cada llamador provee (libsql client o wrapper de turso).

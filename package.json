@@ -8,10 +8,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "migrate": "node scripts/migrate.mjs",
-    "ugr:login": "node scripts/ugr-login.mjs",
-    "ugr:sync": "node scripts/ugr-sync.mjs",
-    "test": "node --test tests/**/*.test.mjs"
+    "migrate": "node database/migrate.mjs",
+    "ugr:login": "node ugr-sync/scripts/login.mjs",
+    "ugr:sync": "node ugr-sync/scripts/sync.mjs",
+    "test": "node --test tests/**/*.test.mjs ugr-sync/test/**/*.test.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",

@@ -8,7 +8,7 @@
 // en .env.local.
 import { createInterface } from 'node:readline/promises';
 import { createClient } from '@libsql/client';
-import { actualizarUrlsParciales, actualizarUrlsTareas, conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../src/lib/ugr/sync-core.mjs';
+import { actualizarUrlsParciales, actualizarUrlsTareas, conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../lib/sync-core.mjs';
 
 process.loadEnvFile?.('.env.local');
 

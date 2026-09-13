@@ -1,9 +1,9 @@
 // Script: iniciar sesión en UGR Virtual y guardar la sesión.
 // Uso: npm run ugr:login
 // Requiere UGRVIRTUAL_USER y UGRVIRTUAL_PASSWORD en .env.local.
-import { crearCliente } from '../src/lib/ugr/red.mjs';
-import { extraerCursos } from '../src/lib/ugr/materias.mjs';
-import { UGR_BASE_URL } from '../src/lib/ugr/constantes.mjs';
+import { crearCliente } from '../lib/red.mjs';
+import { extraerCursos } from '../lib/materias.mjs';
+import { UGR_BASE_URL } from '../lib/constantes.mjs';
 
 process.loadEnvFile?.('.env.local');
 
