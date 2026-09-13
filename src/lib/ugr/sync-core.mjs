@@ -15,27 +15,109 @@ import {
 } from './normalizar.mjs';
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 
-// Carga explícita de .env.local, igual que hace el CLI con node: el bundler de
-// Next (Turbopack) reemplaza `process.env.VARIABLE` por su valor en el momento
-// de compilar y cachea el resultado, así que si el archivo cambia después (o el
-// servidor arrancó antes de que existieran las claves) la credencial queda
-// vieja/incompleta aunque ya esté en .env.local. Este pasaje lo refresca en
-// runtime cada vez que se importa el módulo.
-try {
-  process.loadEnvFile?.('.env.local');
-} catch {
-  // Si no existe el archivo, usamos las variables del entorno tal cual.
+// Credenciales de UGR: si el proceso de Next arranca antes de que existan
+// UGRVIRTUAL_USER / UGRVIRTUAL_PASSWORD en .env.local, Node no las carga en
+// process.env (los `.env*` se leen al iniciar) y quedan ausentes aunque después
+// se agreguen al archivo. Además Turbopack reemplaza `process.env.VARIABLE` por
+// su valor al compilar y cachea. Por eso:
+//   * la lectura es dinámica, vía process.env[nombre] con el nombre en una
+//     variable de runtime (imposible de «inlinar» en el bundle);
+//   * justo antes de conectar se recarga .env.local con ruta absoluta, sin
+//     depender del directorio de trabajo ni del momento en que arrancó el
+//     proceso (idempotente y barato si las claves ya están cargadas).
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+let rutaEnvLocalCacheada = null;
+
+// Ubica .env.local: primero relativo al cwd (arranque normal) y como respaldo
+// subiendo desde el módulo compilado hacia la raíz del proyecto (cubre un
+// server lanzado con otro directorio de trabajo).
+function rutaEnvLocal() {
+  if (rutaEnvLocalCacheada) return rutaEnvLocalCacheada;
+  const candidatas = [join(process.cwd(), '.env.local')];
+  try {
+    let directorio = dirname(fileURLToPath(import.meta.url));
+    for (let nivel = 0; nivel < 10; nivel += 1) {
+      candidatas.push(join(directorio, '.env.local'));
+      if (existsSync(join(directorio, 'package.json'))) break;
+      directorio = dirname(directorio);
+    }
+  } catch {
+    // import.meta.url no resoluble: nos quedamos con la ruta del cwd.
+  }
+  for (const ruta of candidatas) {
+    if (existsSync(/* turbopackIgnore: true */ ruta)) {
+      rutaEnvLocalCacheada = ruta;
+      return ruta;
+    }
+  }
+  return null;
 }
 
-// Indirección a propósito: `process.env['UGRVIRTUAL_USER']` con el nombre en una
-// variable de runtime no puede ser reemplazado por el bundler en compilación,
-// garantizando que la lectura ocurra contra el entorno real.
+// Parser mínimo de KEY=VALOR: ignora vacíos y comentarios, y quita comillas
+// simples o dobles simples. Suficiente para .env.local del proyecto.
+function parsearEnvLocal(texto) {
+  const campos = new Map();
+  for (const linea of texto.split(/\r?\n/)) {
+    const limpia = linea.trim();
+    if (!limpia || limpia.startsWith('#')) continue;
+    const igual = limpia.indexOf('=');
+    if (igual <= 0) continue;
+    let valor = limpia.slice(igual + 1).trim();
+    if (
+      (valor.startsWith('"') && valor.endsWith('"')) ||
+      (valor.startsWith("'") && valor.endsWith("'"))
+    ) {
+      valor = valor.slice(1, -1);
+    }
+    campos.set(limpia.slice(0, igual).trim(), valor);
+  }
+  return campos;
+}
+
+function aplicarVariables(mapa) {
+  for (const [clave, valor] of mapa) {
+    // El archivo nunca pisa variables que ya vienen del entorno real.
+    if (process.env[clave] === undefined) process.env[clave] = valor;
+  }
+}
+
+// Indirección a propósito: `process.env[nombre]` con el nombre en una variable
+// de runtime no puede ser reemplazado por el bundler en compilación, así la
+// lectura ocurre siempre contra el entorno real.
 function variableEntorno(nombre) {
   return process.env[nombre] || '';
 }
 
+// Recarga las credenciales en el momento de usarlas. Si ya están en el entorno,
+// no toca nada. Primero intenta con process.loadEnvFile (Node >= 20.12) y, si
+// falta o falla, parsea el archivo a mano y lo aplica en process.env.
+function cargarCredencialesUGR() {
+  if (variableEntorno('UGRVIRTUAL_USER') && variableEntorno('UGRVIRTUAL_PASSWORD')) return;
+  const ruta = rutaEnvLocal();
+  if (!ruta) return;
+  try {
+    if (typeof process.loadEnvFile === 'function') process.loadEnvFile(ruta);
+  } catch {
+    // Parseo manual por debajo si loadEnvFile falla o no existe.
+  }
+  if (variableEntorno('UGRVIRTUAL_USER') && variableEntorno('UGRVIRTUAL_PASSWORD')) return;
+  try {
+    aplicarVariables(parsearEnvLocal(readFileSync(/* turbopackIgnore: true */ ruta, 'utf8')));
+  } catch {
+    // Sin credenciales disponibles: conectarUGR dará su mensaje claro.
+  }
+}
+
+// También al importar el módulo (por ejemplo para el CLI y para arranques en
+// los que .env.local ya está presente), por delante de cualquier uso.
+cargarCredencialesUGR();
+
 // Crea el cliente HTTP con las credenciales del entorno.
 export async function conectarUGR() {
+  cargarCredencialesUGR();
   const usuario = variableEntorno('UGRVIRTUAL_USER');
   const contrasena = variableEntorno('UGRVIRTUAL_PASSWORD');
   if (!usuario || !contrasena) {
