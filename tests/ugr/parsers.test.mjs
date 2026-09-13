@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerNombreCursoDesdePagina } from '../../src/lib/ugr/materias.mjs';
-import { esForoInformativo, extraerFechasActividad, extraerForos, extraerTareas } from '../../src/lib/ugr/tareas.mjs';
+import { esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerTareas } from '../../src/lib/ugr/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -134,6 +134,8 @@ test('esForoInformativo descarta avisos y foros de consultas, conserva consignas
   assert.equal(esForoInformativo('Foro interactivo Consultas'), true);
   assert.equal(esForoInformativo('Foro de Consulta Módulo II'), true);
   assert.equal(esForoInformativo('Foro general'), true);
+  assert.equal(esForoInformativo('Los encuentros sincrónicos para ambas comisiones conjuntamente, serán los días lunes'), true);
+  assert.equal(esForoInformativo('Horario adicional de encuentro sincrónico'), true);
 
   assert.equal(esForoInformativo('Hallazgos de la Semana'), false);
   assert.equal(esForoInformativo('Presentación individual'), false);
@@ -143,6 +145,66 @@ test('esForoInformativo descarta avisos y foros de consultas, conserva consignas
 test('extraerForos no captura nada sin índice o sin foros', () => {
   assert.deepEqual(extraerForos(''), []);
   assert.deepEqual(extraerForos('<html><body><table><tr><td>sin foros</td></tr></table></body></html>'), []);
+});
+
+test('extraerActividadesOverview parsea todas las consignas del overview unificado', async () => {
+  const html = await readFile(path.join(DIR, 'overview.html'), 'utf8');
+  const actividades = extraerActividadesOverview(html, 'https://virtual.ugr.edu.ar');
+
+  // 2 quiz + 1 feedback + 2 foros (Avisos descartado) + 1 assign = 6 consignas.
+  // El recurso (url «Video de presentación») no es consigna y se ignora.
+  assert.equal(actividades.length, 6);
+
+  // Quiz con vencimiento y sección.
+  const basadre = actividades.find((a) => a.id === '215115');
+  assert.equal(basadre.nombre, 'Lea y responda (Basadre)');
+  assert.equal(basadre.tipo, 'actividad');
+  assert.equal(basadre.conNota, true);
+  assert.equal(basadre.fin, '2026-09-19');
+  assert.equal(basadre.unidad, 1);
+  assert.equal(basadre.url, 'https://virtual.ugr.edu.ar/mod/quiz/view.php?id=215115');
+
+  // Quiz sin fecha.
+  const vargas = actividades.find((a) => a.id === '220959');
+  assert.equal(vargas.nombre, 'Lea y responda- Vargas y Ollarves');
+  assert.equal(vargas.inicio, 'Sin fecha');
+  assert.equal(vargas.fin, 'Sin fecha');
+  assert.equal(vargas.unidad, 2);
+
+  // Feedback: consigna pero sin nota.
+  const inciber = actividades.find((a) => a.id === '306254');
+  assert.equal(inciber.nombre, 'Activos según INCIBE');
+  assert.equal(inciber.tipo, 'actividad');
+  assert.equal(inciber.conNota, false);
+  assert.equal(inciber.unidad, 1);
+
+  // Foros: informativos descartados, resto tipo 'foro' con url.
+  assert.equal(actividades.some((a) => a.nombre === 'Avisos'), false);
+  const hallazgos = actividades.find((a) => a.id === '267799');
+  assert.equal(hallazgos.tipo, 'foro');
+  assert.equal(hallazgos.conNota, false);
+  assert.equal(hallazgos.unidad, null); // sección «General»
+  assert.ok(hallazgos.url.includes('/mod/forum/view.php?id=267799'));
+
+  // Assign: fechas de apertura y vencimiento + sección.
+  const auditorias = actividades.find((a) => a.id === '199391');
+  assert.equal(auditorias.nombre, 'Auditorías de SI, UII Tarea nro.1');
+  assert.equal(auditorias.tipo, 'actividad'); // inferirTipoTarea no marca "Tarea" como TP
+  assert.equal(auditorias.inicio, '2025-09-08');
+  assert.equal(auditorias.fin, '2025-09-27');
+  assert.equal(auditorias.unidad, 2);
+  assert.equal(auditorias.conNota, true);
+
+  // Recursos de lectura (url/page/resource) no aparecen como tareas.
+  assert.equal(actividades.some((a) => a.nombre.includes('Video de presentación')), false);
+});
+
+test('extraerActividadesOverview no captura nada sin overview o sin filas', async () => {
+  assert.deepEqual(extraerActividadesOverview(''), []);
+  assert.deepEqual(
+    extraerActividadesOverview('<html><body><div id="quiz_overview"><table><tr><td>x</td></tr></table></div></body></html>'),
+    []
+  );
 });
 
 test('extraerFechasActividad lee la apertura y el cierre del detalle de la tarea', async () => {

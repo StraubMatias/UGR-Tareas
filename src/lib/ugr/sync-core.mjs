@@ -6,14 +6,15 @@
 import { randomUUID } from 'node:crypto';
 import { crearCliente } from './red.mjs';
 import { extraerCursos, extraerNombreCursoDesdePagina } from './materias.mjs';
-import { extraerFechasActividad, extraerForos, extraerTareas } from './tareas.mjs';
+import { extraerFechasActividad, extraerActividadesOverview } from './tareas.mjs';
 import {
   claveTareaParaEmparejar,
   coincidirMateria,
+  coincidirNombreTarea,
   inferirTipoTarea,
   normalizarNombre
 } from './normalizar.mjs';
-import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
+import { MODULOS_CONSIGNA, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 
 // Credenciales de UGR: se leen en el momento de conectar directamente de
 // process.env, igual que las variables TURSO_* en src/app/turso.js. Por lo
@@ -230,18 +231,13 @@ export async function detectarTareasNuevas({ db, cliente }) {
   // esta misma pasada (backfill de la columna `url`).
   const urlsActualizar = [];
   for (const { curso, coincidencia } of mapeos) {
-    // Tareas (assign) del curso + foros. Moodle los sirve en páginas
-    // distintas (/mod/assign/index.php y /mod/forum/index.php). Aunque la
-    // tabla de asignaciones puede traer alguna fila de foro suelta, al
-    // fusionar deduplicamos por id de módulo para no cargarlos dos veces.
-    const [pagina, paginaForos] = await Promise.all([
-      cliente.pedir(UGR_RUTAS.tareasDeCurso(curso.id)),
-      cliente.pedir(UGR_RUTAS.forosDeCurso(curso.id))
-    ]);
-    const tareas = [
-      ...extraerTareas(pagina.html, UGR_BASE_URL),
-      ...extraerForos(paginaForos.html, UGR_BASE_URL)
-    ];
+    // Vista unificada de Moodle 4.5: /course/overview.php agrupa por tipo los
+    // módulos del curso (assigns, foros, cuestionarios, feedback, …). Se piden
+    // todos los tipos «consigna» de una sola vez y se parsean juntos; así un
+    // sync alcanza también los quizzes/formation que antes solo vivían en
+    // páginas que ni siquiera miramos (/mod/quiz/index.php, /mod/feedback/…).
+    const pagina = await cliente.pedir(UGR_RUTAS.overviewCurso(curso.id, MODULOS_CONSIGNA));
+    const tareas = extraerActividadesOverview(pagina.html, UGR_BASE_URL);
     const idsVistos = new Set();
     const tareasUnicas = tareas.filter((t) => {
       if (!t.id || idsVistos.has(t.id)) return false;
@@ -252,8 +248,9 @@ export async function detectarTareasNuevas({ db, cliente }) {
     // Las tareas ya importadas no se vuelven a insertar; pero las de antes de
     // que existiera la columna `url` quedaron sin enlace, así que los
     // aprovechamos para completarlos con el link real a UGR Virtual. La clave
-    // ignora el sufijo «(FORO)» que el usuario agrega a mano a los foros, para
-    // que el backfill también alcance a los foros ya cargados.
+    // ignora el sufijo «(FORO)» que el usuario agrega a mano a los foros, y el
+    // match por nombre tolera sufijos explicativos («(Video 5m)»), para que el
+    // backfill también alcance a las actividades cargadas a mano.
     const resExistentes = await db.execute({
       sql: 'SELECT id, nombre, url FROM tareas WHERE materia_id = ?',
       args: [coincidencia.materia.id]
@@ -270,7 +267,8 @@ export async function detectarTareasNuevas({ db, cliente }) {
 
       const nombreFinal = normalizarNombre({ nombre: tarea.nombre, cursoNombre: curso.nombre });
       const clave = claveTareaParaEmparejar(nombreFinal);
-      const existente = existentesPorClave.get(clave);
+      const existente = existentesPorClave.get(clave)
+        || resExistentes.rows.find((t) => coincidirNombreTarea(t.nombre, nombreFinal));
       if (existente) {
         if (!existente.url && tarea.url) {
           urlsActualizar.push({ id: existente.id, url: tarea.url });

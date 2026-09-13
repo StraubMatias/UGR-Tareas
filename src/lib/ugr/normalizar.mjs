@@ -116,6 +116,27 @@ export function claveTareaParaEmparejar(nombre) {
   );
 }
 
+// ¿Dos nombres de tarea refieren a la misma actividad de Moodle? Se usa en el
+// backfill de `url` (sync-core): además de la clave exacta (que ya ignora el
+// sufijo «(FORO)»), tolera que el nombre local lleve un sufijo explicativo que
+// el usuario le agregó al importar a mano, p. ej.
+//   local «Activos según INCIBE (Video 5m)» ↔ Moodle «Activos según INCIBE».
+// Para no generar cruces falsos, el lado más corto debe tener al menos
+// MIN_LONGITUD_CONTENIDA caracteres (limpiados).
+const MIN_LONGITUD_CONTENIDA = 12;
+
+export function coincidirNombreTarea(nombreLocal, nombreMoodle) {
+  if (!nombreLocal || !nombreMoodle) return false;
+  const a = limpiarTextoParaBusqueda(nombreLocal);
+  const b = limpiarTextoParaBusqueda(nombreMoodle);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const corto = a.length <= b.length ? a : b;
+  const largo = a.length <= b.length ? b : a;
+  if (corto.length < MIN_LONGITUD_CONTENIDA) return false;
+  return largo.includes(corto);
+}
+
 // Inferir el tipo de tarea según el nombre, igual que hace la app
 // (actividad | foro | trabajo_practico).
 export function inferirTipoTarea(nombre) {

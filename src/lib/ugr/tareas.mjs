@@ -8,8 +8,8 @@
 //   2. Overview (Moodle 4.5): celdas con data-mdl-overview-item="name|duedate",
 //      id en data-mdl-overview-cmid y fechas como <span data-timestamp="...">.
 import { load } from 'cheerio';
-import { ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE } from './constantes.mjs';
-import { limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle } from './normalizar.mjs';
+import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE } from './constantes.mjs';
+import { inferirTipoTarea, limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle } from './normalizar.mjs';
 
 function indiceColumna(encabezados, rotulos) {
   for (let i = 0; i < encabezados.length; i += 1) {
@@ -160,7 +160,10 @@ export function extraerTareas(html, baseUrl = '') {
 const PATRONES_FORO_INFORMATIVO = [
   /^(avisos?|novedades?|noticias?|anuncios?)$/,
   /consulta(s)?/,
-  /^foro\s+(general|principal)$/
+  /^foro\s+(general|principal)$/,
+  // Avisos de organización: horarios de clases sincrónicas, encuentros, etc.
+  /encuentr[oa]s?\s*(sincr|virtual)/,
+  /horari[oa]\s+(de\s+)?encuentro/
 ];
 
 export function esForoInformativo(nombre) {
@@ -204,6 +207,78 @@ export function extraerForos(html, baseUrl = '') {
   });
 
   return foros;
+}
+
+// Parser de la vista unificada /course/overview.php?id=ID (Moodle 4.5).
+// Esa página agrupa los módulos del curso por tipo («Asignaciones», «Foros»,
+// «Cuestionarios», «Retroalimentación», …) y renderiza las filas de cada tipo
+// pedido con expand[]. Cada fila tiene data-mdl-overview-cmid (id del módulo),
+// el nombre con enlace a /mod/<tipo>/view.php?id=N, la sección del curso en
+// `.small` y, según el tipo, fechas (duedate) y calificación.
+// Se importan como tareas SOLO los tipos «consigna» (MODULOS_CONSIGNA); los
+// recursos de lectura (resource, url, page, folder, zoom…) se ignoran, y los
+// foros informativos se descartan con esForoInformativo.
+export function extraerActividadesOverview(html, baseUrl = '') {
+  const actividades = [];
+  if (!html) return actividades;
+
+  const $ = load(html);
+  const vistos = new Set();
+
+  $('[id$="_overview"]').each((_, contenedor) => {
+    const idContenedor = $(contenedor).attr('id') || '';
+    const moduloSeccion = idContenedor.replace(/_overview$/, '');
+    if (!MODULOS_CONSIGNA.includes(moduloSeccion)) return;
+
+    $(contenedor).find('tr[data-mdl-overview-cmid]').each((_, fila) => {
+      const cmid = $(fila).attr('data-mdl-overview-cmid');
+      if (!cmid || vistos.has(cmid)) return;
+
+      const celdaNombre = $(fila).find('td[data-mdl-overview-item="name"]').first();
+      const enlace = $(fila).find('a.activityname, a[href*="/mod/"]').first();
+      const href = $(enlace).attr('href') || '';
+      const idModulo = (href.match(/[?&]id=(\d+)/) || [])[1];
+      const nombre = limpiarTexto(
+        $(celdaNombre).attr('data-mdl-overview-value')
+          || $(enlace).text()
+          || ''
+      );
+      if (!idModulo || !nombre) return;
+
+      // El tipo del módulo se deduce del enlace real (más fiable que la sección).
+      const modulo = (href.match(/\/mod\/([a-z0-9_]+)\/view\.php/) || [])[1] || moduloSeccion;
+      if (!MODULOS_CONSIGNA.includes(modulo)) return;
+
+      const esForo = modulo === 'forum';
+      if (esForo && esForoInformativo(nombre)) return;
+
+      // Fechas del overview (no todos los tipos las traen; los foros no).
+      const fechaItem = (item) => {
+        const celda = $(fila).find(`td[data-mdl-overview-item="${item}"]`).first();
+        if (!celda.length) return null;
+        return fechaDeCelda($, celda);
+      };
+      const inicio = fechaItem('allowsubmissionsfromdate') || 'Sin fecha';
+      const fin = fechaItem('duedate') || 'Sin fecha';
+
+      // Sección del curso («General», «Unidad 2», …) dentro de la celda de nombre.
+      const unidad = parsearUnidadMoodle(limpiarTexto($(celdaNombre).find('.small').first().text()));
+
+      actividades.push({
+        id: idModulo,
+        nombre,
+        url: completarUrl(href, baseUrl),
+        inicio,
+        fin,
+        unidad,
+        tipo: esForo ? 'foro' : inferirTipoTarea(nombre),
+        conNota: esForo || modulo === 'feedback' ? false : true
+      });
+      vistos.add(cmid);
+    });
+  });
+
+  return actividades;
 }
 
 // Extrae «Apertura» (disponibilidad) y «Cierre» (vencimiento) de la página de una

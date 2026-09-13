@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   claveTareaParaEmparejar,
   coincidirMateria,
+  coincidirNombreTarea,
   inferirTipoTarea,
   limpiarNombreCursoParaBusqueda,
   limpiarTextoParaBusqueda,
@@ -63,6 +64,29 @@ test('claveTareaParaEmparejar ignora el sufijo (FORO) que agrega el usuario', ()
   // No altera nombres de assigns ni foros cuyo título no termina en (FORO).
   assert.equal(claveTareaParaEmparejar('Contexto organizacional y activos de información'), 'contexto organizacional y activos de informacion');
   assert.equal(claveTareaParaEmparejar('Foro de presentación'), 'foro de presentacion');
+});
+
+test('coincidirNombreTarea tolera sufijos explicativos que agrega el usuario', () => {
+  // Igual nombre → coincide.
+  assert.equal(coincidirNombreTarea('Lea y responda- Vargas y Ollarves', 'Lea y responda- Vargas y Ollarves'), true);
+  // Sufijo entre paréntesis agregado a mano: Moodle expone «Activos según INCIBE».
+  assert.equal(coincidirNombreTarea('Activos según INCIBE (Video 5m)', 'Activos según INCIBE'), true);
+  // Sufijo (FORO) ya cubierto por claveTareaParaEmparejar.
+  assert.equal(coincidirNombreTarea('Hallazgos de la Semana (FORO)', 'Hallazgos de la Semana'), true);
+  // Ignora acentos/mayúsculas.
+  assert.equal(coincidirNombreTarea('GESTIÓN DE ACTIVOS', 'Gestión de Activos'), true);
+  // Nombres cortos o sin relación no cruzan.
+  assert.equal(coincidirNombreTarea('Contexto organizacional y activos de información', 'Trabajo práctico 1'), false);
+  assert.equal(coincidirNombreTarea('Trabajo', 'Trabajo práctico integrador'), false); // demasiado corto
+  assert.equal(coincidirNombreTarea('', 'Lea y responda'), false);
+  assert.equal(coincidirNombreTarea(null, 'Lea y responda'), false);
+});
+
+test('coincidirNombreTarea conserva la distinción entre actividad y quiz con sufijo propio', () => {
+  // «(Basadre)» y «(Marcos de Referencia)» son parte del nombre real de Moodle:
+  // no deben colisionar entre ellos.
+  assert.equal(coincidirNombreTarea('Lea y responda (Basadre)', 'Lea y responda (Basadre)'), true);
+  assert.equal(coincidirNombreTarea('Lea y responda (Basadre)', 'Lea y responda (Marcos de Referencia)'), false);
 });
 
 test('limpiarTextoParaBusqueda normaliza mayúsculas y acentos', () => {
