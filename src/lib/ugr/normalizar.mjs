@@ -137,6 +137,27 @@ export function coincidirNombreTarea(nombreLocal, nombreMoodle) {
   return largo.includes(corto);
 }
 
+// Clave para emparejar una tarea candidata con un PARCIAL ya cargado en la
+// tabla «parciales» (VistaParciales). Los avisos de Moodle suelen incluir al
+// final la fecha/hora del anuncio en el propio nombre («Examen PARCIAL de
+// Auditorías, martes 9 de Junio 18hs.») que puede no coincidir con la fecha
+// real de la actividad (martes 10 de Noviembre). Para no volver a proponer el
+// examen como tarea nueva, la comparación ignora ese fragmento y usa solo el
+// núcleo del nombre («examen parcial de auditorias»). El uso es exclusivo del
+// cruce tarea-candidata → parcial; el dedup entre tareas sigue usando
+// claveTareaParaEmparejar / coincidirNombreTarea.
+const DIAS_SEMANA_EMPAREJAMIENTO = '(lunes|martes|miercoles|jueves|viernes|sabado|domingo)';
+
+export function claveParcialParaEmparejar(nombre) {
+  const limpio = limpiarTextoParaBusqueda(nombre);
+  if (!limpio) return '';
+  const sinFecha = limpio
+    .replace(new RegExp(`\\b${DIAS_SEMANA_EMPAREJAMIENTO}\\s+\\d{1,2}\\s+de\\s+[a-z]{3,}\\b.*$`), '')
+    .replace(/[,\\s]+$/g, '')
+    .trim();
+  return sinFecha || limpio;
+}
+
 // Inferir el tipo de tarea según el nombre, igual que hace la app
 // (actividad | foro | trabajo_practico).
 export function inferirTipoTarea(nombre) {

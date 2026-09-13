@@ -8,6 +8,7 @@ import { crearCliente } from './red.mjs';
 import { extraerCursos, extraerNombreCursoDesdePagina } from './materias.mjs';
 import { extraerFechasActividad, extraerActividadesOverview } from './tareas.mjs';
 import {
+  claveParcialParaEmparejar,
   claveTareaParaEmparejar,
   coincidirMateria,
   coincidirNombreTarea,
@@ -259,6 +260,19 @@ export async function detectarTareasNuevas({ db, cliente }) {
       resExistentes.rows.map((t) => [claveTareaParaEmparejar(t.nombre), t])
     );
 
+    // Exámenes ya cargados como parcial en VistaParciales: no son tareas a
+    // insertar de nuevo. Moodle suele etiquetar el examen con la fecha del
+    // anuncio («martes 9 de Junio …») que puede no ser la fecha real del evento
+    // (martes 10 de Noviembre); claveParcialParaEmparejar compara solo el
+    // núcleo del nombre para que la dedup también aplique en ese caso.
+    const resParciales = await db.execute({
+      sql: 'SELECT nombre FROM parciales WHERE materia_id = ?',
+      args: [coincidencia.materia.id]
+    });
+    const clavesParciales = new Set(
+      resParciales.rows.map((p) => claveParcialParaEmparejar(p.nombre)).filter(Boolean)
+    );
+
     for (const tarea of tareasUnicas) {
       // La apertura no viene en el índice: se lee del detalle de la tarea.
       const fechas = await fechasDeDetalle({ cliente, tarea });
@@ -273,6 +287,11 @@ export async function detectarTareasNuevas({ db, cliente }) {
         if (!existente.url && tarea.url) {
           urlsActualizar.push({ id: existente.id, url: tarea.url });
         }
+        continue;
+      }
+      // Ya está resuelto como parcial en VistaParciales (p. ej. el «Examen
+      // PARCIAL …»): no se ofrece como tarea nueva ni se intenta insertar.
+      if (clavesParciales.size && clavesParciales.has(claveParcialParaEmparejar(nombreFinal))) {
         continue;
       }
       detectadas.push({

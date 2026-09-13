@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  claveParcialParaEmparejar,
   claveTareaParaEmparejar,
   coincidirMateria,
   coincidirNombreTarea,
@@ -87,6 +88,23 @@ test('coincidirNombreTarea conserva la distinción entre actividad y quiz con su
   // no deben colisionar entre ellos.
   assert.equal(coincidirNombreTarea('Lea y responda (Basadre)', 'Lea y responda (Basadre)'), true);
   assert.equal(coincidirNombreTarea('Lea y responda (Basadre)', 'Lea y responda (Marcos de Referencia)'), false);
+});
+
+test('claveParcialParaEmparejar ignora el día/hora que Moodle etiqueta en el anuncio', () => {
+  // El campus etiquetó «martes 9 de Junio» pero la fecha real (y la cargada en
+  // VistaParciales) es «martes 10 de Noviembre»: ambos deben emparejar.
+  assert.equal(
+    claveParcialParaEmparejar('Examen PARCIAL de Auditorías, martes 9 de Junio 18hs.'),
+    claveParcialParaEmparejar('Examen PARCIAL de Auditorías, martes 10 de Noviembre 18hs.')
+  );
+  assert.equal(
+    claveParcialParaEmparejar('Examen PARCIAL de Auditorías, martes 10 de Noviembre 18hs.'),
+    'examen parcial de auditorias'
+  );
+  // Nombres sin fecha no se tocan.
+  assert.equal(claveParcialParaEmparejar('Parcial de la Unidad 1'), 'parcial de la unidad 1');
+  assert.equal(claveParcialParaEmparejar('Parcial integrador'), 'parcial integrador');
+  assert.equal(claveParcialParaEmparejar(''), '');
 });
 
 test('limpiarTextoParaBusqueda normaliza mayúsculas y acentos', () => {

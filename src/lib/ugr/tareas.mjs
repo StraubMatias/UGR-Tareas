@@ -166,9 +166,26 @@ const PATRONES_FORO_INFORMATIVO = [
   /horari[oa]\s+(de\s+)?encuentro/
 ];
 
+// Patrones de anuncios/organización que aplican también fuera de los foros
+// (p. ej. una encuesta «choice» de «Horario adicional de encuentro…»).
+const PATRONES_ANUNCIO_GENERAL = [
+  /^(avisos?|novedades?|noticias?|anuncios?)$/,
+  /encuentr[oa]s?\s*(sincr|virtual)/,
+  /horari[oa]\s+(de\s+)?encuentro/
+];
+
 export function esForoInformativo(nombre) {
   const n = limpiarTextoParaBusqueda(nombre);
   return PATRONES_FORO_INFORMATIVO.some((patron) => patron.test(n));
+}
+
+// ¿El nombre corresponde a una actividad meramente informativa (no consigna)
+// en cualquier tipo de módulo? Usa un subconjunto más conservador que
+// esForoInformativo para no descartar de más en quizzes/tareas: solo avisos y
+// avisos de organización (horarios de encuentro, clases sincrónicas, …).
+export function esActividadInformativa(nombre) {
+  const n = limpiarTextoParaBusqueda(nombre);
+  return PATRONES_ANUNCIO_GENERAL.some((patron) => patron.test(n));
 }
 
 export function extraerForos(html, baseUrl = '') {
@@ -216,8 +233,10 @@ export function extraerForos(html, baseUrl = '') {
 // el nombre con enlace a /mod/<tipo>/view.php?id=N, la sección del curso en
 // `.small` y, según el tipo, fechas (duedate) y calificación.
 // Se importan como tareas SOLO los tipos «consigna» (MODULOS_CONSIGNA); los
-// recursos de lectura (resource, url, page, folder, zoom…) se ignoran, y los
-// foros informativos se descartan con esForoInformativo.
+// recursos de lectura (resource, url, page, folder, zoom…) se ignoran, y las
+// actividades informativas (avisos, foros de consultas, «horarios de encuentro»,
+// encuestas de organización…) se descartan con esForoInformativo (foros) y
+// esActividadInformativa (resto de los tipos).
 export function extraerActividadesOverview(html, baseUrl = '') {
   const actividades = [];
   if (!html) return actividades;
@@ -250,7 +269,11 @@ export function extraerActividadesOverview(html, baseUrl = '') {
       if (!MODULOS_CONSIGNA.includes(modulo)) return;
 
       const esForo = modulo === 'forum';
-      if (esForo && esForoInformativo(nombre)) return;
+      // Actividades meramente informativas no son consignas y se descartan en
+      // cualquier tipo de módulo (foros «Avisos»/«Consultas» y también el
+      // «choice» de «Horario adicional de encuentro sincrónico», encuestas de
+      // organización, etc.).
+      if (esForo ? esForoInformativo(nombre) : esActividadInformativa(nombre)) return;
 
       // Fechas del overview (no todos los tipos las traen; los foros no).
       const fechaItem = (item) => {

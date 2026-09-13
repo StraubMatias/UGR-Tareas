@@ -84,6 +84,7 @@ export default function VistaHorarios({
                     type="button"
                     onClick={() => setDiaCalendarioSeleccionado(fecha)}
                     aria-label={`Ver detalle del día ${fecha.toLocaleDateString('es-AR', { dateStyle: 'full' })}`}
+                    className={`calendar-day ${esHoy ? 'calendar-day-today' : ''}`}
                   >
                     <div className="flex items-center justify-between gap-1">
                       <span className={`calendar-date ${esHoy ? 'calendar-date-today' : ''}`}>{fecha.getDate()}</span>

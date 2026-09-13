@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerNombreCursoDesdePagina } from '../../src/lib/ugr/materias.mjs';
-import { esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerTareas } from '../../src/lib/ugr/tareas.mjs';
+import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerTareas } from '../../src/lib/ugr/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -142,6 +142,19 @@ test('esForoInformativo descarta avisos y foros de consultas, conserva consignas
   assert.equal(esForoInformativo('Casos de exfiltración por Metadatos y Borrado (in)seguro'), false);
 });
 
+test('esActividadInformativa descarta anuncios/encuestas de organización en cualquier tipo', () => {
+  // La encuesta «choice» de coordinación del horario no es una consigna.
+  assert.equal(esActividadInformativa('Horario Adicional de encuentro sincrónico'), true);
+  assert.equal(esActividadInformativa('Los encuentros sincrónicos para ambas comisiones conjuntamente, serán los días lunes'), true);
+  assert.equal(esActividadInformativa('Avisos'), true);
+  assert.equal(esActividadInformativa('Novedades'), true);
+  // Quizzes/consignas reales no se tocan.
+  assert.equal(esActividadInformativa('Lea y responda (Basadre)'), false);
+  assert.equal(esActividadInformativa('Evaluación de avance de medio cursado'), false);
+  assert.equal(esActividadInformativa('Examen PARCIAL de Auditorías, martes 9 de Junio 18hs.'), false);
+  assert.equal(esActividadInformativa('Hallazgos de la Semana'), false);
+});
+
 test('extraerForos no captura nada sin índice o sin foros', () => {
   assert.deepEqual(extraerForos(''), []);
   assert.deepEqual(extraerForos('<html><body><table><tr><td>sin foros</td></tr></table></body></html>'), []);
@@ -180,6 +193,10 @@ test('extraerActividadesOverview parsea todas las consignas del overview unifica
 
   // Foros: informativos descartados, resto tipo 'foro' con url.
   assert.equal(actividades.some((a) => a.nombre === 'Avisos'), false);
+  // Foro de organización de CIBERDELITOS (horarios de encuentros) → descartado.
+  assert.equal(actividades.some((a) => a.nombre.includes('Los encuentros sincrónicos')), false);
+  // Encuesta «choice» de organización de horario → descartada como no-consigna.
+  assert.equal(actividades.some((a) => a.nombre.includes('Horario Adicional')), false);
   const hallazgos = actividades.find((a) => a.id === '267799');
   assert.equal(hallazgos.tipo, 'foro');
   assert.equal(hallazgos.conNota, false);

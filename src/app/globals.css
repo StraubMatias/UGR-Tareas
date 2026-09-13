@@ -195,6 +195,8 @@ textarea {
   border-radius: 0.75rem;
   background: rgba(22, 28, 38, 0.82);
   padding: 0.5rem;
+  min-height: 5rem;
+  transition: border-color 160ms ease, background-color 160ms ease;
 }
 
 .calendar-day-empty {
