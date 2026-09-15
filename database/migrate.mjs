@@ -370,6 +370,37 @@ async function main() {
     }
   });
 
+await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async () => {
+    // Avisos detectados en los foros del campus. El sync los deja en 'pendiente'
+    // y SOLO pasan a 'aceptado' (y al cronograma + campana) cuando el admin los
+    // aprueba en el modal de sincronización. 'rechazado' no se vuelve a sugerir.
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS avisos_moodle (
+        id TEXT PRIMARY KEY,
+        curso_id TEXT NOT NULL,
+        curso_nombre TEXT NOT NULL,
+        materia_id TEXT,
+        materia_nombre TEXT,
+        foro_id TEXT NOT NULL,
+        foro_nombre TEXT NOT NULL,
+        hilo_id TEXT NOT NULL,
+        titulo TEXT NOT NULL,
+        autor TEXT NOT NULL DEFAULT '',
+        fecha TEXT NOT NULL,
+        contenido TEXT NOT NULL DEFAULT '',
+        url TEXT NOT NULL DEFAULT '',
+        estado TEXT NOT NULL DEFAULT 'pendiente',
+        creado_en TEXT NOT NULL,
+        UNIQUE(curso_id, hilo_id)
+      )
+    `);
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_avisos_moodle_estado ON avisos_moodle(estado)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_avisos_moodle_fecha ON avisos_moodle(fecha)');
+    // Los eventos del cronograma pueden venir de un aviso de UGR: guardamos el
+    // enlace para «Ver en UGR» y de dónde salió el evento ('manual' o 'ugr').
+    await agregarColumnaSiFalta('cronograma_eventos', 'url', "TEXT NOT NULL DEFAULT ''");
+    await agregarColumnaSiFalta('cronograma_eventos', 'origen', "TEXT NOT NULL DEFAULT 'manual'");
+  });
   await db.close?.();
 }
 

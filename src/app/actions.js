@@ -6,7 +6,7 @@ import { cookies, headers } from 'next/headers';
 import { db } from './turso';
 import { PLAN_DE_ESTUDIO } from './plan-utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
-import { actualizarUrlsParciales, actualizarUrlsTareas, conectarUGR, detectarTareasNuevas, insertarTareasDetectadas } from '../../ugr-sync/lib/sync-core.mjs';
+import { actualizarUrlsParciales, actualizarUrlsTareas, aprobarAvisos, conectarUGR, detectarAvisosMoodle, detectarTareasNuevas, insertarAvisosDetectados, insertarEventosCronograma, insertarTareasDetectadas, rechazarAvisos } from '../../ugr-sync/lib/sync-core.mjs';
 
 const COOKIE_SESION = 'ugr_sesion';
 const DURACION_SESION_SEGUNDOS = 30 * 60;
@@ -705,13 +705,16 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado = null) {
       || periodos[0]?.id
       || null;
 
-    const [materias, alumnos, datosParciales, horarios, cronograma, progresoPlan] = await Promise.all([
+    const [materias, alumnos, datosParciales, horarios, cronograma, progresoPlan, resAvisos] = await Promise.all([
       obtenerDatos(periodoParaCargar),
       obtenerAlumnosAction(),
       obtenerParcialesAction(periodoParaCargar),
       obtenerHorariosAction(periodoParaCargar),
       obtenerCronogramaAction(periodoParaCargar),
-      obtenerProgresoPlanAction()
+      obtenerProgresoPlanAction(),
+      db.execute(
+        "SELECT id, curso_nombre, materia_nombre, foro_nombre, titulo, autor, fecha, contenido, url FROM avisos_moodle WHERE estado = 'aceptado' ORDER BY fecha DESC"
+      )
     ]);
 
     return {
@@ -725,7 +728,8 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado = null) {
       notas: datosParciales?.notas || [],
       horarios,
       cronograma,
-      progresoPlan
+      progresoPlan,
+      avisos: resAvisos?.rows || []
     };
   } catch (error) {
     console.error('Error en obtenerEstadoCompleto:', error);
@@ -1034,7 +1038,7 @@ export async function eliminarTareaAction(id) {
 // Sincroniza tareas nuevas desde UGR Virtual. Con `confirmar: false` solo
 // detecta (vista previa); con `confirmar: true` inserta únicamente las tareas
 // cuyo `idMoodle` esté en `ids` (el admin las tilda una por una en el modal).
-export async function syncUgrAction({ confirmar = false, ids = [] } = {}) {
+export async function syncUgrAction({ confirmar = false, ids = [], idsAvisos = [], idsEventos = [] } = {}) {
   try {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede sincronizar con UGR.' };
@@ -1046,6 +1050,15 @@ export async function syncUgrAction({ confirmar = false, ids = [] } = {}) {
     const cliente = await conectarUGR();
     const { materiasLocales, cursos, mapeos, detectadas, urlsActualizar, urlsParcialesActualizar } = await detectarTareasNuevas({ db, cliente });
 
+    // Avisos de los foros del campus (Avisos/Consultas) y eventos espontáneos.
+    // Solo se toman hilos publicados desde hoy hacia adelante; los anteriores ya
+    // fueron procesados y no se vuelven a proponer (avisos_moodle guarda el
+    // histórico por curso + hilo).
+    const { avisosDetectados, eventosSugeridos } = await detectarAvisosMoodle({ db, cliente, mapeos });
+    // Registramos las sugerencias como 'pendiente': no se publican solas. Si un
+    // hilo ya había sido aceptado/rechazado antes, no se re-sugiere ni cambia.
+    await insertarAvisosDetectados({ db, avisos: avisosDetectados });
+
     // Backfill de enlaces: completamos los URLs que faltan en tareas que ya
     // estaban importadas. No agrega nada nuevo, solo deja listo el botón de
     // «Ver en UGR» para las tareas existentes. Lo mismo para los parciales
@@ -1054,7 +1067,10 @@ export async function syncUgrAction({ confirmar = false, ids = [] } = {}) {
     const urlsParcialesActualizadas = await actualizarUrlsParciales({ db, urlsParcialesActualizar });
 
     let insertadas = 0;
-    if (confirmar && detectadas.length > 0) {
+    let avisosAceptados = 0;
+    let avisosRechazados = 0;
+    let eventosInsertados = 0;
+    if (confirmar) {
       // Nunca insertamos algo que no esté en la detección recién realizada:
       // el front solo puede indicar cuáles de estas quiere cargar.
       const pedidas = new Set(Array.isArray(ids) ? ids : []);
@@ -1062,10 +1078,34 @@ export async function syncUgrAction({ confirmar = false, ids = [] } = {}) {
       if (seleccionadas.length > 0) {
         insertadas = await insertarTareasDetectadas({ db, detectadas: seleccionadas });
       }
+
+      // Avisos aprobados: pasan a la campana (estado 'aceptado').
+      const pedidosAvisos = new Set(Array.isArray(idsAvisos) ? idsAvisos : []);
+      const avisosSeleccionados = avisosDetectados.filter((a) => pedidosAvisos.has(a.id));
+      if (avisosSeleccionados.length > 0) {
+        avisosAceptados = await aprobarAvisos({ db, ids: avisosSeleccionados.map((a) => a.id) });
+      }
+
+      // Los detectados que el admin no aprobó quedan 'pendiente'; los que
+      // explícitamente quiere descartar van a 'rechazado'.
+      const avisosADescartar = avisosDetectados
+        .filter((a) => !pedidosAvisos.has(a.id))
+        .map((a) => a.id);
+      if (avisosADescartar.length > 0) {
+        avisosRechazados = await rechazarAvisos({ db, ids: avisosADescartar });
+      }
+
+      // Eventos sugeridos aprobados por el admin → cronograma (origen 'ugr').
+      const pedidosEventos = new Set(Array.isArray(idsEventos) ? idsEventos : []);
+      const eventosSeleccionados = eventosSugeridos.filter((e) => pedidosEventos.has(e.avisoId));
+      if (eventosSeleccionados.length > 0) {
+        eventosInsertados = await insertarEventosCronograma({ db, eventos: eventosSeleccionados });
+      }
+
       await registrarAuditoria({
         accion: 'sync_ugr',
         usuario: usuarioSesion,
-        detalle: `Sincronizó UGR: insertó ${insertadas} tarea(s) en ${mapeos.length} materia(s); actualizó ${urlsActualizadas} enlace(s) de tareas y ${urlsParcialesActualizadas} de parciales`,
+        detalle: `Sincronizó UGR: insertó ${insertadas} tarea(s) en ${mapeos.length} materia(s); actualizó ${urlsActualizadas} enlace(s) de tareas y ${urlsParcialesActualizadas} de parciales; aprobó ${avisosAceptados} aviso(s) (${avisosRechazados} descartado(s)) y agregó ${eventosInsertados} evento(s) al cronograma`,
         ip: await obtenerIPReal()
       });
     }
@@ -1083,11 +1123,69 @@ export async function syncUgrAction({ confirmar = false, ids = [] } = {}) {
       detectadas,
       insertadas,
       urlsActualizadas,
-      urlsParcialesActualizadas
+      urlsParcialesActualizadas,
+      avisos: avisosDetectados,
+      eventosSugeridos,
+      avisosAceptados,
+      avisosRechazados,
+      eventosInsertados
     };
   } catch (error) {
     console.error('Error en syncUgrAction:', error);
     return { exito: false, mensaje: error?.message || 'No se pudo sincronizar con UGR Virtual.' };
+  }
+}
+
+// Historial de avisos detectados en los foros (solo admin). Con
+// soloPendientes=true devuelve únicamente los que todavía no se decidieron.
+export async function obtenerAvisosAction({ soloPendientes = false } = {}) {
+  try {
+    if (!await verificarAdmin()) {
+      return { exito: false, mensaje: 'Solo el administrador puede gestionar avisos sugeridos.' };
+    }
+    const filtro = soloPendientes ? "WHERE estado = 'pendiente'" : '';
+    const res = await db.execute(
+      `SELECT id, curso_id, curso_nombre, materia_nombre, foro_nombre, titulo, autor, fecha, contenido, url, estado
+       FROM avisos_moodle ${filtro} ORDER BY fecha DESC LIMIT 100`
+    );
+    return { exito: true, avisos: res.rows };
+  } catch (error) {
+    console.error('Error en obtenerAvisosAction:', error);
+    return { exito: false, mensaje: 'No se pudieron obtener los avisos sugeridos.' };
+  }
+}
+
+// Aprueba o rechaza avisos sugeridos individualmente (admin). La decisión
+// 'aceptado' los publica en la campana; 'rechazado' los descarta definitivamente.
+export async function decidirAvisoAction({ ids = [], decision = 'aceptado', usuario } = {}) {
+  try {
+    if (!await verificarAdmin()) {
+      return { exito: false, mensaje: 'Solo el administrador puede decidir sobre los avisos.' };
+    }
+    const usuarioSesion = await obtenerUsuarioSesion();
+    const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
+    if (!rateLimit.exito) return rateLimit;
+    if (!['aceptado', 'rechazado'].includes(decision)) {
+      return { exito: false, mensaje: 'La decisión debe ser aceptado o rechazado.' };
+    }
+    const lista = Array.isArray(ids) ? ids.filter(Boolean) : [];
+    if (lista.length === 0) return { exito: false, mensaje: 'No se indicó ningún aviso.' };
+
+    if (decision === 'aceptado') {
+      await aprobarAvisos({ db, ids: lista });
+    } else {
+      await rechazarAvisos({ db, ids: lista });
+    }
+    await registrarAuditoria({
+      accion: `decidir_aviso_${decision}`,
+      usuario: usuarioSesion,
+      detalle: `${decision === 'aceptado' ? 'Aprobó' : 'Rechazó'} ${lista.length} aviso(s) de los foros`,
+      ip: await obtenerIPReal()
+    });
+    return { exito: true, actualizados: lista.length };
+  } catch (error) {
+    console.error('Error en decidirAvisoAction:', error);
+    return { exito: false, mensaje: 'No se pudo actualizar el aviso.' };
   }
 }
 
@@ -1119,10 +1217,10 @@ export async function obtenerCronogramaAction(periodoId = null) {
     if (!await obtenerUsuarioSesion()) return [];
     const res = await db.execute(consultaPeriodo(
       periodoId,
-      `SELECT c.id, c.materia_id, c.fecha, c.modalidad, c.tipo, c.titulo, c.detalles
+      `SELECT c.id, c.materia_id, c.fecha, c.modalidad, c.tipo, c.titulo, c.detalles, c.url
        FROM cronograma_eventos c JOIN materias m ON m.id = c.materia_id
        WHERE m.periodo_id = ? ORDER BY c.fecha ASC, c.titulo ASC`,
-      `SELECT id, materia_id, fecha, modalidad, tipo, titulo, detalles
+      `SELECT id, materia_id, fecha, modalidad, tipo, titulo, detalles, url
        FROM cronograma_eventos ORDER BY fecha ASC, titulo ASC`
     ));
     return res.rows;

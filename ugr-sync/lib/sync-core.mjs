@@ -8,6 +8,13 @@ import { crearCliente } from './red.mjs';
 import { extraerCursos, extraerNombreCursoDesdePagina } from './materias.mjs';
 import { extraerFechasActividad, extraerActividadesOverview } from './tareas.mjs';
 import {
+  analizarAvisoParaCronograma,
+  extraerDiscusionesDeForo,
+  extraerForosDelIndice,
+  extraerPrimerPostDeHilo,
+  fechaHoyLocal
+} from './avisos.mjs';
+import {
   claveTareaParaEmparejar,
   coincidirMateria,
   coincidirNombreTarea,
@@ -380,4 +387,209 @@ export async function actualizarUrlsParciales({ db, urlsParcialesActualizar }) {
   if (updates.length === 0) return 0;
   await db.batch(updates, 'write');
   return updates.length;
+}
+
+// Ejecuta `fn` sobre `items` respetando un máximo de `concurrency` llamadas
+// simultáneas. Mantiene el orden de los resultados. Útil para las decenas de
+// pedidos HTTP del sync de avisos sin saturar el campus.
+export async function conPool(items, concurrency = 4, fn) {
+  const resultados = new Array(items.length);
+  let indice = 0;
+  async function trabajador() {
+    for (;;) {
+      const actual = indice;
+      indice += 1;
+      if (actual >= items.length) return;
+      resultados[actual] = await fn(items[actual], actual);
+    }
+  }
+  const hilos = Math.max(1, Math.min(Number(concurrency) || 1, items.length));
+  await Promise.all(Array.from({ length: hilos }, () => trabajador()));
+  return resultados;
+}
+
+// Recorre los foros de avisos de los cursos mapeados y extrae los hilos nuevos
+// publicados desde hoy hacia adelante. Devuelve { avisosDetectados,
+// eventosSugeridos }; nada se inserta acá.
+export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy }) {
+  const fechaBase = hoy || fechaHoyLocal();
+
+  const resConocidos = await db.execute('SELECT curso_id, hilo_id FROM avisos_moodle');
+  const conocidos = new Set(
+    resConocidos.rows.map((fila) => `${fila.curso_id}:${fila.hilo_id}`)
+  );
+
+  const avisosDetectados = [];
+  const eventosSugeridos = [];
+
+  for (const { curso, coincidencia } of mapeos || []) {
+    // 1) Índice de foros del curso y filtro de los informativos (Avisos, etc.).
+    let foros = [];
+    try {
+      const paginaForos = await cliente.pedir(UGR_RUTAS.forosDeCurso(curso.id));
+      foros = extraerForosDelIndice(paginaForos.html, UGR_BASE_URL)
+        .filter((foro) => foro.esAvisos);
+    } catch {
+      continue;
+    }
+
+    for (const foro of foros) {
+      // 2) Discusiones (hilos) del foro.
+      let discusiones = [];
+      try {
+        const paginaForo = await cliente.pedir(foro.url);
+        discusiones = extraerDiscusionesDeForo(paginaForo.html, UGR_BASE_URL);
+      } catch {
+        continue;
+      }
+
+      const nuevas = discusiones.filter((d) => !conocidos.has(`${curso.id}:${d.id}`));
+
+      // 3) Primer post de cada hilo nuevo, en paralelo (concurrencia 4).
+      const posts = await conPool(nuevas, 4, async (d) => {
+        try {
+          const pagina = await cliente.pedir(d.url);
+          return extraerPrimerPostDeHilo(pagina.html, UGR_BASE_URL);
+        } catch {
+          return null;
+        }
+      });
+
+      for (let i = 0; i < nuevas.length; i += 1) {
+        const discusion = nuevas[i];
+        const post = posts[i];
+        if (!post) continue;
+        // Regla confirmada: solo avisos publicados desde hoy (DIAS_HACIA_ATRAS = 0).
+        if (!post.fecha || post.fecha < fechaBase) continue;
+
+        const id = `aviso_${curso.id}_${discusion.id}`;
+        const analisis = analizarAvisoParaCronograma({
+          titulo: post.titulo,
+          contenido: post.contenido,
+          materiaNombre: coincidencia.materia.nombre,
+          hoy: fechaBase
+        });
+
+        avisosDetectados.push({
+          id,
+          idMoodle: `moodle_avisos_${curso.id}_${discusion.id}`,
+          cursoId: curso.id,
+          cursoNombre: curso.nombre,
+          materiaId: coincidencia.materia.id,
+          materiaNombre: coincidencia.materia.nombre,
+          foroId: foro.id,
+          foroNombre: foro.nombre,
+          hiloId: discusion.id,
+          titulo: post.titulo,
+          autor: post.autor,
+          fecha: post.fecha,
+          contenido: post.contenido,
+          contenidoHtml: post.contenidoHtml,
+          url: post.urlHilo || discusion.url
+        });
+
+        if (analisis) {
+          eventosSugeridos.push({
+            avisoId: id,
+            avisoIdMoodle: `moodle_avisos_${curso.id}_${discusion.id}`,
+            materiaId: coincidencia.materia.id,
+            url: post.urlHilo || discusion.url,
+            ...analisis
+          });
+        }
+      }
+    }
+  }
+
+  return { avisosDetectados, eventosSugeridos };
+}
+
+// Registra las sugerencias de avisos (estado 'pendiente'). No se publican
+// solas: solo el admin las aprueba. Si un hilo ya existía (aceptado o
+// rechazado) no se re-sugiere ni se le cambia el estado.
+export async function insertarAvisosDetectados({ db, avisos }) {
+  if (!Array.isArray(avisos) || avisos.length === 0) return 0;
+  const insertar = avisos.map((a) => ({
+    sql: `INSERT INTO avisos_moodle
+          (id, curso_id, curso_nombre, materia_id, materia_nombre, foro_id, foro_nombre, hilo_id, titulo, autor, fecha, contenido, url, estado, creado_en)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', datetime('now'))
+          ON CONFLICT(curso_id, hilo_id) DO UPDATE SET
+            titulo = excluded.titulo,
+            autor = excluded.autor,
+            contenido = excluded.contenido,
+            fecha = excluded.fecha,
+            url = excluded.url`,
+    args: [
+      a.id,
+      a.cursoId,
+      a.cursoNombre,
+      a.materiaId || null,
+      a.materiaNombre || '',
+      a.foroId,
+      a.foroNombre,
+      a.hiloId,
+      a.titulo,
+      a.autor || '',
+      a.fecha,
+      a.contenido || '',
+      a.url || ''
+    ]
+  }));
+  await db.batch(insertar, 'write');
+  return insertar.length;
+}
+
+// Aprueba avisos (estado 'pendiente' → 'aceptado'). Solo después de esto el
+// aviso se muestra en la campana de notificaciones.
+export async function aprobarAvisos({ db, ids }) {
+  if (!Array.isArray(ids) || ids.length === 0) return 0;
+  const updates = ids
+    .filter(Boolean)
+    .map((id) => ({
+      sql: "UPDATE avisos_moodle SET estado = 'aceptado' WHERE id = ?",
+      args: [id]
+    }));
+  if (updates.length === 0) return 0;
+  await db.batch(updates, 'write');
+  return updates.length;
+}
+
+// Rechaza avisos sugeridos (no se publican y no se vuelven a proponer).
+export async function rechazarAvisos({ db, ids }) {
+  if (!Array.isArray(ids) || ids.length === 0) return 0;
+  const updates = ids
+    .filter(Boolean)
+    .map((id) => ({
+      sql: "UPDATE avisos_moodle SET estado = 'rechazado' WHERE id = ?",
+      args: [id]
+    }));
+  if (updates.length === 0) return 0;
+  await db.batch(updates, 'write');
+  return updates.length;
+}
+
+// Agrega eventos sugeridos al cronograma (origen 'ugr', con el enlace al hilo
+// para «Ver en UGR»). INSERT OR IGNORE: no duplica por (materia, fecha, titulo).
+export async function insertarEventosCronograma({ db, eventos }) {
+  if (!Array.isArray(eventos) || eventos.length === 0) return 0;
+  const inserts = eventos
+    .filter((e) => e && e.materiaId && e.fecha && e.titulo)
+    .map((e) => ({
+      sql: `INSERT OR IGNORE INTO cronograma_eventos
+            (id, materia_id, fecha, modalidad, tipo, titulo, detalles, url, origen)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ugr')`,
+      args: [
+        `cronograma_${e.materiaId}_${e.fecha}_${String(e.titulo).slice(0, 60)}_${randomUUID().slice(0, 8)}`,
+        e.materiaId,
+        e.fecha,
+        e.modalidad || 'sincrónico',
+        e.tipo || 'clase',
+        String(e.titulo).slice(0, 200),
+        e.detalles || '',
+        e.url || ''
+      ]
+    }));
+  if (inserts.length === 0) return 0;
+  await db.batch(inserts, 'write');
+  return inserts.length;
 }

@@ -306,6 +306,16 @@ export default function VistaHorarios({
                         {!esSinClases && evento.titulo && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
                         {esSinClases && evento.titulo && evento.titulo.toLowerCase() !== 'sin clases' && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
                         {evento.detalles && <p className="mt-2 text-sm opacity-85">{evento.detalles}</p>}
+                        {evento.url && (
+                          <a
+                            href={evento.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-2"
+                          >
+                            Ver en UGR ↗
+                          </a>
+                        )}
                       </div>
                     );
                   })}

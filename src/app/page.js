@@ -100,6 +100,10 @@ export default function Home() {
   const [syncMensaje, setSyncMensaje] = useState('');
   // Tareas detectadas que el admin dejó tildadas en la vista previa (idMoodle).
   const [syncSeleccionados, setSyncSeleccionados] = useState(() => new Set());
+  // Avisos de foros tildados para publicar en la campana (id del aviso_local).
+  const [syncAvisosSeleccionados, setSyncAvisosSeleccionados] = useState(() => new Set());
+  // Avisos cuyo evento sugerido se agrega al cronograma (id del aviso_local).
+  const [syncEventosSeleccionados, setSyncEventosSeleccionados] = useState(() => new Set());
 
   // Estado para Parciales y Notas
   const [parciales, setParciales] = useState([]);
@@ -110,6 +114,7 @@ export default function Home() {
   const [horarios, setHorarios] = useState([]);
   const [cronograma, setCronograma] = useState([]);
   const [progresoPlan, setProgresoPlan] = useState([]);
+  const [avisos, setAvisos] = useState([]);
   const [mesCalendario, setMesCalendario] = useState(() => {
     const hoy = new Date();
     return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
@@ -362,6 +367,7 @@ export default function Home() {
     setHorarios(estado.horarios || []);
     setCronograma(estado.cronograma || []);
     setProgresoPlan(estado.progresoPlan || []);
+    setAvisos(estado.avisos || []);
     if (estado.rol) setRolUsuario(estado.rol);
 
     // Inicializar inputs de notas locales
@@ -745,11 +751,11 @@ export default function Home() {
     }
   };
 
-  const ejecutarSyncUGR = async (confirmar = false, ids = []) => {
+  const ejecutarSyncUGR = async (confirmar = false, ids = [], idsAvisos = [], idsEventos = []) => {
     setSyncEstado('cargando');
     setSyncMensaje('');
     try {
-      const res = await syncUgrAction({ confirmar, ids });
+      const res = await syncUgrAction({ confirmar, ids, idsAvisos, idsEventos });
       if (!res?.exito) {
         setSyncEstado('error');
         setSyncMensaje(res?.mensaje || 'No se pudo sincronizar.');
@@ -758,10 +764,13 @@ export default function Home() {
       setSyncDatos(res);
       setSyncEstado('listo');
       if (!confirmar) {
-        // Vista previa: arrancamos con todas las tareas tildadas.
-        setSyncSeleccionados(new Set(res.detectadas.map((t) => t.idMoodle)));
+        // Vista previa: arrancamos con todas las tareas y avisos tildados; los
+        // eventos sugeridos asociados a avisos aprobados también vienen tildados.
+        setSyncSeleccionados(new Set((res.detectadas || []).map((t) => t.idMoodle)));
+        setSyncAvisosSeleccionados(new Set((res.avisos || []).map((a) => a.id)));
+        setSyncEventosSeleccionados(new Set((res.eventosSugeridos || []).map((e) => e.avisoId)));
       }
-      if (confirmar && res.insertadas > 0) {
+      if (confirmar && (res.insertadas > 0 || res.avisosAceptados > 0 || res.eventosInsertados > 0)) {
         await cargarBD(false);
       }
     } catch (error) {
@@ -784,9 +793,44 @@ export default function Home() {
     setSyncSeleccionados(marcadas ? new Set(syncDatos.detectadas.map((t) => t.idMoodle)) : new Set());
   };
 
+  const toggleSyncAviso = (id) => {
+    setSyncAvisosSeleccionados((prev) => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(id)) {
+        nuevo.delete(id);
+        // Si destildamos el aviso, su evento sugerido no se agrega al cronograma.
+        setSyncEventosSeleccionados((prevEventos) => {
+          const nuevosEventos = new Set(prevEventos);
+          nuevosEventos.delete(id);
+          return nuevosEventos;
+        });
+      } else {
+        nuevo.add(id);
+      }
+      return nuevo;
+    });
+  };
+
+  const toggleSyncEvento = (avisoId) => {
+    setSyncEventosSeleccionados((prev) => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(avisoId)) nuevo.delete(avisoId);
+      else nuevo.add(avisoId);
+      return nuevo;
+    });
+  };
+
+  const marcarTodasAvisosSync = (marcadas) => {
+    if (!syncDatos) return;
+    setSyncAvisosSeleccionados(marcadas ? new Set(syncDatos.avisos.map((a) => a.id)) : new Set());
+    if (!marcadas) setSyncEventosSeleccionados(new Set());
+  };
+
   const abrirSyncUGR = () => {
     setSyncDatos(null);
     setSyncSeleccionados(new Set());
+    setSyncAvisosSeleccionados(new Set());
+    setSyncEventosSeleccionados(new Set());
     setSyncAbierto(true);
     ejecutarSyncUGR(false);
   };
@@ -951,6 +995,14 @@ export default function Home() {
   const notificaciones = usuarioActual
     ? [
       ...novedades,
+      // Avisos aprobados de los foros del campus (solo los que el admin publicó).
+      ...avisos.map((aviso) => ({
+        id: `aviso-${aviso.id}`,
+        tipo: 'aviso-nuevo',
+        nombre: aviso.titulo,
+        materia: aviso.materia_nombre || aviso.curso_nombre || 'Materia',
+        url: aviso.url || ''
+      })),
       ...materias.flatMap((materia) => materia.tareas
         .map((tarea) => ({ tarea, materia }))
         .filter(({ tarea }) => {
@@ -1351,28 +1403,42 @@ export default function Home() {
                             ? 'Nuevo parcial cargado'
                             : notificacion.tipo === 'nueva-tarea'
                               ? 'Nueva tarea cargada'
+                              : notificacion.tipo === 'aviso-nuevo'
+                                ? 'Aviso en el campus'
                           : notificacion.tipo === 'apertura'
                             ? 'Se habilita mañana'
                             : notificacion.dias === 0
                               ? 'Vence hoy'
                               : `Vence en ${notificacion.dias} ${notificacion.dias === 1 ? 'día' : 'días'}`;
                         return (
-                          <button
-                            type="button"
-                            key={notificacion.id}
-                            onClick={() => {
-                              marcarNotificacionesVistas([notificacion.id]);
-                              navegarA(['parcial', 'nuevo-parcial'].includes(notificacion.tipo) ? 'parciales' : 'materias');
-                              setNotificacionesAbiertas(false);
-                            }}
-                            className={`w-full text-left px-4 py-3 hover:bg-slate-800/70 transition-colors cursor-pointer ${notificacionesVistas.includes(notificacion.id) ? 'opacity-60' : ''}`}
-                          >
-                            <p className="text-sm font-semibold text-slate-100 truncate">{notificacion.nombre}</p>
-                            <p className="text-xs text-slate-400 mt-1">{etiquetaMateria(notificacion.materia)}</p>
-                            <p className={`text-xs font-bold mt-2 ${notificacion.tipo === 'vencimiento' && notificacion.dias <= 2 ? 'text-red-300' : 'text-amber-300'}`}>
-                              {texto}
-                            </p>
-                          </button>
+                          <div key={notificacion.id} className="relative">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                marcarNotificacionesVistas([notificacion.id]);
+                                navegarA(['parcial', 'nuevo-parcial'].includes(notificacion.tipo) ? 'parciales' : notificacion.tipo === 'aviso-nuevo' ? 'horarios' : 'materias');
+                                setNotificacionesAbiertas(false);
+                              }}
+                              className={`w-full text-left px-4 py-3 hover:bg-slate-800/70 transition-colors cursor-pointer ${notificacionesVistas.includes(notificacion.id) ? 'opacity-60' : ''}`}
+                            >
+                              <p className="text-sm font-semibold text-slate-100 truncate">{notificacion.nombre}</p>
+                              <p className="text-xs text-slate-400 mt-1">{etiquetaMateria(notificacion.materia)}</p>
+                              <p className={`text-xs font-bold mt-2 ${notificacion.tipo === 'vencimiento' && notificacion.dias <= 2 ? 'text-red-300' : 'text-amber-300'}`}>
+                                {texto}
+                              </p>
+                            </button>
+                            {notificacion.url && (
+                              <a
+                                href={notificacion.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Abrir el anuncio en UGR Virtual"
+                                className="absolute top-2 right-2 text-[11px] font-semibold text-blue-300 hover:text-blue-100 hover:underline"
+                              >
+                                UGR ↗
+                              </a>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
@@ -2890,6 +2956,101 @@ export default function Home() {
                   </>
                 )}
 
+{/* Avisos de foros y eventos sugeridos (solo los aprueba el admin) */}
+                {(syncDatos.avisos?.length || 0) > 0 ? (
+                  <div className="border-t border-slate-800 pt-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-purple-300">
+                        📢 {syncAvisosSeleccionados.size} de {syncDatos.avisos.length} aviso(s) para publicar en la campana
+                      </span>
+                      <div className="flex gap-2 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => marcarTodasAvisosSync(true)}
+                          className="text-slate-400 hover:text-purple-300 cursor-pointer underline"
+                        >
+                          Tildar todos
+                        </button>
+                        <span className="text-slate-600">·</span>
+                        <button
+                          type="button"
+                          onClick={() => marcarTodasAvisosSync(false)}
+                          className="text-slate-400 hover:text-red-300 cursor-pointer underline"
+                        >
+                          Destildar todos
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-3 space-y-2 max-h-80 overflow-y-auto pr-1">
+                      {syncDatos.avisos.map((aviso) => {
+                        const tildado = syncAvisosSeleccionados.has(aviso.id);
+                        const eventoDe = (syncDatos.eventosSugeridos || []).find((e) => e.avisoId === aviso.id);
+                        const eventoElecto = syncEventosSeleccionados.has(aviso.id) && tildado;
+                        return (
+                          <div
+                            key={aviso.id}
+                            className={`rounded-xl border p-3 transition-colors ${
+                              tildado
+                                ? 'border-purple-500/50 bg-purple-500/5'
+                                : 'border-slate-700 bg-[#0f141c] opacity-60'
+                            }`}
+                          >
+                            <button type="button" onClick={() => toggleSyncAviso(aviso.id)} className="w-full text-left cursor-pointer">
+                              <div className="flex items-start gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={tildado}
+                                  onChange={() => toggleSyncAviso(aviso.id)}
+                                  className="mt-0.5 h-4 w-4 shrink-0 accent-purple-500 cursor-pointer"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-semibold text-white">{aviso.titulo}</p>
+                                  <p className="text-xs text-purple-300 mt-0.5">
+                                    {etiquetaMateria(aviso.materiaNombre || aviso.cursoNombre || 'Materia')} · {aviso.foroNombre} · publicado el {aviso.fecha}
+                                  </p>
+                                  {aviso.contenido && (
+                                    <p className="text-xs text-slate-400 mt-1 line-clamp-2">{aviso.contenido}</p>
+                                  )}
+                                  {aviso.url && (
+                                    <a
+                                      href={aviso.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-1"
+                                    >
+                                      Abrir anuncio en UGR ↗
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                            {eventoDe && (
+                              <label className={`mt-2 flex items-start gap-2 rounded-lg bg-slate-800/60 px-2.5 py-2 ${tildado ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={eventoElecto}
+                                  onChange={() => toggleSyncEvento(aviso.id)}
+                                  disabled={!tildado}
+                                  className="mt-0.5 h-4 w-4 shrink-0 accent-purple-400 cursor-pointer"
+                                />
+                                <span className="text-xs text-slate-300">
+                                  <strong className="text-purple-200">Agregar al cronograma:</strong>{' '}
+                                  {eventoDe.titulo} · {eventoDe.fecha} · {eventoDe.tipo}
+                                </span>
+                              </label>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2">
+                      Avisos publicados desde hoy. Los que no tildes quedan sin publicar (no se vuelven a sugerir).
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 pt-2">📭 No hay avisos nuevos en los foros del campus.</p>
+                )}
                 {syncDatos.insertadas > 0 && (
                   <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
                     ✅ Se cargaron {syncDatos.insertadas} tarea(s) en la página.
@@ -2902,6 +3063,18 @@ export default function Home() {
                   </div>
                 )}
 
+                {syncDatos.avisosAceptados > 0 && (
+                  <div className="rounded-xl border border-purple-500/40 bg-purple-500/10 p-4 text-sm text-purple-200">
+                    ✅ Se publicaron {syncDatos.avisosAceptados} aviso(s) en la campana.
+                  </div>
+                )}
+
+                {syncDatos.eventosInsertados > 0 && (
+                  <div className="rounded-xl border border-purple-500/40 bg-purple-500/10 p-4 text-sm text-purple-200">
+                    📅 Se agregaron {syncDatos.eventosInsertados} evento(s) sugerido(s) al cronograma.
+                  </div>
+                )}
+
                 <div className="flex justify-end gap-3 pt-2">
                   <button
                     type="button"
@@ -2910,16 +3083,16 @@ export default function Home() {
                   >
                     Cerrar
                   </button>
-                  {syncDatos.detectadas.length > 0 && syncDatos.insertadas === 0 && (
+                  {(syncDatos.detectadas.length > 0 || syncDatos.avisos.length > 0) && syncDatos.insertadas === 0 && (
                     <button
                       type="button"
-                      onClick={() => ejecutarSyncUGR(true, [...syncSeleccionados])}
-                      disabled={syncEstado === 'cargando' || syncSeleccionados.size === 0}
+                      onClick={() => ejecutarSyncUGR(true, [...syncSeleccionados], [...syncAvisosSeleccionados], [...syncEventosSeleccionados])}
+                      disabled={syncEstado === 'cargando' || (syncSeleccionados.size === 0 && syncAvisosSeleccionados.size === 0)}
                       className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {syncSeleccionados.size > 0
-                        ? `Importar ${syncSeleccionados.size} seleccionada(s)`
-                        : 'Ninguna tarea seleccionada'}
+                      {syncSeleccionados.size + syncAvisosSeleccionados.size > 0
+                        ? `Aplicar cambios (${syncSeleccionados.size + syncAvisosSeleccionados.size})`
+                        : 'Sin cambios seleccionados'}
                     </button>
                   )}
                 </div>
