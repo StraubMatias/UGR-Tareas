@@ -406,9 +406,9 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     // Fuente: recurso del curso en UGR Virtual «AUDITORIAS-Diagramación contenidos.
     // MARTES 2026.docx». La materia no tenía eventos propios y por eso su cursada
     // fija (martes 18:00-19:30) aparecía todas las semanas. El Word de plan marca
-    // el martes 15/09/2026 como «Sin clases - Turno examen», pero en la realidad
-    // del campus ese día sí hay cursada y no existe anulación publicada, así que
-    // ese evento NO se carga (ver migración 14).
+    // el martes 15/09/2026 como «Sin clases - Turno examen» (mesas de examen de
+    // septiembre): ese evento se carga junto con el resto del calendario, así el
+    // cronograma refleja el plan oficial completo.
     const resultado = await db.execute("SELECT id, nombre FROM materias WHERE nombre LIKE '%AUDITORÍAS DE SEGURIDAD%'");
     const materia = resultado.rows[0];
     if (!materia) return;
@@ -418,6 +418,7 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
       ['2026-08-25', 'sincrónico', 'clase', 'Unidad 1: marcos de control', 'Las prácticas de control, de las normas a las buenas prácticas en SI y Ciberseguridad. Responsabilidades.'],
       ['2026-09-01', 'sincrónico', 'clase', 'Unidad 2: las auditorías en general', 'Definiciones de auditoría de seguridad de la información. El rol de las auditorías.'],
       ['2026-09-08', 'sincrónico', 'clase', 'Unidad 2: auditores', 'Habilidades, conocimiento y ética. Desde los principios generales de auditoría a los posibles conflictos.'],
+      ['2026-09-15', 'sincrónico', 'sin_clases', 'Sin clases', 'Mesas de examen de septiembre: no hay cursada.'],
       ['2026-09-22', 'sincrónico', 'clase', 'Unidad 2: el auditor en la planificación', 'El rol del auditor en las estrategias y la planificación. Claves de éxito.'],
       ['2026-09-29', 'sincrónico', 'clase', 'Mejora continua y auditoría', 'Auditoría, motivaciones y objetivos.'],
       ['2026-10-06', 'sincrónico', 'clase', 'Unidad 3: auditoría del SGSI', 'Desde las normas de estandarización de aplicación internacional. Normas certificables.'],
@@ -440,17 +441,22 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     }
   });
 
-  await ejecutarMigracion(14, 'corregir cronograma Auditorías 15/09/2026 (sí hay cursada)', async () => {
-    // La migración 13 cargó «Sin clases - Turno examen» para el 15/09/2026 a
-    // partir del Word de plan, pero en el campus ese día hay cursada y entregas,
-    // sin anulación publicada. Al ser un evento manual (origen 'manual') no debe
-    // cancelar la cursada fija: lo quitamos de la base ya migrada.
+  await ejecutarMigracion(14, 'cronograma Auditorías 15/09/2026 (sin clases por mesas de examen)', async () => {
+    // Versiones previas de esta migración borraban el «Sin clases» del 15/09/2026
+    // asumiendo que el campus tenía cursada ese día. El plan oficial (Word del
+    // curso) la marca como «Sin clases - Turno examen» y no hay clase: el evento
+    // se conserva. Esta migración ya no elimina nada (quedó como no-op histórico).
+  });
+
+  await ejecutarMigracion(15, 'asegurar «Sin clases» de Auditorías el 15/09/2026', async () => {
+    // Para bases ya migradas con la versión anterior (que omitía/borraba el
+    // evento): reinserta el «Sin clases» del 15/09/2026 según el plan oficial.
     const resultado = await db.execute("SELECT id FROM materias WHERE nombre LIKE '%AUDITORÍAS DE SEGURIDAD%'");
     const materia = resultado.rows[0];
     if (!materia) return;
     await db.execute({
-      sql: "DELETE FROM cronograma_eventos WHERE materia_id = ? AND fecha = '2026-09-15' AND tipo = 'sin_clases'",
-      args: [materia.id]
+      sql: 'INSERT OR IGNORE INTO cronograma_eventos (id, materia_id, fecha, modalidad, tipo, titulo, detalles) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: [`cronograma_${materia.id}_2026-09-15_Sin clases`, materia.id, '2026-09-15', 'sincrónico', 'sin_clases', 'Sin clases', 'Mesas de examen de septiembre: no hay cursada.']
     });
   });
 

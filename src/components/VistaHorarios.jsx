@@ -1,11 +1,10 @@
 import { etiquetaMateria } from '../lib/cursada';
 
-// Un cronograma académico puede marcar «sin clases» a nivel de plan (los Word
-// del curso), pero solo una anulación real confirmada por el campus (origen
-// 'ugr', avisos aprobados en el sync) cancela la cursada fija: los eventos
-// manuales del plan no cancelan nada y se muestran como notas informativas.
+// El cronograma académico (el plan oficial de cada materia: Word/PDF del curso)
+// es la fuente de verdad de la cursada. Un evento «sin clases» cancela la
+// cursada fija de esa materia ese día, tanto si nace del plan (origen 'manual')
+// como de un aviso aprobado del campus (origen 'ugr'):
 const esEventoDeSinClases = (evento) => Boolean(evento) && (evento.tipo === 'sin_clases' || evento.modalidad === 'sin_clases');
-const esCancelacionReal = (evento) => esEventoDeSinClases(evento) && evento.origen === 'ugr';
 
 // Vista "Horarios / Calendario mensual": grilla del mes con cursadas, parciales,
 // entregas y cronograma, más el modal de detalle por día.
@@ -106,7 +105,7 @@ export default function VistaHorarios({
                         && eventos.parciales.length === 0
                         && eventos.tareas.length === 0
                         && eventos.cronograma.length > 0
-                        && eventos.cronograma.every((evento) => esCancelacionReal(evento));
+                        && eventos.cronograma.every(esEventoDeSinClases);
                       if (esSoloSinClases) {
                         return (
                           <div className="mt-2 space-y-1.5">
@@ -143,17 +142,14 @@ export default function VistaHorarios({
                       {eventos.cronograma.map((evento) => {
                         const materia = materias.find((item) => item.id === evento.materia_id);
                         const esAsincronico = evento.modalidad === 'asincrónico';
-                        const esSinClases = esCancelacionReal(evento);
-                        const esSinClasesManual = esEventoDeSinClases(evento) && !esSinClases;
+                        const esSinClases = esEventoDeSinClases(evento);
                         const esExamen = evento.tipo === 'examen';
                         const esEntrega = evento.tipo === 'entrega';
                         const esExposicion = evento.tipo === 'exposición';
                         const esConsulta = evento.tipo === 'consulta';
                         const etiqueta = esSinClases
                           ? 'Sin clases'
-                          : esSinClasesManual
-                            ? 'Cronograma'
-                            : esAsincronico
+                          : esAsincronico
                             ? esEntrega
                               ? 'Entrega asínc.'
                               : esExposicion
@@ -233,7 +229,7 @@ export default function VistaHorarios({
               ) : (
                 <div className="mt-5 space-y-3">
                   {(() => {
-                    const eventosSinClases = eventos.cronograma.filter(esCancelacionReal);
+                    const eventosSinClases = eventos.cronograma.filter(esEventoDeSinClases);
                     const hayActividades = eventos.horarios.length > 0
                       || eventos.parciales.length > 0
                       || eventos.tareas.length > 0
@@ -285,17 +281,14 @@ export default function VistaHorarios({
                   {eventos.cronograma.map((evento) => {
                     const materia = materias.find((item) => item.id === evento.materia_id);
                     const esAsincronico = evento.modalidad === 'asincrónico';
-                    const esSinClases = esCancelacionReal(evento);
-                    const esSinClasesManual = esEventoDeSinClases(evento) && !esSinClases;
+                    const esSinClases = esEventoDeSinClases(evento);
                     const esExamen = evento.tipo === 'examen';
                     const esEntrega = evento.tipo === 'entrega';
                     const esExposicion = evento.tipo === 'exposición';
                     const esConsulta = evento.tipo === 'consulta';
                     const etiqueta = esSinClases
                       ? 'No hay clases'
-                      : esSinClasesManual
-                        ? 'Cronograma'
-                        : esAsincronico
+                      : esAsincronico
                         ? esEntrega
                           ? 'Entrega asincrónica'
                           : esExposicion
