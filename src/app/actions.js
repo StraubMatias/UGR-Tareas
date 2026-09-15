@@ -1217,10 +1217,10 @@ export async function obtenerCronogramaAction(periodoId = null) {
     if (!await obtenerUsuarioSesion()) return [];
     const res = await db.execute(consultaPeriodo(
       periodoId,
-      `SELECT c.id, c.materia_id, c.fecha, c.modalidad, c.tipo, c.titulo, c.detalles, c.url
+      `SELECT c.id, c.materia_id, c.fecha, c.modalidad, c.tipo, c.titulo, c.detalles, c.url, c.origen
        FROM cronograma_eventos c JOIN materias m ON m.id = c.materia_id
        WHERE m.periodo_id = ? ORDER BY c.fecha ASC, c.titulo ASC`,
-      `SELECT id, materia_id, fecha, modalidad, tipo, titulo, detalles, url
+      `SELECT id, materia_id, fecha, modalidad, tipo, titulo, detalles, url, origen
        FROM cronograma_eventos ORDER BY fecha ASC, titulo ASC`
     ));
     return res.rows;

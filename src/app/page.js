@@ -1106,7 +1106,11 @@ export default function Home() {
     const eventosCronogramaDia = cronograma.filter((evento) => obtenerClaveDiaCalendario(evento.fecha) === claveDia);
     const materiasSinCursadaDia = new Set(
       eventosCronogramaDia
-        .filter((evento) => evento.modalidad !== 'sincrónico' || evento.tipo === 'sin_clases')
+        // Una marca «sin clases» del cronograma solo cancela la cursada fija
+        // cuando es una anulación real confirmada por el campus (origen 'ugr',
+        // avisos aprobados en el sync). Las notas manuales del plan (origen
+        // 'manual') dejan la cursada visible: la realidad manda.
+        .filter((evento) => evento.modalidad !== 'sincrónico' || (evento.tipo === 'sin_clases' && evento.origen === 'ugr'))
         .map((evento) => evento.materia_id)
     );
 

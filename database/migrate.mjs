@@ -401,6 +401,59 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     await agregarColumnaSiFalta('cronograma_eventos', 'url', "TEXT NOT NULL DEFAULT ''");
     await agregarColumnaSiFalta('cronograma_eventos', 'origen', "TEXT NOT NULL DEFAULT 'manual'");
   });
+
+  await ejecutarMigracion(13, 'cronograma de Auditorías de Seguridad de la Información 2026', async () => {
+    // Fuente: recurso del curso en UGR Virtual «AUDITORIAS-Diagramación contenidos.
+    // MARTES 2026.docx». La materia no tenía eventos propios y por eso su cursada
+    // fija (martes 18:00-19:30) aparecía todas las semanas. El Word de plan marca
+    // el martes 15/09/2026 como «Sin clases - Turno examen», pero en la realidad
+    // del campus ese día sí hay cursada y no existe anulación publicada, así que
+    // ese evento NO se carga (ver migración 14).
+    const resultado = await db.execute("SELECT id, nombre FROM materias WHERE nombre LIKE '%AUDITORÍAS DE SEGURIDAD%'");
+    const materia = resultado.rows[0];
+    if (!materia) return;
+
+    const filas = [
+      ['2026-08-18', 'sincrónico', 'clase', 'Unidad 1: contexto global de SI y ciberseguridad', 'Evolución según referentes de la industria y Organizaciones internacionales. Los controles internos como respuesta y necesidad.'],
+      ['2026-08-25', 'sincrónico', 'clase', 'Unidad 1: marcos de control', 'Las prácticas de control, de las normas a las buenas prácticas en SI y Ciberseguridad. Responsabilidades.'],
+      ['2026-09-01', 'sincrónico', 'clase', 'Unidad 2: las auditorías en general', 'Definiciones de auditoría de seguridad de la información. El rol de las auditorías.'],
+      ['2026-09-08', 'sincrónico', 'clase', 'Unidad 2: auditores', 'Habilidades, conocimiento y ética. Desde los principios generales de auditoría a los posibles conflictos.'],
+      ['2026-09-22', 'sincrónico', 'clase', 'Unidad 2: el auditor en la planificación', 'El rol del auditor en las estrategias y la planificación. Claves de éxito.'],
+      ['2026-09-29', 'sincrónico', 'clase', 'Mejora continua y auditoría', 'Auditoría, motivaciones y objetivos.'],
+      ['2026-10-06', 'sincrónico', 'clase', 'Unidad 3: auditoría del SGSI', 'Desde las normas de estandarización de aplicación internacional. Normas certificables.'],
+      ['2026-10-13', 'sincrónico', 'clase', 'Unidad 3: proceso de certificación', 'Características del proceso de certificación. Estrategias y procesos. Acompañamiento interno del proceso y los roles de los auditores. Informes.'],
+      ['2026-10-20', 'sincrónico', 'clase', 'Unidad 3: auditoría de certificación', 'Informe de auditoría. Certificaciones y posicionamiento empresarial.'],
+      ['2026-10-27', 'sincrónico', 'clase', 'Unidad 4: auditorías interna y externa del SGSI', 'Evaluación del gobierno de TI. Casos.'],
+      ['2026-11-03', 'sincrónico', 'clase', 'Unidad 4: marcos auditables', 'Identidad del marco. Determinación de grado de cumplimiento. Marcos auditables y de cumplimiento: PCI, Normas del BCRA y otros.'],
+      ['2026-11-10', 'sincrónico', 'clase', 'Unidad 4: planificación de auditoría', 'Consideraciones del proceso de auditoría de marcos no certificables. Auditorías de marcos: Ciberseguridad del NIST e ISO 27002.'],
+      ['2026-11-24', 'sincrónico', 'consulta', 'Clase de consulta', ''],
+      ['2026-12-01', 'sincrónico', 'examen', 'Examen 1er llamado turno Diciembre', ''],
+      ['2026-12-08', 'sincrónico', 'consulta', 'Clase de consulta', ''],
+      ['2026-12-15', 'sincrónico', 'examen', 'Examen 2do llamado turno Diciembre', '']
+    ];
+
+    for (const [fecha, modalidad, tipo, titulo, detalles] of filas) {
+      await db.execute({
+        sql: 'INSERT OR IGNORE INTO cronograma_eventos (id, materia_id, fecha, modalidad, tipo, titulo, detalles) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        args: [`cronograma_${materia.id}_${fecha}_${titulo}`, materia.id, fecha, modalidad, tipo, titulo, detalles]
+      });
+    }
+  });
+
+  await ejecutarMigracion(14, 'corregir cronograma Auditorías 15/09/2026 (sí hay cursada)', async () => {
+    // La migración 13 cargó «Sin clases - Turno examen» para el 15/09/2026 a
+    // partir del Word de plan, pero en el campus ese día hay cursada y entregas,
+    // sin anulación publicada. Al ser un evento manual (origen 'manual') no debe
+    // cancelar la cursada fija: lo quitamos de la base ya migrada.
+    const resultado = await db.execute("SELECT id FROM materias WHERE nombre LIKE '%AUDITORÍAS DE SEGURIDAD%'");
+    const materia = resultado.rows[0];
+    if (!materia) return;
+    await db.execute({
+      sql: "DELETE FROM cronograma_eventos WHERE materia_id = ? AND fecha = '2026-09-15' AND tipo = 'sin_clases'",
+      args: [materia.id]
+    });
+  });
+
   await db.close?.();
 }
 
