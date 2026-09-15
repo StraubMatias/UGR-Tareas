@@ -1051,9 +1051,9 @@ export async function syncUgrAction({ confirmar = false, ids = [], idsAvisos = [
     const { materiasLocales, cursos, mapeos, detectadas, urlsActualizar, urlsParcialesActualizar } = await detectarTareasNuevas({ db, cliente });
 
     // Avisos de los foros del campus (Avisos/Consultas) y eventos espontáneos.
-    // Solo se toman hilos publicados desde hoy hacia adelante; los anteriores ya
-    // fueron procesados y no se vuelven a proponer (avisos_moodle guarda el
-    // histórico por curso + hilo).
+    // Se toman hilos publicados desde hace 7 días hacia adelante (los previos
+    // ya fueron procesados y no se vuelven a proponer: avisos_moodle guarda el
+    // histórico por curso + hilo) y cuyos eventos son del día actual o futuro.
     const { avisosDetectados, eventosSugeridos } = await detectarAvisosMoodle({ db, cliente, mapeos });
     // Registramos las sugerencias como 'pendiente': no se publican solas. Si un
     // hilo ya había sido aceptado/rechazado antes, no se re-sugiere ni cambia.

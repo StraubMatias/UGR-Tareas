@@ -2,8 +2,11 @@
 
 Módulo independiente que sincroniza la app con el campus
 [`virtual.ugr.edu.ar`](https://virtual.ugr.edu.ar) (Moodle): detecta **tareas nuevas**
-de las materias mapeadas, evita duplicar **parciales** ya cargados desde el cronograma
-y completa el **enlace a UGR Virtual** de tareas y parciales que quedaron sin URL.
+de las materias mapeadas, **publica en la campana los avisos recientes** de los foros
+Avisos/Consultas y **sugiere sus eventos al cronograma** (clases de consulta,
+entregas, encuentros, «sin clases»), evita duplicar **parciales** ya cargados desde el
+cronograma y completa el **enlace a UGR Virtual** de tareas y parciales que quedaron
+sin URL.
 
 No depende de la interfaz de la app: se puede usar desde el CLI, desde el botón
 «🔄 Sincronizar UGR» del panel (vía `src/app/actions.js`) o como librería.
@@ -40,7 +43,7 @@ npm run ugr:sync
 
 # 2b. Variantes
 npm run ugr:sync -- --dry   # solo muestra, no escribe nada
-npm run ugr:sync -- --yes   # inserta todo sin preguntar
+npm run ugr:sync -- --yes   # inserta tareas Y publica avisos sin preguntar
 ```
 
 Correr los tests del módulo:
@@ -66,6 +69,19 @@ node --test ugr-sync/test
    sin URL (los del cronograma) reciben el link real a Moodle cuando la actividad
    aparece en el campus. Solo se escribe cuando la columna `url` está vacía: nunca
    pisa un enlace existente.
+4. **Detecta avisos y eventos espontáneos**: recorre los foros «informativos» de
+   cada curso (Avisos, Novedades, Consultas, …) y toma los hilos **publicados en
+   los últimos 7 días** (ni hilos viejos ni avisos cuya fecha ya pasó). Cada aviso
+   se registra una sola vez (clave `curso_id + hilo_id`: el upsert nunca duplica)
+   y, si se confirma, se **publica en la campana** de la app. Del texto del aviso
+   se sugieren además eventos al cronograma (clases de consulta, encuentros,
+   entregas, exámenes, «sin clases») con fecha del día actual o en adelante
+   (p. ej. «el martes 15 a las 20:00 tendremos un encuentro» → evento del 2026-09-15).
+
+El recorrido es **paralelo** (concurrencia 4): overviews de todos los cursos,
+índices de foros, páginas de foro y post de cada hilo se piden de a cuatro. Además,
+el detalle de fechas (apertura/vencimiento) solo se lee para las tareas que todavía
+no existen en la base, así un sync sin novedades no encadena un pedido HTTP por tarea.
 
 ## Notas
 

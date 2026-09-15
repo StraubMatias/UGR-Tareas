@@ -5,11 +5,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   analizarAvisoParaCronograma,
+  DIAS_HACIA_ATRAS,
   esForoDeAvisos,
   extraerDiscusionesDeForo,
   extraerForosDelIndice,
   extraerPrimerPostDeHilo,
-  fechaHoyLocal
+  fechaHoyLocal,
+  sumarDias
 } from '../lib/avisos.mjs';
 import { conPool } from '../lib/sync-core.mjs';
 
@@ -109,6 +111,45 @@ test('analizarAvisoParaCronograma detecta fechas desde hoy hacia adelante', () =
   assert.equal(analizar('Reunión', 'La clase pasada vimos los activos de información.'), null);
   // Sin fecha ni tipo no se sugiere evento (el aviso igual puede publicarse).
   assert.equal(analizar('Material', 'Subí la grabación de la clase.'), null);
+});
+
+test('analizarAvisoParaCronograma resuelve «día de la semana + número»', () => {
+  const analizar = (titulo, contenido) => analizarAvisoParaCronograma({
+    titulo,
+    contenido,
+    materiaNombre: 'EVALUACIÓN Y GESTIÓN DE RIESGOS',
+    hoy: HOY
+  });
+
+  // El ejemplo real del aviso de Riesgos: el encuentro es HOY (martes 15), no
+  // el martes siguiente.
+  const encontroHoy = analizar('Encuentro de consultas', 'Para acompañarlos, el martes 15 a las 20:00 tendremos un encuentro para responder dudas sobre el TP.');
+  assert.equal(encontroHoy.tipo, 'consulta');
+  assert.equal(encontroHoy.fecha, HOY);
+
+  // «viernes 18» → 18/09/2026 (día 18 del mes actual y en adelante).
+  const entrega = analizar('Clase 3', 'La primera entrega del Trabajo Práctico vence el próximo viernes 18.');
+  assert.equal(entrega.tipo, 'entrega');
+  assert.equal(entrega.fecha, '2026-09-18');
+
+  // Si el día del mes ya pasó, se interpreta como del mes siguiente.
+  const proximoMes = analizar('Consulta', 'El martes 8 tendremos una clase de consulta por Zoom.');
+  assert.equal(proximoMes.fecha, '2026-10-08');
+});
+
+test('la ventana de avisos mira 7 días hacia atrás', () => {
+  assert.equal(DIAS_HACIA_ATRAS, 7);
+  // Límite de la ventana: hoy − 7 (aviso del jueves que anuncia el martes 15).
+  assert.equal(sumarDias(HOY, -7), '2026-09-08');
+  assert.equal(sumarDias('2026-09-08', 7), HOY);
+  // Los eventos ya pasados se siguen descartando dentro de la ventana.
+  const pasado = analizarAvisoParaCronograma({
+    titulo: 'Clase 2',
+    contenido: 'La clase pasada vimos la matriz de riesgo.',
+    materiaNombre: 'GESTIÓN DE ACTIVOS',
+    hoy: HOY
+  });
+  assert.equal(pasado, null);
 });
 
 test('conPool corre en paralelo y mantiene el orden', async () => {

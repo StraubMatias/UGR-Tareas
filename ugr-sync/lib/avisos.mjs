@@ -4,15 +4,21 @@
 // El sync SOLO propone: cada aviso queda 'pendiente' y pasa a la campana y al
 // cronograma únicamente cuando el admin lo aprueba en el modal de sincronización.
 //
-// Regla de negocio confirmada: se procesan avisos publicados desde hoy hacia
-// adelante (DIAS_HACIA_ATRAS = 0); los hilos viejos y los eventos cuya fecha ya
-// pasó se ignoran.
+// Regla de negocio confirmada: se procesan avisos publicados desde hace
+// DIAS_HACIA_ATRAS días hacia adelante (DIAS_HACIA_ATRAS = 7), es decir los que
+// anuncian cosas del día actual o en adelante. Los hilos más viejos y los
+// eventos cuya fecha ya pasó se ignoran.
 import { load } from 'cheerio';
 import {
   limpiarTextoParaBusqueda,
   parsearFechaMoodle,
   parsearUnidadMoodle
 } from './normalizar.mjs';
+
+// Ventana de publicación del sync de avisos: se procesan los hilos publicados
+// desde esta cantidad de días atrás hacia adelante. El caso típico es un aviso
+// del jueves que anuncia un encuentro/entrega del martes siguiente.
+export const DIAS_HACIA_ATRAS = 7;
 
 function limpiarTexto(texto) {
   return String(texto || '').replace(/\s+/g, ' ').trim();
@@ -131,18 +137,23 @@ export function extraerPrimerPostDeHilo(html, baseUrl = '') {
 
   const id = post.attr('data-post-id') || '';
   const titulo = limpiarTexto(
-    post.find('[data-region="post-subject"], h3[class*="subject"] a, .discussionname').first().text()
+    post.find('[data-region="post-subject"], [data-region-content="forum-post-core-subject"], h3[class*="subject"] a, .discussionname').first().text()
     || post.find('.subject a').first().text()
     || post.find('.subject').text()
     || post.find('h3').first().text()
   );
   const autor = limpiarTexto(
-    post.find('[data-region="author-name"], .author a').first().text()
+    post.find('[data-region="author-name"], [data-region-content="forum-post-core-subject"] ~ [data-region-content="author-name"], .author a').first().text()
+    || post.find('a[href*="user/view.php"]').first().text()
     || post.find('.author').text()
   );
   const fechaTexto = post.find('time[datetime]').first().attr('datetime')
     || limpiarTexto(post.find('time').first().text());
-  const bloqueContenido = post.find('[data-region="post-content"], .posting, .content, .post-content').first();
+  // Cubre el layout clásico de Moodle y el de Moodle 4.5+ (class
+  // `post-content-container` / data-region-content="forum-post-core").
+  const bloqueContenido = post.find(
+    '.post-content-container, [data-region="post-content"], [data-region-content="forum-post-core"], .posting, .content, .post-content'
+  ).first();
   const contenido = limpiarTexto(bloqueContenido.text());
   const contenidoHtml = bloqueContenido.html() || '';
   const urlHilo = completarUrl(post.find('a[href*="discuss.php"]').first().attr('href'), baseUrl);
@@ -177,81 +188,120 @@ function hoyISO() {
   return `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
 }
 
-function sumarDias(fechaISO, cantidad) {
+export function sumarDias(fechaISO, cantidad) {
   const fecha = new Date(`${fechaISO}T12:00:00`);
   fecha.setDate(fecha.getDate() + cantidad);
   return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
 }
 
-// Busca una fecha explícita (día de mes + mes [+ año]) dentro del texto y solo
-// considera las que caen desde hoy en adelante.
-function encontrarFechaExplicita(texto, hoy) {
+// Recolecta TODAS las fechas de evento que menciona el texto, desde hoy hacia
+// adelante (nunca del pasado), con la confianza según cómo viene escrita:
+//   * «mañana» / «hoy» (confianza alta);
+//   * día + mes [+ año] («21 de septiembre [de 2026]») o fecha numérica
+//     («30/11/2026») (alta/media);
+//   * día de la semana + número («el próximo viernes 18», «el martes 15») o día
+//     de la semana a secas («el lunes que viene») (media).
+// Devuelve [{ fecha, confianza, span, contexto }] ordenado por fecha. `span` es
+// el fragmento de texto que disparó la fecha y `contexto` la ventana de texto
+// que lo rodea: sirven para clasificar el tipo de evento por contexto.
+function encontrarFechasPotenciales(texto, hoy) {
   // Limpieza que conserva los separadores numéricos (/ y -): a diferencia de
   // limpiarTextoParaBusqueda (que los convierte en espacios), acá preservamos
-  // el formato "30/11/2026" para poder matchearlo.
-  const limpio = String(texto || '')
+  // el formato «30/11/2026» para poder matchearlo.
+  const limpiar = (t) => String(t || '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\bde\s+el\b/g, 'del')
-    .replace(/[^a-z0-9\-/\s]+/g, ' ')
+    .replace(/[^a-z0-9\-\/\s]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  const textoLimpio = limpiar(texto);
   const anioActual = hoy.slice(0, 4);
+  const hoyMedio = new Date(`${hoy}T12:00:00`);
+  const resultados = [];
+  const agregar = (fecha, confianza, span) => {
+    if (fecha < hoy) return; // cosas ya pasadas: nunca se sugieren.
+    if (resultados.some((r) => r.fecha === fecha)) return; // sin duplicados.
+    // Contexto = ventana de texto alrededor de la fecha mencionada (los
+    // avisos de Moodle suelen ser un párrafo largo sin oraciones separadas por
+    // punto, así que la ventana local es más fiable para clasificar el tipo).
+    const contexto = span
+      ? (() => {
+        const idx = textoLimpio.indexOf(span);
+        if (idx < 0) return textoLimpio;
+        const inicio = Math.max(0, idx - 50);
+        const fin = Math.min(textoLimpio.length, idx + span.length + 60);
+        return textoLimpio.slice(inicio, fin);
+      })()
+      : textoLimpio;
+    resultados.push({ fecha, confianza, span: span || '', contexto });
+  };
 
-  // "21 de septiembre de 2026" / "21 de septiembre"
-  const porNombre = limpio.match(/(?:el\s+)?(\d{1,2})\s+de\s+(?:del?\s+)?([a-z]+)(?:\s+de\s+(\d{4}))?/);
-  if (porNombre) {
-    const dia = porNombre[1].padStart(2, '0');
+  let trabajar = textoLimpio;
+
+  // «21 de septiembre [de 2026]» / «21 de septiembre»
+  let porNombre;
+  while ((porNombre = trabajar.match(/(?:el\s+)?(\d{1,2})\s+de\s+(?:del?\s+)?([a-z]+)(?:\s+de\s+(\d{4}))?/))) {
     const mes = MESES[porNombre[2]];
     if (mes) {
-      const anio = porNombre[3] || anioActual;
-      const fecha = `${anio}-${mes}-${dia}`;
-      if (fecha >= hoy) return [{ fecha, confianza: porNombre[3] ? 'alta' : 'media' }];
+      agregar(`${porNombre[3] || anioActual}-${mes}-${porNombre[1].padStart(2, '0')}`, porNombre[3] ? 'alta' : 'media', porNombre[0]);
     }
+    trabajar = trabajar.replace(porNombre[0], ' ');
   }
 
-  // "21/09", "21/09/2026", "21-09-2026"
-  const porNumero = limpio.match(/(\d{1,2})\s*[/-]\s*(\d{1,2})(?:\s*[/-]\s*(\d{2,4}))?/);
-  if (porNumero) {
+  // «30/11/2026» / «21-09-2026» / «21/09»
+  let porNumero;
+  while ((porNumero = trabajar.match(/(\d{1,2})\s*[/-]\s*(\d{1,2})(?:\s*[/-]\s*(\d{2,4}))?/))) {
     const dia = porNumero[1].padStart(2, '0');
     const mes = porNumero[2].padStart(2, '0');
-    const anioRaw = porNumero[3];
-    if (Number(dia) >= 1 && Number(dia) <= 31 && Number(mes) >= 1 && Number(mes) <= 12) {
-      let anio = anioRaw;
-      if (anioRaw && anioRaw.length === 2) anio = `20${anioRaw}`;
-      const fecha = `${anio || anioActual}-${mes}-${dia}`;
-      if (fecha >= hoy) return [{ fecha, confianza: anioRaw ? 'alta' : 'media' }];
+    if (Number(porNumero[1]) >= 1 && Number(porNumero[1]) <= 31 && Number(porNumero[2]) >= 1 && Number(porNumero[2]) <= 12) {
+      let anio = porNumero[3];
+      if (anio && anio.length === 2) anio = `20${anio}`;
+      agregar(`${anio || anioActual}-${mes}-${dia}`, porNumero[3] ? 'alta' : 'media', porNumero[0]);
     }
+    trabajar = trabajar.replace(porNumero[0], ' ');
   }
 
-  return [];
-}
-
-// Detecta una fecha de evento en el texto de un aviso. Prioridad: «mañana» →
-// «hoy» → fecha explícita con año → numérica → sin año → «el lunes…».
-// Devuelve { fecha, confianza } o null. Nunca devuelve fechas pasadas.
-function detectarFechaEvento(texto, hoy) {
-  const limpio = limpiarTextoParaBusqueda(texto);
-
-  if (/\b(?:manana|maniana)\b/.test(limpio)) {
-    return { fecha: sumarDias(hoy, 1), confianza: 'alta' };
+  // «el próximo viernes 18», «el martes 15 a las 20:00», «este domingo 27»: el
+  // número es el día del mes. Más preciso que solo el día de la semana cuando
+  // el texto lo incluye. Si el día ya pasó en el mes actual, se interpreta como
+  // del mes siguiente. («31 de febrero» es inválido: se descarta.)
+  let diaConNumero;
+  while ((diaConNumero = trabajar.match(/\b(?:el\s+|este\s+|proximo\s+)?(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\s+(\d{1,2})\b/))) {
+    const diaMes = Number(diaConNumero[2]);
+    if (diaMes >= 1 && diaMes <= 31) {
+      const candidato = new Date(Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)) - 1, diaMes, 12, 0, 0);
+      const valido = candidato.getDate() === diaMes;
+      if (valido && candidato.getTime() < hoyMedio.getTime()) candidato.setMonth(candidato.getMonth() + 1);
+      if (valido) {
+        agregar(
+          `${candidato.getFullYear()}-${String(candidato.getMonth() + 1).padStart(2, '0')}-${String(candidato.getDate()).padStart(2, '0')}`,
+          'media',
+          diaConNumero[0]
+        );
+      }
+    }
+    trabajar = trabajar.replace(diaConNumero[0], ' ');
   }
-  if (/\bhoy\b/.test(limpio)) {
-    return { fecha: hoy, confianza: 'alta' };
-  }
-  const explicitas = encontrarFechaExplicita(texto.replace(/\b(?:a|para|durante)\s+(?:el|la|los|las)\b/gi, ' '), hoy);
-  if (explicitas.length > 0) return explicitas[0];
 
-  const dia = limpio.match(/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
+  // «el lunes que viene»: día de la semana a secas (próxima ocurrencia). Los
+  // tramos «día + número» ya se retiraron del texto, así que no se duplica.
+  const dia = trabajar.match(/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
   if (dia) {
     const objetivo = DIAS_SEMANA[dia[1]];
-    const hoyDia = new Date(`${hoy}T12:00:00`).getDay();
+    const hoyDia = hoyMedio.getDay();
     let distancia = (objetivo - hoyDia + 7) % 7;
     if (distancia === 0) distancia = 7; // «el lunes» publicado un lunes = próximo lunes
-    return { fecha: sumarDias(hoy, distancia), confianza: 'media' };
+    agregar(sumarDias(hoy, distancia), 'media', dia[0]);
   }
-  return null;
+
+  // «mañana» / «hoy».
+  const limpio = limpiarTextoParaBusqueda(texto);
+  if (/\b(?:manana|maniana)\b/.test(limpio)) agregar(sumarDias(hoy, 1), 'alta', 'manana');
+  if (/\bhoy\b/.test(limpio)) agregar(hoy, 'alta', 'hoy');
+
+  return resultados.sort((a, b) => a.fecha.localeCompare(b.fecha));
 }
 
 // Devuelve la fecha actual en formato ISO local (YYYY-MM-DD).
@@ -286,36 +336,58 @@ function formatoLegible(fechaISO) {
 // Analiza un aviso y, si el texto anuncia un evento con fecha desde hoy en
 // adelante, devuelve la sugerencia para el cronograma. Si no hay fecha o el
 // evento ya pasó, devuelve null (el aviso igual puede aprobarse como aviso).
-export function analizarAvisoParaCronograma({ titulo, contenido, materiaNombre, hoy }) {
+// Analiza un aviso y, si su texto anuncia evento(s) con fecha desde hoy en
+// adelante, devuelve las sugerencias para el cronograma (una por fecha
+// mencionada, ordenadas de la más próxima a la más lejana; por defecto hasta 4).
+// El tipo de cada evento se clasifica según la oración que menciona la fecha
+// (p. ej. «…la entrega del TP vence el próximo viernes 18» → entrega del 18 y
+// «…el martes 15 a las 20:00 tendremos un encuentro…» → consulta del 15). Si no
+// hay fechas o son del pasado, devuelve [] (el aviso igual puede publicarse
+// como aviso en la campana).
+export function analizarAvisosParaCronograma({ titulo, contenido, materiaNombre, hoy, maxEventos = 4 }) {
   const fechaBase = hoy || hoyISO();
   const texto = `${titulo || ''} ${contenido || ''}`;
-  const fechaEvento = detectarFechaEvento(texto, fechaBase);
-  const tipoEvento = detectarTipoEvento(texto);
-  if (!fechaEvento || !tipoEvento) return null;
-  if (fechaEvento.fecha < fechaBase) return null; // fecha ya pasó: se ignora.
+  const candidatos = encontrarFechasPotenciales(texto, fechaBase)
+    .filter((c) => c.fecha >= fechaBase)
+    .slice(0, Math.max(1, Number(maxEventos) || 4));
 
-  const limpio = limpiarTexto(texto.replace(/\b(?:el|la|los|las)\b/gi, ' '));
-  const fragmento = limpio
-    .replace(/\b(?:hoy|manana|maniana|mañana)\b/gi, ' ')
-    .replace(/\b(?:a\s+las\s+\d{1,2}(?::\d{2})?\s*(?:hs\.?|horas?)?)\b/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80);
+  const eventos = [];
+  for (const candidato of candidatos) {
+    // Tipo según el contexto local de la fecha (ventana de texto alrededor de
+    // la mención), con caída al texto completo.
+    const tipoEvento = detectarTipoEvento(candidato.contexto || texto);
+    if (!tipoEvento) continue;
 
-  const tituloEvento = fragmento || limpiarTexto(titulo || 'Aviso del campus').slice(0, 80);
-  const modalidad = /\basincr[oó]nic|\ba\s+distancia\b/.test(limpiarTextoParaBusqueda(texto))
-    ? 'asincrónico'
-    : 'sincrónico';
+    const limpio = limpiarTexto((candidato.contexto || texto).replace(/\b(?:el|la|los|las)\b/gi, ' '));
+    const fragmento = limpio
+      .replace(/\b(?:hoy|manana|maniana|mañana)\b/gi, ' ')
+      .replace(/\b(?:a\s+las\s+\d{1,2}(?::\d{2})?\s*(?:hs\.?|horas?)?)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 80);
 
-  const detalles = limpiarTexto(contenido || '').slice(0, 200);
+    const tituloEvento = fragmento || limpiarTexto(titulo || 'Aviso del campus').slice(0, 80);
+    const modalidad = /\basincr[oó]nic|\ba\s+distancia\b/.test(limpiarTextoParaBusqueda(texto))
+      ? 'asincrónico'
+      : 'sincrónico';
 
-  return {
-    tipo: tipoEvento,
-    fecha: fechaEvento.fecha,
-    modalidad,
-    titulo: tituloEvento,
-    detalles: `Aviso del foro (${formatoLegible(fechaEvento.fecha)})${detalles ? ` — ${detalles}` : ''}`.slice(0, 250),
-    confianza: fechaEvento.confianza,
-    materiaNombre
-  };
+    const detalles = limpiarTexto(contenido || '').slice(0, 200);
+
+    eventos.push({
+      tipo: tipoEvento,
+      fecha: candidato.fecha,
+      modalidad,
+      titulo: tituloEvento,
+      detalles: `Aviso del foro (${formatoLegible(candidato.fecha)})${detalles ? ` — ${detalles}` : ''}`.slice(0, 250),
+      confianza: candidato.confianza,
+      materiaNombre
+    });
+  }
+  return eventos;
+}
+
+// Versión de una sola sugerencia (compatibilidad): devuelve el primer evento
+// sugerido o null.
+export function analizarAvisoParaCronograma(args) {
+  return analizarAvisosParaCronograma({ maxEventos: 1, ...args })[0] || null;
 }

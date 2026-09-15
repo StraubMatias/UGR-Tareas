@@ -8,11 +8,13 @@ import { crearCliente } from './red.mjs';
 import { extraerCursos, extraerNombreCursoDesdePagina } from './materias.mjs';
 import { extraerFechasActividad, extraerActividadesOverview } from './tareas.mjs';
 import {
-  analizarAvisoParaCronograma,
+  analizarAvisosParaCronograma,
+  DIAS_HACIA_ATRAS,
   extraerDiscusionesDeForo,
   extraerForosDelIndice,
   extraerPrimerPostDeHilo,
-  fechaHoyLocal
+  fechaHoyLocal,
+  sumarDias
 } from './avisos.mjs';
 import {
   claveTareaParaEmparejar,
@@ -219,16 +221,19 @@ export async function detectarTareasNuevas({ db, cliente }) {
   // El nombre completo está en la página del curso: lo resolvemos antes de
   // mapear contra las materias locales.
   const mapeos = [];
-  for (const curso of cursos) {
-    if (curso.nombreIncompleto) {
-      try {
-        const paginaCurso = await cliente.pedir(UGR_RUTAS.curso(curso.id));
-        const nombreCompleto = extraerNombreCursoDesdePagina(paginaCurso.html, curso.id);
-        if (nombreCompleto) curso.nombre = nombreCompleto;
-      } catch {
-        // Si falla la resolución, nos quedamos con el nombre parcial.
-      }
+  // La resolución del nombre completo es independiente por curso: se hace en
+  // paralelo (concurrencia 4) en vez de encadenar un pedido HTTP por curso.
+  await conPool(cursos, 4, async (curso) => {
+    if (!curso.nombreIncompleto) return;
+    try {
+      const paginaCurso = await cliente.pedir(UGR_RUTAS.curso(curso.id));
+      const nombreCompleto = extraerNombreCursoDesdePagina(paginaCurso.html, curso.id);
+      if (nombreCompleto) curso.nombre = nombreCompleto;
+    } catch {
+      // Si falla la resolución, nos quedamos con el nombre parcial.
     }
+  });
+  for (const curso of cursos) {
     const coincidencia = coincidirMateria(curso.nombre, materiasLocales);
     if (coincidencia) mapeos.push({ curso, coincidencia });
   }
@@ -241,14 +246,29 @@ export async function detectarTareasNuevas({ db, cliente }) {
   // Parciales ya cargados que también quedaron sin enlace (los que se cargan
   // desde el cronograma no traen URL de UGR): se completan acá mismo.
   const urlsParcialesActualizar = [];
-  for (const { curso, coincidencia } of mapeos) {
-    // Vista unificada de Moodle 4.5: /course/overview.php agrupa por tipo los
-    // módulos del curso (assigns, foros, cuestionarios, feedback, …). Se piden
-    // todos los tipos «consigna» de una sola vez y se parsean juntos; así un
-    // sync alcanza también los quizzes/formation que antes solo vivían en
-    // páginas que ni siquiera miramos (/mod/quiz/index.php, /mod/feedback/…).
-    const pagina = await cliente.pedir(UGR_RUTAS.overviewCurso(curso.id, MODULOS_CONSIGNA));
-    const tareas = extraerActividadesOverview(pagina.html, UGR_BASE_URL);
+
+  // Los overviews de todos los cursos se piden en paralelo (concurrencia 4) y el
+  // detalle de fechas se lee SOLO para las actividades que todavía no existen en
+  // la base: un sync sin novedades no encadena un pedido HTTP por tarea (ese era
+  // el motivo principal de la lentitud cuando no había nada nuevo que importar).
+  const overviews = await conPool(mapeos, 4, async ({ curso, coincidencia }) => {
+    try {
+      // Vista unificada de Moodle 4.5: /course/overview.php agrupa por tipo los
+      // módulos del curso (assigns, foros, cuestionarios, feedback, …). Se piden
+      // todos los tipos «consigna» de una sola vez y se parsean juntos; así un
+      // sync alcanza también los quizzes/formation que antes solo vivían en
+      // páginas que ni siquiera miramos (/mod/quiz/index.php, /mod/feedback/…).
+      const pagina = await cliente.pedir(UGR_RUTAS.overviewCurso(curso.id, MODULOS_CONSIGNA));
+      return { curso, coincidencia, html: pagina.html };
+    } catch {
+      return null;
+    }
+  });
+
+  for (const resultado of overviews) {
+    if (!resultado) continue;
+    const { curso, coincidencia, html } = resultado;
+    const tareas = extraerActividadesOverview(html, UGR_BASE_URL);
     const idsVistos = new Set();
     const tareasUnicas = tareas.filter((t) => {
       if (!t.id || idsVistos.has(t.id)) return false;
@@ -281,12 +301,10 @@ export async function detectarTareasNuevas({ db, cliente }) {
       args: [coincidencia.materia.id]
     });
 
+    // Solo las candidatas que todavía no existen necesitan el detalle
+    // (apertura/vencimiento): las ya importadas se resuelven sin pedidos HTTP.
+    const candidatas = [];
     for (const tarea of tareasUnicas) {
-      // La apertura no viene en el índice: se lee del detalle de la tarea.
-      const fechas = await fechasDeDetalle({ cliente, tarea });
-      const inicio = fechas.inicio || (tarea.inicio && tarea.inicio !== 'Sin fecha' ? tarea.inicio : 'Sin fecha');
-      const fin = fechas.fin || (tarea.fin && tarea.fin !== 'Sin fecha' ? tarea.fin : 'Sin fecha');
-
       const nombreFinal = normalizarNombre({ nombre: tarea.nombre, cursoNombre: curso.nombre });
       const clave = claveTareaParaEmparejar(nombreFinal);
       const existente = existentesPorClave.get(clave)
@@ -297,6 +315,19 @@ export async function detectarTareasNuevas({ db, cliente }) {
         }
         continue;
       }
+      candidatas.push({ tarea, nombreFinal });
+    }
+
+    // La apertura no viene en el índice: se lee del detalle de cada candidata,
+    // en paralelo (concurrencia 4).
+    const conFechas = await conPool(candidatas, 4, async ({ tarea, nombreFinal }) => {
+      const fechas = await fechasDeDetalle({ cliente, tarea });
+      const inicio = fechas.inicio || (tarea.inicio && tarea.inicio !== 'Sin fecha' ? tarea.inicio : 'Sin fecha');
+      const fin = fechas.fin || (tarea.fin && tarea.fin !== 'Sin fecha' ? tarea.fin : 'Sin fecha');
+      return { tarea, nombreFinal, inicio, fin };
+    });
+
+    for (const { tarea, nombreFinal, inicio, fin } of conFechas) {
       // Ya está resuelto como parcial en VistaParciales: no se ofrece como tarea
       // nueva ni se intenta insertar. Además, si ese parcial quedó sin enlace
       // (los cargados por cronograma no traen URL), aprovechamos para completarlo
@@ -409,10 +440,17 @@ export async function conPool(items, concurrency = 4, fn) {
 }
 
 // Recorre los foros de avisos de los cursos mapeados y extrae los hilos nuevos
-// publicados desde hoy hacia adelante. Devuelve { avisosDetectados,
-// eventosSugeridos }; nada se inserta acá.
-export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy }) {
+// publicados desde DIAS_HACIA_ATRAS días hacia atrás en adelante (el típico
+// aviso del jueves que anuncia un encuentro del martes siguiente entra en la
+// ventana). Devuelve { avisosDetectados, eventosSugeridos }; nada se inserta
+// acá.
+export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy, diasAtras = DIAS_HACIA_ATRAS }) {
   const fechaBase = hoy || fechaHoyLocal();
+  const diasVentana = Math.max(1, Number(diasAtras) || DIAS_HACIA_ATRAS);
+  // Los hilos publicados antes de la ventana ya fueron procesados (o no
+  // anuncian nada del día actual en adelante) y no se vuelven a proponer:
+  // avisos_moodle guarda el histórico por curso + hilo.
+  const fechaMinima = sumarDias(fechaBase, -diasVentana);
 
   const resConocidos = await db.execute('SELECT curso_id, hilo_id FROM avisos_moodle');
   const conocidos = new Set(
@@ -422,28 +460,46 @@ export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy }) {
   const avisosDetectados = [];
   const eventosSugeridos = [];
 
-  for (const { curso, coincidencia } of mapeos || []) {
-    // 1) Índice de foros del curso y filtro de los informativos (Avisos, etc.).
-    let foros = [];
+  // 1) Índice de foros de todos los cursos en paralelo (concurrencia 4) y,
+  // dentro de cada curso, las páginas de los foros «de avisos» (Avisos,
+  // Consultas, …) con la misma concurrencia. Antes se encadenaba un pedido por
+  // curso y luego otro por foro: ese ida-y-vuelta era gran parte de la lentitud.
+  const cursosConForos = await conPool(mapeos || [], 4, async ({ curso, coincidencia }) => {
     try {
       const paginaForos = await cliente.pedir(UGR_RUTAS.forosDeCurso(curso.id));
-      foros = extraerForosDelIndice(paginaForos.html, UGR_BASE_URL)
+      const foros = extraerForosDelIndice(paginaForos.html, UGR_BASE_URL)
         .filter((foro) => foro.esAvisos);
+      const conDiscusiones = await conPool(foros, 4, async (foro) => {
+        try {
+          const paginaForo = await cliente.pedir(foro.url);
+          return { foro, discusiones: extraerDiscusionesDeForo(paginaForo.html, UGR_BASE_URL) };
+        } catch {
+          return { foro, discusiones: [] };
+        }
+      });
+      return {
+        curso,
+        coincidencia,
+        foros: conDiscusiones.filter(({ discusiones }) => discusiones.length > 0)
+      };
     } catch {
-      continue;
+      return null;
     }
+  });
 
-    for (const foro of foros) {
-      // 2) Discusiones (hilos) del foro.
-      let discusiones = [];
-      try {
-        const paginaForo = await cliente.pedir(foro.url);
-        discusiones = extraerDiscusionesDeForo(paginaForo.html, UGR_BASE_URL);
-      } catch {
-        continue;
-      }
+  for (const resultado of cursosConForos) {
+    if (!resultado) continue;
+    const { curso, coincidencia, foros } = resultado;
 
-      const nuevas = discusiones.filter((d) => !conocidos.has(`${curso.id}:${d.id}`));
+    for (const { foro, discusiones } of foros) {
+      // 2) Hilos nuevos dentro de la ventana: los ya conocidos no se vuelven a
+      // proponer, y los que no se actualizaron en los últimos `diasVentana`
+      // días no se leen siquiera (evita pedir el post de hilos viejos la
+      // primera vez que corre el sync).
+      const nuevas = discusiones.filter((d) =>
+        !conocidos.has(`${curso.id}:${d.id}`)
+        && (!d.actualizado || d.actualizado >= fechaMinima)
+      );
 
       // 3) Primer post de cada hilo nuevo, en paralelo (concurrencia 4).
       const posts = await conPool(nuevas, 4, async (d) => {
@@ -459,11 +515,12 @@ export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy }) {
         const discusion = nuevas[i];
         const post = posts[i];
         if (!post) continue;
-        // Regla confirmada: solo avisos publicados desde hoy (DIAS_HACIA_ATRAS = 0).
-        if (!post.fecha || post.fecha < fechaBase) continue;
+        // Regla confirmada: solo avisos publicados dentro de la ventana (desde
+        // `fechaMinima` hacia adelante); los más viejos se descartan.
+        if (!post.fecha || post.fecha < fechaMinima) continue;
 
         const id = `aviso_${curso.id}_${discusion.id}`;
-        const analisis = analizarAvisoParaCronograma({
+        const analisis = analizarAvisosParaCronograma({
           titulo: post.titulo,
           contenido: post.contenido,
           materiaNombre: coincidencia.materia.nombre,
@@ -488,13 +545,13 @@ export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy }) {
           url: post.urlHilo || discusion.url
         });
 
-        if (analisis) {
+        for (const analizado of analisis) {
           eventosSugeridos.push({
             avisoId: id,
             avisoIdMoodle: `moodle_avisos_${curso.id}_${discusion.id}`,
             materiaId: coincidencia.materia.id,
             url: post.urlHilo || discusion.url,
-            ...analisis
+            ...analizado
           });
         }
       }
