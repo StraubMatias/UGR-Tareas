@@ -147,6 +147,11 @@ export function extraerPrimerPostDeHilo(html, baseUrl = '') {
     || post.find('a[href*="user/view.php"]').first().text()
     || post.find('.author').text()
   );
+  // Id del perfil del autor (user/view.php?id=N): permite validar el rol del
+  // autor contra su perfil cuando el autor no está en el resumen del curso.
+  const enlaceAutor = post.find('a[href*="user/view.php"]').first();
+  const matchAutorId = (enlaceAutor.attr('href') || '').match(/[?&]id=(\d+)/);
+  const autorId = matchAutorId ? matchAutorId[1] : '';
   const fechaTexto = post.find('time[datetime]').first().attr('datetime')
     || limpiarTexto(post.find('time').first().text());
   // Cubre el layout clásico de Moodle y el de Moodle 4.5+ (class
@@ -163,6 +168,7 @@ export function extraerPrimerPostDeHilo(html, baseUrl = '') {
     id,
     titulo,
     autor,
+    autorId,
     fecha: parsearFechaMoodle(fechaTexto) || null,
     contenido,
     contenidoHtml,

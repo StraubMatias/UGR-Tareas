@@ -5,6 +5,7 @@
 // el objeto `db` que cada llamador provee (libsql client o wrapper de turso).
 import { randomUUID } from 'node:crypto';
 import { crearCliente } from './red.mjs';
+import { esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
 import { extraerCursos, extraerNombreCursoDesdePagina } from './materias.mjs';
 import { extraerFechasActividad, extraerActividadesOverview } from './tareas.mjs';
 import {
@@ -464,10 +465,18 @@ export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy, diasAtras
   // dentro de cada curso, las páginas de los foros «de avisos» (Avisos,
   // Consultas, …) con la misma concurrencia. Antes se encadenaba un pedido por
   // curso y luego otro por foro: ese ida-y-vuelta era gran parte de la lentitud.
+  // En el mismo worker se baja la página del curso para identificar al equipo
+  // docente (los avisos que llegan a la campana son solo del profesorado).
   const cursosConForos = await conPool(mapeos || [], 4, async ({ curso, coincidencia }) => {
     try {
-      const paginaForos = await cliente.pedir(UGR_RUTAS.forosDeCurso(curso.id));
-      const foros = extraerForosDelIndice(paginaForos.html, UGR_BASE_URL)
+      const [paginaForos, paginaCurso] = await Promise.all([
+        cliente.pedir(UGR_RUTAS.forosDeCurso(curso.id)).catch(() => null),
+        cliente.pedir(UGR_RUTAS.curso(curso.id)).catch(() => null)
+      ]);
+      const docentes = paginaCurso
+        ? extraerDocentesDeCurso(paginaCurso.html, UGR_BASE_URL)
+        : [];
+      const foros = extraerForosDelIndice(paginaForos?.html || '', UGR_BASE_URL)
         .filter((foro) => foro.esAvisos);
       const conDiscusiones = await conPool(foros, 4, async (foro) => {
         try {
@@ -480,6 +489,7 @@ export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy, diasAtras
       return {
         curso,
         coincidencia,
+        docentes,
         foros: conDiscusiones.filter(({ discusiones }) => discusiones.length > 0)
       };
     } catch {
@@ -489,7 +499,7 @@ export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy, diasAtras
 
   for (const resultado of cursosConForos) {
     if (!resultado) continue;
-    const { curso, coincidencia, foros } = resultado;
+    const { curso, coincidencia, foros, docentes } = resultado;
 
     for (const { foro, discusiones } of foros) {
       // 2) Hilos nuevos dentro de la ventana: los ya conocidos no se vuelven a
@@ -518,6 +528,17 @@ export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy, diasAtras
         // Regla confirmada: solo avisos publicados dentro de la ventana (desde
         // `fechaMinima` hacia adelante); los más viejos se descartan.
         if (!post.fecha || post.fecha < fechaMinima) continue;
+        // Regla confirmada: solo anuncios del equipo docente. Las preguntas y
+        // comentarios de compañeros no llegan a la campana ni al cronograma.
+        const esDeDocente = await autorEsEquipoDocente({
+          autor: post.autor,
+          autorId: post.autorId,
+          cursoId: curso.id,
+          docentes,
+          cliente,
+          cache: cachePerfilDocente
+        });
+        if (!esDeDocente) continue;
 
         const id = `aviso_${curso.id}_${discusion.id}`;
         const analisis = analizarAvisosParaCronograma({

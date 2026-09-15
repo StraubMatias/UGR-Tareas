@@ -2998,7 +2998,19 @@ export default function Home() {
                                 : 'border-slate-700 bg-[#0f141c] opacity-60'
                             }`}
                           >
-                            <button type="button" onClick={() => toggleSyncAviso(aviso.id)} className="w-full text-left cursor-pointer">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              // Sin la guarda, un click en el checkbox dispara
+                              // DOS veces (el input y el botón que lo envuelve)
+                              // y el aviso vuelve a quedar tildado: por eso no
+                              // se podía destildar uno por uno y solo servía
+                              // «Destildar todo».
+                              if (e.target.tagName === 'INPUT' || e.target.tagName === 'A') return;
+                              toggleSyncAviso(aviso.id);
+                            }}
+                            className="w-full text-left cursor-pointer"
+                          >
                               <div className="flex items-start gap-3">
                                 <input
                                   type="checkbox"
