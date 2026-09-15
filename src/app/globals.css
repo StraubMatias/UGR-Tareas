@@ -278,6 +278,13 @@ textarea {
   white-space: normal;
 }
 
+.calendar-off {
+  border-color: #64748b;
+  background: rgba(100, 116, 139, 0.16);
+  color: #cbd5e1;
+  text-decoration: none;
+}
+
 .calendar-legend-dot {
   display: inline-block;
   width: 0.5rem;

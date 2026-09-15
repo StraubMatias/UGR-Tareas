@@ -1054,7 +1054,7 @@ export default function Home() {
     const eventosCronogramaDia = cronograma.filter((evento) => obtenerClaveDiaCalendario(evento.fecha) === claveDia);
     const materiasSinCursadaDia = new Set(
       eventosCronogramaDia
-        .filter((evento) => evento.modalidad !== 'sincrónico')
+        .filter((evento) => evento.modalidad !== 'sincrónico' || evento.tipo === 'sin_clases')
         .map((evento) => evento.materia_id)
     );
 

@@ -94,7 +94,23 @@ export default function VistaHorarios({
                         </span>
                       )}
                     </div>
-                    {cantidadEventos > 0 && <div className="mt-2 space-y-1.5">
+                    {cantidadEventos > 0 && (() => {
+                      const esSoloSinClases = eventos.horarios.length === 0
+                        && eventos.parciales.length === 0
+                        && eventos.tareas.length === 0
+                        && eventos.cronograma.length > 0
+                        && eventos.cronograma.every((evento) => evento.tipo === 'sin_clases' || evento.modalidad === 'sin_clases');
+                      if (esSoloSinClases) {
+                        return (
+                          <div className="mt-2 space-y-1.5">
+                            <div className="calendar-event calendar-off">
+                              <span className="font-bold">Sin clases</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="mt-2 space-y-1.5">
                       {eventos.horarios.map((horario) => {
                         const materia = materias.find((item) => item.id === horario.materia_id);
                         return (
@@ -120,16 +136,44 @@ export default function VistaHorarios({
                       {eventos.cronograma.map((evento) => {
                         const materia = materias.find((item) => item.id === evento.materia_id);
                         const esAsincronico = evento.modalidad === 'asincrónico';
-                        const esSinClases = evento.modalidad === 'sin_clases';
-                        const diaSemana = obtenerDiaSemanaHorario(new Date(`${evento.fecha}T00:00:00`));
-                        const horarioMateria = horarios.find((h) => h.materia_id === evento.materia_id && Number(h.dia) === diaSemana);
+                        const esSinClases = evento.tipo === 'sin_clases' || evento.modalidad === 'sin_clases';
+                        const esExamen = evento.tipo === 'examen';
+                        const esEntrega = evento.tipo === 'entrega';
+                        const esExposicion = evento.tipo === 'exposición';
+                        const esConsulta = evento.tipo === 'consulta';
+                        const etiqueta = esSinClases
+                          ? 'Sin clases'
+                          : esAsincronico
+                            ? esEntrega
+                              ? 'Entrega asínc.'
+                              : esExposicion
+                                ? 'Exposición asínc.'
+                                : esConsulta
+                                  ? 'Consulta asínc.'
+                                  : 'Asincrónica'
+                            : esExamen
+                              ? 'Examen'
+                              : esEntrega
+                                ? 'Entrega'
+                                : esExposicion
+                                  ? 'Exposición'
+                                  : esConsulta
+                                    ? 'Consulta'
+                                    : 'Clase';
                         return (
-                          <div key={evento.id} className={`calendar-event ${esAsincronico ? 'calendar-async' : 'calendar-academic'}`} title={`${evento.titulo} · ${materia?.nombre || 'Materia'}`}>
-                            <span className="font-bold">{esAsincronico ? 'Asíncrono' : esSinClases ? 'Sin clases' : 'Clase'}</span> {esAsincronico ? (horarioMateria ? `${horarioMateria.hora_inicio} - ${horarioMateria.hora_fin}` : '') : esSinClases ? 'Sin clases' : evento.titulo}
+                          <div
+                            key={evento.id}
+                            className={`calendar-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : esExamen ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}
+                            title={`${evento.titulo} · ${materia?.nombre || 'Materia'}`}
+                          >
+                            <span className="font-bold">{etiqueta}</span>
+                            {!esSinClases && <span className="block truncate opacity-90">{evento.titulo}</span>}
                           </div>
                         );
                       })}
-                    </div>}
+                        </div>
+                      );
+                    })()}
                   </button>
                 );
               })}
@@ -140,6 +184,7 @@ export default function VistaHorarios({
               <span><i className="calendar-legend-dot bg-amber-400" /> Entrega</span>
               <span><i className="calendar-legend-dot bg-emerald-400" /> Cronograma</span>
               <span><i className="calendar-legend-dot bg-orange-400" /> Asincrónico</span>
+              <span><i className="calendar-legend-dot bg-slate-500" /> Sin clases</span>
             </div>
           </div>
         )}
@@ -174,9 +219,32 @@ export default function VistaHorarios({
               </div>
 
               {eventos.horarios.length === 0 && eventos.parciales.length === 0 && eventos.tareas.length === 0 && eventos.cronograma.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-400">No hay eventos programados para este día.</p>
+                <p className="py-8 text-center text-sm font-semibold text-slate-400">No hay clases este día.</p>
               ) : (
                 <div className="mt-5 space-y-3">
+                  {(() => {
+                    const eventosSinClases = eventos.cronograma.filter((evento) => evento.tipo === 'sin_clases' || evento.modalidad === 'sin_clases');
+                    const hayActividades = eventos.horarios.length > 0
+                      || eventos.parciales.length > 0
+                      || eventos.tareas.length > 0
+                      || eventos.cronograma.some((evento) => evento.tipo !== 'sin_clases' && evento.modalidad !== 'sin_clases');
+                    if (eventosSinClases.length > 0 && !hayActividades) {
+                      return (
+                        <div className="calendar-modal-event calendar-off">
+                          <p className="text-sm font-extrabold">Hoy no hay clases</p>
+                          <p className="mt-1 text-sm opacity-85">
+                            {eventosSinClases.map((evento) => etiquetaMateria(materias.find((m) => m.id === evento.materia_id)?.nombre || 'Materia')).filter((nombre, indice, lista) => lista.indexOf(nombre) === indice).join(' · ')}
+                          </p>
+                          {eventosSinClases.some((evento) => evento.detalles) && (
+                            <p className="mt-2 text-sm opacity-85">
+                              {[...new Set(eventosSinClases.map((evento) => evento.detalles).filter(Boolean))].join(' ')}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                   {eventos.horarios.map((horario) => {
                     const materia = materias.find((item) => item.id === horario.materia_id);
                     return (
@@ -207,15 +275,36 @@ export default function VistaHorarios({
                   {eventos.cronograma.map((evento) => {
                     const materia = materias.find((item) => item.id === evento.materia_id);
                     const esAsincronico = evento.modalidad === 'asincrónico';
-                    const esSinClases = evento.modalidad === 'sin_clases';
-                    const diaSemana = obtenerDiaSemanaHorario(new Date(`${evento.fecha}T00:00:00`));
-                    const horarioMateria = horarios.find((h) => h.materia_id === evento.materia_id && Number(h.dia) === diaSemana);
+                    const esSinClases = evento.tipo === 'sin_clases' || evento.modalidad === 'sin_clases';
+                    const esExamen = evento.tipo === 'examen';
+                    const esEntrega = evento.tipo === 'entrega';
+                    const esExposicion = evento.tipo === 'exposición';
+                    const esConsulta = evento.tipo === 'consulta';
+                    const etiqueta = esSinClases
+                      ? 'No hay clases'
+                      : esAsincronico
+                        ? esEntrega
+                          ? 'Entrega asincrónica'
+                          : esExposicion
+                            ? 'Exposición asincrónica'
+                            : esConsulta
+                              ? 'Consulta asincrónica'
+                              : 'Clase asincrónica'
+                        : esExamen
+                          ? 'Examen'
+                          : esEntrega
+                            ? 'Entrega'
+                            : esExposicion
+                              ? 'Exposición'
+                              : esConsulta
+                                ? 'Consulta'
+                                : 'Clase';
                     return (
-                      <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esAsincronico ? 'calendar-async' : 'calendar-academic'}`}>
-                        <p className="text-sm font-extrabold">{esAsincronico ? 'Clase asincrónica' : esSinClases ? 'Sin clases' : 'Cronograma'} · {esAsincronico ? (horarioMateria ? `${horarioMateria.hora_inicio} - ${horarioMateria.hora_fin}` : '') : esSinClases ? 'Sin clases' : evento.titulo}</p>
+                      <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : esExamen ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}>
+                        <p className="text-sm font-extrabold">{etiqueta}</p>
                         <p className="mt-1 text-sm">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
-                        {esAsincronico && evento.titulo && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
-                        {esSinClases && evento.titulo && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
+                        {!esSinClases && evento.titulo && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
+                        {esSinClases && evento.titulo && evento.titulo.toLowerCase() !== 'sin clases' && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
                         {evento.detalles && <p className="mt-2 text-sm opacity-85">{evento.detalles}</p>}
                       </div>
                     );
