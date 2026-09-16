@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   analizarAvisoParaCronograma,
+  analizarAvisosParaCronograma,
   DIAS_HACIA_ATRAS,
   esForoDeAvisos,
   extraerDiscusionesDeForo,
@@ -150,6 +151,81 @@ test('la ventana de avisos mira 7 días hacia atrás', () => {
     hoy: HOY
   });
   assert.equal(pasado, null);
+});
+
+test('un aviso de cancelación genera «sin clases» hoy y la clase corrida mañana', () => {
+  const eventos = analizarAvisosParaCronograma({
+    titulo: 'Encuentro Sincrónico de hoy y mañana',
+    contenido: 'Estimados alumnos los saludo y les comunico que hoy no tendremos encuentro sincrónico debido a los exámenes finales de esta y otras materias. Si mañana tienen disponibilidad desde las 20:30 Hs estaré disponbiles para dictar el primer encuentro de los jueves.',
+    materiaNombre: 'GESTIÓN DE ACTIVOS',
+    hoy: '2026-09-16'
+  });
+
+  assert.equal(eventos.length, 2);
+  const [miercoles, jueves] = eventos;
+
+  assert.equal(miercoles.tipo, 'sin_clases');
+  assert.equal(miercoles.fecha, '2026-09-16');
+  assert.equal(miercoles.confianza, 'alta');
+  assert.equal(miercoles.titulo, 'Sin clases');
+
+  assert.equal(jueves.tipo, 'clase');
+  assert.equal(jueves.fecha, '2026-09-17');
+  assert.equal(jueves.confianza, 'alta');
+  assert.ok(jueves.titulo.includes('20:30'), `la hora debería estar en el título: «${jueves.titulo}»`);
+  assert.match(jueves.titulo, /jueves/i);
+});
+
+test('las variantes de cancelación se clasifican como sin_clases', () => {
+  const analizar = (titulo, contenido) => analizarAvisoParaCronograma({
+    titulo,
+    contenido,
+    materiaNombre: 'X',
+    hoy: HOY
+  });
+
+  // «no hay clases».
+  const noHay = analizar('Aviso', 'El miércoles no hay clases por el paro de colectivos.');
+  assert.equal(noHay.tipo, 'sin_clases');
+  assert.equal(noHay.fecha, '2026-09-16');
+
+  // «…se cancela». El día de la semana gana sobre la mención «por viaje».
+  const cancela = analizar('Aviso 2', 'La clase del viernes 18 se cancela por viaje.');
+  assert.equal(cancela.tipo, 'sin_clases');
+  assert.equal(cancela.fecha, '2026-09-18');
+
+  // «…suspendidas».
+  const suspendidas = analizar('Aviso 3', 'Clases suspendidas el jueves por asamblea.');
+  assert.equal(suspendidas.tipo, 'sin_clases');
+  assert.equal(suspendidas.fecha, '2026-09-17');
+
+  // Una cancelación domina aunque la razón mencione exámenes.
+  const conExamenes = analizar('Encuentro de hoy', 'Hoy no tendremos encuentro sincrónico por los exámenes finales.');
+  assert.equal(conExamenes.tipo, 'sin_clases');
+  assert.equal(conExamenes.fecha, HOY);
+});
+
+test('la hora mencionada con la fecha se refleja en el título del evento', () => {
+  const consulta = analizarAvisoParaCronograma({
+    titulo: 'Clase de consulta',
+    contenido: 'Mañana a las 18 h tenemos clase de consulta por Zoom.',
+    materiaNombre: 'X',
+    hoy: HOY
+  });
+  assert.equal(consulta.tipo, 'consulta');
+  assert.equal(consulta.fecha, '2026-09-16');
+  assert.ok(consulta.titulo.includes('18:00'), `titulo: «${consulta.titulo}»`);
+
+  const clase = analizarAvisoParaCronograma({
+    titulo: 'Encuentro',
+    contenido: 'El jueves a las 20:30 tendremos el primer encuentro de los jueves.',
+    materiaNombre: 'X',
+    hoy: '2026-09-16'
+  });
+  assert.equal(clase.tipo, 'clase');
+  assert.equal(clase.fecha, '2026-09-17'); // jueves siguiente al miércoles 16
+  assert.ok(clase.titulo.includes('20:30'), `titulo: «${clase.titulo}»`);
+  assert.match(clase.titulo, /jueves/i);
 });
 
 test('conPool corre en paralelo y mantiene el orden', async () => {

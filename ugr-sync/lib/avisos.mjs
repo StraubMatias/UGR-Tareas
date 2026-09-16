@@ -210,7 +210,7 @@ export function sumarDias(fechaISO, cantidad) {
 // Devuelve [{ fecha, confianza, span, contexto }] ordenado por fecha. `span` es
 // el fragmento de texto que disparó la fecha y `contexto` la ventana de texto
 // que lo rodea: sirven para clasificar el tipo de evento por contexto.
-function encontrarFechasPotenciales(texto, hoy) {
+export function encontrarFechasPotenciales(texto, hoy, textoTitulo) {
   // Limpieza que conserva los separadores numéricos (/ y -): a diferencia de
   // limpiarTextoParaBusqueda (que los convierte en espacios), acá preservamos
   // el formato «30/11/2026» para poder matchearlo.
@@ -223,6 +223,16 @@ function encontrarFechasPotenciales(texto, hoy) {
     .replace(/\s+/g, ' ')
     .trim();
   const textoLimpio = limpiar(texto);
+  // El contexto de una fecha no debe estirarse hasta el TÍTULO del hilo (va
+  // pegado al final del texto analizado y solo ensucia la clasificación).
+  let limiteContexto = textoLimpio.length;
+  if (String(textoTitulo || '').trim()) {
+    const tituloLimpio = limpiar(textoTitulo);
+    if (tituloLimpio) {
+      const indiceTitulo = textoLimpio.lastIndexOf(tituloLimpio);
+      if (indiceTitulo >= 0) limiteContexto = indiceTitulo;
+    }
+  }
   const anioActual = hoy.slice(0, 4);
   const hoyMedio = new Date(`${hoy}T12:00:00`);
   const resultados = [];
@@ -232,12 +242,16 @@ function encontrarFechasPotenciales(texto, hoy) {
     // Contexto = ventana de texto alrededor de la fecha mencionada (los
     // avisos de Moodle suelen ser un párrafo largo sin oraciones separadas por
     // punto, así que la ventana local es más fiable para clasificar el tipo).
+    // La ventana se estira hacia ADELANTE (lo suele seguir el verbo de lo que
+    // va a pasar: «…mañana tienen disponibilidad desde las 20:30…») y apenas
+    // hacia atrás, para que menciones previas sin relación («…debido a los
+    // exámenes finales…») no contaminen la clasificación.
     const contexto = span
       ? (() => {
         const idx = textoLimpio.indexOf(span);
         if (idx < 0) return textoLimpio;
-        const inicio = Math.max(0, idx - 50);
-        const fin = Math.min(textoLimpio.length, idx + span.length + 60);
+        const inicio = Math.max(0, idx - 30);
+        const fin = Math.min(limiteContexto, idx + span.length + 120);
         return textoLimpio.slice(inicio, fin);
       })()
       : textoLimpio;
@@ -245,6 +259,14 @@ function encontrarFechasPotenciales(texto, hoy) {
   };
 
   let trabajar = textoLimpio;
+
+  // «mañana» / «hoy»: alta confianza. Se procesan ANTES que el día de la
+  // semana a secas para que «mañana jueves…» gane la fecha exacta (hoy + 1)
+  // con su confianza alta, y el «jueves» del final quede descartado como
+  // duplicado en vez de robarle el evento (que quedaría con confianza media).
+  const limpio = limpiarTextoParaBusqueda(texto);
+  if (/\b(?:manana|maniana)\b/.test(limpio)) agregar(sumarDias(hoy, 1), 'alta', 'manana');
+  if (/\bhoy\b/.test(limpio)) agregar(hoy, 'alta', 'hoy');
 
   // «21 de septiembre [de 2026]» / «21 de septiembre»
   let porNombre;
@@ -302,11 +324,6 @@ function encontrarFechasPotenciales(texto, hoy) {
     agregar(sumarDias(hoy, distancia), 'media', dia[0]);
   }
 
-  // «mañana» / «hoy».
-  const limpio = limpiarTextoParaBusqueda(texto);
-  if (/\b(?:manana|maniana)\b/.test(limpio)) agregar(sumarDias(hoy, 1), 'alta', 'manana');
-  if (/\bhoy\b/.test(limpio)) agregar(hoy, 'alta', 'hoy');
-
   return resultados.sort((a, b) => a.fecha.localeCompare(b.fecha));
 }
 
@@ -315,12 +332,24 @@ export function fechaHoyLocal() {
   return hoyISO();
 }
 const TIPOS_EVENTO = [
-  // Orden de prioridad: lo específico antes que lo genérico.
+  // Orden de prioridad: una cancelación explícita domina al resto — el contexto
+  // «hoy no tendremos encuentro sincrónico… debido a los exámenes finales»
+  // DESCANSA la clase aunque mencione la razón («exámenes»), así que sin_clases
+  // va primero. Después lo específico antes que lo genérico.
+  { tipo: 'sin_clases', patrones: [
+    /sin\s+clases/,
+    /no\s+hay\s+clases?/,
+    /no\s+habr[áa]\s+clases?/,
+    /no\s+(?:tendr(?:e|é)mos|tendr[áa]|habr[áa]|hay|vamos\s+a\s+tener)\s+(?:encuentro|clases?|cursada)/,
+    /(?:encuentro|clase|clases|cursada)\s+(?:suspendid[oa]s?|cancelad[oa]s?)/,
+    /(?:clase|clases|encuentro|cursada)[^.]{0,40}\bse\s+(?:cancela|cancel[oa]n?)/,
+    /s[eu]\s+(?:cancela|cancel[oa]n?)\s+(?:el\s+|la\s+)?(?:encuentro|clases?|cursada)/,
+    /(?:clases?|encuentros?)\s+cancelad[oa]s?/
+  ] },
   { tipo: 'examen', patrones: [/parcial/, /examen/, /parcialito/, /recuperatorio/, /final\b/, /coloquio/, /integrador/] },
-  { tipo: 'entrega', patrones: [/entrega/, /entregar/, /vencimiento/, /present[ao]\s+(?:del?\s+)?(?:tp|trabajo)/] },
+  { tipo: 'entrega', patrones: [/entrega/, /entregar/, /vencimiento/, /present[ao]\s+(?:del?|tp|trabajo)/] },
   { tipo: 'consulta', patrones: [/consulta/] },
   { tipo: 'exposición', patrones: [/exposici[oó]n/, /presentaci[oó]n/] },
-  { tipo: 'sin_clases', patrones: [/sin\s+clases/, /no\s+hay\s+clases/, /no\s+habr[áa]\s+clases/] },
   { tipo: 'clase', patrones: [/clase/, /encuentro/, /zoom/, /meet/] }
 ];
 
@@ -330,6 +359,43 @@ function detectarTipoEvento(texto) {
     if (regla.patrones.some((patron) => patron.test(limpio))) return regla.tipo;
   }
   return null;
+}
+
+// Extrae la hora «HH:MM» del fragmento que menciona la fecha («a las 20:30»,
+// «desde las 20,30 Hs», «a las 18 h»). Devuelve '' si no hay una hora válida.
+function extraerHora(texto) {
+  const limpio = limpiarTextoParaBusqueda(texto);
+  const coincidencia = limpio.match(/(?:a\s+)?las\s+(\d{1,2})\s*(?::?(\d{2}))?\s*(?:hs?\.?|horas?)?\b/)
+    || limpio.match(/\b(\d{1,2})[:.](\d{2})\s*(?:hs?\.?|horas?)?\b/);
+  if (!coincidencia) return '';
+  const horas = Number(coincidencia[1]);
+  const minutos = coincidencia[2] === undefined ? 0 : Number(coincidencia[2]);
+  if (!Number.isInteger(horas) || horas > 23 || !Number.isInteger(minutos) || minutos > 59) return '';
+  return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+}
+
+function capitalizar(texto) {
+  const limpio = String(texto || '').trim();
+  return limpio ? limpio.charAt(0).toUpperCase() + limpio.slice(1) : limpio;
+}
+
+// Arma el título del evento sugerido: legible en vez del recorte crudo del
+// texto. «Sin clases» cuando el aviso cancela, y la frase del encuentro («el
+// primer encuentro de los jueves») cuando el aviso anuncia una clase. A
+// cualquiera de las dos se le agrega la hora si el texto la menciona.
+function construirTituloEvento(tipoEvento, contexto, fragmento, tituloAviso) {
+  const conHora = (titulo) => {
+    const hora = extraerHora(contexto);
+    return hora ? `${titulo} · ${hora}` : titulo;
+  };
+  if (tipoEvento === 'sin_clases') return 'Sin clases';
+  if (tipoEvento === 'clase') {
+    const frase = limpiarTextoParaBusqueda(contexto).match(
+      /(?:el\s+|un\s+)?(?:primer|proximo)\s+(?:encuentro|clase)(?:\s+de\s+(?:los\s+)?(lunes|martes|miercoles|jueves|viernes|sabado|domingo))?/
+    );
+    if (frase) return conHora(capitalizar(frase[0]));
+  }
+  return conHora(capitalizar(fragmento || tituloAviso));
 }
 
 function formatoLegible(fechaISO) {
@@ -352,27 +418,48 @@ function formatoLegible(fechaISO) {
 // como aviso en la campana).
 export function analizarAvisosParaCronograma({ titulo, contenido, materiaNombre, hoy, maxEventos = 4 }) {
   const fechaBase = hoy || hoyISO();
-  const texto = `${titulo || ''} ${contenido || ''}`;
-  const candidatos = encontrarFechasPotenciales(texto, fechaBase)
+  // El contenido primero: las palabras ancla («hoy», «mañana», días de la
+  // semana) del título del hilo no deben secuestrar el contexto — el título
+  // «Encuentro Sincrónico de hoy y mañana» menciona fechas sin aclarar nada.
+  const texto = `${contenido || ''} ${titulo || ''}`;
+  const candidatos = encontrarFechasPotenciales(texto, fechaBase, titulo)
     .filter((c) => c.fecha >= fechaBase)
     .slice(0, Math.max(1, Number(maxEventos) || 4));
 
   const eventos = [];
   for (const candidato of candidatos) {
     // Tipo según el contexto local de la fecha (ventana de texto alrededor de
-    // la mención), con caída al texto completo.
-    const tipoEvento = detectarTipoEvento(candidato.contexto || texto);
+    // la mención). Si esa ventana no alcanza a decir si es examen, entrega,
+    // consulta, etc., se consulta el contenido completo (sin el título, que va
+    // pegado al final del texto analizado y solo ensucia la clasificación).
+    // Después, el respaldo del título del hilo: si el contexto solo sugiere
+    // «clase» (genérico) pero el título anuncia algo más específico («Clase de
+    // consulta» → consulta), se usa el del título. Una cancelación explícita
+    // (sin_clases) siempre se respeta.
+    const contexto = candidato.contexto || texto;
+    let tipoEvento = detectarTipoEvento(contexto);
+    const cayoAlContenido = !tipoEvento;
+    if (!tipoEvento) tipoEvento = detectarTipoEvento(contenido || '');
+    const tipoTitulo = detectarTipoEvento(titulo || '');
+    if ((!tipoEvento || tipoEvento === 'clase') && tipoTitulo && tipoTitulo !== 'clase') {
+      tipoEvento = tipoTitulo;
+    }
     if (!tipoEvento) continue;
 
-    const limpio = limpiarTexto((candidato.contexto || texto).replace(/\b(?:el|la|los|las)\b/gi, ' '));
+    const fuente = cayoAlContenido ? (contenido || titulo || '') : contexto;
+
+    const limpio = limpiarTexto(fuente.replace(/\b(?:el|la|los|las)\b/gi, ' '));
     const fragmento = limpio
       .replace(/\b(?:hoy|manana|maniana|mañana)\b/gi, ' ')
-      .replace(/\b(?:a\s+las\s+\d{1,2}(?::\d{2})?\s*(?:hs\.?|horas?)?)\b/gi, ' ')
+      .replace(/\b(?:a\s+las\s+\d{1,2}(?::\d{2})?\s*(?:hs?\.?|horas?)?)\b/gi, ' ')
+      .replace(/[,;:]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
+      // Relleno encabalgado que no aporta al título («si tienen…», «se estará»).
+      .replace(/^(?:(?:si|sí|que|q|para|tenemos|hay|se|un|una|desde|estar[aá]n|estar[eé]|ser[aá]|tendremos|habr[aá]|van|vamos|en)\s+)+/gi, '')
       .slice(0, 80);
 
-    const tituloEvento = fragmento || limpiarTexto(titulo || 'Aviso del campus').slice(0, 80);
+    const tituloEvento = construirTituloEvento(tipoEvento, fuente, fragmento, limpiarTexto(titulo || 'Aviso del campus'));
     const modalidad = /\basincr[oó]nic|\ba\s+distancia\b/.test(limpiarTextoParaBusqueda(texto))
       ? 'asincrónico'
       : 'sincrónico';
