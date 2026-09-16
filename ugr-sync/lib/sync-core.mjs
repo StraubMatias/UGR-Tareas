@@ -5,7 +5,7 @@
 // el objeto `db` que cada llamador provee (libsql client o wrapper de turso).
 import { randomUUID } from 'node:crypto';
 import { crearCliente } from './red.mjs';
-import { esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
+import { autorEsEquipoDocente, esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
 import { extraerCursos, extraerNombreCursoDesdePagina } from './materias.mjs';
 import { extraerFechasActividad, extraerActividadesOverview } from './tareas.mjs';
 import {
@@ -460,6 +460,10 @@ export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy, diasAtras
 
   const avisosDetectados = [];
   const eventosSugeridos = [];
+  // Cache de la comprobación «¿el autor es del equipo docente?» por
+  // (curso, autorId): evita volver a pedir el perfil de un mismo autor en
+  // varios hilos detectados en el mismo sync.
+  const cachePerfilDocente = new Map();
 
   // 1) Índice de foros de todos los cursos en paralelo (concurrencia 4) y,
   // dentro de cada curso, las páginas de los foros «de avisos» (Avisos,

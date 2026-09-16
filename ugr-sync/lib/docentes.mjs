@@ -4,6 +4,7 @@
 // resumen de la página del curso (extraerDocentesDeCurso) o si el rol de su
 // perfil en el curso lo acredita (esEquipoDocente).
 import { load } from 'cheerio';
+import { UGR_BASE_URL } from './constantes.mjs';
 import { limpiarTextoParaBusqueda } from './normalizar.mjs';
 
 // Roles docentes tal como los renderiza UGR Virtual en el perfil del usuario
@@ -78,4 +79,44 @@ export function esEquipoDocente(html) {
   if (PATRONES_ROL_DOCENTE.some((p) => p.test(roles))) return true;
   if (PATRONES_ROL_ALUMNO.some((p) => p.test(roles))) return false;
   return null; // roles sin clasificar (p. ej. solo «Invitado» con contexto raro).
+}
+
+// ¿El autor de un hilo de un foro de avisos pertenece al equipo docente del
+// curso? Se intenta en dos vías, en orden:
+//   1) aparece en el resumen de la página del curso (extraerDocentesDeCurso),
+//      por su id de perfil (user/view.php?id=…) o por su nombre;
+//   2) el bloque «Roles» de su perfil en el curso lo acredita
+//      (/user/view.php?id=ID&course=ID, ver esEquipoDocente).
+// Devuelve true/false. Si no se puede afirmar nada (no está en el resumen, su
+// perfil no trae el bloque «Roles» o el perfil es inaccesible) devuelve true:
+// el sync SOLO propone avisos 'pendiente' y la publicación la decide el admin
+// en el modal, así que perder un anuncio legítimo del profesorado sería peor
+// que una propuesta dudosa que se puede rechazar. `cache` es un Map clave
+// `${cursoId}:${autorId}` que evita re-pedir el perfil de un mismo autor
+// (varios hilos en un mismo sync).
+export async function autorEsEquipoDocente({ autor, autorId, cursoId, docentes, cliente, cache }) {
+  const nombreAutor = normalizarNombrePersona(autor);
+  const coincideConResumen = (docentes || []).some((d) => {
+    if (autorId && d.userId && String(d.userId) === String(autorId)) return true;
+    return Boolean(d.nombre && normalizarNombrePersona(d.nombre) === nombreAutor);
+  });
+  if (coincideConResumen) return true;
+
+  // Sin perfil identificable no queda más que permitir (ver regla de arriba).
+  if (!autorId) return true;
+
+  const clave = `${cursoId}:${autorId}`;
+  if (cache?.has(clave)) return cache.get(clave);
+
+  let resultado = true;
+  try {
+    const pagina = await cliente.pedir(`/user/view.php?id=${autorId}&course=${cursoId}`);
+    const decision = esEquipoDocente(String(pagina?.html || ''));
+    if (decision !== null) resultado = decision;
+  } catch {
+    // Perfil inaccesible: se mantiene el default inclusivo (true).
+  }
+
+  cache?.set(clave, resultado);
+  return resultado;
 }
