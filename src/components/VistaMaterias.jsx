@@ -159,6 +159,28 @@ export default function VistaMaterias({
                                 {tareaFaltaNota(t, usuarioActual) ? 'Entregada · falta nota' : 'Tarea con nota'}
                               </span>
                             )}
+
+                            {t.grupal && (
+                              <span
+                                className={`text-xs px-3 py-1 rounded-md border inline-flex items-center gap-1.5 font-semibold ${
+                                  t.grupos?.some((g) => g.integrantes?.includes(usuarioActual))
+                                    ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                }`}
+                              >
+                                <span>👥</span>
+                                <span>
+                                  {t.grupos?.find((g) => g.integrantes?.includes(usuarioActual))
+                                    ? `Grupo: ${t.grupos.find((g) => g.integrantes?.includes(usuarioActual)).nombre}`
+                                    : 'Grupal · sin grupo'}
+                                </span>
+                                {Number(t.cupo_maximo) > 0 && (
+                                  <span className="text-[10px] opacity-75 font-normal">
+                                    (máx. {t.cupo_maximo})
+                                  </span>
+                                )}
+                              </span>
+                            )}
     
                             {esAdmin && (
                               <div className="flex gap-1.5 ml-auto sm:ml-2">
@@ -178,7 +200,15 @@ export default function VistaMaterias({
                             )}
                           </div>
     
-                          {t.grupal && <GrupoTarea tarea={t} usuarioActual={usuarioActual} recargar={recargar} />}
+                          {t.grupal && (
+                            <GrupoTarea
+                              tarea={t}
+                              usuarioActual={usuarioActual}
+                              recargar={recargar}
+                              esAdmin={esAdmin}
+                              alumnos={alumnos}
+                            />
+                          )}
                           <div className="bg-[#161c26] border border-slate-800 rounded-xl p-4">
                             <span className="text-xs font-semibold text-slate-400 block mb-1">
                               📄 Detalle / Consigna:

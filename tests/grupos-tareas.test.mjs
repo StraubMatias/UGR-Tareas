@@ -100,3 +100,41 @@ test('cupo máximo de integrantes por grupo', async (t) => {
   // Intento de unirse a un grupo lleno:
   await assert.rejects(asignarGrupo(db, 't', 'c', { grupoId }), /cupo máximo/);
 });
+test('múltiples grupos independientes para una misma tarea', async (t) => {
+  const db = await preparar(t);
+  const { grupoId: g1 } = await asignarGrupo(db, 't', 'a', { nombre: 'Grupo Alpha' });
+  const { grupoId: g2 } = await asignarGrupo(db, 't', 'b', { nombre: 'Grupo Beta' });
+  assert.notEqual(g1, g2);
+
+  await actualizarProgresoTarea(db, 't', ana, { nota: '10' });
+  await actualizarProgresoTarea(db, 't', beto, { nota: '7' });
+
+  const notas = (await db.execute('SELECT alumno, nota FROM notas_tareas ORDER BY alumno')).rows;
+  assert.deepEqual(notas, [
+    { alumno: 'Ana', nota: '10' },
+    { alumno: 'Beto', nota: '7' }
+  ]);
+});
+
+test('administrador: reasignar alumno entre grupos y eliminar grupo', async (t) => {
+  const db = await preparar(t);
+  const { grupoId: g1 } = await asignarGrupo(db, 't', 'a', { nombre: 'Grupo 1' });
+  const { grupoId: g2 } = await asignarGrupo(db, 't', 'b', { nombre: 'Grupo 2' });
+
+  // Beto se mueve directamente a Grupo 1 mediante el admin (permitirMover: true)
+  await asignarGrupo(db, 't', 'b', { grupoId: g1, permitirMover: true });
+  const miembrosG1 = (await db.execute({ sql: 'SELECT alumno_id FROM integrantes_tareas WHERE grupo_id = ? ORDER BY alumno_id', args: [g1] })).rows;
+  assert.deepEqual(miembrosG1.map((m) => m.alumno_id), ['a', 'b']);
+
+  // Grupo 2 quedó vacío y debe haberse eliminado automáticamente
+  const existeG2 = (await db.execute({ sql: 'SELECT 1 FROM grupos_tareas WHERE id = ?', args: [g2] })).rows;
+  assert.equal(existeG2.length, 0);
+
+  // Admin elimina el Grupo 1 directamente
+  await asignarGrupo(db, 't', null, { eliminarGrupoId: g1 });
+  const grupos = (await db.execute('SELECT * FROM grupos_tareas')).rows;
+  assert.equal(grupos.length, 0);
+  const integrantes = (await db.execute('SELECT * FROM integrantes_tareas')).rows;
+  assert.equal(integrantes.length, 0);
+});
+

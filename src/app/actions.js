@@ -1497,16 +1497,48 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
   }
 }
 
-export async function gestionarGrupoTareaAction({ tareaId, nombre, grupoId, salir = false }) {
+export async function gestionarGrupoTareaAction({ tareaId, nombre, grupoId, salir = false, alumnoNombre, eliminarGrupoId }) {
   try {
     const usuario = await obtenerUsuarioSesion();
     if (!usuario) return { exito: false, mensaje: 'Debés iniciar sesión.' };
     const limite = await verificarRateLimitEscritura(usuario);
     if (!limite.exito) return limite;
-    const alumno = await obtenerAlumno(usuario);
+
+    const esAdmin = await verificarAdmin();
+
+    if (eliminarGrupoId) {
+      if (!esAdmin) return { exito: false, mensaje: 'Solo el administrador puede eliminar grupos.' };
+      await asignarGrupo(db, tareaId, null, { eliminarGrupoId });
+      await registrarAuditoria({
+        accion: 'grupo_tarea_eliminar',
+        usuario,
+        detalle: `Eliminó el grupo ${eliminarGrupoId} de la tarea ${tareaId}`,
+        ip: await obtenerIPReal()
+      });
+      return { exito: true };
+    }
+
+    const nombreAlumnoObjetivo = (esAdmin && alumnoNombre) ? alumnoNombre.trim() : usuario;
+    if (!esAdmin && alumnoNombre && alumnoNombre.trim().toLowerCase() !== usuario.toLowerCase()) {
+      return { exito: false, mensaje: 'Solo el administrador puede gestionar los grupos de otros compañeros.' };
+    }
+
+    const alumno = await obtenerAlumno(nombreAlumnoObjetivo);
     if (!alumno) return { exito: false, mensaje: 'El alumno no existe.' };
-    await asignarGrupo(db, tareaId, alumno.id, { nombre, grupoId, salir });
-    await registrarAuditoria({ accion: 'grupo_tarea', usuario, detalle: `${salir ? 'Salió de' : 'Se unió a'} un grupo de ${tareaId}`, ip: await obtenerIPReal() });
+
+    await asignarGrupo(db, tareaId, alumno.id, {
+      nombre,
+      grupoId,
+      salir,
+      permitirMover: esAdmin
+    });
+
+    await registrarAuditoria({
+      accion: 'grupo_tarea',
+      usuario,
+      detalle: `${salir ? 'Salió de' : 'Asignó a'} un grupo de la tarea ${tareaId} (${nombreAlumnoObjetivo})`,
+      ip: await obtenerIPReal()
+    });
     return { exito: true };
   } catch (error) {
     console.error('Error al gestionar grupo:', error);

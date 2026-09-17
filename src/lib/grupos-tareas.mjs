@@ -90,15 +90,28 @@ async function sincronizarProgresoGrupo(tx, tarea, grupoId) {
 }
 
 // El servidor debe pasar el alumno obtenido de la sesión, nunca del formulario.
-export async function asignarGrupo(db, tareaId, alumnoId, { nombre, grupoId, salir = false }) {
+export async function asignarGrupo(db, tareaId, alumnoId, { nombre, grupoId, salir = false, eliminarGrupoId = null, permitirMover = false }) {
   return transaccion(db, async (tx) => {
     const tarea = await obtenerTarea(tx, tareaId);
     if (!Number(tarea.grupal)) throw new ErrorGrupo('Esta tarea es individual.');
-    const actual = (await tx.execute({
+
+    if (eliminarGrupoId) {
+      const grupo = await tx.execute({
+        sql: 'SELECT id FROM grupos_tareas WHERE id = ? AND tarea_id = ?',
+        args: [eliminarGrupoId, tareaId]
+      });
+      if (!grupo.rows.length) throw new ErrorGrupo('El grupo no pertenece a esta tarea.');
+      await tx.execute({ sql: 'DELETE FROM integrantes_tareas WHERE grupo_id = ? AND tarea_id = ?', args: [eliminarGrupoId, tareaId] });
+      await tx.execute({ sql: 'DELETE FROM grupos_tareas WHERE id = ? AND tarea_id = ?', args: [eliminarGrupoId, tareaId] });
+      return { grupoId: null, eliminado: true };
+    }
+
+    const actual = alumnoId ? (await tx.execute({
       sql: 'SELECT grupo_id FROM integrantes_tareas WHERE tarea_id = ? AND alumno_id = ?',
       args: [tareaId, alumnoId]
-    })).rows[0]?.grupo_id;
-    if (actual && !salir) throw new ErrorGrupo('Primero salí de tu grupo actual.');
+    })).rows[0]?.grupo_id : null;
+
+    if (actual && !salir && !permitirMover) throw new ErrorGrupo('Primero salí de tu grupo actual.');
     if (salir && !actual) throw new ErrorGrupo('No pertenecés a un grupo de esta tarea.');
     const nombreLimpio = typeof nombre === 'string' ? nombre.trim() : '';
     let destino = actual;
@@ -134,6 +147,10 @@ export async function asignarGrupo(db, tareaId, alumnoId, { nombre, grupoId, sal
       await tx.execute({ sql: 'DELETE FROM integrantes_tareas WHERE tarea_id = ? AND alumno_id = ?', args: [tareaId, alumnoId] });
       await tx.execute({ sql: 'DELETE FROM grupos_tareas WHERE id = ? AND NOT EXISTS (SELECT 1 FROM integrantes_tareas WHERE grupo_id = ?)', args: [actual, actual] });
     } else {
+      if (actual && actual !== destino && permitirMover) {
+        await tx.execute({ sql: 'DELETE FROM integrantes_tareas WHERE tarea_id = ? AND alumno_id = ?', args: [tareaId, alumnoId] });
+        await tx.execute({ sql: 'DELETE FROM grupos_tareas WHERE id = ? AND NOT EXISTS (SELECT 1 FROM integrantes_tareas WHERE grupo_id = ?)', args: [actual, actual] });
+      }
       await tx.execute({ sql: 'INSERT INTO integrantes_tareas (tarea_id, alumno_id, grupo_id) VALUES (?, ?, ?)', args: [tareaId, alumnoId, destino] });
       // Sincronizar automáticamente entregas y notas previas entre los integrantes
       await sincronizarProgresoGrupo(tx, tarea, destino);
