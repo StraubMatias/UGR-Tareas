@@ -69,7 +69,7 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
                         <span className="w-1.5 h-1.5 rounded-full bg-cyan-500/50"></span>
                         {materia.nombre}
                       </h4>
-                      <ul className="estado-tareas-columnas grid grid-cols-1 md:grid-cols-2 gap-3" aria-label={`Tareas de ${materia.nombre}`}>
+                      <ul className="estado-tareas-columnas grid grid-cols-1 sm:grid-cols-2 gap-3" aria-label={`Tareas de ${materia.nombre}`}>
                         {agruparTareasPorUnidad(tareas).flatMap((grupo) =>
                           grupo.tareas.map((tarea) => (
                             <EstadoTareaAlumno key={tarea.id} tarea={tarea} alumno={alumno}
