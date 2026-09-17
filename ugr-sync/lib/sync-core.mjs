@@ -5,6 +5,7 @@
 // el objeto `db` que cada llamador provee (libsql client o wrapper de turso).
 import { randomUUID } from 'node:crypto';
 import { crearCliente } from './red.mjs';
+import { optimizarLecturas } from './lecturas.mjs';
 import { autorEsEquipoDocente, esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
 import { extraerCursos, extraerNombreCursoDesdePagina } from './materias.mjs';
 import { extraerFechasActividad, extraerActividadesOverview } from './tareas.mjs';
@@ -15,6 +16,7 @@ import {
   extraerForosDelIndice,
   extraerPrimerPostDeHilo,
   fechaHoyLocal,
+  filtrarEventosDeAviso,
   sumarDias
 } from './avisos.mjs';
 import {
@@ -193,7 +195,7 @@ export async function conectarUGR() {
       'Agregalas a .env.local en la raíz del proyecto y reiniciá `npm run dev`.'
     );
   }
-  return crearCliente({ usuario, contrasena });
+  return optimizarLecturas(await crearCliente({ usuario, contrasena }));
 }
 
 async function fechasDeDetalle({ cliente, tarea }) {
@@ -266,8 +268,8 @@ export async function detectarTareasNuevas({ db, cliente }) {
     }
   });
 
-  for (const resultado of overviews) {
-    if (!resultado) continue;
+  await conPool(overviews, 4, async (resultado) => {
+    if (!resultado) return;
     const { curso, coincidencia, html } = resultado;
     const tareas = extraerActividadesOverview(html, UGR_BASE_URL);
     const idsVistos = new Set();
@@ -359,7 +361,9 @@ export async function detectarTareasNuevas({ db, cliente }) {
         detalles: 'Importada desde UGR Virtual'
       });
     }
-  }
+  });
+  const ordenMaterias = new Map(mapeos.map((m, i) => [m.coincidencia.materia.id, i]));
+  detectadas.sort((a, b) => ordenMaterias.get(a.materiaId) - ordenMaterias.get(b.materiaId));
 
   return { materiasLocales, cursos, mapeos, detectadas, urlsActualizar, urlsParcialesActualizar };
 }
@@ -546,13 +550,14 @@ export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy, diasAtras
         });
         if (!esDeDocente) continue;
 
-        const analisis = analizarAvisosParaCronograma({
+        const analisis = filtrarEventosDeAviso(post, analizarAvisosParaCronograma({
           titulo: post.titulo,
           contenido: post.contenido,
           materiaNombre: coincidencia.materia.nombre,
           hoy: fechaBase,
           fechaPublicacion: post.fecha
-        });
+        }));
+        if (analisis.length === 0) continue;
         const id = `aviso_${curso.id}_${discusion.id}`;
 
         avisosDetectados.push({

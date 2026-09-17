@@ -348,7 +348,7 @@ const TIPOS_EVENTO = [
     /(?:clases?|encuentros?)\s+cancelad[oa]s?/
   ] },
   { tipo: 'examen', patrones: [/parcial/, /examen/, /parcialito/, /recuperatorio/, /final\b/, /coloquio/, /integrador/] },
-  { tipo: 'entrega', patrones: [/entrega/, /entregar/, /vencimiento/, /present[ao]\s+(?:del?|tp|trabajo)/] },
+  { tipo: 'entrega', patrones: [/entrega/, /entregar/, /vencimiento/, /present[ao]\s+(?:del?|tp|trabajo)/, /\b(?:tarea|tp|trabajo practico|actividad)\b[^.]{0,60}\b(?:vence|abre|cierra|disponible|habilita)/, /\b(?:apertura|cierre|prorroga)\b[^.]{0,60}\b(?:tarea|tp|trabajo|actividad)\b/] },
   { tipo: 'consulta', patrones: [/consulta/] },
   { tipo: 'exposición', patrones: [/exposici[oó]n/, /presentaci[oó]n/] },
   { tipo: 'clase', patrones: [/clase/, /encuentro/, /zoom/, /meet/] }
@@ -481,6 +481,23 @@ export function analizarAvisosParaCronograma({ titulo, contenido, materiaNombre,
     });
   }
   return eventos;
+}
+
+// Política del sincronizador: solo cambios concretos de cursada/evaluación.
+// No basta con mencionar «clase» o «parcial» en un anuncio de materiales/notas.
+export function filtrarEventosDeAviso({ titulo, contenido }, eventos) {
+  const texto = limpiarTextoParaBusqueda(`${titulo || ''} ${contenido || ''}`);
+  const programa = /\b(?:tendremos|tenemos|habra|realizara|dictara|vence|vencimiento|entregar|entrega|rendir|rinde|rinden|programad[oa]|reprogram|posterg|prorroga|nueva clase|clase extra|apertura|cierre)\b/.test(texto);
+  const informativo = /\b(?:grabacion|material|diapositivas|bibliografia|calificaciones|notas|resultados)\b/.test(texto);
+  return eventos.filter((evento) => {
+    if (evento.tipo === 'sin_clases') return true;
+    if (informativo && !programa) return false;
+    if (evento.tipo === 'examen') return /\b(?:parcial\w*|recuperatorio\w*)\b/.test(texto);
+    if (evento.tipo === 'entrega') return true;
+    if (evento.tipo === 'clase') return true;
+    if (evento.tipo === 'consulta') return /\b(?:clase|encuentro)\b/.test(texto);
+    return false;
+  });
 }
 
 // Versión de una sola sugerencia (compatibilidad): devuelve el primer evento

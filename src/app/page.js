@@ -99,6 +99,7 @@ export default function Home() {
   const [syncAbierto, setSyncAbierto] = useState(false);
   const [syncEstado, setSyncEstado] = useState('idle'); // idle | cargando | listo | error
   const [syncDatos, setSyncDatos] = useState(null);
+  const syncEnCurso = useRef(false);
   const [syncMensaje, setSyncMensaje] = useState('');
   // Tareas detectadas que el admin dejó tildadas en la vista previa (idMoodle).
   const [syncSeleccionados, setSyncSeleccionados] = useState(() => new Set());
@@ -765,10 +766,12 @@ export default function Home() {
   };
 
   const ejecutarSyncUGR = async (confirmar = false, ids = [], idsAvisos = [], idsEventos = []) => {
+    if (syncEnCurso.current) return;
+    syncEnCurso.current = true;
     setSyncEstado('cargando');
     setSyncMensaje('');
     try {
-      const res = await syncUgrAction({ confirmar, ids, idsAvisos, idsEventos });
+      const res = await syncUgrAction({ confirmar, previaId: syncDatos?.previaId, ids, idsAvisos, idsEventos });
       if (!res?.exito) {
         setSyncEstado('error');
         setSyncMensaje(res?.mensaje || 'No se pudo sincronizar.');
@@ -789,6 +792,8 @@ export default function Home() {
     } catch (error) {
       setSyncEstado('error');
       setSyncMensaje(error?.message || 'Error inesperado al sincronizar con UGR.');
+    } finally {
+      syncEnCurso.current = false;
     }
   };
 
@@ -840,12 +845,8 @@ export default function Home() {
   };
 
   const abrirSyncUGR = () => {
-    setSyncDatos(null);
-    setSyncSeleccionados(new Set());
-    setSyncAvisosSeleccionados(new Set());
-    setSyncEventosSeleccionados(new Set());
     setSyncAbierto(true);
-    ejecutarSyncUGR(false);
+    if (!syncDatos && !syncEnCurso.current) ejecutarSyncUGR(false);
   };
 
   const handleNotaTareaChangeLocal = (tareaId, alumno, valor) => {
@@ -2642,6 +2643,10 @@ export default function Home() {
       {syncAbierto && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="float-right flex gap-3">
+              <button type="button" onClick={() => ejecutarSyncUGR(false)} disabled={syncEstado === 'cargando'} className="text-xs text-cyan-300 disabled:opacity-50">Buscar de nuevo</button>
+              <button type="button" onClick={() => setSyncAbierto(false)} className="text-xs text-slate-300">Cerrar</button>
+            </div>
             <h3 className="text-base font-bold text-white mb-1">🔄 Sincronizar con UGR Virtual</h3>
             <p className="text-xs text-slate-400 mb-4">Busca las tareas nuevas del campus y te las muestra antes de cargarlas.</p>
 
@@ -2883,7 +2888,7 @@ export default function Home() {
                   >
                     Cerrar
                   </button>
-                  {(syncDatos.detectadas.length > 0 || syncDatos.avisos.length > 0) && syncDatos.insertadas === 0 && (
+                  {(syncDatos.detectadas.length > 0 || syncDatos.avisos.length > 0) && !syncDatos.confirmar && (
                     <button
                       type="button"
                       onClick={() => ejecutarSyncUGR(true, [...syncSeleccionados], [...syncAvisosSeleccionados], [...syncEventosSeleccionados])}

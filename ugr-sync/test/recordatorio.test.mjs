@@ -64,6 +64,12 @@ test('integración: pendiente → aprobación → campana/cronograma, sin duplic
       curso: { id: '9', nombre: '(V.TUCS.1.09.2) EVALUACIÓN Y GESTIÓN DE RIESGOS' },
       coincidencia: { materia: { id: 'riesgos', nombre: 'Evaluación y Gestión de Riesgos' } }
     }] });
+    // Los anuncios generales no deben llegar ni a la campana ni al cronograma.
+    paginas['/mod/forum/discuss.php?d=11'] = HTML
+      .replace('Recordatorio – mañana no hay clases', 'Material de la clase')
+      .replace('Les recuerdo que mañana no tendremos clases debido a la semana de exámenes finales. Nos reencontramos la próxima semana.', 'Mañana estará disponible la grabación de la clase.');
+    assert.deepEqual(await detectar(), { avisosDetectados: [], eventosSugeridos: [] });
+    paginas['/mod/forum/discuss.php?d=11'] = HTML;
     const previa = await detectar();
     assert.equal(previa.avisosDetectados.length, 1);
     await insertarAvisosDetectados({ db, avisos: previa.avisosDetectados });

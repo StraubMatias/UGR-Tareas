@@ -55,19 +55,29 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
               <p role="status" className="rounded-xl border border-slate-800 p-6 text-center text-sm text-slate-300">
                 {resumen.total === 0 ? 'Todavía no hay tareas cargadas.' : filtro === 'pendientes' ? 'No hay entregas abiertas pendientes. Podés consultar las notas, tareas futuras y grupos en los otros filtros.' : 'No hay tareas en esta categoría.'}
               </p>
-            ) : (
-              <div className="estado-tareas-contenedor">
-                <ul className="estado-tareas-columnas" aria-label={`Tareas de ${alumno}`}>
-                  {materias.flatMap((materia) => {
-                    const tareas = (materia.tareas || []).filter((tarea) => ids.has(tarea.id));
-                    return agruparTareasPorUnidad(tareas).flatMap((grupo) =>
-                      grupo.tareas.map((tarea) => (
-                        <EstadoTareaAlumno key={tarea.id} tarea={tarea} alumno={alumno}
-                          materia={materia} unidad={grupo.unidad} {...acciones} />
-                      ))
-                    );
-                  })}
-                </ul>
+                        ) : (
+              <div className="estado-tareas-contenedor space-y-4">
+                {materias
+                  .map((materia) => ({
+                    materia,
+                    tareas: (materia.tareas || []).filter((tarea) => ids.has(tarea.id))
+                  }))
+                  .filter(({ tareas }) => tareas.length > 0)
+                  .map(({ materia, tareas }) => (
+                    <div key={materia.id}>
+                      <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wide mb-2">
+                        {materia.nombre}
+                      </h4>
+                      <ul className="estado-tareas-columnas" aria-label={`Tareas de ${materia.nombre}`}>
+                        {agruparTareasPorUnidad(tareas).flatMap((grupo) =>
+                          grupo.tareas.map((tarea) => (
+                            <EstadoTareaAlumno key={tarea.id} tarea={tarea} alumno={alumno}
+                              materia={materia} unidad={grupo.unidad} {...acciones} />
+                          ))
+                        )}
+                      </ul>
+                    </div>
+                  ))}
               </div>
             )}
           </div>

@@ -7,7 +7,8 @@ import { db } from './turso';
 import { asignarGrupo, actualizarProgresoTarea, ErrorGrupo } from '../lib/grupos-tareas.mjs';
 import { PLAN_DE_ESTUDIO } from './plan-utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
-import { actualizarUrlsParciales, actualizarUrlsTareas, aprobarAvisos, conectarUGR, detectarAvisosMoodle, detectarTareasNuevas, insertarAvisosDetectados, insertarEventosCronograma, insertarTareasDetectadas, rechazarAvisos } from '../../ugr-sync/lib/sync-core.mjs';
+import { aprobarAvisos, conectarUGR, detectarAvisosMoodle, detectarTareasNuevas, rechazarAvisos } from '../../ugr-sync/lib/sync-core.mjs';
+import { sincronizarConPrevia } from '../../ugr-sync/lib/previa.mjs';
 
 const COOKIE_SESION = 'ugr_sesion';
 const DURACION_SESION_SEGUNDOS = 30 * 60;
@@ -1037,7 +1038,7 @@ export async function eliminarTareaAction(id) {
 // Sincroniza tareas nuevas desde UGR Virtual. Con `confirmar: false` solo
 // detecta (vista previa); con `confirmar: true` inserta únicamente las tareas
 // cuyo `idMoodle` esté en `ids` (el admin las tilda una por una en el modal).
-export async function syncUgrAction({ confirmar = false, ids = [], idsAvisos = [], idsEventos = [] } = {}) {
+export async function syncUgrAction({ confirmar = false, previaId, ids = [], idsAvisos = [], idsEventos = [] } = {}) {
   try {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede sincronizar con UGR.' };
@@ -1046,60 +1047,20 @@ export async function syncUgrAction({ confirmar = false, ids = [], idsAvisos = [
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
 
-    const cliente = await conectarUGR();
-    const { materiasLocales, cursos, mapeos, detectadas, urlsActualizar, urlsParcialesActualizar } = await detectarTareasNuevas({ db, cliente });
+    const resultado = await sincronizarConPrevia({
+      db, usuario: usuarioSesion, confirmar, previaId, ids, idsAvisos, idsEventos,
+      detectar: async () => {
+        const cliente = await conectarUGR();
+        const tareas = await detectarTareasNuevas({ db, cliente });
+        const { avisosDetectados, eventosSugeridos } = await detectarAvisosMoodle({ db, cliente, mapeos: tareas.mapeos });
+        return { ...tareas, avisos: avisosDetectados, eventosSugeridos };
+      }
+    });
+    const { materiasLocales, cursos, mapeos, detectadas, avisos: avisosDetectados, eventosSugeridos,
+      insertadas = 0, avisosAceptados = 0, avisosRechazados = 0, eventosInsertados = 0,
+      urlsActualizadas = 0, urlsParcialesActualizadas = 0 } = resultado;
 
-    // Avisos de los foros del campus (Avisos/Consultas) y eventos espontáneos.
-    // Se toman hilos publicados desde hace 7 días hacia adelante (los previos
-    // ya fueron procesados y no se vuelven a proponer: avisos_moodle guarda el
-    // histórico por curso + hilo) y cuyos eventos son del día actual o futuro.
-    const { avisosDetectados, eventosSugeridos } = await detectarAvisosMoodle({ db, cliente, mapeos });
-    // Registramos las sugerencias como 'pendiente': no se publican solas. Si un
-    // hilo ya había sido aceptado/rechazado antes, no se re-sugiere ni cambia.
-    await insertarAvisosDetectados({ db, avisos: avisosDetectados });
-
-    // Backfill de enlaces: completamos los URLs que faltan en tareas que ya
-    // estaban importadas. No agrega nada nuevo, solo deja listo el botón de
-    // «Ver en UGR» para las tareas existentes. Lo mismo para los parciales
-    // cargados desde el cronograma, que nacen sin enlace a UGR.
-    const urlsActualizadas = await actualizarUrlsTareas({ db, urlsActualizar });
-    const urlsParcialesActualizadas = await actualizarUrlsParciales({ db, urlsParcialesActualizar });
-
-    let insertadas = 0;
-    let avisosAceptados = 0;
-    let avisosRechazados = 0;
-    let eventosInsertados = 0;
     if (confirmar) {
-      // Nunca insertamos algo que no esté en la detección recién realizada:
-      // el front solo puede indicar cuáles de estas quiere cargar.
-      const pedidas = new Set(Array.isArray(ids) ? ids : []);
-      const seleccionadas = detectadas.filter((t) => pedidas.has(t.idMoodle));
-      if (seleccionadas.length > 0) {
-        insertadas = await insertarTareasDetectadas({ db, detectadas: seleccionadas });
-      }
-
-      // Avisos aprobados: pasan a la campana (estado 'aceptado').
-      const pedidosAvisos = new Set(Array.isArray(idsAvisos) ? idsAvisos : []);
-      const avisosSeleccionados = avisosDetectados.filter((a) => pedidosAvisos.has(a.id));
-      if (avisosSeleccionados.length > 0) {
-        avisosAceptados = await aprobarAvisos({ db, ids: avisosSeleccionados.map((a) => a.id) });
-      }
-
-      // Los detectados que el admin no aprobó quedan 'pendiente'; los que
-      // explícitamente quiere descartar van a 'rechazado'.
-      const avisosADescartar = avisosDetectados
-        .filter((a) => !pedidosAvisos.has(a.id))
-        .map((a) => a.id);
-      if (avisosADescartar.length > 0) {
-        avisosRechazados = await rechazarAvisos({ db, ids: avisosADescartar });
-      }
-
-      // Eventos sugeridos aprobados por el admin → cronograma (origen 'ugr').
-      const pedidosEventos = new Set(Array.isArray(idsEventos) ? idsEventos : []);
-      const eventosSeleccionados = eventosSugeridos.filter((e) => pedidosEventos.has(e.avisoId) && pedidosAvisos.has(e.avisoId));
-      if (eventosSeleccionados.length > 0) {
-        eventosInsertados = await insertarEventosCronograma({ db, eventos: eventosSeleccionados });
-      }
 
       await registrarAuditoria({
         accion: 'sync_ugr',
@@ -1112,6 +1073,7 @@ export async function syncUgrAction({ confirmar = false, ids = [], idsAvisos = [
     return {
       exito: true,
       confirmar,
+      previaId: resultado.previaId,
       materiasLocales: materiasLocales?.length || 0,
       cursos: cursos?.length || 0,
       mapeos: (mapeos || []).map(({ curso, coincidencia }) => ({
