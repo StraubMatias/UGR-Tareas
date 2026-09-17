@@ -462,7 +462,11 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
   });
 
   await ejecutarMigracion(16, 'grupos por tarea con autoasignación de alumnos', async () => {
-  await db.execute(`ALTER TABLE tareas ADD COLUMN cupo_maximo INTEGER DEFAULT 0`);
+    await crearEsquemaGrupos(db);
+  });
+
+  await ejecutarMigracion(17, 'agregar cupo_maximo a tareas y validar esquema de grupos', async () => {
+    await crearEsquemaGrupos(db);
   });
 
   await db.close?.();

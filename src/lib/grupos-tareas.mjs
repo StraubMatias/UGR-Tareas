@@ -35,6 +35,60 @@ async function tieneProgreso(tx, tareaId, alumnos) {
   return false;
 }
 
+// Sincroniza entregas y notas existentes entre todos los integrantes actuales del grupo.
+async function sincronizarProgresoGrupo(tx, tarea, grupoId) {
+  const miembros = (await tx.execute({
+    sql: 'SELECT a.id, a.nombre FROM integrantes_tareas i JOIN alumnos a ON a.id = i.alumno_id WHERE i.grupo_id = ?',
+    args: [grupoId]
+  })).rows;
+  if (!miembros.length) return;
+
+  const placeholders = miembros.map(() => '?').join(',');
+  const ids = miembros.map((m) => m.id);
+
+  // 1. Sincronizar entregas si al menos un integrante ya la tenía marcada
+  const completadas = await tx.execute({
+    sql: `SELECT * FROM completadas WHERE tarea_id = ? AND alumno_id IN (${placeholders}) ORDER BY completada_en ASC`,
+    args: [tarea.id, ...ids]
+  });
+
+  if (completadas.rows.length > 0) {
+    const fechaCompletada = completadas.rows[0].completada_en || new Date().toISOString();
+    for (const m of miembros) {
+      await tx.execute({
+        sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, ?)
+              ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, completada_en = excluded.completada_en`,
+        args: [tarea.id, m.id, m.nombre, fechaCompletada]
+      });
+    }
+  }
+
+  // 2. Sincronizar nota si la tarea lleva nota y al menos un integrante ya tenía nota cargada
+  if (Number(tarea.con_nota)) {
+    const notas = await tx.execute({
+      sql: `SELECT * FROM notas_tareas WHERE tarea_id = ? AND alumno_id IN (${placeholders}) ORDER BY cargada_en DESC`,
+      args: [tarea.id, ...ids]
+    });
+
+    if (notas.rows.length > 0) {
+      const notaSincronizar = notas.rows[0].nota;
+      const fechaNota = notas.rows[0].cargada_en || new Date().toISOString();
+      for (const m of miembros) {
+        await tx.execute({
+          sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, nota = excluded.nota, cargada_en = excluded.cargada_en`,
+          args: [`nota_tarea_${randomUUID()}`, tarea.id, m.id, m.nombre, notaSincronizar, fechaNota]
+        });
+        await tx.execute({
+          sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, ?)
+                ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, completada_en = excluded.completada_en`,
+          args: [tarea.id, m.id, m.nombre, fechaNota]
+        });
+      }
+    }
+  }
+}
+
 // El servidor debe pasar el alumno obtenido de la sesión, nunca del formulario.
 export async function asignarGrupo(db, tareaId, alumnoId, { nombre, grupoId, salir = false }) {
   return transaccion(db, async (tx) => {
@@ -49,20 +103,20 @@ export async function asignarGrupo(db, tareaId, alumnoId, { nombre, grupoId, sal
     const nombreLimpio = typeof nombre === 'string' ? nombre.trim() : '';
     let destino = actual;
     if (!salir) {
-    if (grupoId) {
-      const grupo = await tx.execute({
-        sql: 'SELECT id FROM grupos_tareas WHERE id = ? AND tarea_id = ?', args: [grupoId, tareaId]
-      });
-      if (!grupo.rows.length) throw new ErrorGrupo('El grupo no pertenece a esta tarea.');
-      
-      const integrantesCount = await tx.execute({
-        sql: 'SELECT COUNT(*) as total FROM integrantes_tareas WHERE grupo_id = ?', args: [grupoId]
-      });
-      if (integrantesCount.rows[0].total >= tarea.cupo_maximo && tarea.cupo_maximo > 0) {
-        throw new ErrorGrupo('El grupo ya alcanzó el cupo máximo permitido.');
-      }
-      destino = grupoId;
-    } else {
+      if (grupoId) {
+        const grupo = await tx.execute({
+          sql: 'SELECT id FROM grupos_tareas WHERE id = ? AND tarea_id = ?', args: [grupoId, tareaId]
+        });
+        if (!grupo.rows.length) throw new ErrorGrupo('El grupo no pertenece a esta tarea.');
+
+        const integrantesCount = await tx.execute({
+          sql: 'SELECT COUNT(*) as total FROM integrantes_tareas WHERE grupo_id = ?', args: [grupoId]
+        });
+        if (Number(tarea.cupo_maximo) > 0 && integrantesCount.rows[0].total >= Number(tarea.cupo_maximo)) {
+          throw new ErrorGrupo('El grupo ya alcanzó el cupo máximo permitido.');
+        }
+        destino = grupoId;
+      } else {
         if (!nombreLimpio || nombreLimpio.length > 100) throw new ErrorGrupo('El nombre del grupo debe tener entre 1 y 100 caracteres.');
         const repetido = await tx.execute({
           sql: 'SELECT id FROM grupos_tareas WHERE tarea_id = ? AND nombre = ?', args: [tareaId, nombreLimpio]
@@ -75,17 +129,14 @@ export async function asignarGrupo(db, tareaId, alumnoId, { nombre, grupoId, sal
         });
       }
     }
-    const integrantes = await tx.execute({
-      sql: 'SELECT alumno_id FROM integrantes_tareas WHERE grupo_id = ?', args: [destino]
-    });
-    if (await tieneProgreso(tx, tareaId, [...new Set([alumnoId, ...integrantes.rows.map((i) => i.alumno_id)])])) {
-      throw new ErrorGrupo('No se pueden cambiar integrantes mientras el alumno o el grupo tenga entrega o nota.');
-    }
+
     if (salir) {
       await tx.execute({ sql: 'DELETE FROM integrantes_tareas WHERE tarea_id = ? AND alumno_id = ?', args: [tareaId, alumnoId] });
       await tx.execute({ sql: 'DELETE FROM grupos_tareas WHERE id = ? AND NOT EXISTS (SELECT 1 FROM integrantes_tareas WHERE grupo_id = ?)', args: [actual, actual] });
     } else {
       await tx.execute({ sql: 'INSERT INTO integrantes_tareas (tarea_id, alumno_id, grupo_id) VALUES (?, ?, ?)', args: [tareaId, alumnoId, destino] });
+      // Sincronizar automáticamente entregas y notas previas entre los integrantes
+      await sincronizarProgresoGrupo(tx, tarea, destino);
     }
     return { grupoId: salir ? null : destino };
   });
@@ -136,6 +187,11 @@ export async function actualizarProgresoTarea(db, tareaId, alumno, { nota, alter
             sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en) VALUES (?, ?, ?, ?, ?, ?)
                   ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, nota = excluded.nota, cargada_en = excluded.cargada_en`,
             args: [`nota_tarea_${randomUUID()}`, tareaId, integrante.id, integrante.nombre, validacion.valor, fecha]
+          });
+          await tx.execute({
+            sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, ?)
+                  ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, completada_en = excluded.completada_en`,
+            args: [tareaId, integrante.id, integrante.nombre, fecha]
           });
         }
       }

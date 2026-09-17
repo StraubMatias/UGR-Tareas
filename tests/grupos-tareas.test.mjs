@@ -26,32 +26,55 @@ async function preparar(t) {
 }
 const ana = { id: 'a', nombre: 'Ana' };
 const beto = { id: 'b', nombre: 'Beto' };
+const caro = { id: 'c', nombre: 'Caro' };
 
-test('recorrido grupal: autoasignación, entrega, nota, corrección y borrado para ambos', async (t) => {
+test('recorrido grupal: autoasignación, entrega, nota, sincronización y corrección', async (t) => {
   const db = await preparar(t);
   const { grupoId } = await asignarGrupo(db, 't', 'a', { nombre: 'Equipo 1' });
   await asignarGrupo(db, 't', 'b', { grupoId });
   await actualizarProgresoTarea(db, 't', ana, { alternarEntrega: true });
-  const entregas = (await db.execute('SELECT * FROM completadas')).rows;
+  let entregas = (await db.execute('SELECT * FROM completadas')).rows;
   assert.deepEqual(entregas.map((r) => r.alumno).sort(), ['Ana', 'Beto']);
   assert.equal(entregas[0].completada_en, entregas[1].completada_en);
   await actualizarProgresoTarea(db, 't', beto, { nota: '8,5' });
   let notas = (await db.execute('SELECT * FROM notas_tareas')).rows;
   assert.deepEqual(notas.map((r) => r.nota), ['8.5', '8.5']);
   assert.equal(notas[0].cargada_en, notas[1].cargada_en);
-  await assert.rejects(asignarGrupo(db, 't', 'c', { grupoId }), /entrega o nota/);
-  await assert.rejects(asignarGrupo(db, 't', 'a', { salir: true }), /entrega o nota/);
+
+  // Caro se une al grupo existente y automáticamente recibe la entrega y nota sincronizada
+  await asignarGrupo(db, 't', 'c', { grupoId });
+  entregas = (await db.execute('SELECT * FROM completadas')).rows;
+  assert.deepEqual(entregas.map((r) => r.alumno).sort(), ['Ana', 'Beto', 'Caro']);
+  notas = (await db.execute('SELECT * FROM notas_tareas')).rows;
+  assert.deepEqual(notas.map((r) => r.nota), ['8.5', '8.5', '8.5']);
+
   await assert.rejects(actualizarProgresoTarea(db, 't', ana, { alternarEntrega: true }), /borrá la nota/);
   await actualizarProgresoTarea(db, 't', ana, { nota: '9' });
   notas = (await db.execute('SELECT nota FROM notas_tareas')).rows;
-  assert.deepEqual(notas.map((r) => r.nota), ['9', '9']);
+  assert.deepEqual(notas.map((r) => r.nota), ['9', '9', '9']);
   await actualizarProgresoTarea(db, 't', beto, { nota: '' });
   assert.equal((await db.execute('SELECT * FROM notas_tareas')).rows.length, 0);
   await actualizarProgresoTarea(db, 't', beto, { alternarEntrega: true });
   assert.equal((await db.execute('SELECT * FROM completadas')).rows.length, 0);
   await asignarGrupo(db, 't', 'a', { salir: true });
   await asignarGrupo(db, 't', 'b', { salir: true });
+  await asignarGrupo(db, 't', 'c', { salir: true });
   assert.equal((await db.execute('SELECT * FROM grupos_tareas')).rows.length, 0);
+});
+
+test('sincronización cuando un alumno con entrega previa crea un grupo y otro se une', async (t) => {
+  const db = await preparar(t);
+  await db.execute({
+    sql: 'INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, ?)',
+    args: ['t', 'a', 'Ana', '2026-09-17T10:00:00.000Z']
+  });
+  const { grupoId } = await asignarGrupo(db, 't', 'a', { nombre: 'Grupo Alpha' });
+  await asignarGrupo(db, 't', 'b', { grupoId });
+  const entregas = (await db.execute('SELECT * FROM completadas ORDER BY alumno')).rows;
+  assert.equal(entregas.length, 2);
+  assert.equal(entregas[0].alumno, 'Ana');
+  assert.equal(entregas[1].alumno, 'Beto');
+  assert.equal(entregas[1].completada_en, '2026-09-17T10:00:00.000Z');
 });
 
 test('aislamiento de tareas, grupos e individuales y validaciones', async (t) => {

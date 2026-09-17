@@ -1000,17 +1000,11 @@ export async function editarTareaAction({ id, nombre, inicio, fin, detalles, uni
     const tipoNormalizado = ['actividad', 'foro', 'trabajo_practico'].includes(tipo) ? tipo : 'actividad';
 
     const grupalNumerico = grupal === true ? 1 : 0;
-    // La condición se evalúa junto con el UPDATE para evitar carreras con las autoasignaciones.
     const actualizacion = await db.execute({
-      sql: `UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ?, con_nota = ?, tipo = ?, grupal = ?, cupo_maximo = ? WHERE id = ?
-        AND (grupal = ? OR (
-          NOT EXISTS (SELECT 1 FROM grupos_tareas WHERE tarea_id = tareas.id)
-          AND NOT EXISTS (SELECT 1 FROM completadas WHERE tarea_id = tareas.id)
-          AND NOT EXISTS (SELECT 1 FROM notas_tareas WHERE tarea_id = tareas.id)))
-        AND (con_nota = ? OR NOT EXISTS (SELECT 1 FROM grupos_tareas WHERE tarea_id = tareas.id))`,
-      args: [validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupalNumerico, cupoMaximo, id, grupalNumerico, conNotaNumerico]
+      sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ?, con_nota = ?, tipo = ?, grupal = ?, cupo_maximo = ? WHERE id = ?',
+      args: [validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupalNumerico, cupoMaximo, id]
     });
-    if (!actualizacion.rowsAffected) return { exito: false, mensaje: 'No se puede cambiar la modalidad con grupos, entregas o notas existentes, ni cambiar la calificación con grupos formados. La tarea también podría haber sido eliminada.' };
+    if (!actualizacion.rowsAffected) return { exito: false, mensaje: 'La tarea seleccionada no existe o no se pudo editar.' };
     await registrarAuditoria({ accion: 'editar_tarea', usuario: usuarioSesion, detalle: `Editó la tarea ${id}`, ip: await obtenerIPReal() });
     return { exito: true };
   } catch (error) {
