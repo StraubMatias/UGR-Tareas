@@ -21,5 +21,8 @@ export const db = {
   },
   batch(...args) {
     return obtenerCliente().batch(...args);
+  },
+  transaction(...args) {
+    return obtenerCliente().transaction(...args);
   }
 };

@@ -4,6 +4,7 @@ import { createHmac, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'no
 import { promisify } from 'node:util';
 import { cookies, headers } from 'next/headers';
 import { db } from './turso';
+import { asignarGrupo, actualizarProgresoTarea, ErrorGrupo } from '../lib/grupos-tareas.mjs';
 import { PLAN_DE_ESTUDIO } from './plan-utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
 import { actualizarUrlsParciales, actualizarUrlsTareas, aprobarAvisos, conectarUGR, detectarAvisosMoodle, detectarTareasNuevas, insertarAvisosDetectados, insertarEventosCronograma, insertarTareasDetectadas, rechazarAvisos } from '../../ugr-sync/lib/sync-core.mjs';
@@ -545,6 +546,8 @@ export async function eliminarAlumnoAction(nombre) {
     const alumnoActual = await obtenerAlumno(nombre);
     if (!alumnoActual) return { exito: false, mensaje: 'El alumno no existe.' };
     await db.batch([
+      { sql: 'DELETE FROM integrantes_tareas WHERE alumno_id = ?', args: [alumnoActual.id] },
+      { sql: 'DELETE FROM grupos_tareas WHERE NOT EXISTS (SELECT 1 FROM integrantes_tareas WHERE grupo_id = grupos_tareas.id)', args: [] },
       { sql: 'DELETE FROM completadas WHERE alumno_id = ?', args: [alumnoActual.id] },
       { sql: 'DELETE FROM notas_parciales WHERE alumno_id = ?', args: [alumnoActual.id] },
       { sql: 'DELETE FROM notas_tareas WHERE alumno_id = ?', args: [alumnoActual.id] },
@@ -580,9 +583,9 @@ export async function obtenerDatos(periodoId = null) {
       )),
       db.execute(consultaPeriodo(
         periodoId,
-        `SELECT t.id, t.materia_id, t.nombre, t.inicio, t.fin, t.detalles, t.unidad, t.con_nota, t.tipo, t.url
+        `SELECT t.id, t.materia_id, t.nombre, t.inicio, t.fin, t.detalles, t.unidad, t.con_nota, t.tipo, t.url, t.grupal, t.cupo_maximo
          FROM tareas t JOIN materias m ON m.id = t.materia_id WHERE m.periodo_id = ?`,
-        `SELECT id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, url FROM tareas`
+        `SELECT id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, url, grupal, cupo_maximo FROM tareas`
       )),
       db.execute(consultaPeriodo(
         periodoId,
@@ -607,6 +610,17 @@ export async function obtenerDatos(periodoId = null) {
          FROM notas_tareas n LEFT JOIN alumnos a ON a.id = n.alumno_id`
       ))
     ]);
+
+    const resGrupos = await db.execute(`SELECT g.id, g.tarea_id, g.nombre, a.nombre AS alumno
+      FROM grupos_tareas g LEFT JOIN integrantes_tareas i ON i.grupo_id = g.id
+      LEFT JOIN alumnos a ON a.id = i.alumno_id ORDER BY g.nombre, a.nombre`);
+    const gruposPorTarea = new Map();
+    for (const fila of resGrupos.rows) {
+      if (!gruposPorTarea.has(fila.tarea_id)) gruposPorTarea.set(fila.tarea_id, new Map());
+      const grupos = gruposPorTarea.get(fila.tarea_id);
+      if (!grupos.has(fila.id)) grupos.set(fila.id, { id: fila.id, nombre: fila.nombre, integrantes: [] });
+      if (fila.alumno) grupos.get(fila.id).integrantes.push(fila.alumno);
+    }
 
     const tareasPorMateria = new Map();
     resTareas.rows.forEach((tarea) => {
@@ -654,6 +668,9 @@ export async function obtenerDatos(periodoId = null) {
           detalles: t.detalles,
           unidad: t.unidad || '',
           conNota: Number(t.con_nota) === 1,
+          grupal: Number(t.grupal) === 1,
+          cupo_maximo: Number(t.cupo_maximo) || 0,
+          grupos: [...(gruposPorTarea.get(t.id)?.values() || [])],
           tipo: t.tipo || 'actividad',
           url: t.url || '',
           completadoPor,
@@ -794,36 +811,12 @@ export async function toggleTareaAction(tareaId, alumno) {
     const alumnoObjetivo = await verificarAdmin() ? alumno : usuarioSesion;
     const alumnoDB = await obtenerAlumno(alumnoObjetivo);
     if (!alumnoDB) return { exito: false, mensaje: 'El alumno no existe.' };
-    const tarea = await db.execute({
-      sql: 'SELECT inicio, fin FROM tareas WHERE id = ?',
-      args: [tareaId]
-    });
-    if (tarea.rows.length === 0) return { exito: false, mensaje: 'La tarea no existe.' };
-    if (!tareaHabilitada(tarea.rows[0].inicio)) {
-      return { exito: false, mensaje: 'La tarea todavía no está habilitada.' };
-    }
-    const existe = await db.execute({
-      sql: 'SELECT * FROM completadas WHERE tarea_id = ? AND alumno_id = ?',
-      args: [tareaId, alumnoDB.id]
-    });
-
-    if (existe.rows.length > 0) {
-      await db.execute({
-        sql: 'DELETE FROM completadas WHERE tarea_id = ? AND alumno_id = ?',
-        args: [tareaId, alumnoDB.id]
-      });
-      await registrarAuditoria({ accion: 'desmarcar_tarea', usuario: usuarioSesion, detalle: `Desmarcó la tarea ${tareaId} de ${alumnoDB.nombre}`, ip: await obtenerIPReal() });
-    } else {
-      await db.execute({
-        sql: "INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, datetime('now'))",
-        args: [tareaId, alumnoDB.id, alumnoDB.nombre]
-      });
-      await registrarAuditoria({ accion: 'marcar_tarea', usuario: usuarioSesion, detalle: `Marcó la tarea ${tareaId} de ${alumnoDB.nombre}`, ip: await obtenerIPReal() });
-    }
+    const resultado = await actualizarProgresoTarea(db, tareaId, alumnoDB, { alternarEntrega: true });
+    await registrarAuditoria({ accion: 'alternar_entrega_tarea', usuario: usuarioSesion, detalle: `Cambió entrega de ${tareaId} para: ${resultado.alumnos.join(', ')}`, ip: await obtenerIPReal() });
     return { exito: true };
   } catch (error) {
     console.error('Error en toggleTareaAction:', error);
-    return { exito: false, mensaje: 'No se pudo actualizar la tarea.' };
+    return { exito: false, mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo actualizar la tarea.' };
   }
 }
 
@@ -932,6 +925,8 @@ export async function eliminarMateriaAction(id) {
     await db.batch([
       { sql: 'DELETE FROM completadas WHERE tarea_id IN (SELECT id FROM tareas WHERE materia_id = ?)', args: [id] },
       { sql: 'DELETE FROM notas_tareas WHERE tarea_id IN (SELECT id FROM tareas WHERE materia_id = ?)', args: [id] },
+      { sql: 'DELETE FROM integrantes_tareas WHERE tarea_id IN (SELECT id FROM tareas WHERE materia_id = ?)', args: [id] },
+      { sql: 'DELETE FROM grupos_tareas WHERE tarea_id IN (SELECT id FROM tareas WHERE materia_id = ?)', args: [id] },
       { sql: 'DELETE FROM tareas WHERE materia_id = ?', args: [id] },
       { sql: 'DELETE FROM notas_parciales WHERE parcial_id IN (SELECT id FROM parciales WHERE materia_id = ?)', args: [id] },
       { sql: 'DELETE FROM parciales WHERE materia_id = ?', args: [id] },
@@ -946,7 +941,7 @@ export async function eliminarMateriaAction(id) {
   }
 }
 
-export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles, unidad, conNota, tipo }) {
+export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles, unidad, conNota, tipo, grupal = false, cupoMaximo = 0 }) {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede crear tareas.' };
     const usuarioSesion = await obtenerUsuarioSesion();
@@ -971,8 +966,8 @@ export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalle
 
     const id = crearId('t_');
     await db.execute({
-      sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      args: [id, materiaId, validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado]
+      sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, grupal, cupo_maximo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      args: [id, materiaId, validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupal === true ? 1 : 0, cupoMaximo]
     });
     await registrarAuditoria({ accion: 'crear_tarea', usuario: usuarioSesion, detalle: `Creó la tarea ${validacionNombre.valor}`, ip: await obtenerIPReal() });
     return { exito: true };
@@ -982,7 +977,7 @@ export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalle
   }
 }
 
-export async function editarTareaAction({ id, nombre, inicio, fin, detalles, unidad, conNota, tipo }) {
+export async function editarTareaAction({ id, nombre, inicio, fin, detalles, unidad, conNota, tipo, grupal = false, cupoMaximo = 0 }) {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede editar tareas.' };
     const usuarioSesion = await obtenerUsuarioSesion();
@@ -1004,10 +999,18 @@ export async function editarTareaAction({ id, nombre, inicio, fin, detalles, uni
     const conNotaNumerico = conNota ? 1 : 0;
     const tipoNormalizado = ['actividad', 'foro', 'trabajo_practico'].includes(tipo) ? tipo : 'actividad';
 
-    await db.execute({
-      sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ?, con_nota = ?, tipo = ? WHERE id = ?',
-      args: [validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, id]
+    const grupalNumerico = grupal === true ? 1 : 0;
+    // La condición se evalúa junto con el UPDATE para evitar carreras con las autoasignaciones.
+    const actualizacion = await db.execute({
+      sql: `UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ?, con_nota = ?, tipo = ?, grupal = ?, cupo_maximo = ? WHERE id = ?
+        AND (grupal = ? OR (
+          NOT EXISTS (SELECT 1 FROM grupos_tareas WHERE tarea_id = tareas.id)
+          AND NOT EXISTS (SELECT 1 FROM completadas WHERE tarea_id = tareas.id)
+          AND NOT EXISTS (SELECT 1 FROM notas_tareas WHERE tarea_id = tareas.id)))
+        AND (con_nota = ? OR NOT EXISTS (SELECT 1 FROM grupos_tareas WHERE tarea_id = tareas.id))`,
+      args: [validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupalNumerico, cupoMaximo, id, grupalNumerico, conNotaNumerico]
     });
+    if (!actualizacion.rowsAffected) return { exito: false, mensaje: 'No se puede cambiar la modalidad con grupos, entregas o notas existentes, ni cambiar la calificación con grupos formados. La tarea también podría haber sido eliminada.' };
     await registrarAuditoria({ accion: 'editar_tarea', usuario: usuarioSesion, detalle: `Editó la tarea ${id}`, ip: await obtenerIPReal() });
     return { exito: true };
   } catch (error) {
@@ -1025,6 +1028,8 @@ export async function eliminarTareaAction(id) {
     await db.batch([
       { sql: 'DELETE FROM completadas WHERE tarea_id = ?', args: [id] },
       { sql: 'DELETE FROM notas_tareas WHERE tarea_id = ?', args: [id] },
+      { sql: 'DELETE FROM integrantes_tareas WHERE tarea_id = ?', args: [id] },
+      { sql: 'DELETE FROM grupos_tareas WHERE tarea_id = ?', args: [id] },
       { sql: 'DELETE FROM tareas WHERE id = ?', args: [id] }
     ], 'write');
     await registrarAuditoria({ accion: 'eliminar_tarea', usuario: usuarioSesion, detalle: `Eliminó la tarea ${id}`, ip: await obtenerIPReal() });
@@ -1483,39 +1488,34 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
     const alumnoDB = await obtenerAlumno(alumno);
     if (!alumnoDB) return { exito: false, mensaje: 'El alumno no existe.' };
 
-    const tarea = await db.execute({
-      sql: 'SELECT con_nota, inicio, fin FROM tareas WHERE id = ?',
-      args: [tareaId]
+    const resultado = await actualizarProgresoTarea(db, tareaId, alumnoDB, { nota });
+    await registrarAuditoria({
+      accion: 'guardar_nota_tarea',
+      usuario: usuarioSesion,
+      detalle: `Cargó nota en la tarea ${tareaId} para: ${resultado.alumnos.join(', ')}`,
+      ip: await obtenerIPReal()
     });
-    if (tarea.rows.length === 0 || Number(tarea.rows[0].con_nota) !== 1) {
-      return { exito: false, mensaje: 'La tarea no está configurada para llevar nota.' };
-    }
-    if (!tareaHabilitada(tarea.rows[0].inicio)) {
-      return { exito: false, mensaje: 'La tarea todavía no está habilitada para cargar notas.' };
-    }
-    const validacion = validarNota(nota);
-    if (!validacion.vacia && !validacion.valida) {
-      return { exito: false, mensaje: 'La nota debe ser un número entre 1 y 10.' };
-    }
-
-    if (validacion.vacia) {
-      await db.execute({
-        sql: 'DELETE FROM notas_tareas WHERE tarea_id = ? AND alumno_id = ?',
-        args: [tareaId, alumnoDB.id]
-      });
-      await registrarAuditoria({ accion: 'eliminar_nota_tarea', usuario: usuarioSesion, detalle: `Eliminó la nota de ${alumnoDB.nombre} en la tarea ${tareaId}`, ip: await obtenerIPReal() });
-    } else {
-      const cargadaEn = new Date().toISOString();
-      await db.execute({
-        sql: 'INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, nota = excluded.nota, cargada_en = excluded.cargada_en',
-        args: [crearId('nota_tarea_'), tareaId, alumnoDB.id, alumnoDB.nombre, validacion.valor, cargadaEn]
-      });
-      await registrarAuditoria({ accion: 'guardar_nota_tarea', usuario: usuarioSesion, detalle: `Cargó nota ${validacion.valor} a ${alumnoDB.nombre} en la tarea ${tareaId}`, ip: await obtenerIPReal() });
-    }
 
     return { exito: true };
   } catch (error) {
     console.error('Error en guardarNotaTareaAction:', error);
-    return { exito: false, mensaje: 'No se pudo guardar la nota de la tarea.' };
+    return { exito: false, mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo guardar la nota de la tarea.' };
+  }
+}
+
+export async function gestionarGrupoTareaAction({ tareaId, nombre, grupoId, salir = false }) {
+  try {
+    const usuario = await obtenerUsuarioSesion();
+    if (!usuario) return { exito: false, mensaje: 'Debés iniciar sesión.' };
+    const limite = await verificarRateLimitEscritura(usuario);
+    if (!limite.exito) return limite;
+    const alumno = await obtenerAlumno(usuario);
+    if (!alumno) return { exito: false, mensaje: 'El alumno no existe.' };
+    await asignarGrupo(db, tareaId, alumno.id, { nombre, grupoId, salir });
+    await registrarAuditoria({ accion: 'grupo_tarea', usuario, detalle: `${salir ? 'Salió de' : 'Se unió a'} un grupo de ${tareaId}`, ip: await obtenerIPReal() });
+    return { exito: true };
+  } catch (error) {
+    console.error('Error al gestionar grupo:', error);
+    return { exito: false, mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo actualizar el grupo.' };
   }
 }

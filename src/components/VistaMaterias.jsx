@@ -11,11 +11,14 @@ import {
   tareaPuedeGestionarse
 } from '../lib/cursada';
 
+import GrupoTarea from './GrupoTarea';
+
 // Vista "Materias": consignas por materia/unidad con marcado de entrega,
 // notas propias y de los compañeros, y resaltado de la tarea a la que se
 // llegó desde "Estado por Alumno".
 export default function VistaMaterias({
   materias,
+  recargar,
   alumnos,
   usuarioActual,
   esAdmin,
@@ -175,6 +178,7 @@ export default function VistaMaterias({
                             )}
                           </div>
     
+                          {t.grupal && <GrupoTarea tarea={t} usuarioActual={usuarioActual} recargar={recargar} />}
                           <div className="bg-[#161c26] border border-slate-800 rounded-xl p-4">
                             <span className="text-xs font-semibold text-slate-400 block mb-1">
                               📄 Detalle / Consigna:
@@ -208,7 +212,7 @@ export default function VistaMaterias({
                                 Entregada
                               </label>
                               <label className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">
-                                Tu nota (1 a 10)
+                                {t.grupal ? 'Nota del grupo (1 a 10)' : 'Tu nota (1 a 10)'}
                               </label>
                               <input
                                 type="text"
@@ -224,6 +228,10 @@ export default function VistaMaterias({
                             </div>
                           ) : (
                           <div>
+                            <label className="flex items-center gap-2 text-sm font-bold text-slate-300 mb-3">
+                              <input type="checkbox" checked={tareaCompletadaPor(t, usuarioActual)} disabled={!tareaPuedeGestionarse(t)} onChange={() => toggleTareaDesdeCliente(t.id, usuarioActual, t)} />
+                              {t.grupal ? 'Entrega del grupo' : 'Entregada'}
+                            </label>
                             <span className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">Completada por:</span>
                             <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">
                               {t.completadoPor.length > 0 ? (

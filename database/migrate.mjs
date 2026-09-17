@@ -1,6 +1,7 @@
 import { randomBytes, scrypt } from 'node:crypto';
 import { promisify } from 'node:util';
 import { createClient } from '@libsql/client';
+import { crearEsquemaGrupos } from './grupos-schema.mjs';
 
 process.loadEnvFile?.('.env.local');
 
@@ -458,6 +459,10 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
       sql: 'INSERT OR IGNORE INTO cronograma_eventos (id, materia_id, fecha, modalidad, tipo, titulo, detalles) VALUES (?, ?, ?, ?, ?, ?, ?)',
       args: [`cronograma_${materia.id}_2026-09-15_Sin clases`, materia.id, '2026-09-15', 'sincrónico', 'sin_clases', 'Sin clases', 'Mesas de examen de septiembre: no hay cursada.']
     });
+  });
+
+  await ejecutarMigracion(16, 'grupos por tarea con autoasignación de alumnos', async () => {
+  await db.execute(`ALTER TABLE tareas ADD COLUMN cupo_maximo INTEGER DEFAULT 0`);
   });
 
   await db.close?.();

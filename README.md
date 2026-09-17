@@ -1,3 +1,17 @@
+
+## Trabajos grupales
+
+Antes de desplegar esta versión, ejecutar `npm run migrate` desde la raíz del proyecto: la migración 16 agrega la modalidad grupal y sus tablas sin convertir tareas existentes.
+
+- El administrador activa **Trabajo grupal** al crear o editar una tarea sin grupos, notas ni entregas previas, y opcionalmente puede definir un **cupo máximo de integrantes por grupo** (0 = sin límite).
+- En **Materias**, cada alumno puede crear un grupo y unirse, o entrar en uno existente siempre que no haya alcanzado el cupo máximo. Los grupos pertenecen a un trabajo, no a toda la materia. Cada alumno solo puede asignarse a sí mismo y estar en un grupo por trabajo.
+- Cargar, corregir o borrar una nota actualiza a todos los integrantes. Marcar o desmarcar la entrega también. Las escrituras se hacen en una transacción: no quedan integrantes actualizados a medias.
+- Los grupos se forman antes de cargar progreso. No se permite entrar o salir mientras el alumno o el grupo tenga entrega o nota. Para desmarcar una entrega calificada primero hay que borrar la nota. Las notas siguen contando como entrega, igual que en el resto de la aplicación.
+- No se cambia la modalidad con progreso o grupos existentes; tampoco la configuración de calificación cuando hay grupos. Las tareas individuales y las importadas del campus siguen siendo individuales por defecto.
+- La sincronización es de registros de esta aplicación; no envía entregas ni modifica calificaciones en UGR Virtual. Los compañeros ven los cambios al refrescar los datos (no hay notificación push nueva).
+
+Pruebas locales de grupos: `node --test tests/grupos-tareas.test.mjs`. Usan archivos SQLite temporales y no modifican Turso.
+
 # 📚 Tareas UGR
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white)

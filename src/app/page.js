@@ -156,6 +156,8 @@ export default function Home() {
   const [detallesTarea, setDetallesTarea] = useState('');
   const [unidadTarea, setUnidadTarea] = useState('');
   const [tareaConNota, setTareaConNota] = useState(false);
+  const [tareaGrupal, setTareaGrupal] = useState(false);
+  const [cupoMaximo, setCupoMaximo] = useState(0);
   const [tipoTarea, setTipoTarea] = useState('actividad');
   const [materiaCondicionesEnEdicion, setMateriaCondicionesEnEdicion] = useState(null);
 
@@ -562,7 +564,8 @@ export default function Home() {
   };
 
   const handleToggleTarea = async (tareaId, alumno) => {
-    await toggleTareaAction(tareaId, alumno);
+    const resultado = await toggleTareaAction(tareaId, alumno);
+    if (!resultado?.exito) alert(resultado?.mensaje || 'No se pudo actualizar la entrega.');
     await cargarBD();
   };
 
@@ -628,6 +631,8 @@ export default function Home() {
       detalles: detallesTarea,
       unidad: unidadTarea,
       conNota: tareaConNota || tipoTarea === 'trabajo_practico',
+      grupal: tareaGrupal,
+      cupoMaximo: cupoMaximo,
       tipo: tipoTarea
     });
     if (!resultado?.exito) {
@@ -640,6 +645,8 @@ export default function Home() {
     setDetallesTarea('');
     setUnidadTarea('');
     setTareaConNota(false);
+    setTareaGrupal(false);
+    setCupoMaximo(0);
     setTipoTarea('actividad');
     await cargarBD();
     setPestana('materias');
@@ -648,7 +655,11 @@ export default function Home() {
   const handleGuardarEdicionTarea = async (e) => {
     e.preventDefault();
     if (!tareaEnEdicion) return;
-    const resultado = await editarTareaAction(tareaEnEdicion.tarea);
+    const resultado = await editarTareaAction({
+      ...tareaEnEdicion.tarea,
+      grupal: Boolean(tareaEnEdicion.tarea.grupal),
+      cupoMaximo: tareaEnEdicion.tarea.cupo_maximo
+    });
     if (!resultado?.exito) {
       alert(resultado?.mensaje || 'No se pudo editar la tarea.');
       return;
@@ -2010,6 +2021,7 @@ export default function Home() {
               {/* VISTA 2: MATERIAS */}
               {pestana === 'materias' && (
                 <VistaMaterias
+                  recargar={cargarBD}
                   materias={materias}
                   alumnos={alumnos}
                   usuarioActual={usuarioActual}
@@ -2308,6 +2320,22 @@ export default function Home() {
                         />
                         Esta tarea se califica con nota
                       </label>
+                      <label className="flex items-center gap-3 text-sm font-semibold text-cyan-200">
+                        <input type="checkbox" checked={tareaGrupal} onChange={(e) => setTareaGrupal(e.target.checked)} />
+                        Trabajo grupal (comparte entrega y nota)
+                      </label>
+                      {tareaGrupal && (
+                        <div className="flex flex-col gap-1">
+                          <label className="block text-xs font-semibold text-slate-300">Cupo máximo por grupo (0 = sin límite)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={cupoMaximo}
+                            onChange={(e) => setCupoMaximo(parseInt(e.target.value, 10) || 0)}
+                            className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-2.5 text-xs text-white focus:outline-none"
+                          />
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -2735,6 +2763,22 @@ export default function Home() {
                 />
                 Esta tarea se califica con nota
               </label>
+              <label className="flex items-center gap-3 text-sm font-semibold text-cyan-200">
+                <input type="checkbox" checked={Boolean(tareaEnEdicion.tarea.grupal)} onChange={(e) => setTareaEnEdicion({ ...tareaEnEdicion, tarea: { ...tareaEnEdicion.tarea, grupal: e.target.checked } })} />
+                Trabajo grupal (comparte entrega y nota)
+              </label>
+              {Boolean(tareaEnEdicion.tarea.grupal) && (
+                <div className="flex flex-col gap-1 mt-2">
+                  <label className="block text-xs font-semibold text-slate-300">Cupo máximo por grupo (0 = sin límite)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={tareaEnEdicion.tarea.cupo_maximo ?? 0}
+                    onChange={(e) => setTareaEnEdicion({ ...tareaEnEdicion, tarea: { ...tareaEnEdicion.tarea, cupo_maximo: parseInt(e.target.value, 10) || 0 } })}
+                    className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-2.5 text-xs text-white focus:outline-none"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
