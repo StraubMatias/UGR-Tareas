@@ -1378,7 +1378,7 @@ export default function Home() {
         </div>
 
         {usuarioActual && (
-          <div className="flex items-center gap-3">
+          <div className="portal-header-actions flex flex-wrap items-center gap-3">
             <div ref={notificacionesRef} className="relative">
               <button
                 type="button"
@@ -1687,9 +1687,9 @@ export default function Home() {
           ) : (
             <>
               {pestana === 'alumnos' && (
-                <div className={`grid grid-cols-1 ${proximoParcial ? 'lg:grid-cols-[280px_minmax(0,1fr)]' : ''} gap-6 items-start`}>
+                <div className={`grid grid-cols-1 ${proximoParcial ? 'xl:grid-cols-[280px_minmax(0,1fr)]' : ''} gap-6 items-start`}>
                   {proximoParcial && (
-                    <aside className="lg:sticky lg:top-6 bg-purple-950/20 border border-purple-500/30 rounded-2xl p-5 shadow-sm">
+                    <aside className="xl:sticky xl:top-6 bg-purple-950/20 border border-purple-500/30 rounded-2xl p-5 shadow-sm">
                       <p className="text-xs font-bold text-purple-300 uppercase tracking-wider mb-4">Próximo examen</p>
                       <div className="space-y-2">
                         <h2 className="text-lg font-bold text-white leading-snug">{proximoParcial.nombre}</h2>

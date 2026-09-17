@@ -1,3 +1,6 @@
+# 📚 Tareas UGR
+
+Portal de cursada para una comisión de estudiantes: materias, entregas, notas, trabajos grupales, cronograma, parciales y avance en la carrera. Complementa UGR Virtual; no reemplaza las entregas ni las calificaciones oficiales del campus.
 
 ## Trabajos grupales
 
@@ -12,7 +15,7 @@ Antes de desplegar esta versión, ejecutar `npm run migrate` desde la raíz del 
 
 Pruebas locales de grupos: `node --test tests/grupos-tareas.test.mjs`. Usan archivos SQLite temporales y no modifican Turso.
 
-# 📚 Tareas UGR
+## Tecnologías principales
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)
@@ -21,15 +24,13 @@ Pruebas locales de grupos: `node --test tests/grupos-tareas.test.mjs`. Usan arch
 ![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white)
 ![Estado](https://img.shields.io/badge/estado-en%20uso%20real%20🟢-22c55e)
 
-> 🎓 **Portal de gestión de cursada** para una comisión real: materias, tareas, parciales, horarios, notas, plan de estudio y ranking, todo en un solo lugar.
-
 ---
 
 ## 📑 Índice
 
 - [🤔 ¿Qué es?](#-qué-es-tareas-ugr)
 - [✨ Funcionalidades](#-funcionalidades)
-- [🖼️ Capturas de la app](#️-capturas-de-la-app)
+- [Trabajos grupales](#trabajos-grupales)
 - [🛠️ Tecnologías](#️-tecnologías)
 - [🧱 Estructura del proyecto](#-estructura-del-proyecto)
 - [🚀 Puesta en marcha](#-puesta-en-marcha)
@@ -54,10 +55,19 @@ No es una demo ni un prototipo: es un proyecto **pensado para uso real entre com
 - Definir fechas de inicio y fin, y marcar qué tareas completó cada alumno
 - Diferenciar tareas **pendientes, entregadas, futuras y con nota faltante**
 
-### 📊 Estado personal y del grupo
-- Avance individual por alumno y qué tareas faltan completar
-- Historial de entregas y actividades por estudiante
-- Revisión rápida de lo ya entregado y lo que todavía necesita nota
+### 📊 Estado por alumno
+- Tarjeta propia de **Tu situación** y acordeones de compañeros con búsqueda por nombre (ignora acentos).
+- Filtros **Pendientes, Sin nota, Futuras, Completadas y Grupales**, con contadores por alumno.
+- Grilla común de tareas: **dos columnas cuando hay ancho suficiente**, incluso entre materias y unidades distintas; una columna en espacios angostos. Cada tarjeta identifica su materia y unidad.
+- Nombres de trabajos y filtros resaltados, textos de mayor contraste y foco visible para navegar con teclado.
+- Marcado de entregas y edición de notas únicamente en las tareas del usuario actual, según la disponibilidad de la actividad; consulta del estado y notas de los compañeros.
+- Grupo propio, compañeros de equipo, otros grupos, alumnos sin grupo y cupos, también en trabajos completados. Acceso a **Materias** para gestionar grupos.
+- Semáforo de fechas, enlaces al campus y panel del próximo examen cuando corresponde.
+- Componentes separados: `VistaAlumnos`, `EstadoAlumno`, `EstadoTareaAlumno` y `EstadoGrupoAlumno`.
+
+### 🕘 Historial y períodos
+- Historial de entregas y notas por alumno.
+- Selector de período de cursada para consultar la información correspondiente.
 
 ### 📝 Parciales, notas y evaluaciones
 - Registrar parciales por materia y fecha, y cargar notas por alumno
@@ -85,30 +95,6 @@ No es una demo ni un prototipo: es un proyecto **pensado para uso real entre com
 - Botón **🔄 Sincronizar UGR** para importar tareas nuevas directo desde el campus virtual
 - Cada alumno entra y ve de un vistazo su situación, lo pendiente, lo próximo y cómo va comparado con sus compañeros
 
-## 🖼️ Capturas de la app
-
-Las vistas principales del proyecto:
-
-#### 📊 Estado del Alumno
-
-![Estado del Alumno](./screenshots/Screenshot_2026-09-07-215924.png)
-
-#### 🗓️ Cronograma
-
-![Cronograma](./screenshots/Screenshot_2026-09-07-215958.png)
-
-#### 🎓 Plan de Estudio
-
-![Plan de Estudio](./screenshots/Screenshot_2026-09-07-220030.png)
-
-#### 📜 Historial
-
-![Historial](./screenshots/Screenshot_2026-09-07-220050.png)
-
-#### 🏆 Ranking
-
-![Ranking](./screenshots/Screenshot_2026-09-07-220103.png)
-
 ## 🛠️ Tecnologías
 
 | Tecnología | Para qué se usa |
@@ -135,7 +121,8 @@ tareasUGR/
 │   └── README.md           #   documentación técnica del módulo
 ├── database/migrate.mjs    # migraciones de la base (Turso / libSQL)
 ├── tests/                  # tests de la app (node:test)
-├── screenshots/            # capturas de las vistas
+├── database/reset-admin-password.mjs # recuperación del administrador
+├── cronogramas/            # cronogramas organizados por año
 ├── .env.example            # variables de entorno de ejemplo
 └── README.md               # este archivo
 
@@ -176,13 +163,16 @@ npm run dev
 TURSO_DATABASE_URL=libsql://tu-base.turso.io
 TURSO_AUTH_TOKEN=tu_token_de_turso
 SESSION_SECRET=una_clave_larga_y_aleatoria
+ADMIN_USUARIO=nombre_del_administrador
 
 # Opcionales: credenciales del campus virtual para el sincronizador (ugr-sync)
 UGRVIRTUAL_USER=
 UGRVIRTUAL_PASSWORD=
 ```
 
-> ⚠️ `SESSION_SECRET` es obligatorio y **no debe reutilizar el token de Turso**. Las credenciales de `UGRVIRTUAL_*` solo van en `.env.local`, nunca en git.
+> ⚠️ `SESSION_SECRET` es obligatorio y **no debe reutilizar el token de Turso**. Guardá los secretos en `.env.local` durante el desarrollo o en las variables de entorno del proveedor de despliegue, nunca en git.
+
+`ADMIN_USUARIO` identifica al administrador del portal. El comando `npm run admin:reset-password` requiere que ese usuario ya exista en la tabla de alumnos: genera una contraseña nueva, la muestra en la terminal e invalida sus sesiones anteriores. No crea una cuenta nueva.
 
 ## 📜 Scripts disponibles
 
@@ -193,6 +183,7 @@ UGRVIRTUAL_PASSWORD=
 | `npm run start` | Sirve el build de producción |
 | `npm run lint` | Ejecuta ESLint |
 | `npm run migrate` | Aplica las migraciones de la base |
+| `npm run admin:reset-password` | Regenera la clave del administrador existente y revoca sus sesiones |
 | `npm run test` | Corré los tests de la app y de `ugr-sync` |
 | `npm run ugr:login` | Inicia sesión en UGR Virtual y guarda la cookie |
 | `npm run ugr:sync` | Detecta tareas nuevas en el campus y sugiere importarlas |
@@ -264,7 +255,7 @@ npm run ugr:sync -- --yes   # inserta todo sin preguntar
 
 ### 🖥️ Desde el panel
 
-También hay un botón **🔄 Sincronizar UGR** en la app (visible solo para el admin, junto a «Panel de Carga»). Abre una ventana con lo que encontró el sync y muestra cada tarea con un **check**: solo las tildadas se importan al apretar «Importar seleccionadas» (con «Tildar/Destildar todas» para cambiar el lote completo). **Nada se carga automáticamente.**
+También hay un botón **🔄 Sincronizar UGR** en la app (visible solo para el admin, junto a «Panel de Carga»). Abre una ventana con lo que encontró el sync y muestra cada tarea con un **check**: solo las tildadas se importan al apretar «Importar seleccionadas» (con «Tildar/Destildar todas» para cambiar el lote completo). Las tareas se importan al confirmar la selección. El sincronizador también detecta avisos recientes del campus para publicarlos en la campana y propone eventos para el cronograma; revisá esas propuestas antes de confirmarlas. La detección puede completar enlaces faltantes de tareas y parciales existentes, sin sobrescribir URLs ya cargadas.
 
 ### ⚙️ Qué hace el sync, por dentro
 

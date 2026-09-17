@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { agruparTareasPorUnidad, formatearUnidad, obtenerIconoMateria, obtenerResumenTareasAlumno } from '../lib/cursada';
+import { agruparTareasPorUnidad, obtenerResumenTareasAlumno } from '../lib/cursada';
 import EstadoTareaAlumno from './EstadoTareaAlumno';
 
 const ESTADOS = [
@@ -55,24 +55,18 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
                 {resumen.total === 0 ? 'Todavía no hay tareas cargadas.' : filtro === 'pendientes' ? 'No hay entregas abiertas pendientes. Podés consultar las notas, tareas futuras y grupos en los otros filtros.' : 'No hay tareas en esta categoría.'}
               </p>
             ) : (
-              <div className="space-y-6">
-                {materias.map((materia) => {
-                  const tareas = (materia.tareas || []).filter((tarea) => ids.has(tarea.id));
-                  if (!tareas.length) return null;
-                  return (
-                    <section key={materia.id} className="space-y-3">
-                      <h4 className="font-semibold text-slate-100">{obtenerIconoMateria(materia.nombre)} {materia.nombre}</h4>
-                      {agruparTareasPorUnidad(tareas).map((grupo) => (
-                        <div key={grupo.unidad || 'sin-unidad'} className="space-y-2">
-                          {grupo.unidad && <h5 className="text-xs font-medium text-slate-400">{grupo.unidad === 'Evaluaciones' ? 'Evaluaciones' : `Unidad ${formatearUnidad(grupo.unidad)}`}</h5>}
-                          <ul className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-                            {grupo.tareas.map((tarea) => <EstadoTareaAlumno key={tarea.id} tarea={tarea} alumno={alumno} {...acciones} />)}
-                          </ul>
-                        </div>
-                      ))}
-                    </section>
-                  );
-                })}
+              <div className="estado-tareas-contenedor">
+                <ul className="estado-tareas-grid" aria-label={`Tareas de ${alumno}`}>
+                  {materias.flatMap((materia) => {
+                    const tareas = (materia.tareas || []).filter((tarea) => ids.has(tarea.id));
+                    return agruparTareasPorUnidad(tareas).flatMap((grupo) =>
+                      grupo.tareas.map((tarea) => (
+                        <EstadoTareaAlumno key={tarea.id} tarea={tarea} alumno={alumno}
+                          materia={materia} unidad={grupo.unidad} {...acciones} />
+                      ))
+                    );
+                  })}
+                </ul>
               </div>
             )}
           </div>

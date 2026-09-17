@@ -1,11 +1,11 @@
 import {
-  calcularEstadoSemaforo, formatearFechaDDMMAAAA, tareaCompletadaPor,
+  calcularEstadoSemaforo, formatearFechaDDMMAAAA, formatearUnidad, obtenerIconoMateria, tareaCompletadaPor,
   tareaFaltaNota, tareaPuedeGestionarse
 } from '../lib/cursada';
 import EstadoGrupoAlumno from './EstadoGrupoAlumno';
 
 export default function EstadoTareaAlumno({
-  tarea, alumno, alumnos, usuarioActual, irATareaEnMaterias,
+  tarea, alumno, alumnos, usuarioActual, irATareaEnMaterias, materia, unidad,
   toggleTareaDesdeCliente, notasTareasInputs, handleNotaTareaChangeLocal,
   handleGuardarNotaTareaOnBlur
 }) {
@@ -18,7 +18,13 @@ export default function EstadoTareaAlumno({
     && tarea.notas?.[nombre] !== undefined && tarea.notas?.[nombre] !== null && tarea.notas?.[nombre] !== '');
 
   return (
-    <li className="estado-tarea rounded-xl border border-slate-800 bg-[#111a24] p-4 space-y-3">
+    <li className="estado-tarea min-w-0 rounded-xl border border-slate-800 bg-[#111a24] p-4 space-y-3">
+      {materia && (
+        <div className="border-b border-slate-800 pb-3">
+          <h4 className="font-semibold text-slate-100">{obtenerIconoMateria(materia.nombre)} {materia.nombre}</h4>
+          {unidad && <p className="text-xs font-medium text-slate-400 mt-1">{unidad === 'Evaluaciones' ? 'Evaluaciones' : `Unidad ${formatearUnidad(unidad)}`}</p>}
+        </div>
+      )}
       <div className="flex items-start gap-3">
         {propia && (
           <input type="checkbox" checked={entregada} disabled={!puedeGestionar}
@@ -28,7 +34,7 @@ export default function EstadoTareaAlumno({
         )}
         <div className="min-w-0 flex-1">
           <button type="button" onClick={() => irATareaEnMaterias(tarea.id)}
-            className="text-left font-semibold text-slate-100 hover:text-cyan-300 cursor-pointer">
+            className="estado-tarea-titulo text-left font-semibold text-slate-100 hover:text-cyan-300 cursor-pointer">
             {tarea.nombre}
           </button>
           <p className="text-xs text-slate-400 mt-1">

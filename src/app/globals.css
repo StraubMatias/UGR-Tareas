@@ -135,6 +135,115 @@ textarea {
   color: #ffffff;
 }
 
+/* Misma fuerza tipográfica que la navegación, limitada a estas dos zonas.
+   Los controles declaran su peso explícitamente por el reset `font: inherit`. */
+.estado-alumnos {
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.estado-alumnos :is(h2, h3, h4, h5, button, summary, strong),
+.portal-header :is(button, select, strong) {
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.32);
+}
+
+.estado-alumnos :is(h2, h3, h4) {
+  color: #f1f5f9;
+}
+
+.estado-alumnos h2 {
+  font-size: 1.5rem;
+}
+
+.estado-alumnos h4 {
+  font-size: 1.125rem;
+}
+
+.estado-alumnos :is(.text-xs, input, summary),
+.portal-header :is(button, select, label) {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.estado-alumnos :is(.text-slate-400, .text-slate-300),
+.portal-header :is(.text-slate-400, .text-slate-500, .text-slate-300) {
+  color: #d9e4ec;
+}
+
+.estado-alumnos [aria-pressed] {
+  color: #e2e8f0;
+}
+
+.estado-alumnos [aria-pressed="true"] {
+  color: #b8f3f0;
+  background-color: rgba(98, 214, 209, 0.16);
+  border-color: rgba(98, 214, 209, 0.65);
+}
+
+.estado-tareas-contenedor {
+  container-type: inline-size;
+}
+
+.estado-tareas-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@container (min-width: 42rem) {
+  .estado-tareas-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.estado-tarea {
+  overflow-wrap: anywhere;
+}
+
+.estado-tarea .estado-tarea-titulo {
+  font-size: 1.125rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.estado-alumnos input {
+  font-weight: 600;
+}
+
+.estado-alumnos input::placeholder {
+  color: #aebdcd;
+  opacity: 1;
+}
+
+.estado-alumnos :is(button, a, summary, input):focus-visible,
+.portal-header :is(button, a, select):focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+.portal-header .portal-kicker {
+  font-size: 0.875rem;
+}
+
+.portal-header-actions > button {
+  color: #e6edf3;
+}
+
+.portal-header-actions > button:hover {
+  color: #ffffff;
+}
+
+.portal-header-actions > button[class~="text-emerald-300"] {
+  color: #baf5d2;
+}
+
+.portal-header-actions > button[class~="text-amber-300"] {
+  color: #fde0ab;
+}
+
 @media (max-width: 640px) {
   body {
     background-size: auto, auto, 30px 30px, 30px 30px;
