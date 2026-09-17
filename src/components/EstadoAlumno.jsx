@@ -55,28 +55,22 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
               <p role="status" className="rounded-xl border border-slate-800 p-6 text-center text-sm text-slate-300">
                 {resumen.total === 0 ? 'Todavía no hay tareas cargadas.' : filtro === 'pendientes' ? 'No hay entregas abiertas pendientes. Podés consultar las notas, tareas futuras y grupos en los otros filtros.' : 'No hay tareas en esta categoría.'}
               </p>
-                        ) : (
-              <div className="estado-tareas-contenedor space-y-6">
+                                                ) : (
+              <div className="estado-tareas-contenedor grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {materias
-                  .map((materia) => ({
-                    materia,
-                    tareas: (materia.tareas || []).filter((tarea) => ids.has(tarea.id))
-                  }))
-                  .filter(({ tareas }) => tareas.length > 0)
-                  .map(({ materia, tareas }) => (
-                    <div key={materia.id} className="materia-grupo pl-4 border-l-2 border-slate-700/50">
-                      <h4 className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+                  .flatMap((materia) => 
+                    (materia.tareas || [])
+                      .filter((tarea) => ids.has(tarea.id))
+                      .map((tarea) => ({ tarea, materia }))
+                  )
+                  .map(({ tarea, materia }) => (
+                    <div key={tarea.id} className="bg-slate-800/20 rounded-lg p-3 border border-slate-700/30">
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 pb-2 border-b border-slate-700/30">
                         <span className="w-1.5 h-1.5 rounded-full bg-cyan-500/50"></span>
                         {materia.nombre}
-                      </h4>
-                      <ul className="estado-tareas-columnas grid grid-cols-1 sm:grid-cols-2 gap-3" aria-label={`Tareas de ${materia.nombre}`}>
-                        {agruparTareasPorUnidad(tareas).flatMap((grupo) =>
-                          grupo.tareas.map((tarea) => (
-                            <EstadoTareaAlumno key={tarea.id} tarea={tarea} alumno={alumno}
-                              materia={materia} unidad={grupo.unidad} {...acciones} />
-                          ))
-                        )}
-                      </ul>
+                      </div>
+                      <EstadoTareaAlumno tarea={tarea} alumno={alumno}
+                        materia={materia} unidad={tarea.unidad} {...acciones} />
                     </div>
                   ))}
               </div>
