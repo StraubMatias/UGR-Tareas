@@ -153,7 +153,8 @@ export function extraerPrimerPostDeHilo(html, baseUrl = '') {
   const matchAutorId = (enlaceAutor.attr('href') || '').match(/[?&]id=(\d+)/);
   const autorId = matchAutorId ? matchAutorId[1] : '';
   const fechaTexto = post.find('time[datetime]').first().attr('datetime')
-    || limpiarTexto(post.find('time').first().text());
+    || limpiarTexto(post.find('time').first().text())
+    || limpiarTexto(post.find('.author').first().text());
   // Cubre el layout clásico de Moodle y el de Moodle 4.5+ (class
   // `post-content-container` / data-region-content="forum-post-core").
   const bloqueContenido = post.find(
@@ -416,13 +417,16 @@ function formatoLegible(fechaISO) {
 // «…el martes 15 a las 20:00 tendremos un encuentro…» → consulta del 15). Si no
 // hay fechas o son del pasado, devuelve [] (el aviso igual puede publicarse
 // como aviso en la campana).
-export function analizarAvisosParaCronograma({ titulo, contenido, materiaNombre, hoy, maxEventos = 4 }) {
+export function analizarAvisosParaCronograma({ titulo, contenido, materiaNombre, hoy, fechaPublicacion, maxEventos = 4 }) {
   const fechaBase = hoy || hoyISO();
+  // «Hoy», «mañana» y días de semana pertenecen al mensaje, no al sync.
+  // El corte de eventos pasados sigue siendo el día de la sincronización.
+  const referencia = parsearFechaMoodle(fechaPublicacion) || fechaBase;
   // El contenido primero: las palabras ancla («hoy», «mañana», días de la
   // semana) del título del hilo no deben secuestrar el contexto — el título
   // «Encuentro Sincrónico de hoy y mañana» menciona fechas sin aclarar nada.
   const texto = `${contenido || ''} ${titulo || ''}`;
-  const candidatos = encontrarFechasPotenciales(texto, fechaBase, titulo)
+  const candidatos = encontrarFechasPotenciales(texto, referencia, titulo)
     .filter((c) => c.fecha >= fechaBase)
     .slice(0, Math.max(1, Number(maxEventos) || 4));
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
+import { nombreNotificacionAviso } from '../lib/avisos';
 import {
   validarLoginAction,
   cerrarSesionAction,
@@ -1011,7 +1012,7 @@ export default function Home() {
       ...avisos.map((aviso) => ({
         id: `aviso-${aviso.id}`,
         tipo: 'aviso-nuevo',
-        nombre: aviso.titulo,
+        nombre: nombreNotificacionAviso(aviso, cronograma),
         materia: aviso.materia_nombre || aviso.curso_nombre || 'Materia',
         url: aviso.url || ''
       })),

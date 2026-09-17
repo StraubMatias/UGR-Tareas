@@ -453,7 +453,9 @@ export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy, diasAtras
   // avisos_moodle guarda el histórico por curso + hilo.
   const fechaMinima = sumarDias(fechaBase, -diasVentana);
 
-  const resConocidos = await db.execute('SELECT curso_id, hilo_id FROM avisos_moodle');
+  // La vista previa persiste pendientes. Deben reaparecer al confirmar o
+  // reabrir el modal; solo una decisión definitiva excluye el hilo.
+  const resConocidos = await db.execute("SELECT curso_id, hilo_id FROM avisos_moodle WHERE estado IN ('aceptado', 'rechazado')");
   const conocidos = new Set(
     resConocidos.rows.map((fila) => `${fila.curso_id}:${fila.hilo_id}`)
   );
@@ -544,13 +546,14 @@ export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy, diasAtras
         });
         if (!esDeDocente) continue;
 
-        const id = `aviso_${curso.id}_${discusion.id}`;
         const analisis = analizarAvisosParaCronograma({
           titulo: post.titulo,
           contenido: post.contenido,
           materiaNombre: coincidencia.materia.nombre,
-          hoy: fechaBase
+          hoy: fechaBase,
+          fechaPublicacion: post.fecha
         });
+        const id = `aviso_${curso.id}_${discusion.id}`;
 
         avisosDetectados.push({
           id,

@@ -109,9 +109,14 @@ export default function VistaHorarios({
                       if (esSoloSinClases) {
                         return (
                           <div className="mt-2 space-y-1.5">
-                            <div className="calendar-event calendar-off">
-                              <span className="font-bold">Sin clases</span>
-                            </div>
+                            {eventos.cronograma.map((evento) => {
+                              const materia = materias.find((item) => item.id === evento.materia_id);
+                              return (
+                                <div key={evento.id} className="calendar-event calendar-off" title={`Sin clases · ${materia?.nombre || 'Materia'}`}>
+                                  <span className="font-bold">Sin clases</span> {materia?.nombre || 'Materia'}
+                                </div>
+                              );
+                            })}
                           </div>
                         );
                       }

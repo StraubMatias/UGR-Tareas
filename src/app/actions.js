@@ -730,7 +730,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado = null) {
       obtenerCronogramaAction(periodoParaCargar),
       obtenerProgresoPlanAction(),
       db.execute(
-        "SELECT id, curso_nombre, materia_nombre, foro_nombre, titulo, autor, fecha, contenido, url FROM avisos_moodle WHERE estado = 'aceptado' ORDER BY fecha DESC"
+        "SELECT id, curso_nombre, materia_id, materia_nombre, foro_nombre, titulo, autor, fecha, contenido, url FROM avisos_moodle WHERE estado = 'aceptado' ORDER BY fecha DESC"
       )
     ]);
 
@@ -1096,7 +1096,7 @@ export async function syncUgrAction({ confirmar = false, ids = [], idsAvisos = [
 
       // Eventos sugeridos aprobados por el admin → cronograma (origen 'ugr').
       const pedidosEventos = new Set(Array.isArray(idsEventos) ? idsEventos : []);
-      const eventosSeleccionados = eventosSugeridos.filter((e) => pedidosEventos.has(e.avisoId));
+      const eventosSeleccionados = eventosSugeridos.filter((e) => pedidosEventos.has(e.avisoId) && pedidosAvisos.has(e.avisoId));
       if (eventosSeleccionados.length > 0) {
         eventosInsertados = await insertarEventosCronograma({ db, eventos: eventosSeleccionados });
       }
