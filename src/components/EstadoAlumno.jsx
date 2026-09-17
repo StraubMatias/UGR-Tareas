@@ -64,7 +64,7 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
                       .map((tarea) => ({ tarea, materia }))
                   )
                   .map(({ tarea, materia }) => (
-                    <div key={tarea.id} className="sm:w-1/2 bg-slate-800/20 rounded-lg p-3 border border-slate-700/30">
+                    <div key={tarea.id} className="w-[calc(50%-0.5rem)] bg-slate-800/20 rounded-lg p-3 border border-slate-700/30">
                       <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 pb-2 border-b border-slate-700/30">
                         <span className="w-1.5 h-1.5 rounded-full bg-cyan-500/50"></span>
                         {materia.nombre}
