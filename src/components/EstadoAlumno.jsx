@@ -56,7 +56,7 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
                 {resumen.total === 0 ? 'Todavía no hay tareas cargadas.' : filtro === 'pendientes' ? 'No hay entregas abiertas pendientes. Podés consultar las notas, tareas futuras y grupos en los otros filtros.' : 'No hay tareas en esta categoría.'}
               </p>
                                                 ) : (
-              <div className="estado-tareas-contenedor grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="estado-tareas-contenedor flex flex-wrap gap-2">
                 {materias
                   .flatMap((materia) => 
                     (materia.tareas || [])
@@ -64,7 +64,7 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
                       .map((tarea) => ({ tarea, materia }))
                   )
                   .map(({ tarea, materia }) => (
-                    <div key={tarea.id} className="bg-slate-800/20 rounded-lg p-3 border border-slate-700/30">
+                    <div key={tarea.id} className="sm:w-1/2 bg-slate-800/20 rounded-lg p-3 border border-slate-700/30">
                       <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 pb-2 border-b border-slate-700/30">
                         <span className="w-1.5 h-1.5 rounded-full bg-cyan-500/50"></span>
                         {materia.nombre}
