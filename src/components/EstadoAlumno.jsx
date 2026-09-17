@@ -56,7 +56,7 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
                 {resumen.total === 0 ? 'Todavía no hay tareas cargadas.' : filtro === 'pendientes' ? 'No hay entregas abiertas pendientes. Podés consultar las notas, tareas futuras y grupos en los otros filtros.' : 'No hay tareas en esta categoría.'}
               </p>
                         ) : (
-              <div className="estado-tareas-contenedor space-y-4">
+              <div className="estado-tareas-contenedor space-y-6">
                 {materias
                   .map((materia) => ({
                     materia,
@@ -64,11 +64,12 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
                   }))
                   .filter(({ tareas }) => tareas.length > 0)
                   .map(({ materia, tareas }) => (
-                    <div key={materia.id}>
-                      <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wide mb-2">
+                    <div key={materia.id} className="materia-grupo pl-4 border-l-2 border-slate-700/50">
+                      <h4 className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-500/50"></span>
                         {materia.nombre}
                       </h4>
-                      <ul className="estado-tareas-columnas" aria-label={`Tareas de ${materia.nombre}`}>
+                      <ul className="estado-tareas-columnas grid grid-cols-1 md:grid-cols-2 gap-3" aria-label={`Tareas de ${materia.nombre}`}>
                         {agruparTareasPorUnidad(tareas).flatMap((grupo) =>
                           grupo.tareas.map((tarea) => (
                             <EstadoTareaAlumno key={tarea.id} tarea={tarea} alumno={alumno}
