@@ -186,21 +186,28 @@ textarea {
   container-type: inline-size;
 }
 
-.estado-tareas-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1rem;
-  align-items: start;
+/* Columnas independientes (estilo masonry): cada tarjeta conserva su altura
+   natural y las columnas se rellenan sin huecos, a diferencia de una grilla
+   donde cada fila mide lo que la tarjeta más alta de esa fila. */
+.estado-tareas-columnas {
+  columns: 1;
+  column-gap: 1rem;
 }
 
 @container (min-width: 42rem) {
-  .estado-tareas-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .estado-tareas-columnas {
+    columns: 2;
   }
 }
 
 .estado-tarea {
+  break-inside: avoid;
+  margin-bottom: 1rem;
   overflow-wrap: anywhere;
+}
+
+.estado-tarea:last-child {
+  margin-bottom: 0;
 }
 
 .estado-tarea .estado-tarea-titulo {

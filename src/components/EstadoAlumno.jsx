@@ -56,7 +56,7 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
               </p>
             ) : (
               <div className="estado-tareas-contenedor">
-                <ul className="estado-tareas-grid" aria-label={`Tareas de ${alumno}`}>
+                <ul className="estado-tareas-columnas" aria-label={`Tareas de ${alumno}`}>
                   {materias.flatMap((materia) => {
                     const tareas = (materia.tareas || []).filter((tarea) => ids.has(tarea.id));
                     return agruparTareasPorUnidad(tareas).flatMap((grupo) =>
