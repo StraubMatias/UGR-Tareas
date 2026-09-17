@@ -20,9 +20,9 @@ export default function EstadoTareaAlumno({
   return (
     <li className="estado-tarea min-w-0 rounded-xl border border-slate-800 bg-[#111a24] p-4 space-y-3">
       {materia && (
-        <div className="border-b border-slate-800 pb-3">
-          <h4 className="font-semibold text-slate-100">{obtenerIconoMateria(materia.nombre)} {materia.nombre}</h4>
-          {unidad && <p className="text-xs font-medium text-slate-400 mt-1">{unidad === 'Evaluaciones' ? 'Evaluaciones' : `Unidad ${formatearUnidad(unidad)}`}</p>}
+        <div className="estado-tarea-contexto border-b border-slate-800">
+          <p className="estado-tarea-materia"><span aria-hidden="true">{obtenerIconoMateria(materia.nombre)}</span> {materia.nombre}</p>
+          {unidad && <p className="estado-tarea-unidad">{unidad === 'Evaluaciones' ? 'Evaluaciones' : `Unidad ${formatearUnidad(unidad)}`}</p>}
         </div>
       )}
       <div className="flex items-start gap-3">
@@ -33,25 +33,27 @@ export default function EstadoTareaAlumno({
             className="mt-1 h-5 w-5 shrink-0 accent-cyan-400 cursor-pointer disabled:opacity-40" />
         )}
         <div className="min-w-0 flex-1">
-          <button type="button" onClick={() => irATareaEnMaterias(tarea.id)}
-            className="estado-tarea-titulo text-left font-semibold text-slate-100 hover:text-cyan-300 cursor-pointer">
-            {tarea.nombre}
-          </button>
-          <p className="text-xs text-slate-400 mt-1">
-            {tarea.grupal ? 'Trabajo grupal' : 'Individual'}{tarea.conNota ? ' · Con nota' : ''}
-            {' · '}Entrega: {formatearFechaDDMMAAAA(tarea.fin)}
+          <h4>
+            <button type="button" onClick={() => irATareaEnMaterias(tarea.id)}
+              className="estado-tarea-titulo text-left text-slate-100 hover:text-cyan-300 cursor-pointer">
+              {tarea.nombre}
+            </button>
+          </h4>
+          <p className="estado-tarea-meta">
+            <span>{tarea.grupal ? 'Trabajo grupal' : 'Individual'}{tarea.conNota ? ' · Con nota' : ''}</span>
+            <span className="estado-tarea-fecha">Entrega: {formatearFechaDDMMAAAA(tarea.fin)}</span>
           </p>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className={`rounded-md border px-2 py-1 ${entregada ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : semaforo.estilo}`}>
+        <span className={`estado-tarea-estado rounded-md border px-2 py-1 ${entregada ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : semaforo.estilo}`}>
           {faltaNota ? 'Entregada · falta nota' : entregada ? 'Completada' : semaforo.texto}
         </span>
-        {tarea.url && <a href={tarea.url} target="_blank" rel="noopener noreferrer" className="text-cyan-300 hover:underline">Ver en UGR ↗</a>}
+        {tarea.url && <a href={tarea.url} target="_blank" rel="noopener noreferrer" className="estado-tarea-campus hover:underline">Ver en UGR ↗</a>}
       </div>
       <EstadoGrupoAlumno tarea={tarea} alumno={alumno} alumnos={alumnos} irATareaEnMaterias={irATareaEnMaterias} />
       {tarea.conNota && (
-        <div className="border-t border-slate-800 pt-3 space-y-3 text-sm">
+        <div className="estado-tarea-notas space-y-3">
           {propia ? (
             <label className="flex items-center justify-between gap-3 text-slate-300">
               <span>{tarea.grupal ? 'Nota del grupo' : 'Tu nota'} (1 a 10)</span>

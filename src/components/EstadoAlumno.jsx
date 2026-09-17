@@ -28,8 +28,8 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
         <button type="button" aria-expanded={abierto} aria-controls={contenidoId} onClick={alAlternar}
           className="w-full flex flex-wrap items-center justify-between gap-3 p-5 text-left hover:bg-white/[0.025] cursor-pointer">
           <span className="min-w-0">
-            <span className="block font-bold text-lg text-white break-words">{alumno}</span>
-            <span className="block text-xs text-slate-400 mt-1">{propia ? 'Tu situación · ' : ''}{resumen.completadas.length} de {resumen.total} tareas completadas</span>
+            <span className="estado-alumno-nombre block text-white break-words">{alumno}</span>
+            <span className="estado-alumno-resumen block text-xs text-slate-400 mt-1">{propia ? 'Tu situación · ' : ''}{resumen.completadas.length} de {resumen.total} tareas completadas</span>
           </span>
           <span className="flex items-center flex-wrap gap-2 text-xs text-slate-300">
             <span className={resumen.pendientes.length ? 'text-amber-300' : 'text-emerald-300'}>{resumen.pendientes.length} pendientes</span>
@@ -42,11 +42,12 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
       <div id={contenidoId} hidden={!abierto}>
         {abierto && (
           <div className="border-t border-slate-800 p-4 sm:p-5 space-y-5">
-            <div className="flex flex-wrap gap-2" role="group" aria-label={`Filtrar tareas de ${alumno}`}>
+            <div className="estado-filtros flex flex-wrap gap-2" role="group" aria-label={`Filtrar tareas de ${alumno}`}>
               {filtros.map(([clave, etiqueta]) => (
                 <button key={clave} type="button" aria-pressed={filtro === clave} onClick={() => setFiltro(clave)}
                   className={`rounded-lg border px-3 py-2 text-xs font-medium cursor-pointer ${filtro === clave ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}>
-                  {etiqueta} ({clave === 'grupales' ? resumen.totalGrupales : resumen[clave].length})
+                  <span>{etiqueta}</span>{' '}
+                  <span className="estado-filtro-contador">{clave === 'grupales' ? resumen.totalGrupales : resumen[clave].length}</span>
                 </button>
               ))}
             </div>

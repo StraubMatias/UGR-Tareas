@@ -135,51 +135,162 @@ textarea {
   color: #ffffff;
 }
 
-/* Misma fuerza tipográfica que la navegación, limitada a estas dos zonas.
-   Los controles declaran su peso explícitamente por el reset `font: inherit`. */
-.estado-alumnos {
-  font-weight: 500;
-  line-height: 1.6;
-}
-
-.estado-alumnos :is(h2, h3, h4, h5, button, summary, strong),
+/* El encabezado conserva su estilo; la vista de alumnos tiene su propia jerarquía. */
 .portal-header :is(button, select, strong) {
   font-weight: 800;
   letter-spacing: 0.01em;
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.32);
 }
 
-.estado-alumnos :is(h2, h3, h4) {
-  color: #f1f5f9;
-}
-
-.estado-alumnos h2 {
-  font-size: 1.5rem;
-}
-
-.estado-alumnos h4 {
-  font-size: 1.125rem;
-}
-
-.estado-alumnos :is(.text-xs, input, summary),
 .portal-header :is(button, select, label) {
   font-size: 1rem;
   line-height: 1.5;
 }
 
-.estado-alumnos :is(.text-slate-400, .text-slate-300),
 .portal-header :is(.text-slate-400, .text-slate-500, .text-slate-300) {
   color: #d9e4ec;
 }
 
+.estado-alumnos {
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.estado-alumnos h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.estado-alumnos .estado-companeros-titulo {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.estado-alumnos :is(.text-xs, summary) {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.estado-alumnos button {
+  font-weight: 500;
+}
+
+.estado-alumnos .estado-alumno-nombre {
+  font-size: 1.125rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.estado-alumnos .estado-alumno-resumen {
+  font-weight: 400;
+}
+
+.estado-alumnos .estado-filtros {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
 .estado-alumnos [aria-pressed] {
-  color: #e2e8f0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #aebdcd;
+  border-color: transparent;
+  background-color: rgba(148, 163, 184, 0.045);
+}
+
+.estado-alumnos [aria-pressed]:hover {
+  color: #e6edf3;
+  background-color: rgba(148, 163, 184, 0.1);
 }
 
 .estado-alumnos [aria-pressed="true"] {
   color: #b8f3f0;
-  background-color: rgba(98, 214, 209, 0.16);
-  border-color: rgba(98, 214, 209, 0.65);
+  font-weight: 600;
+  background-color: rgba(98, 214, 209, 0.1);
+  border-color: rgba(98, 214, 209, 0.35);
+}
+
+.estado-filtro-contador {
+  min-width: 1.5rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.4rem;
+  background: rgba(148, 163, 184, 0.1);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.estado-alumnos .estado-tarea-contexto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.estado-alumnos .estado-tarea-materia {
+  color: #b2c4d3;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.estado-alumnos .estado-tarea-unidad {
+  color: #a3b3c4;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.estado-alumnos .estado-tarea-meta {
+  margin-top: 0.5rem;
+  color: #a3b3c4;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+}
+
+.estado-tarea-fecha {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+.estado-alumnos .estado-tarea-estado {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.estado-alumnos .estado-tarea-campus {
+  margin-left: auto;
+  color: #a9c9d4;
+  font-size: 0.8125rem;
+}
+
+.estado-alumnos .estado-tarea-grupo {
+  border-color: rgba(148, 163, 184, 0.12);
+  background: rgba(148, 163, 184, 0.035);
+  font-size: 0.875rem;
+}
+
+.estado-alumnos .estado-tarea-notas {
+  padding: 0.875rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 0.75rem;
+  background: rgba(8, 15, 23, 0.3);
+  font-size: 0.875rem;
+}
+
+.estado-alumnos summary {
+  color: #a9c9d4;
+  font-weight: 400;
+}
+
+.estado-alumnos summary:hover {
+  color: #b8f3f0;
 }
 
 .estado-tareas-contenedor {
@@ -210,9 +321,11 @@ textarea {
   margin-bottom: 0;
 }
 
-.estado-tarea .estado-tarea-titulo {
+.estado-alumnos .estado-tarea-titulo {
   font-size: 1.125rem;
-  line-height: 1.5;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 

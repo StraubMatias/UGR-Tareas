@@ -27,7 +27,7 @@ export default function VistaAlumnos({
       )}
       <section className="space-y-4" aria-label="Compañeros de cursada">
         <div className="flex flex-wrap justify-between items-end gap-4">
-          <h2 className="font-semibold text-slate-200">Compañeros de cursada ({companeros.length})</h2>
+          <h2 className="estado-companeros-titulo text-slate-200">Compañeros de cursada ({companeros.length})</h2>
           <div className="w-full sm:w-72">
             <label htmlFor={busquedaId} className="block mb-1 text-xs text-slate-400">Buscar compañero</label>
             <input id={busquedaId} type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)}

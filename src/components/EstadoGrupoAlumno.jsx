@@ -12,7 +12,7 @@ export default function EstadoGrupoAlumno({ tarea, alumno, alumnos, irATareaEnMa
   const otrosGrupos = resumen.grupos.filter((otro) => otro !== grupo);
 
   return (
-    <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-4 space-y-3 text-sm">
+    <div className="estado-tarea-grupo rounded-xl border p-4 space-y-3">
       <div>
         <p className={grupo ? 'font-semibold text-cyan-200' : 'font-semibold text-amber-300'}>
           {grupo ? `Grupo de ${alumno}: ${grupo.nombre}` : `${alumno} todavía no tiene grupo`}
