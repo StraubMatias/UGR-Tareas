@@ -2,7 +2,7 @@
 // agrupación por unidad, resúmenes por alumno e historial.
 // Todas estas funciones no dependen del estado de la interfaz: reciben los
 // datos que necesitan como argumentos y son fáciles de testear aisladas.
-import { tareaHabilitada as tareaEstaHabilitada } from '../app/validators';
+import { tareaHabilitada as tareaEstaHabilitada } from '../app/validators.js';
 
 export const tareaCompletadaPor = (tarea, alumno) => (
   tarea.completadoPor.includes(alumno)
@@ -257,16 +257,64 @@ export const calcularEstadoSemaforo = (fechaFinStr, fechaInicioStr = null) => {
 export const tareaPuedeGestionarse = (tarea) =>
   tareaEstaHabilitada(tarea.inicio);
 
+export const obtenerGrupoDeAlumno = (tarea, alumno) => {
+  if (!tarea?.grupal || !tarea?.grupos || !alumno) return null;
+  return tarea.grupos.find((g) =>
+    g.integrantes?.some((i) => i.toLowerCase() === alumno.toLowerCase())
+  ) || null;
+};
+
+export const obtenerCompanerosDeGrupo = (tarea, alumno) => {
+  const grupo = obtenerGrupoDeAlumno(tarea, alumno);
+  if (!grupo || !grupo.integrantes) return [];
+  return grupo.integrantes.filter((i) => i.toLowerCase() !== alumno.toLowerCase());
+};
+
+export const obtenerAlumnosSinGrupo = (tarea, listaAlumnos = []) => {
+  if (!tarea?.grupal) return [];
+  const asignados = new Set(
+    (tarea.grupos || []).flatMap((g) => (g.integrantes || []).map((i) => i.toLowerCase()))
+  );
+  return (listaAlumnos || []).filter((a) => !asignados.has(a.toLowerCase()));
+};
+
+export const obtenerResumenGruposTarea = (tarea, listaAlumnos = []) => {
+  if (!tarea?.grupal) return null;
+  const grupos = tarea.grupos || [];
+  const sinGrupo = obtenerAlumnosSinGrupo(tarea, listaAlumnos);
+  const totalIntegrantes = grupos.reduce((acc, g) => acc + (g.integrantes?.length || 0), 0);
+  return {
+    grupos,
+    totalGrupos: grupos.length,
+    totalIntegrantes,
+    totalSinGrupo: sinGrupo.length,
+    sinGrupo,
+    cupo: Number(tarea.cupo_maximo) || 0
+  };
+};
+
 export const obtenerResumenTareasAlumno = (alumno, materias) => {
-  const tareasNoCompletadas = materias.flatMap((materia) => materia.tareas)
+  const todasTareas = (materias || []).flatMap((materia) => materia.tareas || []);
+  const tareasNoCompletadas = todasTareas
     .filter((tarea) => tareaPendienteAlumno(tarea, alumno));
+  const completadas = todasTareas
+    .filter((tarea) => tareaCompletadaPor(tarea, alumno) && !tareaFaltaNota(tarea, alumno));
   const faltaNota = tareasNoCompletadas.filter((tarea) => tareaFaltaNota(tarea, alumno));
   const pendientes = tareasNoCompletadas
     .filter((tarea) => !tareaFaltaNota(tarea, alumno) && tareaEstaHabilitada(tarea.inicio));
   const futuras = tareasNoCompletadas
     .filter((tarea) => !tareaFaltaNota(tarea, alumno) && !tareaEstaHabilitada(tarea.inicio));
+  const grupales = todasTareas.filter((tarea) => tarea.grupal);
 
-  return { pendientes, faltaNota, futuras, tareasNoCompletadas };
+  return {
+    pendientes,
+    faltaNota,
+    futuras,
+    completadas,
+    tareasNoCompletadas,
+    total: todasTareas.length,
+    totalGrupales: grupales.length
+  };
 };
 
 export const historialPorAlumno = (alumno, materias, notas, parciales) => {

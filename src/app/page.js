@@ -72,6 +72,7 @@ import VistaPromocion from '../components/VistaPromocion';
 import VistaRanking from '../components/VistaRanking';
 import VistaParciales from '../components/VistaParciales';
 import VistaMaterias from '../components/VistaMaterias';
+import VistaAlumnos from '../components/VistaAlumnos';
 import VistaPlan from '../components/VistaPlan';
 import VistaHorarios from '../components/VistaHorarios';
 import VistaHistorial from '../components/VistaHistorial';
@@ -1686,7 +1687,7 @@ export default function Home() {
           ) : (
             <>
               {pestana === 'alumnos' && (
-                <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6 items-start">
+                <div className={`grid grid-cols-1 ${proximoParcial ? 'lg:grid-cols-[280px_minmax(0,1fr)]' : ''} gap-6 items-start`}>
                   {proximoParcial && (
                     <aside className="lg:sticky lg:top-6 bg-purple-950/20 border border-purple-500/30 rounded-2xl p-5 shadow-sm">
                       <p className="text-xs font-bold text-purple-300 uppercase tracking-wider mb-4">Próximo examen</p>
@@ -1739,281 +1740,20 @@ export default function Home() {
                     </aside>
                   )}
 
-                  <div className="space-y-8">
-                  {/* TU TARJETA DESTACADA */}
-                  <div className="bg-[#161c26] border-2 border-blue-500/80 rounded-2xl p-6 shadow-xl ring-1 ring-blue-500/20">
-                    <button
-                      type="button"
-                      aria-expanded={situacionPropiaAbierta}
-                      onClick={() => setSituacionPropiaAbierta((abierta) => !abierta)}
-                      className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 border-b border-slate-800 pb-3 text-left cursor-pointer"
-                    >
-                      <span className="text-xl font-extrabold text-white flex items-center gap-2">
-                        <span>👤</span> {usuarioActual}
-                        <span className="text-xs font-semibold text-blue-300">· Tu situación</span>
-                      </span>
-                      <span className="flex items-center gap-2">
-                        {(() => {
-                          const resumen = obtenerResumenTareasAlumno(usuarioActual, materias);
-                          return (
-                            <span className="flex flex-wrap justify-end gap-1.5 text-[11px] font-bold">
-                              <span className={`px-2.5 py-1 rounded-full border ${resumen.pendientes.length === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
-                                {resumen.pendientes.length} pendiente{resumen.pendientes.length === 1 ? '' : 's'}
-                              </span>
-                              <span className="px-2.5 py-1 rounded-full border bg-orange-500/10 text-orange-300 border-orange-500/30">
-                                {resumen.faltaNota.length} sin nota
-                              </span>
-                              <span className="px-2.5 py-1 rounded-full border bg-blue-500/10 text-blue-300 border-blue-500/30">
-                                {resumen.futuras.length} futura{resumen.futuras.length === 1 ? '' : 's'}
-                              </span>
-                            </span>
-                          );
-                        })()}
-                        <span className="ml-1 text-slate-400 text-sm" aria-hidden="true">{situacionPropiaAbierta ? '▲' : '▼'}</span>
-                      </span>
-                    </button>
-
-                    {situacionPropiaAbierta && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {(() => {
-                        const misMateriasConPendientes = materias.filter((m) =>
-                          m.tareas.some((t) => tareaPendienteAlumno(t, usuarioActual))
-                        );
-
-                        if (misMateriasConPendientes.length === 0) {
-                          return (
-                            <div className="col-span-full text-center py-8 bg-emerald-950/20 border border-emerald-900/30 rounded-xl text-emerald-400 font-medium">
-                              🎉 ¡Excelente! No tenés ninguna entrega pendiente.
-                            </div>
-                          );
-                        }
-
-                        return misMateriasConPendientes.map((m) => {
-                          const tareasPendientes = m.tareas.filter(
-                            (t) => tareaPendienteAlumno(t, usuarioActual)
-                          );
-                          const gruposTareas = agruparTareasPorUnidad(tareasPendientes);
-
-                          return (
-                            <div key={m.id} className="bg-[#0f141c] p-4 rounded-xl border border-slate-800/80">
-                              <h3 className="text-sm font-bold text-amber-400/90 mb-3 flex items-center gap-1.5">
-                                <span>{obtenerIconoMateria(m.nombre)}</span> {m.nombre}
-                              </h3>
-                              {gruposTareas.map((grupo) => (
-                                <div key={grupo.unidad || 'sin-unidad'} className="space-y-3">
-                                  {grupo.unidad && <p className="mt-1 text-xs font-bold uppercase tracking-wider text-blue-300">Unidad {formatearUnidad(grupo.unidad)}</p>}
-                                  <ul className="space-y-3">
-                                    {grupo.tareas.map((t) => {
-                                      const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
-                                      return (
-                                        <li key={t.id} className="flex flex-col gap-1.5 bg-[#161c26]/80 p-3 rounded-lg border border-slate-800/60">
-                                          <div className="flex items-start gap-2.5">
-                                            <input
-                                              type="checkbox"
-                                              checked={tareaCompletadaPor(t, usuarioActual)}
-                                              disabled={!tareaPuedeGestionarse(t)}
-                                              onChange={() => toggleTareaDesdeCliente(t.id, usuarioActual, t)}
-                                              aria-label={`Marcar entregada: ${t.nombre}`}
-                                              className="mt-0.5 h-5 w-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
-                                            />
-                                            <button
-                                              type="button"
-                                              onClick={() => irATareaEnMaterias(t.id)}
-                                              title="Ver consigna y detalles en Materias"
-                                              className="text-sm sm:text-base text-slate-100 font-semibold leading-snug text-left hover:text-blue-400 cursor-pointer transition-colors"
-                                            >
-                                              {t.nombre}
-                                              {t.conNota && <span className="text-xs text-purple-300 font-normal"> (con nota)</span>}
-                                              {tareaFaltaNota(t, usuarioActual) && (
-                                                <span className="ml-2 text-xs text-amber-300 font-normal">Entregada · falta nota</span>
-                                              )}
-                                            </button>
-                                          </div>
-                                          <div className="pl-7 flex items-end justify-between gap-3 flex-wrap">
-                                            <span className="flex items-center gap-2">
-                                              <span className={`text-xs px-2.5 py-0.5 rounded-md border ${semaforo.estilo}`}>
-                                                {semaforo.texto}
-                                              </span>
-                                              {t.url && (
-                                                <a
-                                                  href={t.url}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline"
-                                                >
-                                                  Ver en UGR ↗
-                                                </a>
-                                              )}
-                                            </span>
-                                            {t.conNota && (
-                                              <input
-                                                type="text"
-                                                inputMode="decimal"
-                                                pattern="[0-9]+([.,][0-9]+)?"
-                                                placeholder="Nota"
-                                                disabled={!tareaPuedeGestionarse(t)}
-                                                value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
-                                                onChange={(e) => handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
-                                                onBlur={() => handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
-                                                className="w-20 bg-[#0f141c] border border-purple-500/50 rounded-lg p-1.5 text-center text-sm text-white focus:outline-none"
-                                              />
-                                            )}
-                                          </div>
-                                          {t.conNota && (
-                                            <details className="pl-7 pt-1">
-                                              <summary className="text-[11px] font-semibold text-blue-300 cursor-pointer select-none">
-                                                Ver notas de los demás
-                                              </summary>
-                                              <div className="mt-2 space-y-1">
-                                                {alumnos.filter((alumno) => alumno !== usuarioActual && t.notas?.[alumno] !== undefined).length > 0 ? (
-                                                  alumnos
-                                                    .filter((alumno) => alumno !== usuarioActual && t.notas?.[alumno] !== undefined)
-                                                    .map((alumno) => (
-                                                      <div key={alumno} className="flex justify-between gap-3 text-[11px] text-slate-300">
-                                                        <span className="truncate">{alumno}</span>
-                                                        <strong className="text-purple-300">{t.notas[alumno]}</strong>
-                                                      </div>
-                                                    ))
-                                                ) : (
-                                                  <span className="text-[11px] text-slate-500 italic">Todavía no hay notas cargadas.</span>
-                                                )}
-                                              </div>
-                                            </details>
-                                          )}
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>}
-                  </div>
-
-                  {/* RESTO DE COMPAÑEROS COLAPSADOS */}
-                  <div className="space-y-4 pt-2">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider px-1">
-                      Compañeros de Cursada ({restoDeAlumnos.length})
-                    </h3>
-
-                    {restoDeAlumnos.map((alumno) => {
-                      const estaDesplegado = !!alumnosDesplegados[alumno];
-
-                      const resumenAlumno = obtenerResumenTareasAlumno(alumno, materias);
-
-                      return (
-                        <div
-                          key={alumno}
-                          className="bg-[#161c26] border border-slate-800/80 rounded-2xl overflow-hidden transition-all"
-                        >
-                          <button
-                            onClick={() => toggleDesplegarAlumno(alumno)}
-                            className="w-full p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-left hover:bg-slate-800/40 transition-all cursor-pointer"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <span className="text-lg">👤</span>
-                              <div className="flex flex-col items-start gap-1 min-w-0">
-                                <span className="text-base font-bold text-white">{alumno}</span>
-                              </div>
-                              <span className="text-xs text-slate-500 font-normal hidden sm:inline">
-                                {estaDesplegado ? '(Tocar para ocultar)' : '(Tocar para ver detalle)'}
-                              </span>
-                            </div>
-
-                            <div className="flex flex-wrap items-center justify-end gap-1.5">
-                                <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${resumenAlumno.pendientes.length === 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
-                                  {resumenAlumno.pendientes.length} pendiente{resumenAlumno.pendientes.length === 1 ? '' : 's'}
-                                </span>
-                                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-orange-500/10 text-orange-300 border-orange-500/30">
-                                  {resumenAlumno.faltaNota.length} sin nota
-                                </span>
-                                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-blue-500/10 text-blue-300 border-blue-500/30">
-                                  {resumenAlumno.futuras.length} futura{resumenAlumno.futuras.length === 1 ? '' : 's'}
-                                </span>
-                                <span className="ml-auto text-slate-400 text-sm font-bold">
-                                  {estaDesplegado ? '▲' : '▼'}
-                                </span>
-                            </div>
-                          </button>
-
-                          {estaDesplegado && (
-                            <div className="p-5 border-t border-slate-800/80 bg-[#0f141c]/60 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              {resumenAlumno.tareasNoCompletadas.length === 0 ? (
-                                <p className="col-span-full text-sm text-emerald-400/90 italic py-3 text-center">
-                                  🎉 ¡Al día! Este alumno no tiene tareas pendientes.
-                                </p>
-                              ) : (
-                                <>
-                                {resumenAlumno.pendientes.length === 0 && resumenAlumno.futuras.length > 0 && (
-                                  <p className="col-span-full text-sm text-blue-300/90 italic py-3 text-center">
-                                    No tiene tareas abiertas pendientes. Tiene {resumenAlumno.futuras.length} tarea{resumenAlumno.futuras.length === 1 ? '' : 's'} futura{resumenAlumno.futuras.length === 1 ? '' : 's'}.
-                                  </p>
-                                )}
-                                {materias.map((m) => {
-                                  const tareasPendientes = m.tareas.filter(
-                                    (t) => tareaPendienteAlumno(t, alumno)
-                                  );
-
-                                  if (tareasPendientes.length === 0) return null;
-                                  const gruposTareas = agruparTareasPorUnidad(tareasPendientes);
-
-                                  return (
-                                    <div key={m.id} className="bg-[#0f141c] p-4 rounded-xl border border-slate-800/60">
-                                      <h4 className="text-xs font-bold text-amber-400 mb-2 flex items-center gap-1.5">
-                                        <span>{obtenerIconoMateria(m.nombre)}</span> {m.nombre}
-                                      </h4>
-                                      {gruposTareas.map((grupo) => (
-                                        <div key={grupo.unidad || 'sin-unidad'} className="space-y-2 mb-3 last:mb-0">
-                                          {grupo.unidad && <p className="text-[11px] font-bold uppercase tracking-wider text-blue-300">Unidad {formatearUnidad(grupo.unidad)}</p>}
-                                          <ul className="space-y-2">
-                                            {grupo.tareas.map((t) => {
-                                              const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
-                                              return (
-                                                <li key={t.id} className="bg-[#161c26]/60 p-2.5 rounded-lg border border-slate-800/50 flex flex-col gap-1">
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => irATareaEnMaterias(t.id)}
-                                                    title="Ver consigna y detalles en Materias"
-                                                    className="text-xs text-slate-200 font-semibold text-left hover:text-blue-400 cursor-pointer transition-colors"
-                                                  >
-                                                    • {t.nombre}
-                                                    {tareaFaltaNota(t, alumno) && (
-                                                      <span className="ml-2 text-amber-300 font-normal">Entregada · falta nota</span>
-                                                    )}
-                                                  </button>
-                                                  {t.url && (
-                                                    <a
-                                                      href={t.url}
-                                                      target="_blank"
-                                                      rel="noopener noreferrer"
-                                                      className="text-[10px] font-semibold text-blue-300 hover:text-blue-200 hover:underline w-fit"
-                                                    >
-                                                      Ver en UGR ↗
-                                                    </a>
-                                                  )}
-                                                  <span className={`text-[10px] w-fit px-2 py-0.5 rounded border ${semaforo.estilo}`}>
-                                                    {semaforo.texto}
-                                                  </span>
-                                                </li>
-                                              );
-                                            })}
-                                          </ul>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  );
-                                })}
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  </div>
+                  <VistaAlumnos
+                    materias={materias}
+                    alumnos={alumnos}
+                    usuarioActual={usuarioActual}
+                    situacionPropiaAbierta={situacionPropiaAbierta}
+                    setSituacionPropiaAbierta={setSituacionPropiaAbierta}
+                    alumnosDesplegados={alumnosDesplegados}
+                    toggleDesplegarAlumno={toggleDesplegarAlumno}
+                    toggleTareaDesdeCliente={toggleTareaDesdeCliente}
+                    irATareaEnMaterias={irATareaEnMaterias}
+                    notasTareasInputs={notasTareasInputs}
+                    handleNotaTareaChangeLocal={handleNotaTareaChangeLocal}
+                    handleGuardarNotaTareaOnBlur={handleGuardarNotaTareaOnBlur}
+                  />
 
                 </div>
               )}
