@@ -2,6 +2,48 @@ import { randomBytes, scrypt } from 'node:crypto';
 import { promisify } from 'node:util';
 import { createClient } from '@libsql/client';
 import { crearEsquemaGrupos } from './grupos-schema.mjs';
+async function aplicarCollationNombre(db) {
+  try {
+    const check = await db.execute({
+      sql: "SELECT sql FROM sqlite_master WHERE type='table' AND name='alumnos'",
+    });
+    const tableSql = check.rows[0]?.sql || "";
+    if (tableSql.includes("COLLATE NOCASE")) return;
+
+    console.log("🔧 Aplicando collation NOCASE a columna 'nombre'...");
+    let transactionStarted = false;
+    try {
+      await db.execute("BEGIN TRANSACTION");
+      transactionStarted = true;
+      await db.execute(`
+        CREATE TABLE alumnos_new (
+          id TEXT PRIMARY KEY,
+          nombre TEXT NOT NULL COLLATE NOCASE UNIQUE,
+          password TEXT NOT NULL,
+          rol TEXT NOT NULL DEFAULT 'alumno',
+          sesion_version INTEGER NOT NULL DEFAULT 1
+        )
+      `);
+      await db.execute(`
+        INSERT INTO alumnos_new (id, nombre, password, rol, sesion_version)
+        SELECT id, nombre, password, rol, sesion_version FROM alumnos
+      `);
+      await db.execute("DROP TABLE alumnos");
+      await db.execute("ALTER TABLE alumnos_new RENAME TO alumnos");
+      await db.execute("COMMIT");
+      console.log("✅ Collation NOCASE aplicada correctamente");
+    } catch (error) {
+      if (transactionStarted) {
+        await db.execute("ROLLBACK").catch(() => {}); // Ignore errors in rollback
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error("❌ Error aplicando collation:", error);
+    throw error;
+  }
+}
+
 
 process.loadEnvFile?.('.env.local');
 
@@ -441,6 +483,9 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
       });
     }
   });
+
+  await aplicarCollationNombre(db);
+
 
   await ejecutarMigracion(14, 'cronograma Auditorías 15/09/2026 (sin clases por mesas de examen)', async () => {
     // Versiones previas de esta migración borraban el «Sin clases» del 15/09/2026
