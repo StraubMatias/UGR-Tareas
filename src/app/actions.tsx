@@ -511,34 +511,6 @@ export async function cambiarPasswordAction(usuarioInput: string, passActualInpu
   }
 }
 
-// Obtener todos los alumnos registrados
-export async function obtenerAlumnosAction() {
-  try {
-    if (!await obtenerUsuarioSesion()) return [];
-    const res = await db.execute('SELECT nombre FROM alumnos ORDER BY nombre ASC');
-    return res.rows.map((fila) => texto(fila.nombre));
-  } catch (error) {
-    console.error('Error al obtener alumnos:', error);
-    return [];
-  }
-}
-
-export async function obtenerPeriodosAction(): Promise<{ id: string; anio: number; cuatrimestre: number; nombre: string; activo: number }[]> {
-  try {
-    if (!await obtenerUsuarioSesion()) return [];
-    const res = await db.execute('SELECT id, anio, cuatrimestre, nombre, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC');
-    return res.rows.map((fila) => ({
-      id: texto(fila.id),
-      anio: Number(fila.anio),
-      cuatrimestre: Number(fila.cuatrimestre),
-      nombre: texto(fila.nombre),
-      activo: Number(fila.activo)
-    }));
-  } catch (error) {
-    console.error('Error al obtener períodos:', error);
-    return [];
-  }
-}
 
 // Crear nuevo alumno en la BD
 export async function crearAlumnoAction(nombre: string): Promise<RespuestaAction> {
@@ -639,57 +611,6 @@ function consultaPeriodo(periodoId: string | null, sqlConPeriodo: string, sqlSin
     : { sql: sqlSinPeriodo, args: [] };
 }
 
-export async function obtenerDatos(periodoId: string | null = null) {
-  try {
-    if (!await obtenerUsuarioSesion()) return [];
-    const [resMaterias, resTareas, resCompletadas, resNotasTareas] = await Promise.all([
-      db.execute(consultaPeriodo(
-        periodoId,
-        `SELECT id, nombre, condiciones, nota_minima_regularizar, nota_minima_promocionar, regla_promocion
-         FROM materias WHERE periodo_id = ? ORDER BY nombre ASC`,
-        `SELECT id, nombre, condiciones, nota_minima_regularizar, nota_minima_promocionar, regla_promocion
-         FROM materias ORDER BY nombre ASC`
-      )),
-      db.execute(consultaPeriodo(
-        periodoId,
-        `SELECT t.id, t.materia_id, t.nombre, t.inicio, t.fin, t.detalles, t.unidad, t.con_nota, t.tipo, t.url, t.grupal, t.cupo_maximo
-         FROM tareas t JOIN materias m ON m.id = t.materia_id WHERE m.periodo_id = ?`,
-        `SELECT id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, url, grupal, cupo_maximo FROM tareas`
-      )),
-      db.execute(consultaPeriodo(
-        periodoId,
-        `SELECT c.tarea_id, COALESCE(a.nombre, c.alumno) AS alumno, c.completada_en
-         FROM completadas c
-         JOIN tareas t ON t.id = c.tarea_id
-         JOIN materias m ON m.id = t.materia_id
-         LEFT JOIN alumnos a ON a.id = c.alumno_id
-         WHERE m.periodo_id = ?`,
-        `SELECT c.tarea_id, COALESCE(a.nombre, c.alumno) AS alumno, c.completada_en
-         FROM completadas c LEFT JOIN alumnos a ON a.id = c.alumno_id`
-      )),
-      db.execute(consultaPeriodo(
-        periodoId,
-        `SELECT n.tarea_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota, n.cargada_en
-         FROM notas_tareas n
-         JOIN tareas t ON t.id = n.tarea_id
-         JOIN materias m ON m.id = t.materia_id
-         LEFT JOIN alumnos a ON a.id = n.alumno_id
-         WHERE m.periodo_id = ?`,
-        `SELECT n.tarea_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota, n.cargada_en
-         FROM notas_tareas n LEFT JOIN alumnos a ON a.id = n.alumno_id`
-      ))
-    ]);
-
-    const resGrupos = await db.execute(`SELECT g.id, g.tarea_id, g.nombre, a.nombre AS alumno
-      FROM grupos_tareas g LEFT JOIN integrantes_tareas i ON i.grupo_id = g.id
-      LEFT JOIN alumnos a ON a.id = i.alumno_id ORDER BY g.nombre, a.nombre`);
-    return armarMaterias(resMaterias.rows, resTareas.rows, resCompletadas.rows, resNotasTareas.rows, resGrupos.rows);
-  } catch (error) {
-    console.error('Error al obtener datos de Turso:', error);
-    return [];
-  }
-}
-
 function armarMaterias(filasMaterias: Row[], filasTareas: Row[], filasCompletadas: Row[], filasNotas: Row[], filasGrupos: Row[]) {
     const gruposPorTarea = new Map<string, Map<string, { id: string; nombre: string; integrantes: string[] }>>();
     for (const fila of filasGrupos) {
@@ -782,22 +703,6 @@ function armarMaterias(filasMaterias: Row[], filasTareas: Row[], filasCompletada
     return materias;
 }
 
-export async function obtenerProgresoPlanAction(): Promise<{ alumno: string | null; materia_codigo: string; estado: string; nota: number | null; actualizado_en: string }[]> {
-  try {
-    if (!await obtenerUsuarioSesion()) return [];
-    const res = await db.execute('SELECT COALESCE(a.nombre, p.alumno) AS alumno, p.materia_codigo, p.estado, p.nota, p.actualizado_en FROM progreso_materias p LEFT JOIN alumnos a ON a.id = p.alumno_id ORDER BY alumno ASC, p.materia_codigo ASC');
-    return res.rows.map((fila) => ({
-      alumno: textoONull(fila.alumno),
-      materia_codigo: texto(fila.materia_codigo),
-      estado: texto(fila.estado),
-      nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota),
-      actualizado_en: texto(fila.actualizado_en)
-    }));
-  } catch (error) {
-    console.error('Error al obtener progreso del plan:', error);
-    return [];
-  }
-}
 
 // Una ida a Turso con todas las lecturas del tablero. Antes cada refresco
 // repetía la sesión y abría un pedido por tabla (~15 roundtrips).
@@ -1360,117 +1265,9 @@ export async function syncUgrAction({
   }
 }
 
-// Historial de avisos detectados en los foros (solo admin). Con
-// soloPendientes=true devuelve únicamente los que todavía no se decidieron.
-export async function obtenerAvisosAction({ soloPendientes = false } = {}) {
-  try {
-    if (!await verificarAdmin()) {
-      return { exito: false, mensaje: 'Solo el administrador puede gestionar avisos sugeridos.' };
-    }
-    const filtro = soloPendientes ? "WHERE estado = 'pendiente'" : '';
-    const res = await db.execute(
-      `SELECT id, curso_id, curso_nombre, materia_nombre, foro_nombre, titulo, autor, fecha, contenido, url, estado
-       FROM avisos_moodle ${filtro} ORDER BY fecha DESC LIMIT 100`
-    );
-    return { exito: true, avisos: res.rows };
-  } catch (error) {
-    console.error('Error en obtenerAvisosAction:', error);
-    return { exito: false, mensaje: 'No se pudieron obtener los avisos sugeridos.' };
-  }
-}
-
-// Aprueba o rechaza avisos sugeridos individualmente (admin). La decisión
-// 'aceptado' los publica en la campana; 'rechazado' los descarta definitivamente.
-export async function decidirAvisoAction({ ids = [], decision = 'aceptado', usuario = null } = {}) {
-  try {
-    if (!await verificarAdmin()) {
-      return { exito: false, mensaje: 'Solo el administrador puede decidir sobre los avisos.' };
-    }
-    const usuarioSesion = await obtenerUsuarioSesion();
-    const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
-    if (!rateLimit.exito) return rateLimit;
-    if (!['aceptado', 'rechazado'].includes(decision)) {
-      return { exito: false, mensaje: 'La decisión debe ser aceptado o rechazado.' };
-    }
-    const lista = Array.isArray(ids) ? ids.filter(Boolean) : [];
-    if (lista.length === 0) return { exito: false, mensaje: 'No se indicó ningún aviso.' };
-
-    const { aprobarAvisos, rechazarAvisos } = await import('../../ugr-sync/lib/sync-core.mjs');
-    if (decision === 'aceptado') {
-      await aprobarAvisos({ db, ids: lista });
-    } else {
-      await rechazarAvisos({ db, ids: lista });
-    }
-    await registrarAuditoria({
-      accion: `decidir_aviso_${decision}`,
-      usuario: usuarioSesion,
-      detalle: `${decision === 'aceptado' ? 'Aprobó' : 'Rechazó'} ${lista.length} aviso(s) de los foros`,
-      ip: await obtenerIPReal()
-    });
-    return { exito: true, actualizados: lista.length };
-  } catch (error) {
-    console.error('Error en decidirAvisoAction:', error);
-    return { exito: false, mensaje: 'No se pudo actualizar el aviso.' };
-  }
-}
 
 // --- HORARIOS DE CURSADA ---
 
-export async function obtenerHorariosAction(periodoId: string | null): Promise<{ id: string; materia_id: string; dia: number | string; hora_inicio: string; hora_fin: string; aula: string }[]> {
-  try {
-    if (!await obtenerUsuarioSesion()) return [];
-    const res = await db.execute(consultaPeriodo(
-      periodoId,
-      `SELECT h.id, h.materia_id, h.dia, h.hora_inicio, h.hora_fin, h.aula
-       FROM horarios h JOIN materias m ON m.id = h.materia_id
-       WHERE CAST(h.dia AS INTEGER) BETWEEN 1 AND 5 AND m.periodo_id = ?
-       ORDER BY h.dia ASC, h.hora_inicio ASC`,
-      `SELECT h.id, h.materia_id, h.dia, h.hora_inicio, h.hora_fin, h.aula
-       FROM horarios h
-       WHERE CAST(h.dia AS INTEGER) BETWEEN 1 AND 5
-       ORDER BY h.dia ASC, h.hora_inicio ASC`
-    ));
-    return res.rows.map((fila) => ({
-      id: texto(fila.id),
-      materia_id: texto(fila.materia_id),
-      dia: texto(fila.dia),
-      hora_inicio: texto(fila.hora_inicio),
-      hora_fin: texto(fila.hora_fin),
-      aula: texto(fila.aula)
-    }));
-  } catch (error) {
-    console.error('Error al obtener horarios:', error);
-    return [];
-  }
-}
-
-export async function obtenerCronogramaAction(periodoId: string | null): Promise<{ id: string; materia_id: string; fecha: string; modalidad: string; tipo: string; titulo: string; detalles: string; url: string; origen: string }[]> {
-  try {
-    if (!await obtenerUsuarioSesion()) return [];
-    const res = await db.execute(consultaPeriodo(
-      periodoId,
-      `SELECT c.id, c.materia_id, c.fecha, c.modalidad, c.tipo, c.titulo, c.detalles, c.url, c.origen
-       FROM cronograma_eventos c JOIN materias m ON m.id = c.materia_id
-       WHERE m.periodo_id = ? ORDER BY c.fecha ASC, c.titulo ASC`,
-      `SELECT id, materia_id, fecha, modalidad, tipo, titulo, detalles, url, origen
-       FROM cronograma_eventos ORDER BY fecha ASC, titulo ASC`
-    ));
-    return res.rows.map((fila) => ({
-      id: texto(fila.id),
-      materia_id: texto(fila.materia_id),
-      fecha: texto(fila.fecha),
-      modalidad: texto(fila.modalidad),
-      tipo: texto(fila.tipo),
-      titulo: texto(fila.titulo),
-      detalles: texto(fila.detalles),
-      url: texto(fila.url),
-      origen: texto(fila.origen)
-    }));
-  } catch (error) {
-    console.error('Error al obtener cronograma:', error);
-    return [];
-  }
-}
 
 export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, aula }: { materiaId: string; dia: string | number; horaInicio: string; horaFin: string; aula: string; usuario?: string }): Promise<RespuestaAction> {
   try {
@@ -1522,51 +1319,6 @@ export async function eliminarHorarioAction(id: string, usuario: string): Promis
 
 // --- PARCIALES Y NOTAS ---
 
-export async function obtenerParcialesAction(periodoId: string | null): Promise<{ parciales: { id: string; materia_id: string; nombre: string; fecha: string; detalles: string; url: string }[]; notas: { id: string; parcial_id: string; alumno: string; nota: number | null }[] }> {
-  try {
-    if (!await obtenerUsuarioSesion()) return { parciales: [], notas: [] };
-    const [resParciales, resNotas] = await Promise.all([
-      db.execute(consultaPeriodo(
-        periodoId,
-        `SELECT p.id, p.materia_id, p.nombre, p.fecha, p.detalles, p.url
-         FROM parciales p JOIN materias m ON m.id = p.materia_id
-         WHERE m.periodo_id = ? ORDER BY p.fecha ASC`,
-        `SELECT id, materia_id, nombre, fecha, detalles, url FROM parciales ORDER BY fecha ASC`
-      )),
-      db.execute(consultaPeriodo(
-        periodoId,
-        `SELECT n.id, n.parcial_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota
-         FROM notas_parciales n
-         JOIN parciales p ON p.id = n.parcial_id
-         JOIN materias m ON m.id = p.materia_id
-         LEFT JOIN alumnos a ON a.id = n.alumno_id
-         WHERE m.periodo_id = ?`,
-        `SELECT n.id, n.parcial_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota
-         FROM notas_parciales n LEFT JOIN alumnos a ON a.id = n.alumno_id`
-      ))
-    ]);
-
-    return {
-      parciales: resParciales.rows.map((fila) => ({
-        id: texto(fila.id),
-        materia_id: texto(fila.materia_id),
-        nombre: texto(fila.nombre),
-        fecha: texto(fila.fecha),
-        detalles: texto(fila.detalles),
-        url: texto(fila.url)
-      })),
-      notas: resNotas.rows.map((fila) => ({
-        id: texto(fila.id),
-        parcial_id: texto(fila.parcial_id),
-        alumno: texto(fila.alumno),
-        nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota)
-      }))
-    };
-  } catch (error) {
-    console.error('Error al obtener parciales:', error);
-    return { parciales: [], notas: [] };
-  }
-}
 
 export async function crearParcialAction({ materiaId, nombre, fecha, detalles, usuario }: { materiaId: string; nombre: string; fecha: string; detalles: string; usuario: string }): Promise<RespuestaAction> {
   try {

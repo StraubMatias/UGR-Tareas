@@ -9,7 +9,6 @@ La estructura del repositorio se organiza para mantener el código fuente limpio
 ```text
 /
 ├── database/         # Esquemas y configuraciones de Base de Datos
-├── scripts/          # Herramientas y scripts de utilidad (parsing, scraping, etc.)
 ├── src/              # Código fuente principal de la aplicación
 ├── tests/            # Suite de pruebas automatizadas
 ├── ugr-sync/         # Módulo de sincronización con UGR Virtual
