@@ -71,7 +71,7 @@ function candidatosEnvLocal() {
     const lista = new Set();
     const agregarDesde = (directorio) => {
       for (const nombre of NOMBRES_ARCHIVOS_ENV) {
-        lista.add(join(directorio, nombre));
+        lista.add(join(/*turbopackIgnore: true*/ directorio, nombre));
       }
     };
     agregarDesde(process.cwd());

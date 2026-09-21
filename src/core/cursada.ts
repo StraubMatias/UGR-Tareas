@@ -1,9 +1,5 @@
 // Lógica pura de la cursada: formato de fechas, estados de tareas, semáforos,
 // agrupación por unidad, resúmenes por alumno e historial.
-// Todas estas funciones no dependen del estado de la interfaz: reciben los
-// datos que necesitan como argumentos y son fáciles de testear aisladas.
-
-import { tareaHabilitada as tareaEstaHabilitada } from '../app/validators';
 
 export interface Tarea {
   id: string;
@@ -17,10 +13,14 @@ export interface Tarea {
   completadoEn?: Record<string, string>;
   notaCargadaEn?: Record<string, string>;
   grupal?: boolean;
+  grupos?: Grupo[];
+  cupo_maximo?: number | string;
+
 }
 
 export interface Grupo {
   integrantes?: string[];
+  nombre?: string;
 }
 
 export interface Materia {
@@ -40,18 +40,29 @@ export interface Parcial {
   id: string;
   materia_id: string;
   nombre: string;
+  fecha: string;
 }
 
+export interface HistorialRegistro {
+  id: string;
+  materia: string;
+  nombre: string;
+  unidad: string | number | null;
+  fecha: string | null;
+  fechaCompletada: string | null;
+  nota: string | number | null;
+  tipo: 'Tarea con nota' | 'Foro' | 'Actividad' | 'Parcial';
+}
 
+// Funciones corregidas con tipos explícitos
 
-
-export const tareaCompletadaPor = (tarea: Tarea, alumno: string) => (
+export const tareaCompletadaPor = (tarea: Tarea, alumno: string): boolean => (
   tarea.completadoPor.includes(alumno)
   || (tarea.conNota && Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno))
 );
 
-export const fechaEntregaTarea = (tarea: Tarea, alumno: string) => (
-  tarea.completadoEn?.[alumno] || (tarea.conNota ? tarea.notaCargadaEn?.[alumno] : null)
+export const fechaEntregaTarea = (tarea: Tarea, alumno: string): string | null => (
+  tarea.completadoEn?.[alumno] || (tarea.conNota ? tarea.notaCargadaEn?.[alumno] ?? null : null)
 );
 
 export const tareaFaltaNota = (tarea: Tarea, alumno: string): boolean => (
@@ -64,7 +75,7 @@ export const tareaPendienteAlumno = (tarea: Tarea, alumno: string): boolean => (
   !tareaCompletadaPor(tarea, alumno) || tareaFaltaNota(tarea, alumno)
 );
 
-export const formatearFechaDDMMAAAA = (fechaStr: string | null): string => {
+export const formatearFechaDDMMAAAA = (fechaStr: string | null | undefined): string => {
   if (!fechaStr || fechaStr === 'Sin fecha') return 'Sin fecha';
   if (fechaStr.includes('-')) {
     const partes = fechaStr.split('-');
@@ -74,22 +85,41 @@ export const formatearFechaDDMMAAAA = (fechaStr: string | null): string => {
   }
   return fechaStr;
 };
+export const formatearFechaHora = (fechaStr: string | null | undefined): string => {
+  if (!fechaStr || fechaStr === 'Sin fecha') return 'Sin fecha';
+  
+  // Si la fecha ya tiene formato DD-MM-YYYY HH:mm, devolverla
+  if (/^\d{2}-\d{2}-\d{4} \d{2}:\d{2}$/.test(fechaStr)) return fechaStr;
 
-export const formatearFechaHora = (fechaStr: string | null): string => {
-  if (!fechaStr) return 'Fecha no disponible';
-  const fecha = new Date(String(fechaStr).endsWith('Z') ? fechaStr : `${String(fechaStr).replace(' ', 'T')}Z`);
-  if (Number.isNaN(fecha.getTime())) return 'Fecha no disponible';
-  return fecha.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+  const fecha = new Date(fechaStr);
+  if (isNaN(fecha.getTime())) return fechaStr;
+
+  return fecha.toLocaleString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).replace(',', '');
 };
 
+
+
 export const obtenerTimestamp = (fechaStr: string | null | undefined): number | null => {
-  if (!fechaStr) return null;
+  if (!fechaStr || fechaStr === 'Sin fecha') return null;
   const fecha = new Date(String(fechaStr).endsWith('Z') ? fechaStr : `${String(fechaStr).replace(' ', 'T')}Z`);
   const timestamp = fecha.getTime();
   return Number.isFinite(timestamp) ? timestamp : null;
 };
 
-export const multiplicadorPuntosTarea = (tarea: Tarea, alumno: string) => {
+export const tareaEstaHabilitada = (fechaInicio: string | null | undefined): boolean => {
+  if (!fechaInicio || fechaInicio === 'Sin fecha') return true;
+  const dias = obtenerDiasHastaApertura(fechaInicio);
+  return dias === null || dias <= 0;
+};
+
+
+export const multiplicadorPuntosTarea = (tarea: Tarea, alumno: string): number => {
   const fechaCarga = obtenerTimestamp(fechaEntregaTarea(tarea, alumno));
   if (fechaCarga === null) return 1;
 
@@ -108,14 +138,14 @@ export const multiplicadorPuntosTarea = (tarea: Tarea, alumno: string) => {
 
 export const puntosBaseTarea = (tarea: Tarea, alumno: string): number => {
   if (!tarea.conNota) {
-    return esForo(tarea.nombre) ? 1 : 2;
+    return tarea.nombre.toLowerCase().includes('foro') ? 1 : 2;
   }
   const notaStr = String(tarea.notas?.[alumno] ?? '');
   if (!notaStr || Number.isNaN(Number.parseFloat(notaStr))) return 0;
   return Number.parseFloat(notaStr.replace(',', '.'));
 };
 
-export const obtenerFechaParcialEnMs = (fechaStr: string): number | null => {
+export const obtenerFechaParcialEnMs = (fechaStr: string | null): number | null => {
   if (!fechaStr || fechaStr === 'Sin fecha') return null;
   const partes = fechaStr.split('-').map(Number);
   if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
@@ -228,14 +258,14 @@ export const ordenarTareas = (listaTareas: Tarea[]): Tarea[] => {
     const tieneFinA = a.fin && a.fin !== 'Sin fecha';
     const tieneFinB = b.fin && b.fin !== 'Sin fecha';
 
-    if (tieneFinA && tieneFinB) return a.fin.localeCompare(b.fin);
+    if (tieneFinA && tieneFinB) return (a.fin as string).localeCompare(b.fin as string);
     if (tieneFinA) return -1;
     if (tieneFinB) return 1;
 
     const tieneInicioA = a.inicio && a.inicio !== 'Sin fecha';
     const tieneInicioB = b.inicio && b.inicio !== 'Sin fecha';
 
-    if (tieneInicioA && tieneInicioB) return a.inicio.localeCompare(b.inicio);
+    if (tieneInicioA && tieneInicioB) return (a.inicio as string).localeCompare(b.inicio as string);
     if (tieneInicioA) return -1;
     if (tieneInicioB) return 1;
 
@@ -243,25 +273,28 @@ export const ordenarTareas = (listaTareas: Tarea[]): Tarea[] => {
   });
 };
 
-export const agruparTareasPorUnidad = (listaTareas: Tarea[]): Map<string, Tarea[]> => {
-  const grupos = new Map<string, Tarea[]>();
+export const agruparTareasPorUnidad = (listaTareas: Tarea[]): { unidad: string; tareas: Tarea[] }[] => {
+  const gruposMap = new Map<string, Tarea[]>();
   listaTareas.forEach((tarea: Tarea) => {
-    const unidad = String(tarea.unidad || '');
-    const grupo = grupos.get(unidad) || [];
+    const unidad = String(tarea.unidad || 'Sin unidad');
+    const grupo = gruposMap.get(unidad) || [];
     grupo.push(tarea);
-    grupos.set(unidad, grupo);
+    gruposMap.set(unidad, grupo);
   });
-  return grupos;
+  return Array.from(gruposMap.entries()).map(([unidad, tareas]) => ({
+    unidad,
+    tareas,
+  }));
 };
 
-export const formatearUnidad = (unidad) => {
+export const formatearUnidad = (unidad: string | number | null | undefined): string => {
   const valor = Number(unidad);
   return Number.isFinite(valor) ? String(valor) : String(unidad || '');
 };
 
-export const esForo = (nombreTarea) => /\(\s*foro\s*\)/i.test(nombreTarea || '');
+export const esForo = (nombreTarea: string | null | undefined): boolean => /\(\s*foro\s*\)/i.test(nombreTarea || '');
 
-export const calcularEstadoSemaforo = (fechaFinStr, fechaInicioStr = null) => {
+export const calcularEstadoSemaforo = (fechaFinStr: string | null | undefined, fechaInicioStr: string | null | undefined = null) => {
   if (fechaInicioStr && !tareaEstaHabilitada(fechaInicioStr)) {
     const diasParaAbrir = obtenerDiasHastaApertura(fechaInicioStr);
     const textoApertura = obtenerTextoApertura(diasParaAbrir);
@@ -280,6 +313,10 @@ export const calcularEstadoSemaforo = (fechaFinStr, fechaInicioStr = null) => {
 
   const diasRestantes = obtenerDiasHastaTarea(fechaFinStr);
 
+  if (diasRestantes === null) {
+    return { texto: 'Sin fecha límite', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
+  }
+
   if (diasRestantes < 0) {
     return { texto: 'Vencida', estilo: 'bg-red-950/80 text-red-400 border-red-800/80 font-bold' };
   } else if (diasRestantes === 0) {
@@ -293,35 +330,35 @@ export const calcularEstadoSemaforo = (fechaFinStr, fechaInicioStr = null) => {
   }
 };
 
-export const tareaPuedeGestionarse = (tarea) =>
+export const tareaPuedeGestionarse = (tarea: Tarea): boolean =>
   tareaEstaHabilitada(tarea.inicio);
 
-export const obtenerGrupoDeAlumno = (tarea, alumno) => {
+export const obtenerGrupoDeAlumno = (tarea: Tarea, alumno: string): Grupo | null => {
   if (!tarea?.grupal || !tarea?.grupos || !alumno) return null;
-  return tarea.grupos.find((g) =>
-    g.integrantes?.some((i) => i.toLowerCase() === alumno.toLowerCase())
+  return tarea.grupos.find((g: Grupo) =>
+    g.integrantes?.some((i: string) => i.toLowerCase() === alumno.toLowerCase())
   ) || null;
 };
 
-export const obtenerCompanerosDeGrupo = (tarea, alumno) => {
+export const obtenerCompanerosDeGrupo = (tarea: Tarea, alumno: string): string[] => {
   const grupo = obtenerGrupoDeAlumno(tarea, alumno);
   if (!grupo || !grupo.integrantes) return [];
-  return grupo.integrantes.filter((i) => i.toLowerCase() !== alumno.toLowerCase());
+  return grupo.integrantes.filter((i: string) => i.toLowerCase() !== alumno.toLowerCase());
 };
 
-export const obtenerAlumnosSinGrupo = (tarea, listaAlumnos = []) => {
+export const obtenerAlumnosSinGrupo = (tarea: Tarea, listaAlumnos: string[] = []): string[] => {
   if (!tarea?.grupal) return [];
   const asignados = new Set(
-    (tarea.grupos || []).flatMap((g) => (g.integrantes || []).map((i) => i.toLowerCase()))
+    (tarea.grupos || []).flatMap((g: Grupo) => (g.integrantes || []).map((i: string) => i.toLowerCase()))
   );
-  return (listaAlumnos || []).filter((a) => !asignados.has(a.toLowerCase()));
+  return (listaAlumnos || []).filter((a: string) => !asignados.has(a.toLowerCase()));
 };
 
-export const obtenerResumenGruposTarea = (tarea, listaAlumnos = []) => {
+export const obtenerResumenGruposTarea = (tarea: Tarea, listaAlumnos: string[] = []) => {
   if (!tarea?.grupal) return null;
   const grupos = tarea.grupos || [];
   const sinGrupo = obtenerAlumnosSinGrupo(tarea, listaAlumnos);
-  const totalIntegrantes = grupos.reduce((acc, g) => acc + (g.integrantes?.length || 0), 0);
+  const totalIntegrantes = grupos.reduce((acc: number, g: Grupo) => acc + (g.integrantes?.length || 0), 0);
   return {
     grupos,
     totalGrupos: grupos.length,

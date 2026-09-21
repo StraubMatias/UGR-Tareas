@@ -49,6 +49,72 @@ interface SyncResult {
   avisosAceptados?: number;
   eventosInsertados?: number;
 }
+
+interface Materia {
+  id: string;
+  nombre: string;
+  codigo: string;
+  periodo_id: string;
+  condiciones: string;
+  nota_minima_regularizar: number;
+  nota_minima_promocionar: number;
+  regla_promocion: string;
+  tareas: Tarea[];
+  parciales: Parcial[];
+}
+
+interface Tarea {
+  id: string;
+  materia_id: string;
+  nombre: string;
+  inicio: string | null;
+  fin: string | null;
+  detalles: string;
+  unidad: string | number;
+  con_nota: number; // 0 o 1
+  tipo: string;
+  grupal: number; // 0 o 1
+  cupo_maximo: number | null;
+}
+
+interface Parcial {
+  id: string;
+  materia_id: string;
+  nombre: string;
+  fecha: string;
+  detalles: string;
+  url: string;
+}
+
+interface Alumno {
+  id: string;
+  nombre: string;
+  rol: string;
+  sesion_version: number;
+}
+
+interface Periodo {
+  id: string;
+  anio: number;
+  cuatrimestre: number;
+  nombre: string;
+  activo: number; // 0 o 1
+}
+
+interface NotificacionBase {
+  id: string;
+  tipo: string;
+  nombre: string;
+  materia: string;
+  dias: number | null;
+  url?: string;
+}
+
+interface Novedad extends NotificacionBase { }
+interface AvisoNovedad extends NotificacionBase { }
+interface VencimientoNovedad extends NotificacionBase { }
+interface ParcialNovedad extends NotificacionBase { }
+interface AperturaNovedad extends NotificacionBase { }
 import {
   tareaCompletadaPor,
   fechaEntregaTarea,
@@ -88,45 +154,55 @@ import VistaHorarios from '../components/VistaHorarios';
 import VistaHistorial from '../components/VistaHistorial';
 
 export default function Home() {
-  const [materias, setMaterias] = useState([]);
-  const [alumnos, setAlumnos] = useState([]);
-  const [periodos, setPeriodos] = useState([]);
-  const [periodoSeleccionado, setPeriodoSeleccionado] = useState('');
-  const [usuarioActual, setUsuarioActual] = useState(null);
-  const [rolUsuario, setRolUsuario] = useState(null);
-  const [pestana, setPestana] = useState('alumnos');
-  const [cargando, setCargando] = useState(true);
-  const [iniciado, setIniciado] = useState(false);
-  const [notificacionesAbiertas, setNotificacionesAbiertas] = useState(false);
-  const [notificacionesVistas, setNotificacionesVistas] = useState([]);
-  const notificacionesRef = useRef(null);
-  const refrescandoRef = useRef(false);
-  const [mostrarAvisoInicio, setMostrarAvisoInicio] = useState(false);
-  const [novedades, setNovedades] = useState([]);
+  const [materias, setMaterias] = useState<Materia[]>([]);
+  const [alumnos, setAlumnos] = useState<Alumno[]>([]);
+  const [periodos, setPeriodos] = useState<Periodo[]>([]);
+  const [periodoSeleccionado, setPeriodoSeleccionado] = useState<string>('');
+  const [usuarioActual, setUsuarioActual] = useState<string | null>(null);
+  const [rolUsuario, setRolUsuario] = useState<string | null>(null);
+  const [pestana, setPestana] = useState<'alumnos' | 'materias' | 'plan' | 'parciales' | 'horarios' | 'ranking' | 'promocion' | 'historial' | 'admin'>('alumnos');
+  const [cargando, setCargando] = useState<boolean>(true);
+  const [iniciado, setIniciado] = useState<boolean>(false);
+  const [notificacionesAbiertas, setNotificacionesAbiertas] = useState<boolean>(false);
+  const [notificacionesVistas, setNotificacionesVistas] = useState<string[]>([]);
+  const notificacionesRef = useRef<HTMLDivElement | null>(null);
+  const refrescandoRef = useRef<boolean>(false);
+  const [mostrarAvisoInicio, setMostrarAvisoInicio] = useState<boolean>(false);
+  const [novedades, setNovedades] = useState<Novedad[]>([]);
 
   // Estado del modal de sincronización con UGR Virtual (solo admin)
-  const [syncAbierto, setSyncAbierto] = useState(false);
-  const [syncEstado, setSyncEstado] = useState('idle'); // idle | cargando | listo | error
-  const [syncDatos, setSyncDatos] = useState(null);
-  const syncEnCurso = useRef(false);
-  const [syncMensaje, setSyncMensaje] = useState('');
-  // Tareas detectadas que el admin dejó tildadas en la vista previa (idMoodle).
-  const [syncSeleccionados, setSyncSeleccionados] = useState(() => new Set());
-  // Avisos de foros tildados para publicar en la campana (id del aviso_local).
-  const [syncAvisosSeleccionados, setSyncAvisosSeleccionados] = useState(() => new Set());
-  // Avisos cuyo evento sugerido se agrega al cronograma (id del aviso_local).
-  const [syncEventosSeleccionados, setSyncEventosSeleccionados] = useState(() => new Set());
+  const [syncAbierto, setSyncAbierto] = useState<boolean>(false);
+  const [syncEstado, setSyncEstado] = useState<'idle' | 'cargando' | 'listo' | 'error'>('idle');
+  const [syncDatos, setSyncDatos] = useState<SyncResult | null>(null);
+  const syncEnCurso = useRef<boolean>(false);
+  const [syncMensaje, setSyncMensaje] = useState<string>('');
+  const [syncSeleccionados, setSyncSeleccionados] = useState<Set<string>>(() => new Set());
+  const [syncAvisosSeleccionados, setSyncAvisosSeleccionados] = useState<Set<string>>(() => new Set());
+  const [syncEventosSeleccionados, setSyncEventosSeleccionados] = useState<Set<string>>(() => new Set());
 
   // Estado para Parciales y Notas
-  const [parciales, setParciales] = useState([]);
-  const [notas, setNotas] = useState([]);
-  const [notasInputs, setNotasInputs] = useState({});
-  const [notasTareasInputs, setNotasTareasInputs] = useState({});
-  const [notasDesplegadas, setNotasDesplegadas] = useState({});
-  const [horarios, setHorarios] = useState([]);
-  const [cronograma, setCronograma] = useState([]);
-  const [progresoPlan, setProgresoPlan] = useState([]);
-  const [avisos, setAvisos] = useState([]);
+  const [parciales, setParciales] = useState<{ id: string; materia_id: string; nombre: string; fecha: string; detalles: string; url: string }[]>([]);
+  const [notas, setNotas] = useState<{ id: string; parcial_id: string; alumno: string; nota: number | null }[]>([]);
+  const [notasInputs, setNotasInputs] = useState<Record<string, string>>({});
+  const [notasTareasInputs, setNotasTareasInputs] = useState<Record<string, string>>({});
+  const [notasDesplegadas, setNotasDesplegadas] = useState<Record<string, boolean>>({});
+  const [horarios, setHorarios] = useState<{ id: string; materia_id: string; dia: number | string; hora_inicio: string; hora_fin: string; aula: string }[]>([]);
+  const [cronograma, setCronograma] = useState<{ id: string; materia_id: string; fecha: string; modalidad: string; tipo: string; titulo: string; detalles: string; url: string; origen: string }[]>([]);
+  const [progresoPlan, setProgresoPlan] = useState<{ alumno: string | null; materia_codigo: string; estado: string; nota: number | null; actualizado_en: string }[]>([]);
+  interface Aviso {
+    id: string;
+    curso_id: string;
+    curso_nombre: string;
+    materia_nombre: string;
+    foro_nombre: string;
+    titulo: string;
+    autor: string;
+    fecha: string;
+    contenido: string;
+    url: string;
+    estado: string;
+  }
+  const [avisos, setAvisos] = useState<Aviso[]>([]);
   const [mesCalendario, setMesCalendario] = useState(() => {
     const hoy = new Date();
     return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
@@ -355,7 +431,7 @@ export default function Home() {
     };
   }, []);
 
-  const iniciarSesionLocal = (usuario, rol) => {
+  const iniciarSesionLocal = (usuario: string, rol: string) => {
     setUsuarioActual(usuario);
     setRolUsuario(rol);
   };
@@ -370,7 +446,7 @@ export default function Home() {
 
 
   // Aplica un estado completo al componente (materias, notas inputs, selections, etc.).
-  const aplicarEstado = useCallback((estado) => {
+  const aplicarEstado = useCallback((estado: any) => {
     if (!estado) return;
 
     setPeriodos(estado.periodos || []);
@@ -385,17 +461,17 @@ export default function Home() {
     if (estado.rol) setRolUsuario(estado.rol);
 
     // Inicializar inputs de notas locales
-    const mapaNotas = {};
-    (estado.notas || []).forEach((n) => {
+    const mapaNotas: Record<string, string> = {};
+    (estado.notas || []).forEach((n: any) => {
       mapaNotas[`${n.parcial_id}_${n.alumno}`] = n.nota;
     });
     setNotasInputs(mapaNotas);
 
-    const mapaNotasTareas = {};
-    (estado.materias || []).forEach((materia) => {
-      materia.tareas.forEach((tarea) => {
+    const mapaNotasTareas: Record<string, string> = {};
+    (estado.materias || []).forEach((materia: any) => {
+      materia.tareas.forEach((tarea: any) => {
         Object.entries(tarea.notas || {}).forEach(([alumno, nota]) => {
-          mapaNotasTareas[`${tarea.id}_${alumno}`] = nota;
+          mapaNotasTareas[`${tarea.id}_${alumno}`] = String(nota);
         });
       });
     });
@@ -408,7 +484,7 @@ export default function Home() {
     }
   }, []);
 
-  const cargarBD = useCallback(async (mostrarCarga = true) => {
+  const cargarBD = useCallback(async (mostrarCarga = true): Promise<boolean> => {
     if (mostrarCarga) setCargando(true);
     try {
       const estado = await obtenerEstadoCompleto(periodoSeleccionado || undefined);
@@ -680,7 +756,7 @@ export default function Home() {
     await cargarBD();
   };
 
-  const obtenerEstadoMateria = (materia, alumno) => {
+  const obtenerEstadoMateria = (materia: Materia, alumno: string): ({ texto: string; estilo: string } | null) => {
     const tareasAbiertas = materia.tareas.filter((tarea) => tareaEstaHabilitada(tarea.inicio));
     const trabajosPracticos = tareasAbiertas.filter((tarea) => tarea.tipo === 'trabajo_practico');
     if (!materia.condiciones && trabajosPracticos.length === 0) return null;
@@ -763,7 +839,7 @@ export default function Home() {
     return notas.every((nota) => nota >= materia.notaMinimaPromocionar) && promedio >= materia.notaMinimaPromocionar ? promociona : regulariza;
   };
 
-  const handleEliminarTarea = async (id) => {
+  const handleEliminarTarea = async (id: string): Promise<void> => {
     if (confirm('¿Seguro que querés borrar esta tarea?')) {
       const resultado = await eliminarTareaAction(id);
       if (resultado && "exito" in resultado && !resultado.exito) {
@@ -774,7 +850,7 @@ export default function Home() {
     }
   };
 
-  const ejecutarSyncUGR = async (confirmar = false, ids = [], idsAvisos = [], idsEventos = []) => {
+  const ejecutarSyncUGR = async (confirmar = false, ids: string[] = [], idsAvisos: string[] = [], idsEventos: string[] = []): Promise<void> => {
     if (syncEnCurso.current) return;
     syncEnCurso.current = true;
     setSyncEstado('cargando');
@@ -865,7 +941,7 @@ export default function Home() {
     }));
   };
 
-  const handleGuardarNotaTareaOnBlur = async (tareaId, alumno) => {
+  const handleGuardarNotaTareaOnBlur = async (tareaId: string, alumno: string): Promise<void> => {
     const clave = `${tareaId}_${alumno}`;
     const resultado = await guardarNotaTareaAction(tareaId, alumno, notasTareasInputs[clave] || '', usuarioActual);
     if (resultado && "exito" in resultado && !resultado.exito) {
@@ -876,7 +952,7 @@ export default function Home() {
     await cargarBD();
   };
 
-  const handleCrearHorario = async (e) => {
+  const handleCrearHorario = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     if (!materiaHorarioSel || !horaInicioHorario || !horaFinHorario) return;
     if (horaInicioHorario >= horaFinHorario) {
@@ -904,7 +980,7 @@ export default function Home() {
     setPestana('horarios');
   };
 
-  const handleEliminarHorario = async (id) => {
+  const handleEliminarHorario = async (id: string): Promise<void> => {
     if (!confirm('¿Seguro que querés borrar este horario?')) return;
     const resultado = await eliminarHorarioAction(id, usuarioActual);
     if (resultado && "exito" in resultado && !resultado.exito) {
@@ -915,7 +991,7 @@ export default function Home() {
   };
 
   // HANDLERS PARCIALES Y NOTAS
-  const handleCrearParcial = async (e) => {
+  const handleCrearParcial = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     if (!nombreParcial.trim() || !materiaParcialSel) return;
     const datosParcial = {
@@ -951,7 +1027,7 @@ export default function Home() {
     setPestana('admin');
   };
 
-  const handleEliminarParcial = async (id) => {
+  const handleEliminarParcial = async (id: string): Promise<void> => {
     if (confirm('¿Seguro que querés borrar este parcial y sus notas cargadas?')) {
       const resultado = await eliminarParcialAction(id, usuarioActual);
       if (resultado && "exito" in resultado && !resultado.exito) {
@@ -962,14 +1038,14 @@ export default function Home() {
     }
   };
 
-  const handleNotaChangeLocal = (parcialId, alumno, valor) => {
+  const handleNotaChangeLocal = (parcialId: string, alumno: string, valor: string) => {
     setNotasInputs((prev) => ({
       ...prev,
       [`${parcialId}_${alumno}`]: valor
     }));
   };
 
-  const handleGuardarNotaOnBlur = async (parcialId, alumno) => {
+  const handleGuardarNotaOnBlur = async (parcialId: string, alumno: string): Promise<void> => {
     if (!esAdmin && alumno !== usuarioActual) return;
     const clave = `${parcialId}_${alumno}`;
     const valor = notasInputs[clave] || '';

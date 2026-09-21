@@ -33,6 +33,22 @@ const MAX_TITULO_LENGTH = 200;
 const MAX_PASSWORD_LENGTH = 128;
 const MAX_USUARIO_LENGTH = 100;
 
+interface LoginParams {
+  usuario: string;
+  password: string;
+}
+
+interface AuditoriaParams {
+  accion: string;
+  usuario: string;
+  detalle: string;
+  ip: string;
+}
+
+interface SesionDatos {
+  usuario: string;
+  versionSesion: number;
+}
 
 export interface RespuestaAction {
   exito: boolean;
@@ -52,6 +68,7 @@ export interface TareaActionParams {
   grupal?: boolean;
   cupoMaximo?: number;
 }
+
 
 
 
@@ -95,7 +112,7 @@ async function obtenerIPReal() {
   return xff[0] || xRealIp || 'unknown';
 }
 
-async function obtenerClavesLogin(usuario) {
+async function obtenerClavesLogin(usuario: string): Promise<{ clave: string; limite: number }[]> {
   const ip = await obtenerIPReal();
   const claves = [{ clave: `ip:${ip}`, limite: LIMITE_LOGIN_IP }];
   if (usuario) claves.push({ clave: `user:${usuario.toLowerCase()}`, limite: LIMITE_LOGIN_USUARIO });
@@ -176,7 +193,7 @@ function validarLongitud(texto, maximo, campo) {
   return { valida: true, valor: limpio };
 }
 
-async function registrarAuditoria({ accion, usuario, detalle, ip }) {
+async function registrarAuditoria({ accion, usuario, detalle, ip }: AuditoriaParams): Promise<void> {
   try {
     await db.execute({
       sql: "INSERT INTO auditoria (id, accion, usuario, detalle, ip, creada_en) VALUES (?, ?, ?, ?, ?, datetime('now'))",
@@ -280,7 +297,7 @@ async function establecerSesion(usuario, versionSesion) {
   });
 }
 
-async function obtenerUsuarioSesion() {
+async function obtenerUsuarioSesion(): Promise<string | null> {
   const cookieStore = await cookies();
   const sesion = leerValorSesion(cookieStore.get(COOKIE_SESION)?.value);
   if (!sesion) return null;
@@ -293,7 +310,7 @@ async function obtenerUsuarioSesion() {
   return versionActual > 0 && versionActual === sesion.versionSesion ? sesion.usuario : null;
 }
 
-async function verificarAdmin() {
+async function verificarAdmin(): Promise<boolean> {
   const usuario = await obtenerUsuarioSesion();
   if (!usuario) return false;
   const resultado = await db.execute({
@@ -303,7 +320,7 @@ async function verificarAdmin() {
   return resultado.rows[0]?.rol === 'admin';
 }
 
-async function obtenerRolUsuario(usuario) {
+async function obtenerRolUsuario(usuario: string | null): Promise<string | null> {
   if (!usuario) return null;
   const resultado = await db.execute({
     sql: 'SELECT rol FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
@@ -312,7 +329,8 @@ async function obtenerRolUsuario(usuario) {
   return resultado.rows[0]?.rol || 'alumno';
 }
 
-async function existeMateria(id) {
+async function existeMateria(id: string | undefined): Promise<boolean> {
+  if (!id) return false;
   const resultado = await db.execute({
     sql: 'SELECT 1 FROM materias WHERE id = ?',
     args: [id]
@@ -320,7 +338,7 @@ async function existeMateria(id) {
   return resultado.rows.length > 0;
 }
 
-async function obtenerAlumno(nombre) {
+async function obtenerAlumno(nombre: string): Promise<{ id: string; nombre: string } | null> {
   const resultado = await db.execute({
     sql: 'SELECT id, nombre FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
     args: [nombre]
@@ -328,13 +346,13 @@ async function obtenerAlumno(nombre) {
   return resultado.rows[0] || null;
 }
 
-async function hashearPassword(password) {
+async function hashearPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString('hex');
   const derivada = await scryptAsync(password, salt, 64) as Buffer;
   return `scrypt$${salt}$${derivada.toString('hex')}`;
 }
 
-async function verificarPassword(password, almacenada) {
+async function verificarPassword(password: string, almacenada: string | null | undefined): Promise<boolean> {
   if (!almacenada?.startsWith('scrypt$')) return false;
 
   const [, salt, hashHex] = almacenada.split('$');
@@ -353,7 +371,7 @@ async function verificarPassword(password, almacenada) {
 // --- AUTENTICACIÓN Y ALUMNOS ---
 
 // Valida credenciales consultando directamente a la tabla alumnos en Turso
-export async function validarLoginAction(usuarioInput, passwordInput) {
+export async function validarLoginAction(usuarioInput: string, passwordInput: string): Promise<RespuestaAction> {
   try {
     const userClean = String(usuarioInput || '').trim();
     const passClean = String(passwordInput || '').trim();
@@ -417,7 +435,7 @@ export async function obtenerSesionAction() {
 }
 
 // Cambiar contraseña en la tabla alumnos en Turso
-export async function cambiarPasswordAction(usuarioInput, passActualInput, passNuevaInput) {
+export async function cambiarPasswordAction(usuarioInput: string, passActualInput: string, passNuevaInput: string): Promise<RespuestaAction> {
   try {
     const userClean = usuarioInput ? usuarioInput.trim() : '';
     const passActualClean = passActualInput ? passActualInput.trim() : '';
@@ -484,7 +502,7 @@ export async function obtenerAlumnosAction() {
   }
 }
 
-export async function obtenerPeriodosAction() {
+export async function obtenerPeriodosAction(): Promise<{ id: string; anio: number; cuatrimestre: number; nombre: string; activo: number }[]> {
   try {
     if (!await obtenerUsuarioSesion()) return [];
     const res = await db.execute('SELECT id, anio, cuatrimestre, nombre, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC');
@@ -496,7 +514,7 @@ export async function obtenerPeriodosAction() {
 }
 
 // Crear nuevo alumno en la BD
-export async function crearAlumnoAction(nombre) {
+export async function crearAlumnoAction(nombre: string): Promise<RespuestaAction> {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede crear alumnos.' };
     const usuarioSesion = await obtenerUsuarioSesion();
@@ -525,7 +543,7 @@ export async function crearAlumnoAction(nombre) {
 }
 
 // Renombrar alumno
-export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
+export async function editarAlumnoAction(nombreAntiguo: string, nuevoNombre: string): Promise<RespuestaAction> {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede editar alumnos.' };
     const usuarioSesion = await obtenerUsuarioSesion();
@@ -561,7 +579,7 @@ export async function editarAlumnoAction(nombreAntiguo, nuevoNombre) {
 }
 
 // Eliminar alumno de la BD
-export async function eliminarAlumnoAction(nombre) {
+export async function eliminarAlumnoAction(nombre: string): Promise<RespuestaAction> {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede eliminar alumnos.' };
     const usuarioSesion = await obtenerUsuarioSesion();
@@ -722,7 +740,7 @@ export async function obtenerDatos(periodoId = null) {
   }
 }
 
-export async function obtenerProgresoPlanAction() {
+export async function obtenerProgresoPlanAction(): Promise<{ alumno: string | null; materia_codigo: string; estado: string; nota: number | null; actualizado_en: string }[]> {
   try {
     if (!await obtenerUsuarioSesion()) return [];
     const res = await db.execute('SELECT COALESCE(a.nombre, p.alumno) AS alumno, p.materia_codigo, p.estado, p.nota, p.actualizado_en FROM progreso_materias p LEFT JOIN alumnos a ON a.id = p.alumno_id ORDER BY alumno ASC, p.materia_codigo ASC');
@@ -1178,7 +1196,7 @@ export async function decidirAvisoAction({ ids = [], decision = 'aceptado', usua
 
 // --- HORARIOS DE CURSADA ---
 
-export async function obtenerHorariosAction(periodoId = null) {
+export async function obtenerHorariosAction(periodoId: string | null): Promise<{ id: string; materia_id: string; dia: number | string; hora_inicio: string; hora_fin: string; aula: string }[]> {
   try {
     if (!await obtenerUsuarioSesion()) return [];
     const res = await db.execute(consultaPeriodo(
@@ -1199,7 +1217,7 @@ export async function obtenerHorariosAction(periodoId = null) {
   }
 }
 
-export async function obtenerCronogramaAction(periodoId = null) {
+export async function obtenerCronogramaAction(periodoId: string | null): Promise<{ id: string; materia_id: string; fecha: string; modalidad: string; tipo: string; titulo: string; detalles: string; url: string; origen: string }[]> {
   try {
     if (!await obtenerUsuarioSesion()) return [];
     const res = await db.execute(consultaPeriodo(
@@ -1217,7 +1235,7 @@ export async function obtenerCronogramaAction(periodoId = null) {
   }
 }
 
-export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, aula, usuario }) {
+export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, aula, usuario }: { materiaId: string; dia: string | number; horaInicio: string; horaFin: string; aula: string; usuario: string }) {
   try {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede crear horarios.' };
@@ -1247,7 +1265,7 @@ export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, 
   }
 }
 
-export async function eliminarHorarioAction(id, usuario) {
+export async function eliminarHorarioAction(id: string, usuario: string): Promise<RespuestaAction> {
   try {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede borrar horarios.' };
@@ -1267,7 +1285,7 @@ export async function eliminarHorarioAction(id, usuario) {
 
 // --- PARCIALES Y NOTAS ---
 
-export async function obtenerParcialesAction(periodoId = null) {
+export async function obtenerParcialesAction(periodoId: string | null): Promise<{ parciales: { id: string; materia_id: string; nombre: string; fecha: string; detalles: string; url: string }[]; notas: { id: string; parcial_id: string; alumno: string; nota: number | null }[] }> {
   try {
     if (!await obtenerUsuarioSesion()) return { parciales: [], notas: [] };
     const [resParciales, resNotas] = await Promise.all([
@@ -1301,7 +1319,7 @@ export async function obtenerParcialesAction(periodoId = null) {
   }
 }
 
-export async function crearParcialAction({ materiaId, nombre, fecha, detalles, usuario }) {
+export async function crearParcialAction({ materiaId, nombre, fecha, detalles, usuario }: { materiaId: string; nombre: string; fecha: string; detalles: string; usuario: string }): Promise<RespuestaAction> {
   try {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede crear parciales.' };
@@ -1331,7 +1349,7 @@ export async function crearParcialAction({ materiaId, nombre, fecha, detalles, u
   }
 }
 
-export async function editarParcialAction({ id, materiaId, nombre, fecha, detalles, usuario }) {
+export async function editarParcialAction({ id, materiaId, nombre, fecha, detalles, usuario }: { id: string; materiaId: string; nombre: string; fecha: string; detalles: string; usuario: string }): Promise<RespuestaAction> {
   try {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede editar parciales.' };
@@ -1360,7 +1378,7 @@ export async function editarParcialAction({ id, materiaId, nombre, fecha, detall
   }
 }
 
-export async function eliminarParcialAction(id, usuario) {
+export async function eliminarParcialAction(id: string, usuario: string): Promise<RespuestaAction> {
   try {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede borrar parciales.' };
@@ -1381,7 +1399,7 @@ export async function eliminarParcialAction(id, usuario) {
   }
 }
 
-export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario) {
+export async function guardarNotaParcialAction(parcialId: string, alumno: string, nota: string | number, usuario: string): Promise<RespuestaAction> {
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) {

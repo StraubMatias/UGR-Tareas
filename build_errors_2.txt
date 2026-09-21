@@ -1,0 +1,663 @@
+
+> dashboard-tareas@0.1.0 build
+> next build
+
+▲ Next.js 16.3.5 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.mjs took 8ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 254ms
+  Running TypeScript ...
+src/app/actions.tsx(7,67): error TS7016: Could not find a declaration file for module '../lib/grupos-tareas.mjs'. '/home/matute/tareasUGR/src/lib/grupos-tareas.mjs' implicitly has an 'any' type.
+src/app/actions.tsx(11,104): error TS7016: Could not find a declaration file for module '../../ugr-sync/lib/sync-core.mjs'. '/home/matute/tareasUGR/ugr-sync/lib/sync-core.mjs' implicitly has an 'any' type.
+src/app/actions.tsx(12,38): error TS7016: Could not find a declaration file for module '../../ugr-sync/lib/previa.mjs'. '/home/matute/tareasUGR/ugr-sync/lib/previa.mjs' implicitly has an 'any' type.
+src/app/actions.tsx(64,18): error TS7006: Parameter 'prefijo' implicitly has an 'any' type.
+src/app/actions.tsx(68,22): error TS7006: Parameter 'ip' implicitly has an 'any' type.
+src/app/actions.tsx(98,35): error TS7006: Parameter 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(105,45): error TS7006: Parameter 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(119,41): error TS7006: Parameter 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(151,44): error TS7006: Parameter 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(159,23): error TS7006: Parameter 'fecha' implicitly has an 'any' type.
+src/app/actions.tsx(171,26): error TS7006: Parameter 'texto' implicitly has an 'any' type.
+src/app/actions.tsx(171,33): error TS7006: Parameter 'maximo' implicitly has an 'any' type.
+src/app/actions.tsx(171,41): error TS7006: Parameter 'campo' implicitly has an 'any' type.
+src/app/actions.tsx(179,37): error TS7031: Binding element 'accion' implicitly has an 'any' type.
+src/app/actions.tsx(179,45): error TS7031: Binding element 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(179,54): error TS7031: Binding element 'detalle' implicitly has an 'any' type.
+src/app/actions.tsx(179,63): error TS7031: Binding element 'ip' implicitly has an 'any' type.
+src/app/actions.tsx(190,35): error TS7006: Parameter 'claves' implicitly has an 'any' type.
+src/app/actions.tsx(202,36): error TS7006: Parameter 'claves' implicitly has an 'any' type.
+src/app/actions.tsx(229,37): error TS7006: Parameter 'claves' implicitly has an 'any' type.
+src/app/actions.tsx(238,23): error TS7006: Parameter 'payload' implicitly has an 'any' type.
+src/app/actions.tsx(242,27): error TS7006: Parameter 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(242,36): error TS7006: Parameter 'versionSesion' implicitly has an 'any' type.
+src/app/actions.tsx(251,26): error TS7006: Parameter 'valor' implicitly has an 'any' type.
+src/app/actions.tsx(272,33): error TS7006: Parameter 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(272,42): error TS7006: Parameter 'versionSesion' implicitly has an 'any' type.
+src/app/actions.tsx(306,34): error TS7006: Parameter 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(315,30): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/actions.tsx(323,30): error TS7006: Parameter 'nombre' implicitly has an 'any' type.
+src/app/actions.tsx(331,32): error TS7006: Parameter 'password' implicitly has an 'any' type.
+src/app/actions.tsx(337,34): error TS7006: Parameter 'password' implicitly has an 'any' type.
+src/app/actions.tsx(337,44): error TS7006: Parameter 'almacenada' implicitly has an 'any' type.
+src/app/actions.tsx(356,42): error TS7006: Parameter 'usuarioInput' implicitly has an 'any' type.
+src/app/actions.tsx(356,56): error TS7006: Parameter 'passwordInput' implicitly has an 'any' type.
+src/app/actions.tsx(397,35): error TS2339: Property 'message' does not exist on type '{}'.
+src/app/actions.tsx(420,45): error TS7006: Parameter 'usuarioInput' implicitly has an 'any' type.
+src/app/actions.tsx(420,59): error TS7006: Parameter 'passActualInput' implicitly has an 'any' type.
+src/app/actions.tsx(420,76): error TS7006: Parameter 'passNuevaInput' implicitly has an 'any' type.
+src/app/actions.tsx(480,26): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/app/actions.tsx(499,41): error TS7006: Parameter 'nombre' implicitly has an 'any' type.
+src/app/actions.tsx(528,42): error TS7006: Parameter 'nombreAntiguo' implicitly has an 'any' type.
+src/app/actions.tsx(528,57): error TS7006: Parameter 'nuevoNombre' implicitly has an 'any' type.
+src/app/actions.tsx(564,44): error TS7006: Parameter 'nombre' implicitly has an 'any' type.
+src/app/actions.tsx(591,26): error TS7006: Parameter 'periodoId' implicitly has an 'any' type.
+src/app/actions.tsx(591,37): error TS7006: Parameter 'sqlConPeriodo' implicitly has an 'any' type.
+src/app/actions.tsx(591,52): error TS7006: Parameter 'sqlSinPeriodo' implicitly has an 'any' type.
+src/app/actions.tsx(650,29): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/actions.tsx(657,34): error TS7006: Parameter 'completada' implicitly has an 'any' type.
+src/app/actions.tsx(665,34): error TS7006: Parameter 'nota' implicitly has an 'any' type.
+src/app/actions.tsx(675,44): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/app/actions.tsx(678,55): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/app/actions.tsx(682,48): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/app/actions.tsx(684,28): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/app/actions.tsx(745,25): error TS7006: Parameter 'periodo' implicitly has an 'any' type.
+src/app/actions.tsx(781,51): error TS7031: Binding element 'alumno' implicitly has an 'any' type.
+src/app/actions.tsx(781,59): error TS7031: Binding element 'materiaCodigo' implicitly has an 'any' type.
+src/app/actions.tsx(781,74): error TS7031: Binding element 'estado' implicitly has an 'any' type.
+src/app/actions.tsx(781,82): error TS7031: Binding element 'nota' implicitly has an 'any' type.
+src/app/actions.tsx(829,41): error TS7006: Parameter 'tareaId' implicitly has an 'any' type.
+src/app/actions.tsx(829,50): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/app/actions.tsx(843,67): error TS18046: 'error' is of type 'unknown'.
+src/app/actions.tsx(847,44): error TS7031: Binding element 'nombre' implicitly has an 'any' type.
+src/app/actions.tsx(847,52): error TS7031: Binding element 'anio' implicitly has an 'any' type.
+src/app/actions.tsx(847,58): error TS7031: Binding element 'cuatrimestre' implicitly has an 'any' type.
+src/app/actions.tsx(887,46): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/actions.tsx(887,50): error TS7006: Parameter 'nuevoNombre' implicitly has an 'any' type.
+src/app/actions.tsx(908,56): error TS7031: Binding element 'id' implicitly has an 'any' type.
+src/app/actions.tsx(908,60): error TS7031: Binding element 'condiciones' implicitly has an 'any' type.
+src/app/actions.tsx(908,73): error TS7031: Binding element 'notaMinimaRegularizar' implicitly has an 'any' type.
+src/app/actions.tsx(908,96): error TS7031: Binding element 'notaMinimaPromocionar' implicitly has an 'any' type.
+src/app/actions.tsx(908,119): error TS7031: Binding element 'reglaPromocion' implicitly has an 'any' type.
+src/app/actions.tsx(908,135): error TS7031: Binding element 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(943,45): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/actions.tsx(1043,43): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/actions.tsx(1105,37): error TS7031: Binding element 'curso' implicitly has an 'any' type.
+src/app/actions.tsx(1105,44): error TS7031: Binding element 'coincidencia' implicitly has an 'any' type.
+src/app/actions.tsx(1122,44): error TS2339: Property 'message' does not exist on type '{}'.
+src/app/actions.tsx(1220,44): error TS7031: Binding element 'materiaId' implicitly has an 'any' type.
+src/app/actions.tsx(1220,55): error TS7031: Binding element 'dia' implicitly has an 'any' type.
+src/app/actions.tsx(1220,60): error TS7031: Binding element 'horaInicio' implicitly has an 'any' type.
+src/app/actions.tsx(1220,72): error TS7031: Binding element 'horaFin' implicitly has an 'any' type.
+src/app/actions.tsx(1220,81): error TS7031: Binding element 'aula' implicitly has an 'any' type.
+src/app/actions.tsx(1220,87): error TS7031: Binding element 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(1250,45): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/actions.tsx(1250,49): error TS7006: Parameter 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(1304,44): error TS7031: Binding element 'materiaId' implicitly has an 'any' type.
+src/app/actions.tsx(1304,55): error TS7031: Binding element 'nombre' implicitly has an 'any' type.
+src/app/actions.tsx(1304,63): error TS7031: Binding element 'fecha' implicitly has an 'any' type.
+src/app/actions.tsx(1304,70): error TS7031: Binding element 'detalles' implicitly has an 'any' type.
+src/app/actions.tsx(1304,80): error TS7031: Binding element 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(1334,45): error TS7031: Binding element 'id' implicitly has an 'any' type.
+src/app/actions.tsx(1334,49): error TS7031: Binding element 'materiaId' implicitly has an 'any' type.
+src/app/actions.tsx(1334,60): error TS7031: Binding element 'nombre' implicitly has an 'any' type.
+src/app/actions.tsx(1334,68): error TS7031: Binding element 'fecha' implicitly has an 'any' type.
+src/app/actions.tsx(1334,75): error TS7031: Binding element 'detalles' implicitly has an 'any' type.
+src/app/actions.tsx(1334,85): error TS7031: Binding element 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(1363,45): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/actions.tsx(1363,49): error TS7006: Parameter 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(1384,48): error TS7006: Parameter 'parcialId' implicitly has an 'any' type.
+src/app/actions.tsx(1384,59): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/app/actions.tsx(1384,67): error TS7006: Parameter 'nota' implicitly has an 'any' type.
+src/app/actions.tsx(1384,73): error TS7006: Parameter 'usuario' implicitly has an 'any' type.
+src/app/actions.tsx(1491,46): error TS18046: 'error' is of type 'unknown'.
+src/app/actions.tsx(1553,46): error TS18046: 'error' is of type 'unknown'.
+src/app/layout.tsx(24,38): error TS7031: Binding element 'children' implicitly has an 'any' type.
+src/app/page.tsx(4,41): error TS7016: Could not find a declaration file for module '../lib/avisos'. '/home/matute/tareasUGR/src/lib/avisos.js' implicitly has an 'any' type.
+src/app/page.tsx(202,49): error TS2339: Property 'alumno' does not exist on type 'never'.
+src/app/page.tsx(202,68): error TS2339: Property 'materia_codigo' does not exist on type 'never'.
+src/app/page.tsx(205,31): error TS7006: Parameter 'codigo' implicitly has an 'any' type.
+src/app/page.tsx(206,35): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/app/page.tsx(206,43): error TS7006: Parameter 'codigo' implicitly has an 'any' type.
+src/app/page.tsx(207,42): error TS7006: Parameter 'materia' implicitly has an 'any' type.
+src/app/page.tsx(207,51): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/app/page.tsx(207,91): error TS7006: Parameter 'correlativa' implicitly has an 'any' type.
+src/app/page.tsx(210,79): error TS2339: Property 'estado' does not exist on type 'never'.
+src/app/page.tsx(214,163): error TS2339: Property 'estado' does not exist on type 'never'.
+src/app/page.tsx(222,51): error TS7006: Parameter 'materia' implicitly has an 'any' type.
+src/app/page.tsx(250,31): error TS2345: Argument of type 'any[]' is not assignable to parameter of type 'SetStateAction<never[]>'.
+  Type 'any[]' is not assignable to type 'never[]'.
+    Type 'any' is not assignable to type 'never'.
+src/app/page.tsx(259,39): error TS7006: Parameter 'evento' implicitly has an 'any' type.
+src/app/page.tsx(260,39): error TS2339: Property 'contains' does not exist on type 'never'.
+src/app/page.tsx(273,67): error TS2339: Property 'tareaId' does not exist on type 'never'.
+src/app/page.tsx(292,66): error TS2339: Property 'tareas' does not exist on type 'never'.
+src/app/page.tsx(292,78): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(296,24): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(299,36): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(301,23): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(302,51): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(302,66): error TS2339: Property 'materia_id' does not exist on type 'never'.
+src/app/page.tsx(302,79): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(322,20): error TS2345: Argument of type 'any[]' is not assignable to parameter of type 'SetStateAction<never[]>'.
+  Type 'any[]' is not assignable to type 'never[]'.
+    Type 'any' is not assignable to type 'never'.
+src/app/page.tsx(358,31): error TS7006: Parameter 'usuario' implicitly has an 'any' type.
+src/app/page.tsx(358,40): error TS7006: Parameter 'rol' implicitly has an 'any' type.
+src/app/page.tsx(373,38): error TS7006: Parameter 'estado' implicitly has an 'any' type.
+src/app/page.tsx(389,35): error TS7006: Parameter 'n' implicitly has an 'any' type.
+src/app/page.tsx(390,7): error TS7053: Element implicitly has an 'any' type because expression of type '`${any}_${any}`' can't be used to index type '{}'.
+src/app/page.tsx(395,38): error TS7006: Parameter 'materia' implicitly has an 'any' type.
+src/app/page.tsx(396,31): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(398,11): error TS7053: Element implicitly has an 'any' type because expression of type '`${any}_${string}`' can't be used to index type '{}'.
+src/app/page.tsx(414,50): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'null | undefined'.
+  Type 'string' is not assignable to type 'null | undefined'.
+src/app/page.tsx(456,30): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/page.tsx(469,21): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'SetStateAction<string>'.
+  Type 'undefined' is not assignable to type 'SetStateAction<string>'.
+src/app/page.tsx(473,40): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/page.tsx(493,44): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/app/page.tsx(493,52): error TS7006: Parameter 'materiaCodigo' implicitly has an 'any' type.
+src/app/page.tsx(493,67): error TS7006: Parameter 'estado' implicitly has an 'any' type.
+src/app/page.tsx(506,14): error TS7053: Element implicitly has an 'any' type because expression of type '`${any}_${any}`' can't be used to index type '{}'.
+src/app/page.tsx(512,34): error TS7006: Parameter 'nombreAlumno' implicitly has an 'any' type.
+src/app/page.tsx(515,24): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{}'.
+src/app/page.tsx(519,35): error TS7006: Parameter 'materiaId' implicitly has an 'any' type.
+src/app/page.tsx(522,21): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{}'.
+src/app/page.tsx(527,31): error TS7006: Parameter 'tareaId' implicitly has an 'any' type.
+src/app/page.tsx(528,44): error TS2339: Property 'tareas' does not exist on type 'never'.
+src/app/page.tsx(528,57): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/app/page.tsx(531,27): error TS2339: Property 'tareas' does not exist on type 'never'.
+src/app/page.tsx(531,40): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/app/page.tsx(534,47): error TS2345: Argument of type 'null' is not assignable to parameter of type 'string'.
+src/app/page.tsx(534,66): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{}'.
+src/app/page.tsx(534,94): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(535,61): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(538,20): error TS2353: Object literal may only specify known properties, and 'materiaId' does not exist in type '(prevState: null) => null'.
+src/app/page.tsx(538,39): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(545,21): error TS7006: Parameter 'destino' implicitly has an 'any' type.
+src/app/page.tsx(551,36): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/page.tsx(559,45): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/page.tsx(561,46): error TS2339: Property 'nuevoNombre' does not exist on type 'never'.
+src/app/page.tsx(562,46): error TS2339: Property 'antiguoNombre' does not exist on type 'never'.
+src/app/page.tsx(562,77): error TS2339: Property 'nuevoNombre' does not exist on type 'never'.
+src/app/page.tsx(567,39): error TS7006: Parameter 'nombre' implicitly has an 'any' type.
+src/app/page.tsx(578,36): error TS7006: Parameter 'tareaId' implicitly has an 'any' type.
+src/app/page.tsx(578,45): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/app/page.tsx(584,37): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/page.tsx(600,50): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/page.tsx(604,7): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(605,51): error TS2339: Property 'reglaPromocion' does not exist on type 'never'.
+src/app/page.tsx(616,48): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/page.tsx(619,51): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(619,72): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(624,40): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/page.tsx(624,44): error TS7006: Parameter 'nombre' implicitly has an 'any' type.
+src/app/page.tsx(635,35): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/page.tsx(667,44): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/page.tsx(671,25): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(672,38): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(673,34): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(683,33): error TS7006: Parameter 'materia' implicitly has an 'any' type.
+src/app/page.tsx(683,42): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/app/page.tsx(684,51): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(685,54): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(687,21): error TS7006: Parameter 'texto' implicitly has an 'any' type.
+src/app/page.tsx(687,28): error TS7006: Parameter 'estilo' implicitly has an 'any' type.
+src/app/page.tsx(692,21): error TS7006: Parameter 'registro' implicitly has an 'any' type.
+src/app/page.tsx(693,26): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(694,28): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(701,27): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(701,79): error TS2531: Object is possibly 'null'.
+src/app/page.tsx(702,28): error TS7006: Parameter 'tareas' implicitly has an 'any' type.
+src/app/page.tsx(706,17): error TS2339: Property 'materia_id' does not exist on type 'never'.
+src/app/page.tsx(707,20): error TS2339: Property 'fecha' does not exist on type 'never'.
+src/app/page.tsx(708,12): error TS2531: Object is possibly 'null'.
+src/app/page.tsx(708,42): error TS2339: Property 'fecha' does not exist on type 'never'.
+src/app/page.tsx(711,38): error TS7006: Parameter 'nota' implicitly has an 'any' type.
+src/app/page.tsx(711,75): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(715,83): error TS2531: Object is possibly 'null'.
+src/app/page.tsx(715,113): error TS2339: Property 'fecha' does not exist on type 'never'.
+src/app/page.tsx(719,41): error TS18047: 'nota' is possibly 'null'.
+src/app/page.tsx(720,45): error TS18047: 'nota' is possibly 'null'.
+src/app/page.tsx(738,71): error TS7006: Parameter 'nota' implicitly has an 'any' type.
+src/app/page.tsx(739,111): error TS7006: Parameter 'nota' implicitly has an 'any' type.
+src/app/page.tsx(749,42): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(753,41): error TS7006: Parameter 'nota' implicitly has an 'any' type.
+src/app/page.tsx(757,77): error TS7006: Parameter 'nota' implicitly has an 'any' type.
+src/app/page.tsx(761,36): error TS7006: Parameter 'total' implicitly has an 'any' type.
+src/app/page.tsx(761,43): error TS7006: Parameter 'nota' implicitly has an 'any' type.
+src/app/page.tsx(762,21): error TS7006: Parameter 'nota' implicitly has an 'any' type.
+src/app/page.tsx(763,25): error TS7006: Parameter 'nota' implicitly has an 'any' type.
+src/app/page.tsx(766,38): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/page.tsx(783,73): error TS2339: Property 'previaId' does not exist on type 'never'.
+src/app/page.tsx(789,20): error TS2345: Argument of type '{ exito: boolean; mensaje?: undefined; } | { mensaje?: undefined; exito: boolean; confirmar: boolean; previaId: any; materiasLocales: any; cursos: any; mapeos: any; detectadas: any; insertadas: any; ... 6 more ...; eventosInsertados: any; } | { ...; }' is not assignable to parameter of type 'SetStateAction<null>'.
+  Type '{ exito: boolean; mensaje?: undefined; }' is not assignable to type 'SetStateAction<null>'.
+    Type '{ exito: boolean; mensaje?: undefined; }' provides no match for the signature '(prevState: null): null'.
+src/app/page.tsx(798,25): error TS2532: Object is possibly 'undefined'.
+src/app/page.tsx(798,63): error TS2532: Object is possibly 'undefined'.
+src/app/page.tsx(798,106): error TS2532: Object is possibly 'undefined'.
+src/app/page.tsx(803,29): error TS2339: Property 'message' does not exist on type '{}'.
+src/app/page.tsx(809,28): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/page.tsx(818,28): error TS7006: Parameter 'marcadas' implicitly has an 'any' type.
+src/app/page.tsx(820,55): error TS2339: Property 'detectadas' does not exist on type 'never'.
+src/app/page.tsx(820,71): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/app/page.tsx(823,28): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/page.tsx(841,29): error TS7006: Parameter 'avisoId' implicitly has an 'any' type.
+src/app/page.tsx(850,34): error TS7006: Parameter 'marcadas' implicitly has an 'any' type.
+src/app/page.tsx(852,61): error TS2339: Property 'avisos' does not exist on type 'never'.
+src/app/page.tsx(852,73): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/page.tsx(861,39): error TS7006: Parameter 'tareaId' implicitly has an 'any' type.
+src/app/page.tsx(861,48): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/app/page.tsx(861,56): error TS7006: Parameter 'valor' implicitly has an 'any' type.
+src/app/page.tsx(868,47): error TS7006: Parameter 'tareaId' implicitly has an 'any' type.
+src/app/page.tsx(868,56): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/app/page.tsx(870,69): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{}'.
+  No index signature with a parameter of type 'string' was found on type '{}'.
+src/app/page.tsx(870,101): error TS2345: Argument of type 'null' is not assignable to parameter of type 'string'.
+src/app/page.tsx(879,37): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/page.tsx(907,40): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/page.tsx(918,37): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/page.tsx(929,58): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(945,34): error TS7006: Parameter 'parcial' implicitly has an 'any' type.
+src/app/page.tsx(954,40): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/page.tsx(965,34): error TS7006: Parameter 'parcialId' implicitly has an 'any' type.
+src/app/page.tsx(965,45): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/app/page.tsx(965,53): error TS7006: Parameter 'valor' implicitly has an 'any' type.
+src/app/page.tsx(972,42): error TS7006: Parameter 'parcialId' implicitly has an 'any' type.
+src/app/page.tsx(972,53): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/app/page.tsx(975,19): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{}'.
+  No index signature with a parameter of type 'string' was found on type '{}'.
+src/app/page.tsx(984,31): error TS7006: Parameter 'parcialId' implicitly has an 'any' type.
+src/app/page.tsx(987,21): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{}'.
+src/app/page.tsx(991,42): error TS7006: Parameter 'tareaId' implicitly has an 'any' type.
+src/app/page.tsx(991,51): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/app/page.tsx(991,59): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(1013,18): error TS2531: Object is possibly 'null'.
+src/app/page.tsx(1016,42): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1023,28): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1026,24): error TS2339: Property 'materia_nombre' does not exist on type 'never'.
+src/app/page.tsx(1026,48): error TS2339: Property 'curso_nombre' does not exist on type 'never'.
+src/app/page.tsx(1027,20): error TS2339: Property 'url' does not exist on type 'never'.
+src/app/page.tsx(1029,48): error TS2339: Property 'tareas' does not exist on type 'never'.
+src/app/page.tsx(1030,15): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(1031,20): error TS7031: Binding element 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(1035,17): error TS7031: Binding element 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(1035,24): error TS7031: Binding element 'materia' implicitly has an 'any' type.
+src/app/page.tsx(1044,34): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1046,27): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(1047,55): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1047,70): error TS2339: Property 'materia_id' does not exist on type 'never'.
+src/app/page.tsx(1047,83): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(1048,47): error TS2339: Property 'fecha' does not exist on type 'never'.
+src/app/page.tsx(1051,48): error TS2339: Property 'tareas' does not exist on type 'never'.
+src/app/page.tsx(1052,15): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(1056,28): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(1059,20): error TS7031: Binding element 'dias' implicitly has an 'any' type.
+src/app/page.tsx(1063,54): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+src/app/page.tsx(1065,39): error TS7006: Parameter 'ids' implicitly has an 'any' type.
+src/app/page.tsx(1069,29): error TS2345: Argument of type 'any[]' is not assignable to parameter of type 'SetStateAction<never[]>'.
+  Type 'any[]' is not assignable to type 'never[]'.
+    Type 'any' is not assignable to type 'never'.
+src/app/page.tsx(1077,36): error TS2339: Property 'materia_id' does not exist on type 'never'.
+src/app/page.tsx(1078,32): error TS2339: Property 'dia' does not exist on type 'never'.
+src/app/page.tsx(1078,60): error TS2339: Property 'dia' does not exist on type 'never'.
+src/app/page.tsx(1078,71): error TS2339: Property 'hora_inicio' does not exist on type 'never'.
+src/app/page.tsx(1078,99): error TS2339: Property 'hora_inicio' does not exist on type 'never'.
+src/app/page.tsx(1091,37): error TS7006: Parameter 'fecha' implicitly has an 'any' type.
+src/app/page.tsx(1097,38): error TS7006: Parameter 'fecha' implicitly has an 'any' type.
+src/app/page.tsx(1102,36): error TS7006: Parameter 'fecha' implicitly has an 'any' type.
+src/app/page.tsx(1108,37): error TS7006: Parameter 'fecha' implicitly has an 'any' type.
+src/app/page.tsx(1122,66): error TS2339: Property 'tareas' does not exist on type 'never'.
+src/app/page.tsx(1122,78): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(1123,36): error TS7006: Parameter 'fecha' implicitly has an 'any' type.
+src/app/page.tsx(1129,97): error TS2339: Property 'fecha' does not exist on type 'never'.
+src/app/page.tsx(1135,36): error TS2339: Property 'modalidad' does not exist on type 'never'.
+src/app/page.tsx(1135,73): error TS2339: Property 'tipo' does not exist on type 'never'.
+src/app/page.tsx(1136,33): error TS2339: Property 'materia_id' does not exist on type 'never'.
+src/app/page.tsx(1140,82): error TS2339: Property 'fecha' does not exist on type 'never'.
+src/app/page.tsx(1143,45): error TS2339: Property 'dia' does not exist on type 'never'.
+src/app/page.tsx(1144,65): error TS2339: Property 'materia_id' does not exist on type 'never'.
+src/app/page.tsx(1145,34): error TS2339: Property 'hora_inicio' does not exist on type 'never'.
+src/app/page.tsx(1145,70): error TS2339: Property 'hora_inicio' does not exist on type 'never'.
+src/app/page.tsx(1151,44): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1154,81): error TS2339: Property 'tareas' does not exist on type 'never'.
+src/app/page.tsx(1169,32): error TS2339: Property 'alumno' does not exist on type 'never'.
+src/app/page.tsx(1172,57): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1172,69): error TS2339: Property 'parcial_id' does not exist on type 'never'.
+src/app/page.tsx(1173,63): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1173,79): error TS2339: Property 'materia_id' does not exist on type 'never'.
+src/app/page.tsx(1175,54): error TS2339: Property 'nota' does not exist on type 'never'.
+src/app/page.tsx(1177,80): error TS2339: Property 'tareas' does not exist on type 'never'.
+src/app/page.tsx(1178,18): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(1179,15): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(1181,28): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(1188,18): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(1190,32): error TS2339: Property 'alumno' does not exist on type 'never'.
+src/app/page.tsx(1192,57): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1192,69): error TS2339: Property 'parcial_id' does not exist on type 'never'.
+src/app/page.tsx(1193,55): error TS2339: Property 'nota' does not exist on type 'never'.
+src/app/page.tsx(1195,30): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(1196,57): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1196,73): error TS2339: Property 'materia_id' does not exist on type 'never'.
+src/app/page.tsx(1196,86): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(1201,107): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(1219,133): error TS2339: Property 'localeCompare' does not exist on type 'never'.
+src/app/page.tsx(1234,22): error TS2339: Property 'localeCompare' does not exist on type 'never'.
+src/app/page.tsx(1250,13): error TS7034: Variable 'razonesPuntos' implicitly has type 'any[]' in some locations where its type cannot be determined.
+src/app/page.tsx(1291,7): error TS7005: Variable 'razonesPuntos' implicitly has an 'any[]' type.
+src/app/page.tsx(1322,9): error TS7005: Variable 'razonesPuntos' implicitly has an 'any[]' type.
+src/app/page.tsx(1327,50): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1329,57): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1332,22): error TS2339: Property 'parciales' does not exist on type 'never'.
+src/app/page.tsx(1334,19): error TS2345: Argument of type '{ id: string; nombre: any; parciales: Parcial[]; }' is not assignable to parameter of type 'never'.
+src/app/page.tsx(1336,35): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(1384,40): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1384,59): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1384,72): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(1448,157): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+src/app/page.tsx(1710,67): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(1715,41): error TS2339: Property 'url' does not exist on type 'Parcial'.
+src/app/page.tsx(1717,50): error TS2339: Property 'url' does not exist on type 'Parcial'.
+src/app/page.tsx(1733,51): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(1734,61): error TS7053: Element implicitly has an 'any' type because expression of type 'number' can't be used to index type '{ 1: string; 2: string; 3: string; 4: string; 5: string; }'.
+  No index signature with a parameter of type 'number' was found on type '{ 1: string; 2: string; 3: string; 4: string; 5: string; }'.
+src/app/page.tsx(1734,88): error TS2339: Property 'dia' does not exist on type 'never'.
+src/app/page.tsx(1734,112): error TS2339: Property 'dia' does not exist on type 'never'.
+src/app/page.tsx(1736,46): error TS2339: Property 'hora_inicio' does not exist on type 'never'.
+src/app/page.tsx(1736,70): error TS2339: Property 'hora_fin' does not exist on type 'never'.
+src/app/page.tsx(1737,46): error TS2339: Property 'aula' does not exist on type 'never'.
+src/app/page.tsx(1737,72): error TS2339: Property 'aula' does not exist on type 'never'.
+src/app/page.tsx(1965,69): error TS2353: Object literal may only specify known properties, and 'antiguoNombre' does not exist in type '(prevState: null) => null'.
+src/app/page.tsx(2020,44): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(2020,57): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(2020,80): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(2145,44): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(2145,57): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(2145,80): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(2217,44): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(2217,57): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/page.tsx(2217,80): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(2371,42): error TS2339: Property 'nuevoNombre' does not exist on type 'never'.
+src/app/page.tsx(2374,23): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2412,43): error TS2339: Property 'nombre' does not exist on type 'never'.
+src/app/page.tsx(2415,23): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2453,41): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2456,23): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2457,50): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2471,41): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2474,23): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2475,50): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2485,41): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2488,23): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2490,43): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2492,90): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2507,51): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2507,84): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2508,44): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2511,23): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2512,50): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2520,72): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2520,124): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2520,170): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2523,39): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2529,43): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2530,58): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2530,104): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2541,43): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2544,25): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2545,52): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2555,43): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2558,25): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2559,52): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2571,41): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2574,23): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2575,50): error TS2339: Property 'tarea' does not exist on type 'never'.
+src/app/page.tsx(2612,54): error TS2339: Property 'condiciones' does not exist on type 'never'.
+src/app/page.tsx(2613,69): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2620,169): error TS2339: Property 'reglaPromocion' does not exist on type 'never'.
+src/app/page.tsx(2624,108): error TS2339: Property 'reglaPromocion' does not exist on type 'never'.
+src/app/page.tsx(2626,56): error TS2339: Property 'notaMinimaRegularizar' does not exist on type 'never'.
+src/app/page.tsx(2627,71): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2632,115): error TS2339: Property 'reglaPromocion' does not exist on type 'never'.
+src/app/page.tsx(2636,54): error TS2339: Property 'reglaPromocion' does not exist on type 'never'.
+src/app/page.tsx(2638,56): error TS2339: Property 'notaMinimaPromocionar' does not exist on type 'never'.
+src/app/page.tsx(2639,71): error TS2698: Spread types may only be created from object types.
+src/app/page.tsx(2678,123): error TS2339: Property 'cursos' does not exist on type 'never'.
+src/app/page.tsx(2679,126): error TS2339: Property 'mapeos' does not exist on type 'never'.
+src/app/page.tsx(2682,28): error TS2339: Property 'detectadas' does not exist on type 'never'.
+src/app/page.tsx(2690,64): error TS2339: Property 'detectadas' does not exist on type 'never'.
+src/app/page.tsx(2711,34): error TS2339: Property 'detectadas' does not exist on type 'never'.
+src/app/page.tsx(2711,50): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/app/page.tsx(2711,57): error TS7006: Parameter 'i' implicitly has an 'any' type.
+src/app/page.tsx(2764,29): error TS2339: Property 'avisos' does not exist on type 'never'.
+src/app/page.tsx(2768,73): error TS2339: Property 'avisos' does not exist on type 'never'.
+src/app/page.tsx(2789,34): error TS2339: Property 'avisos' does not exist on type 'never'.
+src/app/page.tsx(2789,46): error TS7006: Parameter 'aviso' implicitly has an 'any' type.
+src/app/page.tsx(2791,53): error TS2339: Property 'eventosSugeridos' does not exist on type 'never'.
+src/app/page.tsx(2791,83): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/page.tsx(2870,28): error TS2339: Property 'insertadas' does not exist on type 'never'.
+src/app/page.tsx(2872,46): error TS2339: Property 'insertadas' does not exist on type 'never'.
+src/app/page.tsx(2876,28): error TS2339: Property 'urlsActualizadas' does not exist on type 'never'.
+src/app/page.tsx(2878,61): error TS2339: Property 'urlsActualizadas' does not exist on type 'never'.
+src/app/page.tsx(2882,28): error TS2339: Property 'avisosAceptados' does not exist on type 'never'.
+src/app/page.tsx(2884,48): error TS2339: Property 'avisosAceptados' does not exist on type 'never'.
+src/app/page.tsx(2888,28): error TS2339: Property 'eventosInsertados' does not exist on type 'never'.
+src/app/page.tsx(2890,48): error TS2339: Property 'eventosInsertados' does not exist on type 'never'.
+src/app/page.tsx(2902,31): error TS2339: Property 'detectadas' does not exist on type 'never'.
+src/app/page.tsx(2902,66): error TS2339: Property 'avisos' does not exist on type 'never'.
+src/app/page.tsx(2902,99): error TS2339: Property 'confirmar' does not exist on type 'never'.
+src/app/page.tsx(2905,60): error TS2345: Argument of type 'unknown[]' is not assignable to parameter of type 'never[]'.
+  Type 'unknown' is not assignable to type 'never'.
+src/app/plan-utils.ts(42,56): error TS7006: Parameter 'materia' implicitly has an 'any' type.
+src/app/plan-utils.ts(42,65): error TS7006: Parameter 'codigosAprobados' implicitly has an 'any' type.
+src/app/plan-utils.ts(43,39): error TS7006: Parameter 'correlativa' implicitly has an 'any' type.
+src/app/plan-utils.ts(49,45): error TS7006: Parameter 'plan' implicitly has an 'any' type.
+src/app/plan-utils.ts(49,51): error TS7006: Parameter 'codigosAprobados' implicitly has an 'any' type.
+src/app/plan-utils.ts(52,14): error TS7006: Parameter 'materia' implicitly has an 'any' type.
+src/app/plan-utils.ts(53,11): error TS7006: Parameter 'materia' implicitly has an 'any' type.
+src/app/plan-utils.ts(55,30): error TS7006: Parameter 'otra' implicitly has an 'any' type.
+src/app/plan-utils.ts(58,16): error TS7031: Binding element 'pendientes' implicitly has an 'any' type.
+src/app/plan-utils.ts(59,12): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/plan-utils.ts(59,15): error TS7006: Parameter 'b' implicitly has an 'any' type.
+src/app/turso.ts(3,5): error TS7034: Variable 'cliente' implicitly has type 'any' in some locations where its type cannot be determined.
+src/app/turso.ts(6,7): error TS7005: Variable 'cliente' implicitly has an 'any' type.
+src/app/turso.ts(19,11): error TS7019: Rest parameter 'args' implicitly has an 'any[]' type.
+src/app/turso.ts(22,9): error TS7019: Rest parameter 'args' implicitly has an 'any[]' type.
+src/app/turso.ts(25,15): error TS7019: Rest parameter 'args' implicitly has an 'any[]' type.
+src/app/validators.tsx(5,35): error TS7006: Parameter 'fecha' implicitly has an 'any' type.
+src/app/validators.tsx(14,33): error TS7006: Parameter 'fecha' implicitly has an 'any' type.
+src/app/validators.tsx(23,37): error TS7006: Parameter 'fecha' implicitly has an 'any' type.
+src/app/validators.tsx(32,29): error TS7006: Parameter 'nota' implicitly has an 'any' type.
+src/app/validators.tsx(44,34): error TS7006: Parameter 'unidad' implicitly has an 'any' type.
+src/components/EstadoAlumno.tsx(14,40): error TS7031: Binding element 'alumno' implicitly has an 'any' type.
+src/components/EstadoAlumno.tsx(14,48): error TS7031: Binding element 'materias' implicitly has an 'any' type.
+src/components/EstadoAlumno.tsx(14,58): error TS7031: Binding element 'abierto' implicitly has an 'any' type.
+src/components/EstadoAlumno.tsx(14,67): error TS7031: Binding element 'alAlternar' implicitly has an 'any' type.
+src/components/EstadoAlumno.tsx(20,25): error TS7006: Parameter 'materia' implicitly has an 'any' type.
+src/components/EstadoAlumno.tsx(20,67): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/components/EstadoAlumno.tsx(21,7): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'ResumenTareas'.
+  No index signature with a parameter of type 'string' was found on type 'ResumenTareas'.
+src/components/EstadoAlumno.tsx(22,42): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/components/EstadoAlumno.tsx(50,108): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'ResumenTareas'.
+  No index signature with a parameter of type 'string' was found on type 'ResumenTareas'.
+src/components/EstadoAlumno.tsx(61,29): error TS7006: Parameter 'materia' implicitly has an 'any' type.
+src/components/EstadoAlumno.tsx(63,32): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/components/EstadoAlumno.tsx(64,29): error TS7006: Parameter 'tarea' implicitly has an 'any' type.
+src/components/EstadoAlumno.tsx(66,27): error TS7031: Binding element 'tarea' implicitly has an 'any' type.
+src/components/EstadoAlumno.tsx(66,34): error TS7031: Binding element 'materia' implicitly has an 'any' type.
+src/components/EstadoGrupoAlumno.tsx(7,45): error TS7031: Binding element 'tarea' implicitly has an 'any' type.
+src/components/EstadoGrupoAlumno.tsx(7,52): error TS7031: Binding element 'alumno' implicitly has an 'any' type.
+src/components/EstadoGrupoAlumno.tsx(7,60): error TS7031: Binding element 'alumnos' implicitly has an 'any' type.
+src/components/EstadoGrupoAlumno.tsx(7,69): error TS7031: Binding element 'irATareaEnMaterias' implicitly has an 'any' type.
+src/components/EstadoGrupoAlumno.tsx(38,31): error TS2339: Property 'id' does not exist on type 'Grupo'.
+src/components/EstadoTareaAlumno.tsx(8,3): error TS7031: Binding element 'tarea' implicitly has an 'any' type.
+src/components/EstadoTareaAlumno.tsx(8,10): error TS7031: Binding element 'alumno' implicitly has an 'any' type.
+src/components/EstadoTareaAlumno.tsx(8,18): error TS7031: Binding element 'alumnos' implicitly has an 'any' type.
+src/components/EstadoTareaAlumno.tsx(8,27): error TS7031: Binding element 'usuarioActual' implicitly has an 'any' type.
+src/components/EstadoTareaAlumno.tsx(8,42): error TS7031: Binding element 'irATareaEnMaterias' implicitly has an 'any' type.
+src/components/EstadoTareaAlumno.tsx(8,62): error TS7031: Binding element 'materia' implicitly has an 'any' type.
+src/components/EstadoTareaAlumno.tsx(8,71): error TS7031: Binding element 'unidad' implicitly has an 'any' type.
+src/components/EstadoTareaAlumno.tsx(9,3): error TS7031: Binding element 'toggleTareaDesdeCliente' implicitly has an 'any' type.
+src/components/EstadoTareaAlumno.tsx(9,28): error TS7031: Binding element 'notasTareasInputs' implicitly has an 'any' type.
+src/components/EstadoTareaAlumno.tsx(9,47): error TS7031: Binding element 'handleNotaTareaChangeLocal' implicitly has an 'any' type.
+src/components/EstadoTareaAlumno.tsx(10,3): error TS7031: Binding element 'handleGuardarNotaTareaOnBlur' implicitly has an 'any' type.
+src/components/EstadoTareaAlumno.tsx(17,38): error TS7006: Parameter 'nombre' implicitly has an 'any' type.
+src/components/EstadoTareaAlumno.tsx(72,54): error TS7006: Parameter 'nombre' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(4,38): error TS7031: Binding element 'tarea' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(4,45): error TS7031: Binding element 'usuarioActual' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(4,60): error TS7031: Binding element 'recargar' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(21,19): error TS7006: Parameter 'g' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(26,31): error TS7006: Parameter 'g' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(28,29): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(29,48): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{}'.
+src/components/GrupoTarea.tsx(29,82): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{}'.
+src/components/GrupoTarea.tsx(32,27): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(32,54): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{}'.
+src/components/GrupoTarea.tsx(32,86): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{}'.
+src/components/GrupoTarea.tsx(34,28): error TS7006: Parameter 'datos' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(54,37): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(124,45): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(167,30): error TS7006: Parameter 'g' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(216,52): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(284,50): error TS7006: Parameter 'g' implicitly has an 'any' type.
+src/components/GrupoTarea.tsx(318,32): error TS7006: Parameter 'g' implicitly has an 'any' type.
+src/components/VistaAlumnos.tsx(6,21): error TS7006: Parameter 'texto' implicitly has an 'any' type.
+src/components/VistaAlumnos.tsx(9,32): error TS7031: Binding element 'usuarioActual' implicitly has an 'any' type.
+src/components/VistaAlumnos.tsx(9,47): error TS7031: Binding element 'situacionPropiaAbierta' implicitly has an 'any' type.
+src/components/VistaAlumnos.tsx(10,3): error TS7031: Binding element 'setSituacionPropiaAbierta' implicitly has an 'any' type.
+src/components/VistaAlumnos.tsx(10,30): error TS7031: Binding element 'alumnosDesplegados' implicitly has an 'any' type.
+src/components/VistaAlumnos.tsx(10,50): error TS7031: Binding element 'toggleDesplegarAlumno' implicitly has an 'any' type.
+src/components/VistaAlumnos.tsx(26,56): error TS7006: Parameter 'abierta' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(12,3): error TS7031: Binding element 'materias' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(13,3): error TS7031: Binding element 'notas' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(14,3): error TS7031: Binding element 'parciales' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(15,3): error TS7031: Binding element 'usuarioActual' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(16,3): error TS7031: Binding element 'alumnoComparar' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(17,3): error TS7031: Binding element 'setAlumnoComparar' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(18,3): error TS7031: Binding element 'datosComparacion' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(19,3): error TS7031: Binding element 'alumnosDelHistorial' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(20,3): error TS7031: Binding element 'historialPropioAbierto' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(21,3): error TS7031: Binding element 'setHistorialPropioAbierto' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(22,3): error TS7031: Binding element 'alumnosDesplegados' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(23,3): error TS7031: Binding element 'setAlumnosDesplegados' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(92,54): error TS7006: Parameter 'razon' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(112,33): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/components/VistaHistorial.tsx(128,40): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(7,30): error TS7006: Parameter 'evento' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(12,3): error TS7031: Binding element 'mesCalendario' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(13,3): error TS7031: Binding element 'setMesCalendario' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(14,3): error TS7031: Binding element 'nombresMeses' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(15,3): error TS7031: Binding element 'horarios' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(16,3): error TS7031: Binding element 'parciales' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(17,3): error TS7031: Binding element 'tareasCalendario' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(18,3): error TS7031: Binding element 'cronograma' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(19,3): error TS7031: Binding element 'materias' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(20,3): error TS7031: Binding element 'diasCalendario' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(21,3): error TS7031: Binding element 'claveHoyCalendario' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(22,3): error TS7031: Binding element 'eventosDelDiaCalendario' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(23,3): error TS7031: Binding element 'obtenerDiaSemanaHorario' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(24,3): error TS7031: Binding element 'diaCalendarioSeleccionado' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(25,3): error TS7031: Binding element 'setDiaCalendarioSeleccionado' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(79,36): error TS7006: Parameter 'fecha' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(79,43): error TS7006: Parameter 'indice' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(112,54): error TS7006: Parameter 'evento' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(113,62): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(125,46): error TS7006: Parameter 'horario' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(126,56): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(133,47): error TS7006: Parameter 'parcial' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(134,56): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(142,46): error TS7031: Binding element 'tarea' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(142,53): error TS7031: Binding element 'materia' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(147,48): error TS7006: Parameter 'evento' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(148,56): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(241,51): error TS7006: Parameter 'evento' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(247,52): error TS7006: Parameter 'evento' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(247,94): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(247,159): error TS7006: Parameter 'nombre' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(247,167): error TS7006: Parameter 'indice' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(247,175): error TS7006: Parameter 'lista' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(249,51): error TS7006: Parameter 'evento' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(251,66): error TS7006: Parameter 'evento' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(259,42): error TS7006: Parameter 'horario' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(260,52): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(269,43): error TS7006: Parameter 'parcial' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(270,52): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(279,24): error TS7031: Binding element 'tarea' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(279,31): error TS7031: Binding element 'materia' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(286,44): error TS7006: Parameter 'evento' implicitly has an 'any' type.
+src/components/VistaHorarios.tsx(287,52): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(20,3): error TS7031: Binding element 'materias' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(21,3): error TS7031: Binding element 'recargar' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(22,3): error TS7031: Binding element 'alumnos' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(23,3): error TS7031: Binding element 'usuarioActual' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(24,3): error TS7031: Binding element 'esAdmin' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(25,3): error TS7031: Binding element 'materiasDesplegadas' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(26,3): error TS7031: Binding element 'toggleDesplegarMateria' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(27,3): error TS7031: Binding element 'setMateriaCondicionesEnEdicion' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(28,3): error TS7031: Binding element 'setMateriaEnEdicion' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(29,3): error TS7031: Binding element 'handleEliminarMateria' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(30,3): error TS7031: Binding element 'setTareaEnEdicion' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(31,3): error TS7031: Binding element 'handleEliminarTarea' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(32,3): error TS7031: Binding element 'toggleTareaDesdeCliente' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(33,3): error TS7031: Binding element 'handleToggleTarea' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(34,3): error TS7031: Binding element 'notasTareasInputs' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(35,3): error TS7031: Binding element 'handleNotaTareaChangeLocal' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(36,3): error TS7031: Binding element 'handleGuardarNotaTareaOnBlur' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(37,3): error TS7031: Binding element 'tareaFoco' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(38,3): error TS7031: Binding element 'tareaFocoVisible' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(47,23): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(50,14): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(53,14): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(142,32): error TS2339: Property 'url' does not exist on type 'Tarea'.
+src/components/VistaMaterias.tsx(144,41): error TS2339: Property 'url' does not exist on type 'Tarea'.
+src/components/VistaMaterias.tsx(174,49): error TS2532: Object is possibly 'undefined'.
+src/components/VistaMaterias.tsx(217,34): error TS2339: Property 'detalles' does not exist on type 'Tarea'.
+src/components/VistaMaterias.tsx(299,50): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(301,46): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(302,43): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/components/VistaMaterias.tsx(305,78): error TS18048: 't.notas' is possibly 'undefined'.
+src/components/VistaParciales.tsx(7,3): error TS7031: Binding element 'parciales' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(8,3): error TS7031: Binding element 'parcialesAgrupados' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(9,3): error TS7031: Binding element 'esAdmin' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(10,3): error TS7031: Binding element 'usuarioActual' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(11,3): error TS7031: Binding element 'alumnos' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(12,3): error TS7031: Binding element 'iniciarEdicionParcial' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(13,3): error TS7031: Binding element 'handleEliminarParcial' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(14,3): error TS7031: Binding element 'toggleNotasParcial' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(15,3): error TS7031: Binding element 'notasDesplegadas' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(16,3): error TS7031: Binding element 'notasInputs' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(17,3): error TS7031: Binding element 'handleNotaChangeLocal' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(18,3): error TS7031: Binding element 'handleGuardarNotaOnBlur' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(27,33): error TS7006: Parameter 'grupo' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(35,37): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(147,44): error TS7006: Parameter 'alum' implicitly has an 'any' type.
+src/components/VistaParciales.tsx(147,82): error TS7006: Parameter 'alum' implicitly has an 'any' type.
+src/components/VistaPlan.tsx(156,83): error TS7006: Parameter 'actual' implicitly has an 'any' type.
+src/components/VistaPlan.tsx(177,85): error TS7006: Parameter 'actual' implicitly has an 'any' type.
+src/components/VistaPlan.tsx(253,65): error TS7006: Parameter 'actuales' implicitly has an 'any' type.
+src/components/VistaPlan.tsx(253,110): error TS7006: Parameter 'codigo' implicitly has an 'any' type.
+src/components/VistaPlan.tsx(299,121): error TS7006: Parameter 'correlativa' implicitly has an 'any' type.
+src/components/VistaPromocion.tsx(6,3): error TS7031: Binding element 'materias' implicitly has an 'any' type.
+src/components/VistaPromocion.tsx(7,3): error TS7031: Binding element 'esAdmin' implicitly has an 'any' type.
+src/components/VistaPromocion.tsx(8,3): error TS7031: Binding element 'usuarioActual' implicitly has an 'any' type.
+src/components/VistaPromocion.tsx(9,3): error TS7031: Binding element 'alumnosOrdenadosPromocion' implicitly has an 'any' type.
+src/components/VistaPromocion.tsx(10,3): error TS7031: Binding element 'obtenerEstadoMateria' implicitly has an 'any' type.
+src/components/VistaPromocion.tsx(11,3): error TS7031: Binding element 'setMateriaCondicionesEnEdicion' implicitly has an 'any' type.
+src/components/VistaPromocion.tsx(24,23): error TS7006: Parameter 'materia' implicitly has an 'any' type.
+src/components/VistaPromocion.tsx(54,47): error TS7006: Parameter 'alumno' implicitly has an 'any' type.
+src/components/VistaRanking.tsx(6,3): error TS7031: Binding element 'materias' implicitly has an 'any' type.
+src/components/VistaRanking.tsx(7,3): error TS7031: Binding element 'usuarioActual' implicitly has an 'any' type.
+src/components/VistaRanking.tsx(8,3): error TS7031: Binding element 'materiaRanking' implicitly has an 'any' type.
+src/components/VistaRanking.tsx(9,3): error TS7031: Binding element 'setMateriaRanking' implicitly has an 'any' type.
+src/components/VistaRanking.tsx(10,3): error TS7031: Binding element 'ranking' implicitly has an 'any' type.
+src/components/VistaRanking.tsx(11,3): error TS7031: Binding element 'rankingPodio' implicitly has an 'any' type.
+src/components/VistaRanking.tsx(12,3): error TS7031: Binding element 'restoRanking' implicitly has an 'any' type.
+src/components/VistaRanking.tsx(35,30): error TS7006: Parameter 'materia' implicitly has an 'any' type.
+src/components/VistaRanking.tsx(48,34): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/VistaRanking.tsx(48,40): error TS7006: Parameter 'indice' implicitly has an 'any' type.
+src/components/VistaRanking.tsx(78,36): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/VistaRanking.tsx(78,42): error TS7006: Parameter 'indice' implicitly has an 'any' type.
+Failed to type check.
+
