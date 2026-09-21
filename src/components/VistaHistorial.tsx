@@ -1,10 +1,47 @@
 import {
+  type HistorialRegistro,
+  type Materia,
+  type Nota,
+  type Parcial,
   agruparHistorial,
   formatearFechaHora,
   formatearUnidad,
   historialPorAlumno,
   obtenerIconoMateria
 } from '../core/cursada';
+
+interface ItemRanking {
+  alumno: string;
+  puntos: number;
+  tareasConPuntaje: unknown[];
+  parcialesConPuntaje: unknown[];
+  actividades: number;
+}
+
+interface DatosComparacion {
+  motivo: string;
+  usuarioRanking: ItemRanking;
+  comparadoRanking: ItemRanking;
+  ultimaTareaUsuario: HistorialRegistro | undefined;
+  ultimaTareaComparado: HistorialRegistro | undefined;
+  puntosEmpatados: boolean;
+  razonesPuntos: { id: string; texto: string; diferencia: number }[];
+}
+
+interface Props {
+  materias: Materia[];
+  notas: Nota[];
+  parciales: Parcial[];
+  usuarioActual: string | null;
+  alumnoComparar: string;
+  setAlumnoComparar: (alumno: string) => void;
+  datosComparacion: DatosComparacion | null;
+  alumnosDelHistorial: string[];
+  historialPropioAbierto: boolean;
+  setHistorialPropioAbierto: (abierto: boolean) => void;
+  alumnosDesplegados: Record<string, boolean>;
+  setAlumnosDesplegados: (valor: Record<string, boolean> | ((prev: Record<string, boolean>) => Record<string, boolean>)) => void;
+}
 
 // Vista "Historial de entregas y notas": despliegue por alumno de las tareas
 // realizadas, sus notas y el modal de comparación entre dos compañeros.
@@ -21,7 +58,7 @@ export default function VistaHistorial({
   setHistorialPropioAbierto,
   alumnosDesplegados,
   setAlumnosDesplegados
-}) {
+}: Props) {
   return (
     <div className="space-y-4">
       <div className="border-b border-slate-800 pb-4">

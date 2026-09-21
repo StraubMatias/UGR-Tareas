@@ -1,10 +1,18 @@
 import {
   obtenerGrupoDeAlumno,
   obtenerCompanerosDeGrupo,
-  obtenerResumenGruposTarea
+  obtenerResumenGruposTarea,
+  type Tarea
 } from '../core/cursada';
 
-export default function EstadoGrupoAlumno({ tarea, alumno, alumnos, irATareaEnMaterias }) {
+interface Props {
+  tarea: Tarea;
+  alumno: string;
+  alumnos: string[];
+  irATareaEnMaterias: (tareaId: string) => void;
+}
+
+export default function EstadoGrupoAlumno({ tarea, alumno, alumnos, irATareaEnMaterias }: Props) {
   const resumen = obtenerResumenGruposTarea(tarea, alumnos);
   if (!resumen) return null;
   const grupo = obtenerGrupoDeAlumno(tarea, alumno);

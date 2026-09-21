@@ -733,37 +733,40 @@ export async function obtenerDatos(periodoId: string | null = null) {
         const notas = notasPorTarea.get(tareaId) || {};
         const notaCargadaEn = fechasNotasPorTarea.get(tareaId) || {};
         const completadoPor = completadas.map((c) => texto(c.alumno));
-        const completadoEn = Object.fromEntries(
-          completadas.map((c) => [texto(c.alumno), c.completada_en])
-        );
 
         return {
-          id: t.id,
-          nombre: t.nombre,
-          inicio: t.inicio,
-          fin: t.fin,
-          detalles: t.detalles,
-          unidad: t.unidad || '',
+          id: texto(t.id),
+          nombre: texto(t.nombre),
+          inicio: textoONull(t.inicio),
+          fin: textoONull(t.fin),
+          detalles: texto(t.detalles),
+          unidad: t.unidad == null || t.unidad === '' ? '' : texto(t.unidad),
           conNota: Number(t.con_nota) === 1,
           grupal: Number(t.grupal) === 1,
           cupo_maximo: Number(t.cupo_maximo) || 0,
           grupos: [...(gruposPorTarea.get(tareaId)?.values() || [])],
-          tipo: t.tipo || 'actividad',
-          url: t.url || '',
+          tipo: texto(t.tipo) || 'actividad',
+          url: texto(t.url),
           completadoPor,
-          completadoEn,
-          notas,
-          notaCargadaEn
+          completadoEn: Object.fromEntries(
+            completadas.map((c) => [texto(c.alumno), texto(c.completada_en)])
+          ),
+          notas: Object.fromEntries(
+            Object.entries(notas).map(([alumnoNota, valor]) => [alumnoNota, valor == null ? null : texto(valor)])
+          ),
+          notaCargadaEn: Object.fromEntries(
+            Object.entries(notaCargadaEn).map(([alumnoNota, valor]) => [alumnoNota, texto(valor)])
+          )
         };
       });
 
       return {
-        id: m.id,
-        nombre: m.nombre,
-        condiciones: m.condiciones || '',
+        id: texto(m.id),
+        nombre: texto(m.nombre),
+        condiciones: texto(m.condiciones),
         notaMinimaRegularizar: Number(m.nota_minima_regularizar) || 4,
         notaMinimaPromocionar: Number(m.nota_minima_promocionar) || 8,
-        reglaPromocion: m.regla_promocion || 'tp_nota',
+        reglaPromocion: texto(m.regla_promocion) || 'tp_nota',
         tareas: tareasConCompletados
       };
     });
@@ -1610,9 +1613,9 @@ export async function guardarNotaTareaAction(
   }
 }
 
-interface GestionarGrupoParams {
+export interface GestionarGrupoParams {
   tareaId: string;
-  nombre: string;
+  nombre?: string;
   grupoId?: string;
   salir?: boolean;
   alumnoNombre?: string;

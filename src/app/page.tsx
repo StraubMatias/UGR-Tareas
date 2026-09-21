@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { nombreNotificacionAviso } from '../lib/avisos';
 import {
   validarLoginAction,
@@ -34,6 +34,7 @@ import {
   tareaHabilitada as tareaEstaHabilitada
 } from './validators';
 import {
+  type MateriaPlan,
   CUATRIMESTRES_PLAN,
   PLAN_DE_ESTUDIO,
   crearIndicePlan,
@@ -41,56 +42,49 @@ import {
   calcularMateriasPriorizadas
 } from './plan-utils';
 
+interface TareaDetectada {
+  idMoodle: string;
+  nombre?: string;
+  materiaNombre?: string;
+  url?: string;
+  unidad?: string | number | null;
+  inicio?: string | null;
+  fin?: string | null;
+  tipo?: string;
+}
+
+interface AvisoSync {
+  id: string;
+  titulo?: string;
+  materiaNombre?: string;
+  cursoNombre?: string;
+  foroNombre?: string;
+  fecha?: string;
+  contenido?: string;
+  url?: string;
+}
+
+interface EventoSync {
+  avisoId: string;
+  titulo?: string;
+  fecha?: string;
+  tipo?: string;
+}
+
 interface SyncResult {
-  detectadas?: { idMoodle: string }[];
-  avisos?: { id: string }[];
-  eventosSugeridos?: { avisoId: string }[];
-  insertadas?: number;
-  avisosAceptados?: number;
-  eventosInsertados?: number;
-}
-
-interface Materia {
-  id: string;
-  nombre: string;
-  codigo: string;
-  periodo_id: string;
-  condiciones: string;
-  nota_minima_regularizar: number;
-  nota_minima_promocionar: number;
-  regla_promocion: string;
-  tareas: Tarea[];
-  parciales: Parcial[];
-}
-
-interface Tarea {
-  id: string;
-  materia_id: string;
-  nombre: string;
-  inicio: string | null;
-  fin: string | null;
-  detalles: string;
-  unidad: string | number;
-  con_nota: number; // 0 o 1
-  tipo: string;
-  grupal: number; // 0 o 1
-  cupo_maximo: number | null;
-}
-
-interface Parcial {
-  id: string;
-  materia_id: string;
-  nombre: string;
-  fecha: string;
-  detalles: string;
-  url: string;
-}
-
-interface Alumno {
-  id: string;
-  nombre: string;
-  rol: string;
-  sesion_version: number;
+  exito: boolean;
+  confirmar?: boolean;
+  previaId?: string;
+  materiasLocales?: number;
+  cursos?: number;
+  mapeos?: { id?: string | number; curso?: string; materia?: string }[];
+  detectadas: TareaDetectada[];
+  avisos: AvisoSync[];
+  eventosSugeridos: EventoSync[];
+  insertadas: number;
+  urlsActualizadas: number;
+  avisosAceptados: number;
+  eventosInsertados: number;
 }
 
 interface Periodo {
@@ -106,7 +100,7 @@ interface NotificacionBase {
   tipo: string;
   nombre: string;
   materia: string;
-  dias: number | null;
+  dias?: number | null;
   url?: string;
 }
 
@@ -116,6 +110,12 @@ interface VencimientoNovedad extends NotificacionBase { }
 interface ParcialNovedad extends NotificacionBase { }
 interface AperturaNovedad extends NotificacionBase { }
 import {
+  type Materia,
+  type Tarea,
+  type Parcial,
+  type Nota,
+  type Horario,
+  type EventoCronograma,
   tareaCompletadaPor,
   fechaEntregaTarea,
   tareaFaltaNota,
@@ -155,7 +155,7 @@ import VistaHistorial from '../components/VistaHistorial';
 
 export default function Home() {
   const [materias, setMaterias] = useState<Materia[]>([]);
-  const [alumnos, setAlumnos] = useState<Alumno[]>([]);
+  const [alumnos, setAlumnos] = useState<string[]>([]);
   const [periodos, setPeriodos] = useState<Periodo[]>([]);
   const [periodoSeleccionado, setPeriodoSeleccionado] = useState<string>('');
   const [usuarioActual, setUsuarioActual] = useState<string | null>(null);
@@ -181,13 +181,13 @@ export default function Home() {
   const [syncEventosSeleccionados, setSyncEventosSeleccionados] = useState<Set<string>>(() => new Set());
 
   // Estado para Parciales y Notas
-  const [parciales, setParciales] = useState<{ id: string; materia_id: string; nombre: string; fecha: string; detalles: string; url: string }[]>([]);
-  const [notas, setNotas] = useState<{ id: string; parcial_id: string; alumno: string; nota: number | null }[]>([]);
+  const [parciales, setParciales] = useState<Parcial[]>([]);
+  const [notas, setNotas] = useState<Nota[]>([]);
   const [notasInputs, setNotasInputs] = useState<Record<string, string>>({});
   const [notasTareasInputs, setNotasTareasInputs] = useState<Record<string, string>>({});
   const [notasDesplegadas, setNotasDesplegadas] = useState<Record<string, boolean>>({});
-  const [horarios, setHorarios] = useState<{ id: string; materia_id: string; dia: number | string; hora_inicio: string; hora_fin: string; aula: string }[]>([]);
-  const [cronograma, setCronograma] = useState<{ id: string; materia_id: string; fecha: string; modalidad: string; tipo: string; titulo: string; detalles: string; url: string; origen: string }[]>([]);
+  const [horarios, setHorarios] = useState<Horario[]>([]);
+  const [cronograma, setCronograma] = useState<EventoCronograma[]>([]);
   const [progresoPlan, setProgresoPlan] = useState<{ alumno: string | null; materia_codigo: string; estado: string; nota: number | null; actualizado_en: string }[]>([]);
   interface Aviso {
     id: string;
@@ -207,17 +207,17 @@ export default function Home() {
     const hoy = new Date();
     return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   });
-  const [diaCalendarioSeleccionado, setDiaCalendarioSeleccionado] = useState(null);
+  const [diaCalendarioSeleccionado, setDiaCalendarioSeleccionado] = useState<Date | null>(null);
 
   // Acordeón para compañeros
-  const [alumnosDesplegados, setAlumnosDesplegados] = useState({});
-  const [materiasDesplegadas, setMateriasDesplegadas] = useState({});
+  const [alumnosDesplegados, setAlumnosDesplegados] = useState<Record<string, boolean>>({});
+  const [materiasDesplegadas, setMateriasDesplegadas] = useState<Record<string, boolean>>({});
   const [situacionPropiaAbierta, setSituacionPropiaAbierta] = useState(true);
   const [historialPropioAbierto, setHistorialPropioAbierto] = useState(true);
   const [alumnoComparar, setAlumnoComparar] = useState('');
   const [materiaRanking, setMateriaRanking] = useState('general');
   // Foco de tarea al llegar desde "Estado por Alumno" hacia Materias (scroll + resaltado)
-  const [tareaFoco, setTareaFoco] = useState(null); // { materiaId, tareaId }
+  const [tareaFoco, setTareaFoco] = useState<{ materiaId: string; tareaId: string } | null>(null);
   const [tareaFocoVisible, setTareaFocoVisible] = useState(false);
 
   // Form Login
@@ -247,14 +247,20 @@ export default function Home() {
   const [tareaGrupal, setTareaGrupal] = useState(false);
   const [cupoMaximo, setCupoMaximo] = useState(0);
   const [tipoTarea, setTipoTarea] = useState('actividad');
-  const [materiaCondicionesEnEdicion, setMateriaCondicionesEnEdicion] = useState(null);
+  const [materiaCondicionesEnEdicion, setMateriaCondicionesEnEdicion] = useState<{
+    id: string;
+    condiciones: string;
+    notaMinimaRegularizar: number | string;
+    notaMinimaPromocionar: number | string;
+    reglaPromocion: string;
+  } | null>(null);
 
   // Form Admin (Parciales)
   const [materiaParcialSel, setMateriaParcialSel] = useState('');
   const [nombreParcial, setNombreParcial] = useState('');
   const [fechaParcial, setFechaParcial] = useState('');
   const [detallesParcial, setDetallesParcial] = useState('');
-  const [parcialEnEdicion, setParcialEnEdicion] = useState(null);
+  const [parcialEnEdicion, setParcialEnEdicion] = useState<Parcial | null>(null);
   const [materiaHorarioSel, setMateriaHorarioSel] = useState('');
   const [diaHorario, setDiaHorario] = useState('1');
   const [horaInicioHorario, setHoraInicioHorario] = useState('');
@@ -262,13 +268,13 @@ export default function Home() {
   const [aulaHorario, setAulaHorario] = useState('');
 
   // Modales edición
-  const [tareaEnEdicion, setTareaEnEdicion] = useState(null);
-  const [materiaEnEdicion, setMateriaEnEdicion] = useState(null);
-  const [alumnoEnEdicion, setAlumnoEnEdicion] = useState(null);
-  const [progresoPlanEnEdicion, setProgresoPlanEnEdicion] = useState({});
+  const [tareaEnEdicion, setTareaEnEdicion] = useState<{ materiaId: string; tarea: Tarea } | null>(null);
+  const [materiaEnEdicion, setMateriaEnEdicion] = useState<{ id: string; nombre: string } | null>(null);
+  const [alumnoEnEdicion, setAlumnoEnEdicion] = useState<{ antiguoNombre: string; nuevoNombre: string } | null>(null);
+  const [progresoPlanEnEdicion, setProgresoPlanEnEdicion] = useState<Record<string, { estado: string; nota: string }>>({});
   const [planModalAbierto, setPlanModalAbierto] = useState(false);
   const [cuatrimestreSimulado, setCuatrimestreSimulado] = useState('');
-  const [materiasSimuladas, setMateriasSimuladas] = useState([]);
+  const [materiasSimuladas, setMateriasSimuladas] = useState<string[]>([]);
 
   const esAdmin = rolUsuario === 'admin';
   const planDeEstudio = PLAN_DE_ESTUDIO;
@@ -278,9 +284,9 @@ export default function Home() {
     progresoPlan.map((registro) => [`${registro.alumno}_${registro.materia_codigo}`, registro])
   );
 
-  const obtenerMateriaPlan = (codigo) => materiaPlanPorCodigo[codigo];
-  const obtenerProgresoMateria = (alumno, codigo) => progresoPlanPorClave[`${alumno}_${codigo}`];
-  const obtenerCorrelativasPendientes = (materia, alumno) => materia.correlativas.filter((correlativa) => {
+  const obtenerMateriaPlan = (codigo: string) => materiaPlanPorCodigo[codigo];
+  const obtenerProgresoMateria = (alumno: string | null, codigo: string) => progresoPlanPorClave[`${alumno}_${codigo}`];
+  const obtenerCorrelativasPendientes = (materia: MateriaPlan, alumno: string | null) => materia.correlativas.filter((correlativa) => {
     const materiaCorrelativa = obtenerMateriaPlan(correlativa);
     if (!materiaCorrelativa) return true;
     const estado = obtenerProgresoMateria(alumno, materiaCorrelativa.codigo)?.estado;
@@ -295,7 +301,7 @@ export default function Home() {
   ))) || cuatrimestresPlan[0];
   const cuatrimestreActivo = cuatrimestreSimulado || cuatrimestreSugerido;
   const materiasDelSimulador = planDeEstudio.filter((materia) => materia.cuatrimestre === cuatrimestreActivo && !codigosAprobadosSimulados.has(materia.codigo));
-  const obtenerCorrelativasPendientesSimuladas = (materia) => obtenerCorrelativasPendientesDelPlan(materia, codigosAprobadosSimulados, materiaPlanPorCodigo);
+  const obtenerCorrelativasPendientesSimuladas = (materia: MateriaPlan) => obtenerCorrelativasPendientesDelPlan(materia, codigosAprobadosSimulados, materiaPlanPorCodigo);
   const materiasRecomendadas = materiasDelSimulador.filter((materia) => obtenerCorrelativasPendientesSimuladas(materia).length === 0);
   const materiasExtraDisponibles = materiasPendientesUsuario
     .filter((materia) => materia.cuatrimestre !== cuatrimestreActivo && !codigosAprobadosSimulados.has(materia.codigo))
@@ -332,8 +338,8 @@ export default function Home() {
   useEffect(() => {
     if (!notificacionesAbiertas) return undefined;
 
-    const cerrarAlHacerClickAfuera = (evento) => {
-      if (!notificacionesRef.current?.contains(evento.target)) {
+    const cerrarAlHacerClickAfuera = (evento: PointerEvent) => {
+      if (!(evento.target instanceof Node) || !notificacionesRef.current?.contains(evento.target)) {
         setNotificacionesAbiertas(false);
       }
     };
@@ -529,31 +535,31 @@ export default function Home() {
     return () => window.clearInterval(intervalo);
   }, [usuarioActual, cargarBD]);
 
-  const handleLogin = async (e) => {
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!inputUser.trim() || !inputPass.trim()) return;
 
     const res = await validarLoginAction(inputUser, inputPass);
 
-    if (res.exito) {
-      iniciarSesionLocal(res.usuario, res.rol);
+    if (res.exito && res.usuario) {
+      iniciarSesionLocal(res.usuario, res.rol || 'alumno');
       setMostrarAvisoInicio(true);
       setErrorLogin('');
       setInputUser('');
       setInputPass('');
     } else {
-      setErrorLogin(res.mensaje);
+      setErrorLogin(res.mensaje || 'No se pudo iniciar sesión.');
     }
   };
 
-  const handleCambiarPassword = async (e) => {
+  const handleCambiarPassword = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setMsgPassChange({ tipo: '', texto: '' });
 
     const res = await cambiarPasswordAction(userPassChange, currentPassChange, newPassChange);
 
     if (res.exito) {
-      setMsgPassChange({ tipo: 'exito', texto: res.mensaje });
+      setMsgPassChange({ tipo: 'exito', texto: res.mensaje || 'Contraseña actualizada.' });
       setTimeout(() => {
         setModalPasswordOpen(false);
         setUserPassChange('');
@@ -562,11 +568,11 @@ export default function Home() {
         setMsgPassChange({ tipo: '', texto: '' });
       }, 1500);
     } else {
-      setMsgPassChange({ tipo: 'error', texto: res.mensaje });
+      setMsgPassChange({ tipo: 'error', texto: res.mensaje || 'No se pudo cambiar la contraseña.' });
     }
   };
 
-  const handleGuardarProgresoPlan = async (alumno, materiaCodigo, estado, nota = '') => {
+  const handleGuardarProgresoPlan = async (alumno: string, materiaCodigo: string, estado: string, nota: string | number = '') => {
     const resultado = await guardarProgresoPlanAction({
       alumno,
       materiaCodigo,
@@ -585,14 +591,14 @@ export default function Home() {
     await cargarBD(false);
   };
 
-  const toggleDesplegarAlumno = (nombreAlumno) => {
+  const toggleDesplegarAlumno = (nombreAlumno: string) => {
     setAlumnosDesplegados((prev) => ({
       ...prev,
       [nombreAlumno]: !prev[nombreAlumno]
     }));
   };
 
-  const toggleDesplegarMateria = (materiaId) => {
+  const toggleDesplegarMateria = (materiaId: string) => {
     setMateriasDesplegadas((prev) => ({
       ...prev,
       [materiaId]: !prev[materiaId]
@@ -600,7 +606,8 @@ export default function Home() {
   };
 
   // Navega desde "Estado por Alumno" hasta la tarea en "Materias" (scroll + resaltado)
-  const irATareaEnMaterias = (tareaId) => {
+  const irATareaEnMaterias = (tareaId: string) => {
+    if (!usuarioActual) return;
     const materia = materias.find((m) => m.tareas.some((t) => t.id === tareaId));
     if (!materia) return;
 
@@ -618,13 +625,13 @@ export default function Home() {
 
   // Cambia de sección dejando el scroll arriba del todo (para que al entrar
   // a "Estado por Alumno" siempre se vea la propia situación desde arriba).
-  const navegarA = (destino) => {
+  const navegarA = (destino: typeof pestana) => {
     setTareaFoco(null);
     setPestana(destino);
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
-  const handleCrearAlumno = async (e) => {
+  const handleCrearAlumno = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!nuevoAlumnoNombre.trim()) return;
     await crearAlumnoAction(nuevoAlumnoNombre);
@@ -632,7 +639,7 @@ export default function Home() {
     await cargarBD();
   };
 
-  const handleGuardarEdicionAlumno = async (e) => {
+  const handleGuardarEdicionAlumno = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!alumnoEnEdicion || !alumnoEnEdicion.nuevoNombre.trim()) return;
     await editarAlumnoAction(alumnoEnEdicion.antiguoNombre, alumnoEnEdicion.nuevoNombre);
@@ -640,7 +647,7 @@ export default function Home() {
     await cargarBD();
   };
 
-  const handleEliminarAlumno = async (nombre) => {
+  const handleEliminarAlumno = async (nombre: string) => {
     if (confirm(`¿Seguro que querés eliminar a "${nombre}" de la lista?`)) {
       const resultado = await eliminarAlumnoAction(nombre);
       if (resultado && "exito" in resultado && !resultado.exito) {
@@ -651,13 +658,13 @@ export default function Home() {
     }
   };
 
-  const handleToggleTarea = async (tareaId, alumno) => {
+  const handleToggleTarea = async (tareaId: string, alumno: string) => {
     const resultado = await toggleTareaAction(tareaId, alumno);
     if (resultado && "exito" in resultado && !resultado.exito) alert(resultado?.mensaje || 'No se pudo actualizar la entrega.');
     await cargarBD();
   };
 
-  const handleCrearMateria = async (e) => {
+  const handleCrearMateria = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!nuevaMateriaNombre.trim()) return;
     const resultado = await crearMateriaAction({
@@ -673,7 +680,7 @@ export default function Home() {
     await cargarBD();
   };
 
-  const handleGuardarCondicionesMateria = async (e) => {
+  const handleGuardarCondicionesMateria = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!materiaCondicionesEnEdicion) return;
     const resultado = await editarCondicionesMateriaAction({
@@ -689,7 +696,7 @@ export default function Home() {
     await cargarBD();
   };
 
-  const handleGuardarRenombrarMateria = async (e) => {
+  const handleGuardarRenombrarMateria = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!materiaEnEdicion) return;
     await renombrarMateriaAction(materiaEnEdicion.id, materiaEnEdicion.nombre);
@@ -697,7 +704,7 @@ export default function Home() {
     await cargarBD();
   };
 
-  const handleEliminarMateria = async (id, nombre) => {
+  const handleEliminarMateria = async (id: string, nombre: string) => {
     if (confirm(`¿Seguro que querés eliminar la materia "${nombre}" y sus tareas?`)) {
       const resultado = await eliminarMateriaAction(id);
       if (resultado && "exito" in resultado && !resultado.exito) {
@@ -708,7 +715,7 @@ export default function Home() {
     }
   };
 
-  const handleCrearTarea = async (e) => {
+  const handleCrearTarea = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!nombreTarea.trim() || !materiaSel) return;
     const resultado = await crearTareaAction({
@@ -740,13 +747,17 @@ export default function Home() {
     setPestana('materias');
   };
 
-  const handleGuardarEdicionTarea = async (e) => {
+  const handleGuardarEdicionTarea = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!tareaEnEdicion) return;
     const resultado = await editarTareaAction({
       ...tareaEnEdicion.tarea,
+      materiaId: tareaEnEdicion.materiaId,
+      unidad: tareaEnEdicion.tarea.unidad ?? '',
+      detalles: tareaEnEdicion.tarea.detalles ?? '',
+      tipo: tareaEnEdicion.tarea.tipo ?? 'actividad',
       grupal: Boolean(tareaEnEdicion.tarea.grupal),
-      cupoMaximo: tareaEnEdicion.tarea.cupo_maximo
+      cupoMaximo: Number(tareaEnEdicion.tarea.cupo_maximo) || 0
     });
     if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudo editar la tarea.');
@@ -760,40 +771,49 @@ export default function Home() {
     const tareasAbiertas = materia.tareas.filter((tarea) => tareaEstaHabilitada(tarea.inicio));
     const trabajosPracticos = tareasAbiertas.filter((tarea) => tarea.tipo === 'trabajo_practico');
     if (!materia.condiciones && trabajosPracticos.length === 0) return null;
-    const estado = (texto, estilo) => ({ texto, estilo });
+    const estado = (texto: string, estilo: string) => ({ texto, estilo });
     const enCurso = estado('En curso', 'text-amber-300 bg-amber-500/10 border-amber-500/30');
     const desaprueba = estado('Desaprueba', 'text-red-300 bg-red-500/10 border-red-500/30');
     const regulariza = estado('Regulariza', 'text-blue-300 bg-blue-500/10 border-blue-500/30');
     const promociona = estado('Promociona', 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30');
-    const notaDe = (registro) => Number.parseFloat(String(registro).replace(',', '.'));
-    const notaDeTarea = (tarea) => notaDe(tarea.notas?.[alumno]);
-    const tareaAprobada = (tarea) => {
+    const notaDe = (registro: string | number | null | undefined) => Number.parseFloat(String(registro ?? '').replace(',', '.'));
+    const notaDeTarea = (tarea: Tarea) => notaDe(tarea.notas?.[alumno]);
+    const tareaAprobada = (tarea: Tarea) => {
       if (tarea.conNota || tarea.tipo === 'trabajo_practico') {
         const nota = notaDeTarea(tarea);
         return Number.isFinite(nota) && nota >= 6;
       }
       return tareaCompletadaPor(tarea, alumno);
     };
-    const tareaCerrada = (tarea) => tarea.fin && tarea.fin !== 'Sin fecha' && obtenerDiasHastaTarea(tarea.fin) < 0;
-    const todasCerradas = (tareas) => tareas.length > 0 && tareas.every(tareaCerrada);
+    const tareaCerrada = (tarea: Tarea) => {
+      const dias = obtenerDiasHastaTarea(tarea.fin);
+      return Boolean(tarea.fin && tarea.fin !== 'Sin fecha' && dias !== null && dias < 0);
+    };
+    const todasCerradas = (tareas: Tarea[]) => tareas.length > 0 && tareas.every(tareaCerrada);
 
     if (materia.reglaPromocion === 'ciberdelitos_parciales') {
-      const parcialesMateria = parciales.filter((parcial) => (
-        parcial.materia_id === materia.id
-        && parcial.fecha !== 'Sin fecha'
-        && obtenerDiasHastaFecha(parcial.fecha) <= 0
-      ));
+      const parcialesMateria = parciales.filter((parcial) => {
+        const dias = obtenerDiasHastaFecha(parcial.fecha);
+        return parcial.materia_id === materia.id
+          && parcial.fecha !== 'Sin fecha'
+          && dias !== null
+          && dias <= 0;
+      });
       const notasParciales = parcialesMateria.map((parcial) => {
         const registro = notas.find((nota) => nota.parcial_id === parcial.id && nota.alumno === alumno);
         return registro ? notaDe(registro.nota) : null;
       });
-      if (notasParciales.length < 2 || notasParciales.some((nota) => nota === null || !Number.isFinite(nota))) {
-        return notasParciales.length === 2 && parcialesMateria.every((parcial) => obtenerDiasHastaFecha(parcial.fecha) < 0)
+      const notasValidasParciales = notasParciales.filter((nota): nota is number => nota !== null && Number.isFinite(nota));
+      if (notasParciales.length < 2 || notasValidasParciales.length !== notasParciales.length) {
+        return notasParciales.length === 2 && parcialesMateria.every((parcial) => {
+          const dias = obtenerDiasHastaFecha(parcial.fecha);
+          return dias !== null && dias < 0;
+        })
           ? desaprueba
           : enCurso;
       }
-      if (notasParciales.some((nota) => nota < materia.notaMinimaRegularizar)) return desaprueba;
-      return notasParciales.every((nota) => nota >= materia.notaMinimaPromocionar) ? promociona : regulariza;
+      if (notasValidasParciales.some((nota) => nota < materia.notaMinimaRegularizar)) return desaprueba;
+      return notasValidasParciales.every((nota) => nota >= materia.notaMinimaPromocionar) ? promociona : regulariza;
     }
 
     if (materia.reglaPromocion === 'activos_porcentaje') {
@@ -822,21 +842,21 @@ export default function Home() {
     if (trabajosPracticos.length === 0) return tareasAbiertas.length === 0
       ? estado('Sin TPs abiertos', 'text-slate-400 bg-slate-800/60 border-slate-700')
       : estado('Sin TPs cargados', 'text-slate-400 bg-slate-800/60 border-slate-700');
-    const notas = trabajosPracticos.map((tarea) => {
+    const notasTp = trabajosPracticos.map((tarea) => {
       const valor = tarea.notas?.[alumno];
       return valor === undefined ? null : notaDe(valor);
     });
-    const notasCargadas = notas.filter((nota) => nota !== null && Number.isFinite(nota));
+    const notasCargadas = notasTp.filter((nota): nota is number => nota !== null && Number.isFinite(nota));
     if (materia.reglaPromocion === 'riesgos_tps') {
       const completados = trabajosPracticos.filter(tareaAprobada).length;
       if (completados < 3) return todasCerradas(trabajosPracticos) ? desaprueba : enCurso;
-      if (notasCargadas.length === trabajosPracticos.length && notas.every((nota) => nota >= materia.notaMinimaPromocionar)) return promociona;
+      if (notasCargadas.length === trabajosPracticos.length && notasCargadas.every((nota) => nota >= materia.notaMinimaPromocionar)) return promociona;
       return regulariza;
     }
-    if (notas.length !== notasCargadas.length) return todasCerradas(trabajosPracticos) ? desaprueba : enCurso;
-    const promedio = notas.reduce((total, nota) => total + nota, 0) / notas.length;
-    if (notas.some((nota) => nota < materia.notaMinimaRegularizar) || promedio < materia.notaMinimaRegularizar) return desaprueba;
-    return notas.every((nota) => nota >= materia.notaMinimaPromocionar) && promedio >= materia.notaMinimaPromocionar ? promociona : regulariza;
+    if (notasTp.length !== notasCargadas.length) return todasCerradas(trabajosPracticos) ? desaprueba : enCurso;
+    const promedio = notasCargadas.reduce((total, nota) => total + nota, 0) / notasCargadas.length;
+    if (notasCargadas.some((nota) => nota < materia.notaMinimaRegularizar) || promedio < materia.notaMinimaRegularizar) return desaprueba;
+    return notasCargadas.every((nota) => nota >= materia.notaMinimaPromocionar) && promedio >= materia.notaMinimaPromocionar ? promociona : regulariza;
   };
 
   const handleEliminarTarea = async (id: string): Promise<void> => {
@@ -857,21 +877,36 @@ export default function Home() {
     setSyncMensaje('');
     try {
       const res = await syncUgrAction({ confirmar, previaId: syncDatos?.previaId, ids, idsAvisos, idsEventos });
-      if (!res?.exito) {
+      if (!res || !res.exito || !('detectadas' in res)) {
         setSyncEstado('error');
-        setSyncMensaje(res?.mensaje || 'No se pudo sincronizar.');
+        setSyncMensaje(res && 'mensaje' in res ? res.mensaje || 'No se pudo sincronizar.' : 'No se pudo sincronizar.');
         return;
       }
-      setSyncDatos(res);
+      const datos: SyncResult = {
+        exito: true,
+        confirmar: Boolean(res.confirmar),
+        previaId: res.previaId,
+        materiasLocales: res.materiasLocales,
+        cursos: res.cursos,
+        mapeos: res.mapeos,
+        detectadas: Array.isArray(res.detectadas) ? res.detectadas as TareaDetectada[] : [],
+        avisos: Array.isArray(res.avisos) ? res.avisos as AvisoSync[] : [],
+        eventosSugeridos: Array.isArray(res.eventosSugeridos) ? res.eventosSugeridos as EventoSync[] : [],
+        insertadas: res.insertadas ?? 0,
+        urlsActualizadas: res.urlsActualizadas ?? 0,
+        avisosAceptados: res.avisosAceptados ?? 0,
+        eventosInsertados: res.eventosInsertados ?? 0
+      };
+      setSyncDatos(datos);
       setSyncEstado('listo');
       if (!confirmar) {
         // Vista previa: arrancamos con todas las tareas y avisos tildados; los
         // eventos sugeridos asociados a avisos aprobados también vienen tildados.
-        setSyncSeleccionados(new Set(((res as SyncResult).detectadas || []).map((t) => t.idMoodle)));
-        setSyncAvisosSeleccionados(new Set(((res as SyncResult).avisos || []).map((a) => a.id)));
-        setSyncEventosSeleccionados(new Set(((res as SyncResult).eventosSugeridos || []).map((e) => e.avisoId)));
+        setSyncSeleccionados(new Set(datos.detectadas.map((t) => t.idMoodle)));
+        setSyncAvisosSeleccionados(new Set(datos.avisos.map((a) => a.id)));
+        setSyncEventosSeleccionados(new Set(datos.eventosSugeridos.map((e) => e.avisoId)));
       }
-      if (confirmar && ((res as SyncResult).insertadas > 0 || (res as SyncResult).avisosAceptados > 0 || (res as SyncResult).eventosInsertados > 0)) {
+      if (confirmar && (datos.insertadas > 0 || datos.avisosAceptados > 0 || datos.eventosInsertados > 0)) {
         await cargarBD(false);
       }
     } catch (error) {
@@ -882,7 +917,7 @@ export default function Home() {
     }
   };
 
-  const toggleSyncTarea = (id) => {
+  const toggleSyncTarea = (id: string) => {
     setSyncSeleccionados((prev) => {
       const nuevo = new Set(prev);
       if (nuevo.has(id)) nuevo.delete(id);
@@ -891,12 +926,12 @@ export default function Home() {
     });
   };
 
-  const marcarTodasSync = (marcadas) => {
+  const marcarTodasSync = (marcadas: boolean) => {
     if (!syncDatos) return;
     setSyncSeleccionados(marcadas ? new Set(syncDatos.detectadas.map((t) => t.idMoodle)) : new Set());
   };
 
-  const toggleSyncAviso = (id) => {
+  const toggleSyncAviso = (id: string) => {
     setSyncAvisosSeleccionados((prev) => {
       const nuevo = new Set(prev);
       if (nuevo.has(id)) {
@@ -914,7 +949,7 @@ export default function Home() {
     });
   };
 
-  const toggleSyncEvento = (avisoId) => {
+  const toggleSyncEvento = (avisoId: string) => {
     setSyncEventosSeleccionados((prev) => {
       const nuevo = new Set(prev);
       if (nuevo.has(avisoId)) nuevo.delete(avisoId);
@@ -923,7 +958,7 @@ export default function Home() {
     });
   };
 
-  const marcarTodasAvisosSync = (marcadas) => {
+  const marcarTodasAvisosSync = (marcadas: boolean) => {
     if (!syncDatos) return;
     setSyncAvisosSeleccionados(marcadas ? new Set(syncDatos.avisos.map((a) => a.id)) : new Set());
     if (!marcadas) setSyncEventosSeleccionados(new Set());
@@ -934,7 +969,7 @@ export default function Home() {
     if (!syncDatos && !syncEnCurso.current) ejecutarSyncUGR(false);
   };
 
-  const handleNotaTareaChangeLocal = (tareaId, alumno, valor) => {
+  const handleNotaTareaChangeLocal = (tareaId: string, alumno: string, valor: string) => {
     setNotasTareasInputs((prev) => ({
       ...prev,
       [`${tareaId}_${alumno}`]: valor
@@ -942,6 +977,7 @@ export default function Home() {
   };
 
   const handleGuardarNotaTareaOnBlur = async (tareaId: string, alumno: string): Promise<void> => {
+    if (!usuarioActual) return;
     const clave = `${tareaId}_${alumno}`;
     const resultado = await guardarNotaTareaAction(tareaId, alumno, notasTareasInputs[clave] || '', usuarioActual);
     if (resultado && "exito" in resultado && !resultado.exito) {
@@ -966,7 +1002,7 @@ export default function Home() {
       horaInicio: horaInicioHorario,
       horaFin: horaFinHorario,
       aula: aulaHorario,
-      usuario: usuarioActual
+      usuario: usuarioActual ?? undefined
     });
     if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudo guardar el horario.');
@@ -982,6 +1018,7 @@ export default function Home() {
 
   const handleEliminarHorario = async (id: string): Promise<void> => {
     if (!confirm('¿Seguro que querés borrar este horario?')) return;
+    if (!usuarioActual) return;
     const resultado = await eliminarHorarioAction(id, usuarioActual);
     if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudo borrar el horario.');
@@ -994,6 +1031,7 @@ export default function Home() {
   const handleCrearParcial = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     if (!nombreParcial.trim() || !materiaParcialSel) return;
+    if (!usuarioActual) return;
     const datosParcial = {
       materiaId: materiaParcialSel,
       nombre: nombreParcial,
@@ -1018,7 +1056,7 @@ export default function Home() {
     setPestana('parciales');
   };
 
-  const iniciarEdicionParcial = (parcial) => {
+  const iniciarEdicionParcial = (parcial: Parcial) => {
     setParcialEnEdicion(parcial);
     setMateriaParcialSel(parcial.materia_id);
     setNombreParcial(parcial.nombre);
@@ -1029,6 +1067,7 @@ export default function Home() {
 
   const handleEliminarParcial = async (id: string): Promise<void> => {
     if (confirm('¿Seguro que querés borrar este parcial y sus notas cargadas?')) {
+      if (!usuarioActual) return;
       const resultado = await eliminarParcialAction(id, usuarioActual);
       if (resultado && "exito" in resultado && !resultado.exito) {
         alert(resultado?.mensaje || 'No se pudo borrar el parcial.');
@@ -1046,7 +1085,7 @@ export default function Home() {
   };
 
   const handleGuardarNotaOnBlur = async (parcialId: string, alumno: string): Promise<void> => {
-    if (!esAdmin && alumno !== usuarioActual) return;
+    if (!usuarioActual || (!esAdmin && alumno !== usuarioActual)) return;
     const clave = `${parcialId}_${alumno}`;
     const valor = notasInputs[clave] || '';
     const resultado = await guardarNotaParcialAction(parcialId, alumno, valor, usuarioActual);
@@ -1057,14 +1096,14 @@ export default function Home() {
   };
 
 
-  const toggleNotasParcial = (parcialId) => {
+  const toggleNotasParcial = (parcialId: string) => {
     setNotasDesplegadas((prev) => ({
       ...prev,
       [parcialId]: !prev[parcialId]
     }));
   };
 
-  const toggleTareaDesdeCliente = async (tareaId, alumno, tarea) => {
+  const toggleTareaDesdeCliente = async (tareaId: string, alumno: string, tarea: Tarea) => {
     if (!tareaEstaHabilitada(tarea.inicio)) {
       alert('La tarea todavía no está habilitada.');
       return;
@@ -1086,13 +1125,16 @@ export default function Home() {
   const restoDeAlumnos = alumnos.filter((a) => a !== usuarioActual);
   const parcialesOrdenados = ordenarParciales(parciales);
   const proximoParcial = parcialesOrdenados.find(
-    (parcial) => obtenerFechaParcialEnMs(parcial.fecha) >= new Date().setHours(0, 0, 0, 0)
+    (parcial) => {
+      const ms = obtenerFechaParcialEnMs(parcial.fecha);
+      return ms !== null && ms >= new Date().setHours(0, 0, 0, 0);
+    }
   );
   const materiaProximoParcial = proximoParcial
     ? materias.find((materia) => materia.id === proximoParcial.materia_id)
     : null;
-  const notificaciones = usuarioActual
-    ? [
+  const notificaciones: Novedad[] = usuarioActual
+    ? ([
       ...novedades,
       // Avisos aprobados de los foros del campus (solo los que el admin publicó).
       ...avisos.map((aviso) => ({
@@ -1133,12 +1175,12 @@ export default function Home() {
           dias: obtenerDiasHastaFecha(tarea.inicio)
         }))
         .filter(({ dias }) => dias === 1))
-    ].sort((a, b) => (a.dias ?? -1) - (b.dias ?? -1) || a.nombre.localeCompare(b.nombre))
+    ] as Novedad[]).sort((a, b) => (a.dias ?? -1) - (b.dias ?? -1) || a.nombre.localeCompare(b.nombre))
     : [];
   const notificacionesNoVistas = notificaciones.filter(
     (notificacion) => !notificacionesVistas.includes(notificacion.id)
   );
-  const marcarNotificacionesVistas = (ids) => {
+  const marcarNotificacionesVistas = (ids: string[]) => {
     if (!usuarioActual || ids.length === 0) return;
 
     const idsActualizados = [...new Set([...notificacionesVistas, ...ids])];
@@ -1153,7 +1195,7 @@ export default function Home() {
       .filter((horario) => horario.materia_id === proximoParcial.materia_id)
       .sort((a, b) => String(a.dia).localeCompare(String(b.dia)) || a.hora_inicio.localeCompare(b.hora_inicio))
     : [];
-  const nombresDias = {
+  const nombresDias: Record<number, string> = {
     1: 'Lunes',
     2: 'Martes',
     3: 'Miércoles',
@@ -1164,24 +1206,24 @@ export default function Home() {
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
-  const formatearFechaCalendario = (fecha) => {
+  const formatearFechaCalendario = (fecha: string | null | undefined) => {
     if (!fecha || fecha === 'Sin fecha') return null;
     const partes = String(fecha).slice(0, 10).split('-').map(Number);
     if (partes.length !== 3 || partes.some((parte) => !Number.isFinite(parte))) return null;
     return `${partes[0]}-${String(partes[1]).padStart(2, '0')}-${String(partes[2]).padStart(2, '0')}`;
   };
-  const obtenerClaveDiaCalendario = (fecha) => {
+  const obtenerClaveDiaCalendario = (fecha: string | null | undefined) => {
     const fechaNormalizada = formatearFechaCalendario(fecha);
     if (!fechaNormalizada) return null;
     return fechaNormalizada;
   };
-  const obtenerDiaSemanaHorario = (fecha) => {
+  const obtenerDiaSemanaHorario = (fecha: Date) => {
     const diaSemana = fecha.getDay();
     return diaSemana === 0 ? 7 : diaSemana;
   };
   const inicioCursada = new Date(2026, 7, 18);
   const finCursada = new Date(2027, 2, 1);
-  const fechaDentroDelCronograma = (fecha) => {
+  const fechaDentroDelCronograma = (fecha: Date) => {
     const fechaNormalizada = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
     const esRecesoDeEnero = fechaNormalizada.getMonth() === 0;
     return fechaNormalizada >= inicioCursada && fechaNormalizada < finCursada && !esRecesoDeEnero;
@@ -1196,7 +1238,7 @@ export default function Home() {
     return new Date(mesCalendario.getFullYear(), mesCalendario.getMonth(), indice - desplazamientoMes + 1);
   });
   const tareasCalendario = materias.flatMap((materia) => materia.tareas.map((tarea) => ({ tarea, materia })));
-  const eventosDelDiaCalendario = (fecha) => {
+  const eventosDelDiaCalendario = (fecha: Date | null) => {
     if (!fecha || !fechaDentroDelCronograma(fecha)) return { parciales: [], tareas: [], horarios: [], cronograma: [] };
 
     const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
@@ -1323,8 +1365,8 @@ export default function Home() {
       const puntosEmpatados = Math.abs(diferenciaPuntos) < 0.0001;
       const ultimaTareaUsuario = historialUsuario.find((registro) => obtenerTimestamp(registro.fecha) !== null);
       const ultimaTareaComparado = historialComparado.find((registro) => obtenerTimestamp(registro.fecha) !== null);
-      const razonesPuntos = [];
-      const registrosPorClave = new Map();
+      const razonesPuntos: { id: string; texto: string; diferencia: number }[] = [];
+      const registrosPorClave = new Map<string, Record<string, { alumno?: string; materia: string; nombre: string; puntos?: number }>>();
 
       [...usuarioRanking.tareasConPuntaje, ...comparadoRanking.tareasConPuntaje].forEach((registro) => {
         const clave = `tarea-${registro.materia}-${registro.nombre}`;
@@ -1399,7 +1441,7 @@ export default function Home() {
       };
     })()
     : null;
-  const parcialesAgrupados = parcialesOrdenados.reduce((grupos, parcial) => {
+  const parcialesAgrupados = parcialesOrdenados.reduce<{ id: string; nombre: string; parciales: Parcial[] }[]>((grupos, parcial) => {
     const materia = materias.find((item) => item.id === parcial.materia_id);
     const claveMateria = parcial.materia_id || 'sin-materia';
     const grupoExistente = grupos.find((grupo) => grupo.id === claveMateria);
@@ -1525,7 +1567,7 @@ export default function Home() {
                             >
                               <p className="text-sm font-semibold text-slate-100 truncate">{notificacion.nombre}</p>
                               <p className="text-xs text-slate-400 mt-1">{etiquetaMateria(notificacion.materia)}</p>
-                              <p className={`text-xs font-bold mt-2 ${notificacion.tipo === 'vencimiento' && notificacion.dias <= 2 ? 'text-red-300' : 'text-amber-300'}`}>
+                              <p className={`text-xs font-bold mt-2 ${notificacion.tipo === 'vencimiento' && (notificacion.dias ?? 99) <= 2 ? 'text-red-300' : 'text-amber-300'}`}>
                                 {texto}
                               </p>
                             </button>
@@ -2614,7 +2656,7 @@ export default function Home() {
                   <label className="block text-xs font-semibold text-slate-300 mb-1">Abre</label>
                   <input
                     type="date"
-                    value={tareaEnEdicion.tarea.inicio}
+                    value={tareaEnEdicion.tarea.inicio ?? ''}
                     onChange={(e) =>
                       setTareaEnEdicion({
                         ...tareaEnEdicion,
@@ -2628,7 +2670,7 @@ export default function Home() {
                   <label className="block text-xs font-semibold text-slate-300 mb-1">Vence</label>
                   <input
                     type="date"
-                    value={tareaEnEdicion.tarea.fin}
+                    value={tareaEnEdicion.tarea.fin ?? ''}
                     onChange={(e) =>
                       setTareaEnEdicion({
                         ...tareaEnEdicion,
@@ -2752,7 +2794,7 @@ export default function Home() {
               <div className="space-y-4">
                 <div className="flex flex-wrap gap-2 text-[11px] font-bold">
                   <span className="rounded-lg bg-slate-800 border border-slate-700 px-2.5 py-1 text-slate-300">{syncDatos.cursos} curso(s)</span>
-                  <span className="rounded-lg bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-1 text-cyan-300">{syncDatos.mapeos.length} materia(s) mapeada(s)</span>
+                  <span className="rounded-lg bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-1 text-cyan-300">{(syncDatos.mapeos ?? []).length} materia(s) mapeada(s)</span>
                 </div>
 
                 {syncDatos.detectadas.length === 0 ? (

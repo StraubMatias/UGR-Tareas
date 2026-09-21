@@ -1,41 +1,47 @@
+import type { Dispatch, SetStateAction } from 'react';
 import {
   formatearFechaHora,
   obtenerDiasHastaTarea,
 } from '../core/cursada';
+import type { MateriaPlan } from '../app/plan-utils';
 
-interface MateriaPlan {
-  codigo: string;
-  nombre: string;
-  cuatrimestre: string;
-  correlativas: string[];
+interface ProgresoEdicion {
+  estado: string;
+  nota: string;
+}
+
+interface MateriaPriorizada {
+  materia: MateriaPlan;
+  habilita: number;
+  pendientes: number;
 }
 
 interface VistaPlanProps {
   planDeEstudio: MateriaPlan[];
-  cuatrimestresPlan: string[];
-  alumnos: any[]; // TODO: Definir interfaz Alumno
-  usuarioActual: any; // TODO: Definir interfaz Usuario
+  cuatrimestresPlan: readonly string[];
+  alumnos: string[];
+  usuarioActual: string | null;
   esAdmin: boolean;
   planModalAbierto: boolean;
   setPlanModalAbierto: (abierto: boolean) => void;
-  obtenerCorrelativasPendientes: (materia: MateriaPlan, usuario: any) => string[];
+  obtenerCorrelativasPendientes: (materia: MateriaPlan, usuario: string | null) => string[];
   obtenerMateriaPlan: (codigo: string) => MateriaPlan | undefined;
-  obtenerCorrelativasPendientesSimuladas: any;
-  obtenerProgresoMateria: any;
-  progresoPlanEnEdicion: any;
-  setProgresoPlanEnEdicion: any;
-  handleGuardarProgresoPlan: any;
-  materiasAprobadasUsuario: any[];
-  materiasPendientesUsuario: any[];
-  materiasSimuladas: any[];
-  setMateriasSimuladas: any;
+  obtenerCorrelativasPendientesSimuladas: (materia: MateriaPlan) => string[];
+  obtenerProgresoMateria: (alumno: string | null, codigo: string) => { estado?: string; nota?: number | null } | undefined;
+  progresoPlanEnEdicion: Record<string, ProgresoEdicion>;
+  setProgresoPlanEnEdicion: Dispatch<SetStateAction<Record<string, ProgresoEdicion>>>;
+  handleGuardarProgresoPlan: (alumno: string, materiaCodigo: string, estado: string, nota?: string | number) => void;
+  materiasAprobadasUsuario: MateriaPlan[];
+  materiasPendientesUsuario: MateriaPlan[];
+  materiasSimuladas: string[];
+  setMateriasSimuladas: Dispatch<SetStateAction<string[]>>;
   cuatrimestreActivo: string;
-  setCuatrimestreSimulado: any;
+  setCuatrimestreSimulado: (cuatrimestre: string) => void;
   cuatrimestreSugerido: string;
-  materiasDelSimulador: any[];
-  materiasRecomendadas: any[];
-  materiasExtraDisponibles: any[];
-  materiasPriorizadas: any[];
+  materiasDelSimulador: MateriaPlan[];
+  materiasRecomendadas: MateriaPlan[];
+  materiasExtraDisponibles: MateriaPriorizada[];
+  materiasPriorizadas: MateriaPriorizada[];
 }
 
 // Vista "Plan de estudio": materias, códigos y correlativas del plan oficial,
@@ -128,7 +134,7 @@ export default function VistaPlan({
                       {(esAdmin
                         ? [usuarioActual, ...alumnos.filter((alumno) => alumno !== usuarioActual)]
                         : [usuarioActual]
-                      ).map((alumno) => {
+                      ).filter((alumno): alumno is string => Boolean(alumno)).map((alumno) => {
                         const progreso = obtenerProgresoMateria(alumno, materia.codigo);
                         const puedeEditar = esAdmin || alumno === usuarioActual;
                         const claveProgreso = `${alumno}_${materia.codigo}`;

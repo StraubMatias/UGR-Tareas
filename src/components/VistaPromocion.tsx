@@ -1,4 +1,21 @@
-import { obtenerIconoMateria } from '../core/cursada';
+import { obtenerIconoMateria, type Materia } from '../core/cursada';
+
+interface CondicionesEdicion {
+  id: string;
+  condiciones: string;
+  notaMinimaRegularizar: number | string;
+  notaMinimaPromocionar: number | string;
+  reglaPromocion: string;
+}
+
+interface Props {
+  materias: Materia[];
+  esAdmin: boolean;
+  usuarioActual: string | null;
+  alumnosOrdenadosPromocion: string[];
+  obtenerEstadoMateria: (materia: Materia, alumno: string) => { texto: string; estilo: string } | null;
+  setMateriaCondicionesEnEdicion: (condiciones: CondicionesEdicion) => void;
+}
 
 // Vista "Promoción por materia": estado calculado por materia con las reglas
 // de regularización/promoción cargadas en el panel de administración.
@@ -9,7 +26,7 @@ export default function VistaPromocion({
   alumnosOrdenadosPromocion,
   obtenerEstadoMateria,
   setMateriaCondicionesEnEdicion
-}) {
+}: Props) {
   return (
     <div className="space-y-6">
       <div className="border-b border-slate-800 pb-4">

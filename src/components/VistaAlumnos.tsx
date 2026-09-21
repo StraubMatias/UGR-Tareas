@@ -1,14 +1,30 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useState, type Dispatch, type SetStateAction } from 'react';
+import type { Materia, Tarea } from '../core/cursada';
 import EstadoAlumno from './EstadoAlumno';
 
-const normalizar = (texto) => texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+const normalizar = (texto: string) => texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+interface Props {
+  materias?: Materia[];
+  alumnos?: string[];
+  usuarioActual: string | null;
+  situacionPropiaAbierta: boolean;
+  setSituacionPropiaAbierta: Dispatch<SetStateAction<boolean>>;
+  alumnosDesplegados: Record<string, boolean>;
+  toggleDesplegarAlumno: (nombre: string) => void;
+  toggleTareaDesdeCliente: (tareaId: string, alumno: string, tarea: Tarea) => void;
+  irATareaEnMaterias: (tareaId: string) => void;
+  notasTareasInputs: Record<string, string>;
+  handleNotaTareaChangeLocal: (tareaId: string, alumno: string, valor: string) => void;
+  handleGuardarNotaTareaOnBlur: (tareaId: string, alumno: string) => void;
+}
 
 export default function VistaAlumnos({
   materias = [], alumnos = [], usuarioActual, situacionPropiaAbierta,
   setSituacionPropiaAbierta, alumnosDesplegados, toggleDesplegarAlumno, ...acciones
-}) {
+}: Props) {
   const [busqueda, setBusqueda] = useState('');
   const busquedaId = useId();
   const companeros = alumnos.filter((alumno) => alumno !== usuarioActual);

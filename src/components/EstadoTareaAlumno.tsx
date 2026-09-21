@@ -1,14 +1,28 @@
 import {
   calcularEstadoSemaforo, formatearFechaDDMMAAAA, formatearUnidad, obtenerIconoMateria, tareaCompletadaPor,
-  tareaFaltaNota, tareaPuedeGestionarse
+  tareaFaltaNota, tareaPuedeGestionarse, type Materia, type Tarea
 } from '../core/cursada';
 import EstadoGrupoAlumno from './EstadoGrupoAlumno';
+
+interface Props {
+  tarea: Tarea;
+  alumno: string;
+  alumnos: string[];
+  usuarioActual: string | null;
+  irATareaEnMaterias: (tareaId: string) => void;
+  materia: Materia;
+  unidad: string | number | null | undefined;
+  toggleTareaDesdeCliente: (tareaId: string, alumno: string, tarea: Tarea) => void;
+  notasTareasInputs: Record<string, string>;
+  handleNotaTareaChangeLocal: (tareaId: string, alumno: string, valor: string) => void;
+  handleGuardarNotaTareaOnBlur: (tareaId: string, alumno: string) => void;
+}
 
 export default function EstadoTareaAlumno({
   tarea, alumno, alumnos, usuarioActual, irATareaEnMaterias, materia, unidad,
   toggleTareaDesdeCliente, notasTareasInputs, handleNotaTareaChangeLocal,
   handleGuardarNotaTareaOnBlur
-}) {
+}: Props) {
   const propia = alumno === usuarioActual;
   const entregada = tareaCompletadaPor(tarea, alumno);
   const faltaNota = tareaFaltaNota(tarea, alumno);
@@ -70,7 +84,7 @@ export default function EstadoTareaAlumno({
               <summary className="text-xs text-cyan-300 cursor-pointer">Ver notas de los demás ({notasOtros.length})</summary>
               <ul className="mt-2 space-y-1 text-xs text-slate-300">
                 {notasOtros.length ? notasOtros.map((nombre) => (
-                  <li key={nombre} className="flex justify-between gap-3"><span>{nombre}</span><strong>{tarea.notas[nombre]}</strong></li>
+                  <li key={nombre} className="flex justify-between gap-3"><span>{nombre}</span><strong>{tarea.notas?.[nombre]}</strong></li>
                 )) : <li>Todavía no hay notas cargadas.</li>}
               </ul>
             </details>

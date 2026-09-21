@@ -21,7 +21,7 @@ export const metadata = {
 // ejecuta las Server Actions de esta ruta: 60s es el tope del plan Hobby.
 export const maxDuration = 60;
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="es"

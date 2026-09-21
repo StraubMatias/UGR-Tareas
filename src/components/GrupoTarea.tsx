@@ -1,11 +1,21 @@
 import { useState } from 'react';
 import { gestionarGrupoTareaAction } from '../app/actions';
+import type { Grupo, Tarea } from '../core/cursada';
+import type { GestionarGrupoParams } from '../app/actions';
 
-export default function GrupoTarea({ tarea, usuarioActual, recargar, esAdmin = false, alumnos = [] }) {
+interface Props {
+  tarea: Tarea;
+  usuarioActual: string | null;
+  recargar: (mostrarCarga?: boolean) => void | Promise<unknown>;
+  esAdmin?: boolean;
+  alumnos?: string[];
+}
+
+export default function GrupoTarea({ tarea, usuarioActual, recargar, esAdmin = false, alumnos = [] }: Props) {
   const [nombre, setNombre] = useState('');
   const [ocupado, setOcupado] = useState(false);
   const [mensaje, setMensaje] = useState('');
-  const [desplegados, setDesplegados] = useState({});
+  const [desplegados, setDesplegados] = useState<Record<string, boolean>>({});
   const [mostrarOtros, setMostrarOtros] = useState(false);
   const [mostrarAdmin, setMostrarAdmin] = useState(false);
 
@@ -18,20 +28,23 @@ export default function GrupoTarea({ tarea, usuarioActual, recargar, esAdmin = f
   const grupos = tarea.grupos || [];
   const cupo = Number(tarea.cupo_maximo) || 0;
 
-  const plazas = (g) => {
+  const plazas = (g: Grupo) => {
     const actuales = g.integrantes?.length || 0;
     return cupo === 0 ? `${actuales} integrante${actuales === 1 ? '' : 's'}` : `${actuales}/${cupo} plazas`;
   };
 
-  const propio = grupos.find((g) => g.integrantes?.includes(usuarioActual));
+  const propio = grupos.find((g) => usuarioActual != null && g.integrantes?.includes(usuarioActual));
 
-  const toggleDesplegado = (id) => {
+  const toggleDesplegado = (id: string | undefined) => {
+    if (!id) return;
     setDesplegados((prev) => ({ ...prev, [id]: prev[id] === undefined ? false : !prev[id] }));
   };
 
-  const estaDesplegado = (id, porDefecto = true) => (desplegados[id] !== undefined ? desplegados[id] : porDefecto);
+  const estaDesplegado = (id: string | undefined, porDefecto = true) => (
+    id !== undefined && desplegados[id] !== undefined ? desplegados[id] : porDefecto
+  );
 
-  const gestionar = async (datos) => {
+  const gestionar = async (datos: Omit<GestionarGrupoParams, 'tareaId'>) => {
     if (ocupado) return;
     setOcupado(true);
     setMensaje('');
@@ -51,7 +64,7 @@ export default function GrupoTarea({ tarea, usuarioActual, recargar, esAdmin = f
     }
   };
 
-  const handleAdminAsignar = async (e) => {
+  const handleAdminAsignar = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!adminAlumno) return setMensaje('Seleccioná un alumno.');
     if (adminModo === 'existente' && !adminGrupoId) return setMensaje('Seleccioná un grupo.');
@@ -189,7 +202,7 @@ export default function GrupoTarea({ tarea, usuarioActual, recargar, esAdmin = f
                           <button
                             type="button"
                             disabled={ocupado || lleno}
-                            onClick={() => gestionar({ grupoId: g.id })}
+                            onClick={() => g.id && gestionar({ grupoId: g.id })}
                             className="text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 disabled:opacity-40 px-3 py-1.5 rounded-lg cursor-pointer"
                           >
                             {lleno ? 'Cupo lleno' : 'Unirme'}
@@ -199,7 +212,7 @@ export default function GrupoTarea({ tarea, usuarioActual, recargar, esAdmin = f
                               type="button"
                               title="Eliminar grupo"
                               disabled={ocupado}
-                              onClick={() => confirm(`¿Eliminar "${g.nombre}"?`) && gestionar({ eliminarGrupoId: g.id })}
+                              onClick={() => g.id && confirm(`¿Eliminar "${g.nombre}"?`) && gestionar({ eliminarGrupoId: g.id })}
                               className="text-xs text-red-400 hover:text-red-300 p-1 cursor-pointer"
                             >
                               🗑️

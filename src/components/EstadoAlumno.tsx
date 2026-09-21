@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { agruparTareasPorUnidad, obtenerResumenTareasAlumno } from '../core/cursada';
+import { agruparTareasPorUnidad, obtenerResumenTareasAlumno, type Materia, type Tarea } from '../core/cursada';
 import EstadoTareaAlumno from './EstadoTareaAlumno';
 
 const ESTADOS = [
@@ -9,10 +9,26 @@ const ESTADOS = [
   ['faltaNota', 'Sin nota'],
   ['futuras', 'Futuras'],
   ['completadas', 'Completadas']
-];
+] as const;
 
-export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ...acciones }) {
-  const [filtro, setFiltro] = useState('pendientes');
+type ClaveFiltro = 'pendientes' | 'faltaNota' | 'futuras' | 'completadas' | 'grupales';
+
+interface Props {
+  alumno: string;
+  materias: Materia[];
+  abierto: boolean;
+  alAlternar: () => void;
+  alumnos: string[];
+  usuarioActual: string | null;
+  irATareaEnMaterias: (tareaId: string) => void;
+  toggleTareaDesdeCliente: (tareaId: string, alumno: string, tarea: Tarea) => void;
+  notasTareasInputs: Record<string, string>;
+  handleNotaTareaChangeLocal: (tareaId: string, alumno: string, valor: string) => void;
+  handleGuardarNotaTareaOnBlur: (tareaId: string, alumno: string) => void;
+}
+
+export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ...acciones }: Props) {
+  const [filtro, setFiltro] = useState<ClaveFiltro>('pendientes');
   const contenidoId = useId();
   const resumen = obtenerResumenTareasAlumno(alumno, materias);
   const propia = alumno === acciones.usuarioActual;
@@ -43,7 +59,7 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
         {abierto && (
           <div className="border-t border-slate-800 p-4 sm:p-5 space-y-5">
             <div className="estado-filtros flex flex-wrap gap-2" role="group" aria-label={`Filtrar tareas de ${alumno}`}>
-              {filtros.map(([clave, etiqueta]) => (
+              {filtros.map(([clave, etiqueta]: [ClaveFiltro, string]) => (
                 <button key={clave} type="button" aria-pressed={filtro === clave} onClick={() => setFiltro(clave)}
                   className={`rounded-lg border px-3 py-2 text-xs font-medium cursor-pointer ${filtro === clave ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}>
                   <span>{etiqueta}</span>{' '}

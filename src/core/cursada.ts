@@ -1,39 +1,47 @@
 // Lógica pura de la cursada: formato de fechas, estados de tareas, semáforos,
 // agrupación por unidad, resúmenes por alumno e historial.
 
+export interface Grupo {
+  id?: string;
+  nombre?: string;
+  integrantes?: string[];
+}
+
 export interface Tarea {
   id: string;
   nombre: string;
   inicio: string | null;
   fin: string | null;
+  detalles?: string;
   unidad: string | number | null;
   conNota: boolean;
+  tipo?: string;
+  url?: string;
   notas?: Record<string, string | number | null>;
   completadoPor: string[];
-  completadoEn?: Record<string, string>;
-  notaCargadaEn?: Record<string, string>;
+  completadoEn?: Record<string, string | null>;
+  notaCargadaEn?: Record<string, string | null>;
   grupal?: boolean;
   grupos?: Grupo[];
   cupo_maximo?: number | string;
-
-}
-
-export interface Grupo {
-  integrantes?: string[];
-  nombre?: string;
 }
 
 export interface Materia {
   id: string;
   nombre: string;
-  tareas?: Tarea[];
+  condiciones: string;
+  notaMinimaRegularizar: number;
+  notaMinimaPromocionar: number;
+  reglaPromocion: string;
+  tareas: Tarea[];
 }
 
 export interface Nota {
+  id?: string;
   alumno: string;
   parcial_id: string;
-  nota: number;
-  cargada_en: string;
+  nota: number | null;
+  cargada_en?: string;
 }
 
 export interface Parcial {
@@ -41,6 +49,29 @@ export interface Parcial {
   materia_id: string;
   nombre: string;
   fecha: string;
+  detalles?: string;
+  url?: string;
+}
+
+export interface Horario {
+  id: string;
+  materia_id: string;
+  dia: number | string;
+  hora_inicio: string;
+  hora_fin: string;
+  aula: string;
+}
+
+export interface EventoCronograma {
+  id: string;
+  materia_id: string;
+  fecha: string;
+  modalidad: string;
+  tipo: string;
+  titulo: string;
+  detalles: string;
+  url: string;
+  origen: string;
 }
 
 export interface HistorialRegistro {
@@ -56,22 +87,24 @@ export interface HistorialRegistro {
 
 // Funciones corregidas con tipos explícitos
 
-export const tareaCompletadaPor = (tarea: Tarea, alumno: string): boolean => (
-  tarea.completadoPor.includes(alumno)
-  || (tarea.conNota && Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno))
+export const tareaCompletadaPor = (tarea: Tarea, alumno: string | null | undefined): boolean => (
+  Boolean(alumno)
+  && (tarea.completadoPor.includes(alumno as string)
+    || (tarea.conNota && Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno as string)))
 );
 
-export const fechaEntregaTarea = (tarea: Tarea, alumno: string): string | null => (
-  tarea.completadoEn?.[alumno] || (tarea.conNota ? tarea.notaCargadaEn?.[alumno] ?? null : null)
+export const fechaEntregaTarea = (tarea: Tarea, alumno: string | null | undefined): string | null => (
+  !alumno ? null : tarea.completadoEn?.[alumno] || (tarea.conNota ? tarea.notaCargadaEn?.[alumno] ?? null : null)
 );
 
-export const tareaFaltaNota = (tarea: Tarea, alumno: string): boolean => (
-  tarea.conNota
+export const tareaFaltaNota = (tarea: Tarea, alumno: string | null | undefined): boolean => (
+  Boolean(alumno)
+  && tarea.conNota
   && tareaCompletadaPor(tarea, alumno)
-  && (tarea.notas?.[alumno] === undefined || tarea.notas?.[alumno] === null || tarea.notas?.[alumno] === '')
+  && (tarea.notas?.[alumno as string] === undefined || tarea.notas?.[alumno as string] === null || tarea.notas?.[alumno as string] === '')
 );
 
-export const tareaPendienteAlumno = (tarea: Tarea, alumno: string): boolean => (
+export const tareaPendienteAlumno = (tarea: Tarea, alumno: string | null | undefined): boolean => (
   !tareaCompletadaPor(tarea, alumno) || tareaFaltaNota(tarea, alumno)
 );
 
@@ -119,7 +152,7 @@ export const tareaEstaHabilitada = (fechaInicio: string | null | undefined): boo
 };
 
 
-export const multiplicadorPuntosTarea = (tarea: Tarea, alumno: string): number => {
+export const multiplicadorPuntosTarea = (tarea: Tarea, alumno: string | null | undefined): number => {
   const fechaCarga = obtenerTimestamp(fechaEntregaTarea(tarea, alumno));
   if (fechaCarga === null) return 1;
 
@@ -136,11 +169,11 @@ export const multiplicadorPuntosTarea = (tarea: Tarea, alumno: string): number =
   return diasDesdeApertura < 7 ? 1 : 0.5;
 };
 
-export const puntosBaseTarea = (tarea: Tarea, alumno: string): number => {
+export const puntosBaseTarea = (tarea: Tarea, alumno: string | null | undefined): number => {
   if (!tarea.conNota) {
     return tarea.nombre.toLowerCase().includes('foro') ? 1 : 2;
   }
-  const notaStr = String(tarea.notas?.[alumno] ?? '');
+  const notaStr = String(alumno ? tarea.notas?.[alumno] ?? '' : '');
   if (!notaStr || Number.isNaN(Number.parseFloat(notaStr))) return 0;
   return Number.parseFloat(notaStr.replace(',', '.'));
 };
@@ -442,8 +475,8 @@ export const historialPorAlumno = (
         materia: materias.find((materia: Materia) => materia.id === parcial?.materia_id)?.nombre || 'Materia',
         nombre: parcial?.nombre || 'Parcial',
         unidad: null,
-        fecha: nota.cargada_en,
-        fechaCompletada: nota.cargada_en,
+        fecha: nota.cargada_en ?? null,
+        fechaCompletada: nota.cargada_en ?? null,
         nota: nota.nota,
         tipo: 'Parcial'
       };

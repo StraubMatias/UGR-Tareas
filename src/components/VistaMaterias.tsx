@@ -1,4 +1,6 @@
 import {
+  type Materia,
+  type Tarea,
   agruparTareasPorUnidad,
   calcularEstadoSemaforo,
   formatearFechaDDMMAAAA,
@@ -12,6 +14,36 @@ import {
 } from '../core/cursada';
 
 import GrupoTarea from './GrupoTarea';
+
+interface CondicionesEdicion {
+  id: string;
+  condiciones: string;
+  notaMinimaRegularizar: number | string;
+  notaMinimaPromocionar: number | string;
+  reglaPromocion: string;
+}
+
+interface Props {
+  materias: Materia[];
+  recargar: (mostrarCarga?: boolean) => void | Promise<unknown>;
+  alumnos: string[];
+  usuarioActual: string | null;
+  esAdmin: boolean;
+  materiasDesplegadas: Record<string, boolean>;
+  toggleDesplegarMateria: (materiaId: string) => void;
+  setMateriaCondicionesEnEdicion: (condiciones: CondicionesEdicion) => void;
+  setMateriaEnEdicion: (materia: { id: string; nombre: string }) => void;
+  handleEliminarMateria: (id: string, nombre: string) => void;
+  setTareaEnEdicion: (edicion: { materiaId: string; tarea: Tarea }) => void;
+  handleEliminarTarea: (id: string) => void;
+  toggleTareaDesdeCliente: (tareaId: string, alumno: string, tarea: Tarea) => void;
+  handleToggleTarea: (tareaId: string, alumno: string) => void;
+  notasTareasInputs: Record<string, string>;
+  handleNotaTareaChangeLocal: (tareaId: string, alumno: string, valor: string) => void;
+  handleGuardarNotaTareaOnBlur: (tareaId: string, alumno: string) => void;
+  tareaFoco: { materiaId: string; tareaId: string } | null;
+  tareaFocoVisible: boolean;
+}
 
 // Vista "Materias": consignas por materia/unidad con marcado de entrega,
 // notas propias y de los compañeros, y resaltado de la tarea a la que se
@@ -36,7 +68,7 @@ export default function VistaMaterias({
   handleGuardarNotaTareaOnBlur,
   tareaFoco,
   tareaFocoVisible,
-}) {
+}: Props) {
   return (
     <div className="space-y-6">
       {materias.length === 0 ? (
@@ -122,6 +154,9 @@ export default function VistaMaterias({
                       {grupo.tareas.map((t) => {
                         const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
                         const diasParaAbrir = obtenerDiasHastaApertura(t.inicio);
+                        const grupoPropio = usuarioActual
+                          ? t.grupos?.find((g) => g.integrantes?.includes(usuarioActual))
+                          : undefined;
     
                         return (
                           <div
@@ -163,16 +198,14 @@ export default function VistaMaterias({
                             {t.grupal && (
                               <span
                                 className={`text-xs px-3 py-1 rounded-md border inline-flex items-center gap-1.5 font-semibold ${
-                                  t.grupos?.some((g) => g.integrantes?.includes(usuarioActual))
+                                  grupoPropio
                                     ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
                                     : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
                                 }`}
                               >
                                 <span>👥</span>
                                 <span>
-                                  {t.grupos?.find((g) => g.integrantes?.includes(usuarioActual))
-                                    ? `Grupo: ${t.grupos.find((g) => g.integrantes?.includes(usuarioActual)).nombre}`
-                                    : 'Grupal · sin grupo'}
+                                  {grupoPropio ? `Grupo: ${grupoPropio.nombre}` : 'Grupal · sin grupo'}
                                 </span>
                                 {Number(t.cupo_maximo) > 0 && (
                                   <span className="text-[10px] opacity-75 font-normal">
@@ -236,7 +269,7 @@ export default function VistaMaterias({
                                   type="checkbox"
                                   checked={tareaCompletadaPor(t, usuarioActual)}
                                   disabled={!tareaPuedeGestionarse(t)}
-                                  onChange={() => toggleTareaDesdeCliente(t.id, usuarioActual, t)}
+                                  onChange={() => usuarioActual && toggleTareaDesdeCliente(t.id, usuarioActual, t)}
                                   className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
                                 />
                                 Entregada
@@ -251,15 +284,15 @@ export default function VistaMaterias({
                                 placeholder="-"
                                 disabled={!tareaPuedeGestionarse(t)}
                                 value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
-                                onChange={(e) => handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
-                                onBlur={() => handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
+                                onChange={(e) => usuarioActual && handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
+                                onBlur={() => usuarioActual && handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
                                 className="w-24 bg-[#161c26] border border-purple-500/50 rounded-lg p-2 text-center font-bold text-purple-300 focus:outline-none"
                               />
                             </div>
                           ) : (
                           <div>
                             <label className="flex items-center gap-2 text-sm font-bold text-slate-300 mb-3">
-                              <input type="checkbox" checked={tareaCompletadaPor(t, usuarioActual)} disabled={!tareaPuedeGestionarse(t)} onChange={() => toggleTareaDesdeCliente(t.id, usuarioActual, t)} />
+                              <input type="checkbox" checked={tareaCompletadaPor(t, usuarioActual)} disabled={!tareaPuedeGestionarse(t)} onChange={() => usuarioActual && toggleTareaDesdeCliente(t.id, usuarioActual, t)} />
                               {t.grupal ? 'Entrega del grupo' : 'Entregada'}
                             </label>
                             <span className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">Completada por:</span>
@@ -302,7 +335,7 @@ export default function VistaMaterias({
                                     .map((alumno) => (
                                       <div key={alumno} className="flex justify-between gap-3 text-xs text-slate-300">
                                         <span className="truncate">{alumno}</span>
-                                        <strong className="text-purple-300">{t.notas[alumno]}</strong>
+                                        <strong className="text-purple-300">{t.notas?.[alumno]}</strong>
                                       </div>
                                     ))
                                 ) : (

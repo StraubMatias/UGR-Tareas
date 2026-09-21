@@ -1,10 +1,41 @@
-import { etiquetaMateria } from '../core/cursada';
+import {
+  etiquetaMateria,
+  type EventoCronograma,
+  type Horario,
+  type Materia,
+  type Parcial,
+  type Tarea
+} from '../core/cursada';
+
+interface EventosDia {
+  parciales: Parcial[];
+  tareas: { tarea: Tarea; materia: Materia }[];
+  horarios: Horario[];
+  cronograma: EventoCronograma[];
+}
+
+interface Props {
+  mesCalendario: Date;
+  setMesCalendario: (fecha: Date) => void;
+  nombresMeses: string[];
+  horarios: Horario[];
+  parciales: Parcial[];
+  tareasCalendario: { tarea: Tarea; materia: Materia }[];
+  cronograma: EventoCronograma[];
+  materias: Materia[];
+  diasCalendario: (Date | null)[];
+  claveHoyCalendario: string;
+  eventosDelDiaCalendario: (fecha: Date | null) => EventosDia;
+  obtenerDiaSemanaHorario: (fecha: Date) => number;
+  diaCalendarioSeleccionado: Date | null;
+  setDiaCalendarioSeleccionado: (fecha: Date | null) => void;
+}
 
 // El cronograma académico (el plan oficial de cada materia: Word/PDF del curso)
 // es la fuente de verdad de la cursada. Un evento «sin clases» cancela la
 // cursada fija de esa materia ese día, tanto si nace del plan (origen 'manual')
 // como de un aviso aprobado del campus (origen 'ugr'):
-const esEventoDeSinClases = (evento) => Boolean(evento) && (evento.tipo === 'sin_clases' || evento.modalidad === 'sin_clases');
+const esEventoDeSinClases = (evento: EventoCronograma) => Boolean(evento) && (evento.tipo === 'sin_clases' || evento.modalidad === 'sin_clases');
 
 // Vista "Horarios / Calendario mensual": grilla del mes con cursadas, parciales,
 // entregas y cronograma, más el modal de detalle por día.
@@ -23,7 +54,7 @@ export default function VistaHorarios({
   obtenerDiaSemanaHorario,
   diaCalendarioSeleccionado,
   setDiaCalendarioSeleccionado
-}) {
+}: Props) {
   return (
     <>
       <div className="space-y-5">

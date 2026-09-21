@@ -1,5 +1,26 @@
 import { parcialHabilitado as parcialEstaHabilitado } from '../app/validators';
-import { formatearFechaDDMMAAAA, obtenerDiasHastaFecha, obtenerIconoMateria } from '../core/cursada';
+import { formatearFechaDDMMAAAA, obtenerDiasHastaFecha, obtenerIconoMateria, type Parcial } from '../core/cursada';
+
+interface GrupoParciales {
+  id: string;
+  nombre: string;
+  parciales: Parcial[];
+}
+
+interface Props {
+  parciales: Parcial[];
+  parcialesAgrupados: GrupoParciales[];
+  esAdmin: boolean;
+  usuarioActual: string | null;
+  alumnos: string[];
+  iniciarEdicionParcial: (parcial: Parcial) => void;
+  handleEliminarParcial: (id: string) => void;
+  toggleNotasParcial: (parcialId: string) => void;
+  notasDesplegadas: Record<string, boolean>;
+  notasInputs: Record<string, string>;
+  handleNotaChangeLocal: (parcialId: string, alumno: string, valor: string) => void;
+  handleGuardarNotaOnBlur: (parcialId: string, alumno: string) => void;
+}
 
 // Vista "Parciales": listado agrupado por materia con carga de notas propia y
 // de los compañeros (los admin pueden editar la de todos).
@@ -16,7 +37,7 @@ export default function VistaParciales({
   notasInputs,
   handleNotaChangeLocal,
   handleGuardarNotaOnBlur
-}) {
+}: Props) {
   return (
     <div className="space-y-6">
       {parciales.length === 0 ? (

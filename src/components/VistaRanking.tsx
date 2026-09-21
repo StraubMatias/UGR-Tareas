@@ -1,4 +1,19 @@
-import { etiquetaMateria } from '../core/cursada';
+import { etiquetaMateria, type Materia } from '../core/cursada';
+
+interface ItemRanking {
+  alumno: string;
+  puntos: number;
+}
+
+interface Props {
+  materias: Materia[];
+  usuarioActual: string | null;
+  materiaRanking: string;
+  setMateriaRanking: (materiaId: string) => void;
+  ranking: ItemRanking[];
+  rankingPodio: ItemRanking[];
+  restoRanking: ItemRanking[];
+}
 
 // Vista "Ranking de la cursada": podio y resto de la cursada con el puntaje
 // acumulado de tareas, foros y parciales de cada alumno.
@@ -10,7 +25,7 @@ export default function VistaRanking({
   ranking,
   rankingPodio,
   restoRanking
-}) {
+}: Props) {
   return (
     <div className="space-y-6">
       <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
