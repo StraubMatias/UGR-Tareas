@@ -3,6 +3,41 @@ import {
   obtenerDiasHastaTarea,
 } from '../core/cursada';
 
+interface MateriaPlan {
+  codigo: string;
+  nombre: string;
+  cuatrimestre: string;
+  correlativas: string[];
+}
+
+interface VistaPlanProps {
+  planDeEstudio: MateriaPlan[];
+  cuatrimestresPlan: string[];
+  alumnos: any[]; // TODO: Definir interfaz Alumno
+  usuarioActual: any; // TODO: Definir interfaz Usuario
+  esAdmin: boolean;
+  planModalAbierto: boolean;
+  setPlanModalAbierto: (abierto: boolean) => void;
+  obtenerCorrelativasPendientes: (materia: MateriaPlan, usuario: any) => string[];
+  obtenerMateriaPlan: (codigo: string) => MateriaPlan | undefined;
+  obtenerCorrelativasPendientesSimuladas: any;
+  obtenerProgresoMateria: any;
+  progresoPlanEnEdicion: any;
+  setProgresoPlanEnEdicion: any;
+  handleGuardarProgresoPlan: any;
+  materiasAprobadasUsuario: any[];
+  materiasPendientesUsuario: any[];
+  materiasSimuladas: any[];
+  setMateriasSimuladas: any;
+  cuatrimestreActivo: string;
+  setCuatrimestreSimulado: any;
+  cuatrimestreSugerido: string;
+  materiasDelSimulador: any[];
+  materiasRecomendadas: any[];
+  materiasExtraDisponibles: any[];
+  materiasPriorizadas: any[];
+}
+
 // Vista "Plan de estudio": materias, códigos y correlativas del plan oficial,
 // estados por alumno y el modal "Tu camino para adelantar" (simulador).
 export default function VistaPlan({
@@ -31,7 +66,7 @@ export default function VistaPlan({
   materiasRecomendadas,
   materiasExtraDisponibles,
   materiasPriorizadas,
-}) {
+}: VistaPlanProps) {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 border-b border-slate-800 pb-4 sm:flex-row sm:items-end sm:justify-between">

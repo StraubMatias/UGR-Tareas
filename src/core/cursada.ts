@@ -19,6 +19,30 @@ export interface Tarea {
   grupal?: boolean;
 }
 
+export interface Grupo {
+  integrantes?: string[];
+}
+
+export interface Materia {
+  id: string;
+  nombre: string;
+  tareas?: Tarea[];
+}
+
+export interface Nota {
+  alumno: string;
+  parcial_id: string;
+  nota: number;
+  cargada_en: string;
+}
+
+export interface Parcial {
+  id: string;
+  materia_id: string;
+  nombre: string;
+}
+
+
 
 
 export const tareaCompletadaPor = (tarea: Tarea, alumno: string) => (
@@ -315,8 +339,18 @@ export const obtenerResumenGruposTarea = (tarea, listaAlumnos = []) => {
   };
 };
 
-export const obtenerResumenTareasAlumno = (alumno, materias) => {
-  const todasTareas = (materias || []).flatMap((materia) => materia.tareas || []);
+export interface ResumenTareas {
+  pendientes: Tarea[];
+  faltaNota: Tarea[];
+  futuras: Tarea[];
+  completadas: Tarea[];
+  tareasNoCompletadas: Tarea[];
+  total: number;
+  totalGrupales: number;
+}
+
+export const obtenerResumenTareasAlumno = (alumno: string, materias: Materia[]): ResumenTareas => {
+  const todasTareas: Tarea[] = (materias || []).flatMap((materia) => materia.tareas || []);
   const tareasNoCompletadas = todasTareas
     .filter((tarea) => tareaPendienteAlumno(tarea, alumno));
   const completadas = todasTareas
@@ -339,13 +373,24 @@ export const obtenerResumenTareasAlumno = (alumno, materias) => {
   };
 };
 
+export interface HistorialRegistro {
+  id: string;
+  materia: string;
+  nombre: string;
+  unidad: string | number | null;
+  fecha: string | null;
+  fechaCompletada: string | null;
+  nota: string | number | null;
+  tipo: 'Tarea con nota' | 'Foro' | 'Actividad' | 'Parcial';
+}
+
 export const historialPorAlumno = (
   alumno: string,
-  materias: any[], // TODO: Definir interface Materia
-  notas: any[],    // TODO: Definir interface Nota
-  parciales: any[] // TODO: Definir interface Parcial
-) => {
-  const tareas = materias.flatMap((materia) => (materia.tareas || [])
+  materias: Materia[],
+  notas: Nota[],
+  parciales: Parcial[]
+): HistorialRegistro[] => {
+  const tareas: HistorialRegistro[] = materias.flatMap((materia) => (materia.tareas || [])
     .filter((tarea: Tarea) => tareaCompletadaPor(tarea, alumno))
     .map((tarea: Tarea) => ({
       id: `tarea-${tarea.id}`,
@@ -354,18 +399,19 @@ export const historialPorAlumno = (
       unidad: tarea.unidad,
       fecha: fechaEntregaTarea(tarea, alumno),
       fechaCompletada: fechaEntregaTarea(tarea, alumno),
-      nota: tarea.conNota ? tarea.notas?.[alumno] : null,
-      tipo: tarea.conNota ? 'Tarea con nota' : esForo(tarea.nombre) ? 'Foro' : 'Actividad'
+      nota: tarea.conNota ? (tarea.notas?.[alumno] ?? null) : null,
+      tipo: tarea.conNota ? 'Tarea con nota' : (tarea.nombre.toLowerCase().includes('foro') ? 'Foro' : 'Actividad')
     })));
 
-  const parcialesDelAlumno = notas
-    .filter((nota: any) => nota.alumno === alumno)
-    .map((nota: any) => {
-      const parcial = parciales.find((item: any) => item.id === nota.parcial_id);
+  const parcialesDelAlumno: HistorialRegistro[] = notas
+    .filter((nota: Nota) => nota.alumno === alumno)
+    .map((nota: Nota) => {
+      const parcial = parciales.find((item: Parcial) => item.id === nota.parcial_id);
       return {
         id: `parcial-${nota.parcial_id}`,
-        materia: materias.find((materia: any) => materia.id === parcial?.materia_id)?.nombre || 'Materia',
+        materia: materias.find((materia: Materia) => materia.id === parcial?.materia_id)?.nombre || 'Materia',
         nombre: parcial?.nombre || 'Parcial',
+        unidad: null,
         fecha: nota.cargada_en,
         fechaCompletada: nota.cargada_en,
         nota: nota.nota,
@@ -376,11 +422,11 @@ export const historialPorAlumno = (
   return [...tareas, ...parcialesDelAlumno].sort((a, b) => (obtenerTimestamp(b.fecha) ?? 0) - (obtenerTimestamp(a.fecha) ?? 0));
 };
 
-export const agruparHistorial = (historial: any[]) => {
-  const materiasHistorial = new Map<string, Map<string | number, any[]>>();
+export const agruparHistorial = (historial: HistorialRegistro[]) => {
+  const materiasHistorial = new Map<string, Map<string | number, HistorialRegistro[]>>();
 
-  historial.forEach((registro: any) => {
-    const gruposPorUnidad = materiasHistorial.get(registro.materia) || new Map<string | number, any[]>();
+  historial.forEach((registro: HistorialRegistro) => {
+    const gruposPorUnidad = materiasHistorial.get(registro.materia) || new Map<string | number, HistorialRegistro[]>();
     const claveUnidad = registro.tipo === 'Parcial'
       ? 'Evaluaciones'
       : registro.unidad || 'Sin unidad';
@@ -389,7 +435,6 @@ export const agruparHistorial = (historial: any[]) => {
     gruposPorUnidad.set(claveUnidad, registrosUnidad);
     materiasHistorial.set(registro.materia, gruposPorUnidad);
   });
-
   return [...materiasHistorial.entries()]
     .map(([materia, gruposPorUnidad]) => ({
       materia,
