@@ -32,6 +32,31 @@ const MAX_TITULO_LENGTH = 200;
 const MAX_PASSWORD_LENGTH = 128;
 const MAX_USUARIO_LENGTH = 100;
 
+
+export interface RespuestaAction {
+  exito: boolean;
+  mensaje?: string;
+}
+
+export interface TareaActionParams {
+  id?: string;
+  materiaId: string;
+  nombre: string;
+  inicio: string | null;
+  fin: string | null;
+  detalles: string;
+  unidad: string | number;
+  conNota: boolean;
+  tipo: string;
+  grupal?: boolean;
+  cupoMaximo?: number;
+}
+
+export function convertirValidacion(res: any): RespuestaAction {
+  return { exito: res.valida, mensaje: res.mensaje || 'Error de validación' };
+}
+
+
 function obtenerSecretoSesion() {
   const secreto = process.env.SESSION_SECRET?.trim();
   if (!secreto) throw new Error('Falta SESSION_SECRET en el entorno.');
@@ -942,7 +967,8 @@ export async function eliminarMateriaAction(id) {
   }
 }
 
-export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalles, unidad, conNota, tipo, grupal = false, cupoMaximo = 0 }) {
+export async function crearTareaAction(params: TareaActionParams): Promise<RespuestaAction> {
+  const { materiaId, nombre, inicio, fin, detalles, unidad, conNota, tipo, grupal = false, cupoMaximo = 0 } = params;
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede crear tareas.' };
     const usuarioSesion = await obtenerUsuarioSesion();
@@ -950,10 +976,10 @@ export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalle
     if (!rateLimit.exito) return rateLimit;
     if (!await existeMateria(materiaId)) return { exito: false, mensaje: 'La materia seleccionada no existe.' };
     const validacionNombre = validarLongitud(nombre, MAX_NOMBRE_LENGTH, 'nombre de la tarea');
-    if (!validacionNombre.valida) return validacionNombre;
+    if (!validacionNombre.valida) return convertirValidacion(validacionNombre);
     if (!validacionNombre.valor) return { exito: false, mensaje: 'El nombre de la tarea es obligatorio.' };
     const validacionDetalles = validarLongitud(detalles, MAX_DETALLES_LENGTH, 'detalles');
-    if (!validacionDetalles.valida) return validacionDetalles;
+    if (!validacionDetalles.valida) return convertirValidacion(validacionDetalles);
     const validacionInicio = validarFecha(inicio);
     if (!validacionInicio.valida) return { exito: false, mensaje: 'La fecha de inicio no es válida.' };
     const validacionFin = validarFecha(fin);
@@ -978,17 +1004,19 @@ export async function crearTareaAction({ materiaId, nombre, inicio, fin, detalle
   }
 }
 
-export async function editarTareaAction({ id, nombre, inicio, fin, detalles, unidad, conNota, tipo, grupal = false, cupoMaximo = 0 }) {
+export async function editarTareaAction(params: TareaActionParams): Promise<RespuestaAction> {
+  const { id, nombre, inicio, fin, detalles, unidad, conNota, tipo, grupal = false, cupoMaximo = 0 } = params;
   try {
+    if (!id) return { exito: false, mensaje: 'ID de tarea requerido.' };
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede editar tareas.' };
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
     const validacionNombre = validarLongitud(nombre, MAX_NOMBRE_LENGTH, 'nombre de la tarea');
-    if (!validacionNombre.valida) return validacionNombre;
+    if (!validacionNombre.valida) return convertirValidacion(validacionNombre);
     if (!validacionNombre.valor) return { exito: false, mensaje: 'El nombre de la tarea es obligatorio.' };
     const validacionDetalles = validarLongitud(detalles, MAX_DETALLES_LENGTH, 'detalles');
-    if (!validacionDetalles.valida) return validacionDetalles;
+    if (!validacionDetalles.valida) return convertirValidacion(validacionDetalles);
     const validacionInicio = validarFecha(inicio);
     if (!validacionInicio.valida) return { exito: false, mensaje: 'La fecha de inicio no es válida.' };
     const validacionFin = validarFecha(fin);
@@ -1428,7 +1456,12 @@ export async function guardarNotaParcialAction(parcialId, alumno, nota, usuario)
   }
 }
 
-export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
+export async function guardarNotaTareaAction(
+  tareaId: string,
+  alumno: string,
+  nota: string | number,
+  usuario: string
+): Promise<RespuestaAction> {
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) {
@@ -1455,11 +1488,24 @@ export async function guardarNotaTareaAction(tareaId, alumno, nota, usuario) {
     return { exito: true };
   } catch (error) {
     console.error('Error en guardarNotaTareaAction:', error);
-    return { exito: false, mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo guardar la nota de la tarea.' };
+    return { 
+      exito: false, 
+      mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo guardar la nota de la tarea.' 
+    };
   }
 }
 
-export async function gestionarGrupoTareaAction({ tareaId, nombre, grupoId, salir = false, alumnoNombre, eliminarGrupoId }) {
+interface GestionarGrupoParams {
+  tareaId: string;
+  nombre: string;
+  grupoId?: string;
+  salir?: boolean;
+  alumnoNombre?: string;
+  eliminarGrupoId?: string;
+}
+
+export async function gestionarGrupoTareaAction(params: GestionarGrupoParams): Promise<RespuestaAction> {
+  const { tareaId, nombre, grupoId, salir = false, alumnoNombre, eliminarGrupoId } = params;
   try {
     const usuario = await obtenerUsuarioSesion();
     if (!usuario) return { exito: false, mensaje: 'Debés iniciar sesión.' };
@@ -1504,6 +1550,9 @@ export async function gestionarGrupoTareaAction({ tareaId, nombre, grupoId, sali
     return { exito: true };
   } catch (error) {
     console.error('Error al gestionar grupo:', error);
-    return { exito: false, mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo actualizar el grupo.' };
+    return { 
+      exito: false, 
+      mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo actualizar el grupo.' 
+    };
   }
 }

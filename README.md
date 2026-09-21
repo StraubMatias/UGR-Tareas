@@ -2,6 +2,20 @@
 
 Portal de cursada para una comisión de estudiantes: centraliza materias, entregas, notas, trabajos grupales, cronograma, parciales, horarios y el avance de cada alumno en la carrera, complementando (no reemplazando) UGR Virtual.
 
+## 📂 Estructura del Proyecto
+
+La estructura del repositorio se organiza para mantener el código fuente limpio y facilitar la navegación:
+
+```text
+/
+├── database/         # Esquemas y configuraciones de Base de Datos
+├── scripts/          # Herramientas y scripts de utilidad (parsing, scraping, etc.)
+├── src/              # Código fuente principal de la aplicación
+├── tests/            # Suite de pruebas automatizadas
+├── ugr-sync/         # Módulo de sincronización con UGR Virtual
+└── ...               # Archivos de configuración en la raíz
+```
+
 ## ✨ Qué hace
 
 ### 📊 Estado por alumno

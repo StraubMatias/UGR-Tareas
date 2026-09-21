@@ -204,12 +204,12 @@ export const obtenerIconoMateria = (nombreMateria = '') => {
 
 export const etiquetaMateria = (nombreMateria = '') => `${obtenerIconoMateria(nombreMateria)} ${nombreMateria}`;
 
-export const ordenarParciales = (listaParciales) => {
+export const ordenarParciales = (listaParciales: Parcial[]): Parcial[] => {
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
   const hoyEnMs = hoy.getTime();
 
-  return [...listaParciales].sort((a, b) => {
+  return [...listaParciales].sort((a: Parcial, b: Parcial) => {
     const fechaA = obtenerFechaParcialEnMs(a.fecha);
     const fechaB = obtenerFechaParcialEnMs(b.fecha);
 
@@ -223,8 +223,8 @@ export const ordenarParciales = (listaParciales) => {
   });
 };
 
-export const ordenarTareas = (listaTareas) => {
-  return [...listaTareas].sort((a, b) => {
+export const ordenarTareas = (listaTareas: Tarea[]): Tarea[] => {
+  return [...listaTareas].sort((a: Tarea, b: Tarea) => {
     const tieneFinA = a.fin && a.fin !== 'Sin fecha';
     const tieneFinB = b.fin && b.fin !== 'Sin fecha';
 
@@ -243,14 +243,16 @@ export const ordenarTareas = (listaTareas) => {
   });
 };
 
-export const agruparTareasPorUnidad = (listaTareas) => {
-  const grupos = new Map();
-  listaTareas.forEach((tarea) => {
-    const unidad = tarea.unidad?.trim() || '';
+export const agruparTareasPorUnidad = (listaTareas: Tarea[]): Map<string, Tarea[]> => {
+  const grupos = new Map<string, Tarea[]>();
+  listaTareas.forEach((tarea: Tarea) => {
+    const unidad = String(tarea.unidad || '');
     const grupo = grupos.get(unidad) || [];
     grupo.push(tarea);
     grupos.set(unidad, grupo);
   });
+  return grupos;
+};
 
   return [...grupos.entries()]
     .sort(([unidadA], [unidadB]) => {
@@ -422,7 +424,19 @@ export const historialPorAlumno = (
   return [...tareas, ...parcialesDelAlumno].sort((a, b) => (obtenerTimestamp(b.fecha) ?? 0) - (obtenerTimestamp(a.fecha) ?? 0));
 };
 
-export const agruparHistorial = (historial: HistorialRegistro[]) => {
+
+export interface GrupoUnidad {
+  unidad: string | number;
+  registros: HistorialRegistro[];
+}
+
+export interface MateriaHistorial {
+  materia: string;
+  grupos: GrupoUnidad[];
+}
+
+
+export const agruparHistorial = (historial: HistorialRegistro[]): MateriaHistorial[] => {
   const materiasHistorial = new Map<string, Map<string | number, HistorialRegistro[]>>();
 
   historial.forEach((registro: HistorialRegistro) => {
