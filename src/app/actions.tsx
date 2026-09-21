@@ -6,6 +6,7 @@ import { cookies, headers } from 'next/headers';
 import { db } from './turso';
 import { asignarGrupo, actualizarProgresoTarea, ErrorGrupo } from '../lib/grupos-tareas.mjs';
 import { PLAN_DE_ESTUDIO } from './plan-utils';
+import { convertirValidacion } from '../lib/utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
 import { aprobarAvisos, conectarUGR, detectarAvisosMoodle, detectarTareasNuevas, rechazarAvisos } from '../../ugr-sync/lib/sync-core.mjs';
 import { sincronizarConPrevia } from '../../ugr-sync/lib/previa.mjs';
@@ -52,9 +53,6 @@ export interface TareaActionParams {
   cupoMaximo?: number;
 }
 
-export function convertirValidacion(res: any): RespuestaAction {
-  return { exito: res.valida, mensaje: res.mensaje || 'Error de validación' };
-}
 
 
 function obtenerSecretoSesion() {

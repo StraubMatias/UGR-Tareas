@@ -254,15 +254,6 @@ export const agruparTareasPorUnidad = (listaTareas: Tarea[]): Map<string, Tarea[
   return grupos;
 };
 
-  return [...grupos.entries()]
-    .sort(([unidadA], [unidadB]) => {
-      if (!unidadA) return -1;
-      if (!unidadB) return 1;
-      return unidadA.localeCompare(unidadB, 'es', { numeric: true });
-    })
-    .map(([unidad, tareas]) => ({ unidad, tareas: ordenarTareas(tareas) }));
-};
-
 export const formatearUnidad = (unidad) => {
   const valor = Number(unidad);
   return Number.isFinite(valor) ? String(valor) : String(unidad || '');
