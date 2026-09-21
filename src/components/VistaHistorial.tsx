@@ -4,7 +4,7 @@ import {
   formatearUnidad,
   historialPorAlumno,
   obtenerIconoMateria
-} from '../lib/cursada';
+} from '../core/cursada';
 
 // Vista "Historial de entregas y notas": despliegue por alumno de las tareas
 // realizadas, sus notas y el modal de comparación entre dos compañeros.

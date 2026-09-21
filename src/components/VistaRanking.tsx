@@ -1,4 +1,4 @@
-import { etiquetaMateria } from '../lib/cursada';
+import { etiquetaMateria } from '../core/cursada';
 
 // Vista "Ranking de la cursada": podio y resto de la cursada con el puntaje
 // acumulado de tareas, foros y parciales de cada alumno.

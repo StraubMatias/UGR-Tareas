@@ -1,4 +1,4 @@
-import { obtenerIconoMateria } from '../lib/cursada';
+import { obtenerIconoMateria } from '../core/cursada';
 
 // Vista "Promoción por materia": estado calculado por materia con las reglas
 // de regularización/promoción cargadas en el panel de administración.

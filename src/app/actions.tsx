@@ -307,8 +307,8 @@ async function obtenerAlumno(nombre) {
 
 async function hashearPassword(password) {
   const salt = randomBytes(16).toString('hex');
-  const derivada = await scryptAsync(password, salt, 64);
-  return `scrypt$${salt}$${Buffer.from(derivada).toString('hex')}`;
+  const derivada = await scryptAsync(password, salt, 64) as Buffer;
+  return `scrypt$${salt}$${derivada.toString('hex')}`;
 }
 
 async function verificarPassword(password, almacenada) {
@@ -318,9 +318,9 @@ async function verificarPassword(password, almacenada) {
   if (!salt || !hashHex) return false;
 
   try {
-    const derivada = await scryptAsync(password, salt, hashHex.length / 2);
+    const derivada = await scryptAsync(password, salt, hashHex.length / 2) as Buffer;
     const hashBytes = Buffer.from(hashHex, 'hex');
-    const derivadaBytes = Buffer.from(derivada);
+    const derivadaBytes = derivada;
     return hashBytes.length === derivadaBytes.length && timingSafeEqual(hashBytes, derivadaBytes);
   } catch (error) {
     return false;
@@ -1038,7 +1038,7 @@ export async function eliminarTareaAction(id) {
 // Sincroniza tareas nuevas desde UGR Virtual. Con `confirmar: false` solo
 // detecta (vista previa); con `confirmar: true` inserta únicamente las tareas
 // cuyo `idMoodle` esté en `ids` (el admin las tilda una por una en el modal).
-export async function syncUgrAction({ confirmar = false, previaId, ids = [], idsAvisos = [], idsEventos = [] } = {}) {
+export async function syncUgrAction({ confirmar = false, previaId = null, ids = [], idsAvisos = [], idsEventos = [] } = {}) {
   try {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede sincronizar con UGR.' };
@@ -1118,7 +1118,7 @@ export async function obtenerAvisosAction({ soloPendientes = false } = {}) {
 
 // Aprueba o rechaza avisos sugeridos individualmente (admin). La decisión
 // 'aceptado' los publica en la campana; 'rechazado' los descarta definitivamente.
-export async function decidirAvisoAction({ ids = [], decision = 'aceptado', usuario } = {}) {
+export async function decidirAvisoAction({ ids = [], decision = 'aceptado', usuario = null } = {}) {
   try {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede decidir sobre los avisos.' };

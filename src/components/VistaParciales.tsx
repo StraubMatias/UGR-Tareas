@@ -1,5 +1,5 @@
 import { parcialHabilitado as parcialEstaHabilitado } from '../app/validators';
-import { formatearFechaDDMMAAAA, obtenerDiasHastaFecha, obtenerIconoMateria } from '../lib/cursada';
+import { formatearFechaDDMMAAAA, obtenerDiasHastaFecha, obtenerIconoMateria } from '../core/cursada';
 
 // Vista "Parciales": listado agrupado por materia con carga de notas propia y
 // de los compañeros (los admin pueden editar la de todos).

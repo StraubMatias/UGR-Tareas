@@ -2,28 +2,45 @@
 // agrupación por unidad, resúmenes por alumno e historial.
 // Todas estas funciones no dependen del estado de la interfaz: reciben los
 // datos que necesitan como argumentos y son fáciles de testear aisladas.
-import { tareaHabilitada as tareaEstaHabilitada } from '../app/validators.js';
 
-export const tareaCompletadaPor = (tarea, alumno) => (
+import { tareaHabilitada as tareaEstaHabilitada } from '../app/validators';
+
+export interface Tarea {
+  id: string;
+  nombre: string;
+  inicio: string | null;
+  fin: string | null;
+  unidad: string | number | null;
+  conNota: boolean;
+  notas?: Record<string, string | number | null>;
+  completadoPor: string[];
+  completadoEn?: Record<string, string>;
+  notaCargadaEn?: Record<string, string>;
+  grupal?: boolean;
+}
+
+
+
+export const tareaCompletadaPor = (tarea: Tarea, alumno: string) => (
   tarea.completadoPor.includes(alumno)
   || (tarea.conNota && Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno))
 );
 
-export const fechaEntregaTarea = (tarea, alumno) => (
+export const fechaEntregaTarea = (tarea: Tarea, alumno: string) => (
   tarea.completadoEn?.[alumno] || (tarea.conNota ? tarea.notaCargadaEn?.[alumno] : null)
 );
 
-export const tareaFaltaNota = (tarea, alumno) => (
+export const tareaFaltaNota = (tarea: Tarea, alumno: string): boolean => (
   tarea.conNota
   && tareaCompletadaPor(tarea, alumno)
   && (tarea.notas?.[alumno] === undefined || tarea.notas?.[alumno] === null || tarea.notas?.[alumno] === '')
 );
 
-export const tareaPendienteAlumno = (tarea, alumno) => (
+export const tareaPendienteAlumno = (tarea: Tarea, alumno: string): boolean => (
   !tareaCompletadaPor(tarea, alumno) || tareaFaltaNota(tarea, alumno)
 );
 
-export const formatearFechaDDMMAAAA = (fechaStr) => {
+export const formatearFechaDDMMAAAA = (fechaStr: string | null): string => {
   if (!fechaStr || fechaStr === 'Sin fecha') return 'Sin fecha';
   if (fechaStr.includes('-')) {
     const partes = fechaStr.split('-');
@@ -34,21 +51,21 @@ export const formatearFechaDDMMAAAA = (fechaStr) => {
   return fechaStr;
 };
 
-export const formatearFechaHora = (fechaStr) => {
+export const formatearFechaHora = (fechaStr: string | null): string => {
   if (!fechaStr) return 'Fecha no disponible';
   const fecha = new Date(String(fechaStr).endsWith('Z') ? fechaStr : `${String(fechaStr).replace(' ', 'T')}Z`);
   if (Number.isNaN(fecha.getTime())) return 'Fecha no disponible';
   return fecha.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
 };
 
-export const obtenerTimestamp = (fechaStr) => {
+export const obtenerTimestamp = (fechaStr: string | null | undefined): number | null => {
   if (!fechaStr) return null;
   const fecha = new Date(String(fechaStr).endsWith('Z') ? fechaStr : `${String(fechaStr).replace(' ', 'T')}Z`);
   const timestamp = fecha.getTime();
   return Number.isFinite(timestamp) ? timestamp : null;
 };
 
-export const multiplicadorPuntosTarea = (tarea, alumno) => {
+export const multiplicadorPuntosTarea = (tarea: Tarea, alumno: string) => {
   const fechaCarga = obtenerTimestamp(fechaEntregaTarea(tarea, alumno));
   if (fechaCarga === null) return 1;
 
@@ -65,11 +82,16 @@ export const multiplicadorPuntosTarea = (tarea, alumno) => {
   return diasDesdeApertura < 7 ? 1 : 0.5;
 };
 
-export const puntosBaseTarea = (tarea, alumno) => tarea.conNota
-  ? Number.parseFloat(String(tarea.notas?.[alumno]).replace(',', '.'))
-  : esForo(tarea.nombre) ? 1 : 2;
+export const puntosBaseTarea = (tarea: Tarea, alumno: string): number => {
+  if (!tarea.conNota) {
+    return esForo(tarea.nombre) ? 1 : 2;
+  }
+  const notaStr = String(tarea.notas?.[alumno] ?? '');
+  if (!notaStr || Number.isNaN(Number.parseFloat(notaStr))) return 0;
+  return Number.parseFloat(notaStr.replace(',', '.'));
+};
 
-export const obtenerFechaParcialEnMs = (fechaStr) => {
+export const obtenerFechaParcialEnMs = (fechaStr: string): number | null => {
   if (!fechaStr || fechaStr === 'Sin fecha') return null;
   const partes = fechaStr.split('-').map(Number);
   if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
@@ -79,8 +101,8 @@ export const obtenerFechaParcialEnMs = (fechaStr) => {
   return Number.isNaN(fecha.getTime()) ? null : fecha.getTime();
 };
 
-export const obtenerDiasHastaParcial = (fechaStr) => {
-  const fechaParcialEnMs = obtenerFechaParcialEnMs(fechaStr);
+export const obtenerDiasHastaParcial = (fechaStr: string | null): number | null => {
+  const fechaParcialEnMs = obtenerFechaParcialEnMs(fechaStr || '');
   if (fechaParcialEnMs === null) return null;
 
   const hoy = new Date();
@@ -88,7 +110,7 @@ export const obtenerDiasHastaParcial = (fechaStr) => {
   return Math.max(0, Math.ceil((fechaParcialEnMs - hoy.getTime()) / (1000 * 60 * 60 * 24)));
 };
 
-export const obtenerDiasHastaFecha = (fechaStr) => {
+export const obtenerDiasHastaFecha = (fechaStr: string | null): number | null => {
   if (!fechaStr || fechaStr === 'Sin fecha') return null;
   const partes = String(fechaStr).split('-').map(Number);
   if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
@@ -105,7 +127,7 @@ export const obtenerDiasHastaFecha = (fechaStr) => {
   return Math.ceil((fechaLimite.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
 };
 
-export const obtenerDiasHastaApertura = (fechaStr) => {
+export const obtenerDiasHastaApertura = (fechaStr: string | null): number | null => {
   if (!fechaStr || fechaStr === 'Sin fecha') return null;
   const partes = String(fechaStr).split('-').map(Number);
   if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
@@ -122,13 +144,13 @@ export const obtenerDiasHastaApertura = (fechaStr) => {
   return Math.ceil((fechaApertura.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
 };
 
-export const obtenerTextoApertura = (diasParaAbrir) => {
+export const obtenerTextoApertura = (diasParaAbrir: number | null): string => {
   if (diasParaAbrir === null) return 'Sin fecha de apertura';
   if (diasParaAbrir === 0) return 'Abre hoy';
   return `Abre en ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'}`;
 };
 
-export const obtenerDiasHastaTarea = (fechaStr) => {
+export const obtenerDiasHastaTarea = (fechaStr: string | null): number | null => {
   const diasHastaCierre = obtenerDiasHastaFecha(fechaStr);
   return diasHastaCierre === null ? null : diasHastaCierre - 1;
 };
@@ -317,10 +339,15 @@ export const obtenerResumenTareasAlumno = (alumno, materias) => {
   };
 };
 
-export const historialPorAlumno = (alumno, materias, notas, parciales) => {
-  const tareas = materias.flatMap((materia) => materia.tareas
-    .filter((tarea) => tareaCompletadaPor(tarea, alumno))
-    .map((tarea) => ({
+export const historialPorAlumno = (
+  alumno: string,
+  materias: any[], // TODO: Definir interface Materia
+  notas: any[],    // TODO: Definir interface Nota
+  parciales: any[] // TODO: Definir interface Parcial
+) => {
+  const tareas = materias.flatMap((materia) => (materia.tareas || [])
+    .filter((tarea: Tarea) => tareaCompletadaPor(tarea, alumno))
+    .map((tarea: Tarea) => ({
       id: `tarea-${tarea.id}`,
       materia: materia.nombre,
       nombre: tarea.nombre,
@@ -330,13 +357,14 @@ export const historialPorAlumno = (alumno, materias, notas, parciales) => {
       nota: tarea.conNota ? tarea.notas?.[alumno] : null,
       tipo: tarea.conNota ? 'Tarea con nota' : esForo(tarea.nombre) ? 'Foro' : 'Actividad'
     })));
+
   const parcialesDelAlumno = notas
-    .filter((nota) => nota.alumno === alumno)
-    .map((nota) => {
-      const parcial = parciales.find((item) => item.id === nota.parcial_id);
+    .filter((nota: any) => nota.alumno === alumno)
+    .map((nota: any) => {
+      const parcial = parciales.find((item: any) => item.id === nota.parcial_id);
       return {
         id: `parcial-${nota.parcial_id}`,
-        materia: materias.find((materia) => materia.id === parcial?.materia_id)?.nombre || 'Materia',
+        materia: materias.find((materia: any) => materia.id === parcial?.materia_id)?.nombre || 'Materia',
         nombre: parcial?.nombre || 'Parcial',
         fecha: nota.cargada_en,
         fechaCompletada: nota.cargada_en,
@@ -345,14 +373,14 @@ export const historialPorAlumno = (alumno, materias, notas, parciales) => {
       };
     });
 
-  return [...tareas, ...parcialesDelAlumno].sort((a, b) => obtenerTimestamp(b.fecha) - obtenerTimestamp(a.fecha));
+  return [...tareas, ...parcialesDelAlumno].sort((a, b) => (obtenerTimestamp(b.fecha) ?? 0) - (obtenerTimestamp(a.fecha) ?? 0));
 };
 
-export const agruparHistorial = (historial) => {
-  const materiasHistorial = new Map();
+export const agruparHistorial = (historial: any[]) => {
+  const materiasHistorial = new Map<string, Map<string | number, any[]>>();
 
-  historial.forEach((registro) => {
-    const gruposPorUnidad = materiasHistorial.get(registro.materia) || new Map();
+  historial.forEach((registro: any) => {
+    const gruposPorUnidad = materiasHistorial.get(registro.materia) || new Map<string | number, any[]>();
     const claveUnidad = registro.tipo === 'Parcial'
       ? 'Evaluaciones'
       : registro.unidad || 'Sin unidad';
@@ -368,7 +396,7 @@ export const agruparHistorial = (historial) => {
       grupos: [...gruposPorUnidad.entries()]
         .map(([unidad, registros]) => ({
           unidad,
-          registros: registros.sort((a, b) => obtenerTimestamp(b.fecha) - obtenerTimestamp(a.fecha))
+          registros: registros.sort((a, b) => (obtenerTimestamp(b.fecha) ?? 0) - (obtenerTimestamp(a.fecha) ?? 0))
         }))
         .sort((a, b) => {
           if (a.unidad === 'Sin unidad') return 1;
@@ -379,8 +407,8 @@ export const agruparHistorial = (historial) => {
         })
     }))
     .sort((a, b) => {
-      const fechaA = obtenerTimestamp(a.grupos[0]?.registros[0]?.fecha) || 0;
-      const fechaB = obtenerTimestamp(b.grupos[0]?.registros[0]?.fecha) || 0;
+      const fechaA = (obtenerTimestamp(a.grupos[0]?.registros[0]?.fecha) ?? 0);
+      const fechaB = (obtenerTimestamp(b.grupos[0]?.registros[0]?.fecha) ?? 0);
       return fechaB - fechaA;
     });
 };

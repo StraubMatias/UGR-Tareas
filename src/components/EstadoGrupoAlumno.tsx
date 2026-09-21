@@ -2,7 +2,7 @@ import {
   obtenerGrupoDeAlumno,
   obtenerCompanerosDeGrupo,
   obtenerResumenGruposTarea
-} from '../lib/cursada';
+} from '../core/cursada';
 
 export default function EstadoGrupoAlumno({ tarea, alumno, alumnos, irATareaEnMaterias }) {
   const resumen = obtenerResumenGruposTarea(tarea, alumnos);

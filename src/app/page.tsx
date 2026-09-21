@@ -37,6 +37,16 @@ import {
   CUATRIMESTRES_PLAN,
   PLAN_DE_ESTUDIO,
   crearIndicePlan,
+
+interface SyncResult {
+  detectadas?: { idMoodle: string }[];
+  avisos?: { id: string }[];
+  eventosSugeridos?: { avisoId: string }[];
+  insertadas?: number;
+  avisosAceptados?: number;
+  eventosInsertados?: number;
+}
+
   obtenerCorrelativasPendientesSimuladas as obtenerCorrelativasPendientesDelPlan,
   calcularMateriasPriorizadas
 } from './plan-utils';
@@ -68,7 +78,7 @@ import {
   obtenerResumenTareasAlumno,
   historialPorAlumno,
   agruparHistorial
-} from '../lib/cursada';
+} from '../core/cursada';
 import VistaPromocion from '../components/VistaPromocion';
 import VistaRanking from '../components/VistaRanking';
 import VistaParciales from '../components/VistaParciales';
@@ -488,7 +498,7 @@ export default function Home() {
       estado,
       nota
     });
-    if (!resultado?.exito) {
+    if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudo guardar el progreso.');
       return;
     }
@@ -558,7 +568,7 @@ export default function Home() {
   const handleEliminarAlumno = async (nombre) => {
     if (confirm(`¿Seguro que querés eliminar a "${nombre}" de la lista?`)) {
       const resultado = await eliminarAlumnoAction(nombre);
-      if (!resultado?.exito) {
+      if (resultado && "exito" in resultado && !resultado.exito) {
         alert(resultado?.mensaje || 'No se pudo eliminar el alumno.');
         return;
       }
@@ -568,7 +578,7 @@ export default function Home() {
 
   const handleToggleTarea = async (tareaId, alumno) => {
     const resultado = await toggleTareaAction(tareaId, alumno);
-    if (!resultado?.exito) alert(resultado?.mensaje || 'No se pudo actualizar la entrega.');
+    if (resultado && "exito" in resultado && !resultado.exito) alert(resultado?.mensaje || 'No se pudo actualizar la entrega.');
     await cargarBD();
   };
 
@@ -580,7 +590,7 @@ export default function Home() {
       anio: nuevoMateriaAnio,
       cuatrimestre: nuevoMateriaCuatrimestre
     });
-    if (!resultado?.exito) {
+    if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudo crear la materia.');
       return;
     }
@@ -596,7 +606,7 @@ export default function Home() {
       reglaPromocion: materiaCondicionesEnEdicion.reglaPromocion || 'tp_nota',
       usuario: usuarioActual
     });
-    if (!resultado?.exito) {
+    if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudieron guardar las condiciones.');
       return;
     }
@@ -615,7 +625,7 @@ export default function Home() {
   const handleEliminarMateria = async (id, nombre) => {
     if (confirm(`¿Seguro que querés eliminar la materia "${nombre}" y sus tareas?`)) {
       const resultado = await eliminarMateriaAction(id);
-      if (!resultado?.exito) {
+      if (resultado && "exito" in resultado && !resultado.exito) {
         alert(resultado?.mensaje || 'No se pudo eliminar la materia.');
         return;
       }
@@ -638,7 +648,7 @@ export default function Home() {
       cupoMaximo: cupoMaximo,
       tipo: tipoTarea
     });
-    if (!resultado?.exito) {
+    if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudo crear la tarea.');
       return;
     }
@@ -663,7 +673,7 @@ export default function Home() {
       grupal: Boolean(tareaEnEdicion.tarea.grupal),
       cupoMaximo: tareaEnEdicion.tarea.cupo_maximo
     });
-    if (!resultado?.exito) {
+    if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudo editar la tarea.');
       return;
     }
@@ -757,7 +767,7 @@ export default function Home() {
   const handleEliminarTarea = async (id) => {
     if (confirm('¿Seguro que querés borrar esta tarea?')) {
       const resultado = await eliminarTareaAction(id);
-      if (!resultado?.exito) {
+      if (resultado && "exito" in resultado && !resultado.exito) {
         alert(resultado?.mensaje || 'No se pudo borrar la tarea.');
         return;
       }
@@ -782,11 +792,11 @@ export default function Home() {
       if (!confirmar) {
         // Vista previa: arrancamos con todas las tareas y avisos tildados; los
         // eventos sugeridos asociados a avisos aprobados también vienen tildados.
-        setSyncSeleccionados(new Set((res.detectadas || []).map((t) => t.idMoodle)));
-        setSyncAvisosSeleccionados(new Set((res.avisos || []).map((a) => a.id)));
-        setSyncEventosSeleccionados(new Set((res.eventosSugeridos || []).map((e) => e.avisoId)));
+        setSyncSeleccionados(new Set(((res as SyncResult).detectadas || []).map((t) => t.idMoodle)));
+        setSyncAvisosSeleccionados(new Set(((res as SyncResult).avisos || []).map((a) => a.id)));
+        setSyncEventosSeleccionados(new Set(((res as SyncResult).eventosSugeridos || []).map((e) => e.avisoId)));
       }
-      if (confirmar && (res.insertadas > 0 || res.avisosAceptados > 0 || res.eventosInsertados > 0)) {
+      if (confirmar && ((res as SyncResult).insertadas > 0 || (res as SyncResult).avisosAceptados > 0 || (res as SyncResult).eventosInsertados > 0)) {
         await cargarBD(false);
       }
     } catch (error) {
@@ -859,7 +869,7 @@ export default function Home() {
   const handleGuardarNotaTareaOnBlur = async (tareaId, alumno) => {
     const clave = `${tareaId}_${alumno}`;
     const resultado = await guardarNotaTareaAction(tareaId, alumno, notasTareasInputs[clave] || '', usuarioActual);
-    if (!resultado?.exito) {
+    if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudo guardar la nota de la tarea.');
       await cargarBD();
       return;
@@ -883,7 +893,7 @@ export default function Home() {
       aula: aulaHorario,
       usuario: usuarioActual
     });
-    if (!resultado?.exito) {
+    if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudo guardar el horario.');
       return;
     }
@@ -898,7 +908,7 @@ export default function Home() {
   const handleEliminarHorario = async (id) => {
     if (!confirm('¿Seguro que querés borrar este horario?')) return;
     const resultado = await eliminarHorarioAction(id, usuarioActual);
-    if (!resultado?.exito) {
+    if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudo borrar el horario.');
       return;
     }
@@ -920,7 +930,7 @@ export default function Home() {
       ? await editarParcialAction({ id: parcialEnEdicion.id, ...datosParcial })
       : await crearParcialAction(datosParcial);
 
-    if (!resultado?.exito) {
+    if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudo guardar el parcial.');
       return;
     }
@@ -945,7 +955,7 @@ export default function Home() {
   const handleEliminarParcial = async (id) => {
     if (confirm('¿Seguro que querés borrar este parcial y sus notas cargadas?')) {
       const resultado = await eliminarParcialAction(id, usuarioActual);
-      if (!resultado?.exito) {
+      if (resultado && "exito" in resultado && !resultado.exito) {
         alert(resultado?.mensaje || 'No se pudo borrar el parcial.');
         return;
       }
@@ -965,7 +975,7 @@ export default function Home() {
     const clave = `${parcialId}_${alumno}`;
     const valor = notasInputs[clave] || '';
     const resultado = await guardarNotaParcialAction(parcialId, alumno, valor, usuarioActual);
-    if (!resultado?.exito) {
+    if (resultado && "exito" in resultado && !resultado.exito) {
       alert(resultado?.mensaje || 'No se pudo guardar la nota.');
       await cargarBD();
     }
@@ -2105,7 +2115,7 @@ export default function Home() {
                       <div>
                         <label className="block text-xs font-semibold text-slate-300 mb-1">Consigna / Detalles</label>
                         <textarea
-                          rows="3"
+                          rows={3}
                           placeholder="Texto o pautas para el trabajo..."
                           value={detallesTarea}
                           onChange={(e) => setDetallesTarea(e.target.value)}
@@ -2163,7 +2173,7 @@ export default function Home() {
                       <div>
                         <label className="block text-xs font-semibold text-slate-300 mb-1">Temas / Aclaraciones</label>
                         <textarea
-                          rows="3"
+                          rows={3}
                           placeholder="Unidades que entran, aula, etc..."
                           value={detallesParcial}
                           onChange={(e) => setDetallesParcial(e.target.value)}
@@ -2558,7 +2568,7 @@ export default function Home() {
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">Consigna / Detalles</label>
                 <textarea
-                  rows="4"
+                  rows={4}
                   value={tareaEnEdicion.tarea.detalles}
                   onChange={(e) =>
                     setTareaEnEdicion({
@@ -2599,7 +2609,7 @@ export default function Home() {
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">Condiciones de la materia</label>
                 <textarea
-                  rows="5"
+                  rows={5}
                   value={materiaCondicionesEnEdicion.condiciones}
                   onChange={(e) => setMateriaCondicionesEnEdicion({ ...materiaCondicionesEnEdicion, condiciones: e.target.value })}
                   placeholder="Ej: Para regularizar hay que completar todos los trabajos prácticos..."
@@ -2705,7 +2715,7 @@ export default function Home() {
                           <div
                             key={`${tarea.idMoodle || tarea.nombre}-${i}`}
                             onClick={(e) => {
-                              if (e.target.tagName === 'INPUT') return;
+                              if ((e.target as HTMLElement).tagName === 'INPUT') return;
                               toggleSyncTarea(tarea.idMoodle);
                             }}
                             aria-hidden="true"
@@ -2798,7 +2808,7 @@ export default function Home() {
                               // y el aviso vuelve a quedar tildado: por eso no
                               // se podía destildar uno por uno y solo servía
                               // «Destildar todo».
-                              if (e.target.tagName === 'INPUT' || e.target.tagName === 'A') return;
+                              if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'A') return;
                               toggleSyncAviso(aviso.id);
                             }}
                             className="w-full text-left cursor-pointer"
@@ -2894,7 +2904,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => ejecutarSyncUGR(true, [...syncSeleccionados], [...syncAvisosSeleccionados], [...syncEventosSeleccionados])}
-                      disabled={syncEstado === 'cargando' || (syncSeleccionados.size === 0 && syncAvisosSeleccionados.size === 0)}
+                      disabled={(syncEstado as string) === 'cargando' || (syncEstado as string) === 'error' || (syncSeleccionados.size === 0 && syncAvisosSeleccionados.size === 0)}
                       className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {syncSeleccionados.size + syncAvisosSeleccionados.size > 0

@@ -1,7 +1,7 @@
 import {
   calcularEstadoSemaforo, formatearFechaDDMMAAAA, formatearUnidad, obtenerIconoMateria, tareaCompletadaPor,
   tareaFaltaNota, tareaPuedeGestionarse
-} from '../lib/cursada';
+} from '../core/cursada';
 import EstadoGrupoAlumno from './EstadoGrupoAlumno';
 
 export default function EstadoTareaAlumno({

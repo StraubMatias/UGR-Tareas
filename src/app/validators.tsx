@@ -29,7 +29,7 @@ export function tareaDentroDelPlazo(fecha) {
   return !Number.isNaN(fechaCierre.getTime()) && hoy < fechaCierre;
 }
 
-export function validarNota(nota) {
+export function validarNota(nota): { valida: boolean; vacia: boolean; valor: string } {
   const notaLimpia = typeof nota === 'string' ? nota.trim().replace(',', '.') : String(nota ?? '').trim();
   if (!notaLimpia) return { valida: false, vacia: true, valor: '' };
 

@@ -9,7 +9,7 @@ import {
   tareaFaltaNota,
   tareaPendienteAlumno,
   tareaPuedeGestionarse
-} from '../lib/cursada';
+} from '../core/cursada';
 
 import GrupoTarea from './GrupoTarea';
 

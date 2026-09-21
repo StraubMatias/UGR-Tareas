@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { tareaHabilitada, validarNota } from '../app/validators.js';
+import { tareaHabilitada, validarNota } from '../app/validators';
 
 export class ErrorGrupo extends Error {}
 

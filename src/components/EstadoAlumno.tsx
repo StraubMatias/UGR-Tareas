@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { agruparTareasPorUnidad, obtenerResumenTareasAlumno } from '../lib/cursada';
+import { agruparTareasPorUnidad, obtenerResumenTareasAlumno } from '../core/cursada';
 import EstadoTareaAlumno from './EstadoTareaAlumno';
 
 const ESTADOS = [
@@ -70,7 +70,16 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
                         {materia.nombre}
                       </div>
                       <EstadoTareaAlumno tarea={tarea} alumno={alumno}
-                        materia={materia} unidad={tarea.unidad} {...acciones} />
+                        materia={materia} 
+                        unidad={tarea.unidad} 
+                        alumnos={acciones.alumnos}
+                        usuarioActual={acciones.usuarioActual}
+                        irATareaEnMaterias={acciones.irATareaEnMaterias}
+                        toggleTareaDesdeCliente={acciones.toggleTareaDesdeCliente}
+                        notasTareasInputs={acciones.notasTareasInputs}
+                        handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
+                        handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
+          />
                     </div>
                   ))}
               </div>

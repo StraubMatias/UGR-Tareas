@@ -1,7 +1,7 @@
 import {
   formatearFechaHora,
   obtenerDiasHastaTarea,
-} from '../lib/cursada';
+} from '../core/cursada';
 
 // Vista "Plan de estudio": materias, códigos y correlativas del plan oficial,
 // estados por alumno y el modal "Tu camino para adelantar" (simulador).

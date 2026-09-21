@@ -1,4 +1,4 @@
-import { etiquetaMateria } from '../lib/cursada';
+import { etiquetaMateria } from '../core/cursada';
 
 // El cronograma académico (el plan oficial de cada materia: Word/PDF del curso)
 // es la fuente de verdad de la cursada. Un evento «sin clases» cancela la
