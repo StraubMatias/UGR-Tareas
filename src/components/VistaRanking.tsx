@@ -45,7 +45,7 @@ export default function VistaRanking({
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {rankingPodio.map((item, indice) => {
+              {rankingPodio.map((item, indice: number) => {
                 const iconosPodio = ['🥇', '🥈', '🥉'];
                 const estilosPodio = [
                   'border-amber-400/60 bg-amber-500/10',
@@ -75,7 +75,7 @@ export default function VistaRanking({
             {restoRanking.length > 0 && (
               <div className="mt-6 space-y-3">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Resto de la cursada</h3>
-                {restoRanking.map((item, indice) => (
+                {restoRanking.map((item, indice: number) => (
                   <div
                     key={item.alumno}
                     className={`flex items-center gap-3 sm:gap-4 p-4 rounded-xl border ${

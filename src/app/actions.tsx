@@ -204,7 +204,7 @@ async function registrarAuditoria({ accion, usuario, detalle, ip }: AuditoriaPar
   }
 }
 
-async function loginEstaBloqueado(claves) {
+async function loginEstaBloqueado(claves: { clave: string; limite: number }[]): Promise<boolean> {
   const ahora = Date.now();
   for (const { clave } of claves) {
     const res = await db.execute({
@@ -216,7 +216,7 @@ async function loginEstaBloqueado(claves) {
   return false;
 }
 
-async function registrarFalloLogin(claves) {
+async function registrarFalloLogin(claves: { clave: string; limite: number }[]): Promise<void> {
   const ahora = Date.now();
   for (const { clave, limite } of claves) {
     const res = await db.execute({
@@ -243,7 +243,7 @@ async function registrarFalloLogin(claves) {
   }
 }
 
-async function limpiarIntentosLogin(claves) {
+async function limpiarIntentosLogin(claves: { clave: string; limite: number }[]): Promise<void> {
   for (const { clave } of claves) {
     await db.execute({
       sql: 'DELETE FROM login_intentos WHERE clave = ?',
@@ -252,7 +252,7 @@ async function limpiarIntentosLogin(claves) {
   }
 }
 
-function firmarSesion(payload) {
+function firmarSesion(payload: string): string {
   return createHmac('sha256', obtenerSecretoSesion()).update(payload).digest('base64url');
 }
 
@@ -265,7 +265,7 @@ function crearValorSesion(usuario, versionSesion) {
   return `${payload}.${firmarSesion(payload)}`;
 }
 
-function leerValorSesion(valor) {
+function leerValorSesion(valor: string | undefined): SesionDatos | null {
   try {
     const [payload, firma] = String(valor || '').split('.');
     if (!payload || !firma) return null;

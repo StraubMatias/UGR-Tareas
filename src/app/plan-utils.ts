@@ -4,9 +4,16 @@ export const CUATRIMESTRES_PLAN = [
   '2° año · 1° cuatrimestre',
   '2° año · 2° cuatrimestre',
   '3° año · 1° cuatrimestre'
-];
+] as const;
 
-export const PLAN_DE_ESTUDIO = [
+export interface MateriaPlan {
+  codigo: string;
+  nombre: string;
+  cuatrimestre: string;
+  correlativas: string[];
+}
+
+export const PLAN_DE_ESTUDIO: MateriaPlan[] = [
   { codigo: '1.1.1', nombre: 'Introducción a la Seguridad de la Información', cuatrimestre: '1° año · 1° cuatrimestre', correlativas: [] },
   { codigo: '1.2.1', nombre: 'Introducción a Tecnologías de la Información y las Comunicaciones (TIC)', cuatrimestre: '1° año · 1° cuatrimestre', correlativas: [] },
   { codigo: '1.3.1', nombre: 'Tecnologías de las Comunicaciones', cuatrimestre: '1° año · 1° cuatrimestre', correlativas: [] },
@@ -35,18 +42,25 @@ export const PLAN_DE_ESTUDIO = [
   { codigo: '3.26.1', nombre: 'Pasantía Profesional', cuatrimestre: '3° año · 1° cuatrimestre', correlativas: ['1° año aprobado', '1° cuatrimestre de 2° año regularizado'] }
 ];
 
-export function crearIndicePlan(plan = PLAN_DE_ESTUDIO) {
+export function crearIndicePlan(plan: MateriaPlan[] = PLAN_DE_ESTUDIO): Record<string, MateriaPlan> {
   return Object.fromEntries(plan.map((materia) => [materia.codigo, materia]));
 }
 
-export function obtenerCorrelativasPendientesSimuladas(materia, codigosAprobados, indicePlan = crearIndicePlan()) {
+export function obtenerCorrelativasPendientesSimuladas(
+  materia: MateriaPlan,
+  codigosAprobados: Set<string>,
+  indicePlan: Record<string, MateriaPlan> = crearIndicePlan()
+): string[] {
   return materia.correlativas.filter((correlativa) => {
     const materiaCorrelativa = indicePlan[correlativa];
     return materiaCorrelativa ? !codigosAprobados.has(materiaCorrelativa.codigo) : true;
   });
 }
 
-export function calcularMateriasPriorizadas(plan, codigosAprobados) {
+export function calcularMateriasPriorizadas(
+  plan: MateriaPlan[] = PLAN_DE_ESTUDIO,
+  codigosAprobados: Set<string> = new Set()
+) {
   const indicePlan = crearIndicePlan(plan);
   return plan
     .filter((materia) => !codigosAprobados.has(materia.codigo))
@@ -58,3 +72,4 @@ export function calcularMateriasPriorizadas(plan, codigosAprobados) {
     .filter(({ pendientes }) => pendientes === 0)
     .sort((a, b) => b.habilita - a.habilita);
 }
+

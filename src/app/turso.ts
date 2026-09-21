@@ -1,8 +1,8 @@
-import { createClient } from '@libsql/client';
+import { createClient, type Client } from '@libsql/client';
 
-let cliente;
+let cliente: Client | null = null;
 
-function obtenerCliente() {
+function obtenerCliente(): Client {
   if (cliente) return cliente;
 
   const url = process.env.TURSO_DATABASE_URL?.trim();
@@ -15,14 +15,12 @@ function obtenerCliente() {
   return cliente;
 }
 
-export const db = {
-  execute(...args) {
-    return obtenerCliente().execute(...args);
-  },
-  batch(...args) {
-    return obtenerCliente().batch(...args);
-  },
-  transaction(...args) {
-    return obtenerCliente().transaction(...args);
+// Proxy que delega en el cliente real perezosamente, conservando todos los
+// overloads tipados de Client (execute/batch/transaction/...).
+export const db: Client = new Proxy({} as Client, {
+  get(_target, prop) {
+    const clienteReal = obtenerCliente();
+    const valor = Reflect.get(clienteReal, prop, clienteReal);
+    return typeof valor === 'function' ? (valor as (...args: unknown[]) => unknown).bind(clienteReal) : valor;
   }
-};
+});

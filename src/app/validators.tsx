@@ -2,7 +2,7 @@
 // Este archivo no lleva 'use client' ni 'use server': se importa desde ambos lados.
 // Mantenerlo sin dependencias externas permite usarlo en los tests (node --test).
 
-export function parcialHabilitado(fecha) {
+export function parcialHabilitado(fecha: string | null | undefined): boolean {
   if (!fecha || fecha === 'Sin fecha') return false;
 
   const hoy = new Date();
@@ -11,7 +11,7 @@ export function parcialHabilitado(fecha) {
   return !Number.isNaN(fechaParcial.getTime()) && fechaParcial <= hoy;
 }
 
-export function tareaHabilitada(fecha) {
+export function tareaHabilitada(fecha: string | null | undefined): boolean {
   if (!fecha || fecha === 'Sin fecha') return true;
 
   const hoy = new Date();
@@ -20,7 +20,7 @@ export function tareaHabilitada(fecha) {
   return !Number.isNaN(fechaInicio.getTime()) && fechaInicio <= hoy;
 }
 
-export function tareaDentroDelPlazo(fecha) {
+export function tareaDentroDelPlazo(fecha: string | null | undefined): boolean {
   if (!fecha || fecha === 'Sin fecha') return true;
 
   const hoy = new Date();
@@ -29,7 +29,7 @@ export function tareaDentroDelPlazo(fecha) {
   return !Number.isNaN(fechaCierre.getTime()) && hoy < fechaCierre;
 }
 
-export function validarNota(nota): { valida: boolean; vacia: boolean; valor: string } {
+export function validarNota(nota: string | number | null | undefined): { valida: boolean; vacia: boolean; valor: string } {
   const notaLimpia = typeof nota === 'string' ? nota.trim().replace(',', '.') : String(nota ?? '').trim();
   if (!notaLimpia) return { valida: false, vacia: true, valor: '' };
 
@@ -41,7 +41,7 @@ export function validarNota(nota): { valida: boolean; vacia: boolean; valor: str
   };
 }
 
-export function normalizarUnidad(unidad) {
+export function normalizarUnidad(unidad: string | number | null | undefined): { valida: boolean; valor: number | null } {
   const unidadLimpia = unidad === null || unidad === undefined ? '' : String(unidad).trim();
   if (!unidadLimpia) return { valida: true, valor: null };
   if (!/^\d+$/.test(unidadLimpia) || Number(unidadLimpia) < 1) {
@@ -49,3 +49,4 @@ export function normalizarUnidad(unidad) {
   }
   return { valida: true, valor: Number(unidadLimpia) };
 }
+
