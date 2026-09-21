@@ -37,6 +37,9 @@ import {
   CUATRIMESTRES_PLAN,
   PLAN_DE_ESTUDIO,
   crearIndicePlan,
+  obtenerCorrelativasPendientesSimuladas as obtenerCorrelativasPendientesDelPlan,
+  calcularMateriasPriorizadas
+} from './plan-utils';
 
 interface SyncResult {
   detectadas?: { idMoodle: string }[];
@@ -46,10 +49,6 @@ interface SyncResult {
   avisosAceptados?: number;
   eventosInsertados?: number;
 }
-
-  obtenerCorrelativasPendientesSimuladas as obtenerCorrelativasPendientesDelPlan,
-  calcularMateriasPriorizadas
-} from './plan-utils';
 import {
   tareaCompletadaPor,
   fechaEntregaTarea,
