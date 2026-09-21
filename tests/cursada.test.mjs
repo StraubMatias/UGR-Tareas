@@ -8,7 +8,7 @@ import {
   obtenerResumenTareasAlumno,
   formatearFechaDDMMAAAA,
   calcularEstadoSemaforo
-} from '../src/lib/cursada.js';
+} from '../src/core/cursada.ts';
 
 test('obtenerGrupoDeAlumno: encuentra el grupo correspondiente o retorna null', () => {
   const tareaGrupal = {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parsearFechaMoodle } from '../lib/normalizar.mjs';
 import { createClient } from '@libsql/client';
 import { detectarAvisosMoodle, insertarAvisosDetectados, aprobarAvisos, insertarEventosCronograma, rechazarAvisos } from '../lib/sync-core.mjs';
-import { nombreNotificacionAviso } from '../../src/lib/avisos.js';
+import { nombreNotificacionAviso } from '../../src/lib/avisos.ts';
 import { extraerPrimerPostDeHilo, analizarAvisosParaCronograma } from '../lib/avisos.mjs';
 
 // Muestra sintética basada en el texto recibido, no HTML descargado del campus.

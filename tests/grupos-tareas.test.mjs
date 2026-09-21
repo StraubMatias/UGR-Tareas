@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { crearEsquemaGrupos } from '../database/grupos-schema.mjs';
-import { asignarGrupo, actualizarProgresoTarea } from '../src/lib/grupos-tareas.mjs';
+import { asignarGrupo, actualizarProgresoTarea } from '../src/lib/grupos-tareas.ts';
 
 async function preparar(t) {
   const directorio = mkdtempSync(join(tmpdir(), 'ugr-grupos-'));

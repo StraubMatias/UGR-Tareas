@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parcialHabilitado, tareaHabilitada, tareaDentroDelPlazo, validarNota, normalizarUnidad } from '../src/app/validators.js';
+import { parcialHabilitado, tareaHabilitada, tareaDentroDelPlazo, validarNota, normalizarUnidad } from '../src/app/validators.ts';
 
 const hoy = new Date();
 const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

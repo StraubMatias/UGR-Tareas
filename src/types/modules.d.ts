@@ -1,45 +1,38 @@
-declare module '../lib/grupos-tareas.mjs' {
-  export class ErrorGrupo extends Error {}
-  export function asignarGrupo(
-    db: unknown,
-    tareaId: string,
-    alumnoId: string | null,
-    opciones?: {
-      nombre?: string;
-      grupoId?: string | null;
-      salir?: boolean;
-      eliminarGrupoId?: string | null;
-      permitirMover?: boolean;
-    }
-  ): Promise<{ grupoId: string | null; eliminado?: boolean }>;
-  export function actualizarProgresoTarea(
-    db: unknown,
-    tareaId: string,
-    alumno: { id: string; nombre: string },
-    opciones?: { nota?: string | number; alternarEntrega?: boolean }
-  ): Promise<{ alumnos: string[] }>;
-}
-
 declare module '../../ugr-sync/lib/sync-core.mjs' {
+  export interface MapeoCurso {
+    curso?: { id?: string | number; nombre?: string };
+    coincidencia?: { materia?: { nombre?: string } };
+  }
+  export interface ResultadoTareasNuevas {
+    materiasLocales?: unknown[];
+    cursos?: unknown[];
+    mapeos?: MapeoCurso[];
+    detectadas?: unknown[];
+    urlsActualizar?: unknown[];
+    urlsParcialesActualizar?: unknown[];
+  }
+  export interface ResultadoAvisosMoodle {
+    avisosDetectados: unknown[];
+    eventosSugeridos: unknown[];
+  }
   export function aprobarAvisos(opciones: { db: unknown; ids: string[] }): Promise<number>;
   export function rechazarAvisos(opciones: { db: unknown; ids: string[] }): Promise<number>;
   export function conectarUGR(): Promise<unknown>;
-  export function detectarAvisosMoodle(): Promise<unknown>;
-  export function detectarTareasNuevas(): Promise<unknown>;
+  export function detectarAvisosMoodle(opciones: {
+    db: unknown;
+    cliente: unknown;
+    mapeos?: MapeoCurso[];
+    hoy?: string;
+    diasAtras?: number;
+  }): Promise<ResultadoAvisosMoodle>;
+  export function detectarTareasNuevas(opciones: { db: unknown; cliente: unknown }): Promise<ResultadoTareasNuevas>;
 }
 
 declare module '../../ugr-sync/lib/previa.mjs' {
-  export function sincronizarConPrevia(opciones: {
-    db: unknown;
-    usuario: string;
-    confirmar?: boolean;
-    previaId?: string;
-    ids?: string[];
-    idsAvisos?: string[];
-    idsEventos?: string[];
-    detectar?: () => Promise<unknown>;
-    ahora?: number;
-  }): Promise<{
+  import type { MapeoCurso, ResultadoTareasNuevas } from '../../ugr-sync/lib/sync-core.mjs';
+  export interface ResultadoPrevia extends ResultadoTareasNuevas {
+    avisos?: unknown[];
+    eventosSugeridos?: unknown[];
     insertadas?: number;
     urlsActualizadas?: number;
     urlsParcialesActualizadas?: number;
@@ -48,6 +41,16 @@ declare module '../../ugr-sync/lib/previa.mjs' {
     eventosInsertados?: number;
     previaId?: string;
     confirmar?: boolean;
-    [clave: string]: unknown;
-  }>;
+  }
+  export function sincronizarConPrevia(opciones: {
+    db: unknown;
+    usuario: string;
+    confirmar?: boolean;
+    previaId?: string | null;
+    ids?: string[];
+    idsAvisos?: string[];
+    idsEventos?: string[];
+    detectar?: () => Promise<ResultadoPrevia>;
+    ahora?: number;
+  }): Promise<ResultadoPrevia>;
 }

@@ -5,7 +5,7 @@ import {
   crearIndicePlan,
   obtenerCorrelativasPendientesSimuladas,
   calcularMateriasPriorizadas
-} from '../src/app/plan-utils.js';
+} from '../src/app/plan-utils.ts';
 
 test('identifica correlativas pendientes', () => {
   const indice = crearIndicePlan();

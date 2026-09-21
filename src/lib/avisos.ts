@@ -1,6 +1,23 @@
+interface AvisoParaNotificacion {
+  titulo: string;
+  url?: string | null;
+  materia_id?: string | null;
+}
+
+interface EventoCronograma {
+  origen?: string | null;
+  url?: string | null;
+  materia_id?: string | null;
+  tipo?: string | null;
+  fecha: string;
+}
+
 // Usa eventos persistidos y aprobados, nunca vuelve a interpretar texto del campus.
-export function nombreNotificacionAviso(aviso, cronograma = []) {
-  const sinFragmento = (url) => String(url || '').split('#')[0];
+export function nombreNotificacionAviso(
+  aviso: AvisoParaNotificacion,
+  cronograma: EventoCronograma[] = []
+): string {
+  const sinFragmento = (url: string | null | undefined) => String(url || '').split('#')[0];
   const eventos = cronograma.filter((evento) =>
     aviso.url && evento.origen === 'ugr'
     && sinFragmento(evento.url) === sinFragmento(aviso.url)

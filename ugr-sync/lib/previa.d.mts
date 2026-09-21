@@ -1,14 +1,8 @@
-export function sincronizarConPrevia(opciones: {
-  db: unknown;
-  usuario: string;
-  confirmar?: boolean;
-  previaId?: string;
-  ids?: string[];
-  idsAvisos?: string[];
-  idsEventos?: string[];
-  detectar?: () => Promise<unknown>;
-  ahora?: number;
-}): Promise<{
+import type { MapeoCurso, ResultadoTareasNuevas } from './sync-core.mjs';
+
+export interface ResultadoPrevia extends ResultadoTareasNuevas {
+  avisos?: unknown[];
+  eventosSugeridos?: unknown[];
   insertadas?: number;
   urlsActualizadas?: number;
   urlsParcialesActualizadas?: number;
@@ -17,5 +11,16 @@ export function sincronizarConPrevia(opciones: {
   eventosInsertados?: number;
   previaId?: string;
   confirmar?: boolean;
-  [clave: string]: unknown;
-}>;
+}
+
+export function sincronizarConPrevia(opciones: {
+  db: unknown;
+  usuario: string;
+  confirmar?: boolean;
+  previaId?: string | null;
+  ids?: string[];
+  idsAvisos?: string[];
+  idsEventos?: string[];
+  detectar?: () => Promise<ResultadoPrevia>;
+  ahora?: number;
+}): Promise<ResultadoPrevia>;

@@ -3,8 +3,9 @@
 import { createHmac, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { cookies, headers } from 'next/headers';
+import type { Row, Value } from '@libsql/client';
 import { db } from './turso';
-import { asignarGrupo, actualizarProgresoTarea, ErrorGrupo } from '../lib/grupos-tareas.mjs';
+import { asignarGrupo, actualizarProgresoTarea, ErrorGrupo } from '../lib/grupos-tareas';
 import { PLAN_DE_ESTUDIO } from './plan-utils';
 import { convertirValidacion } from '../lib/utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
@@ -33,6 +34,17 @@ const MAX_TITULO_LENGTH = 200;
 const MAX_PASSWORD_LENGTH = 128;
 const MAX_USUARIO_LENGTH = 100;
 
+function texto(valor: Value | undefined): string {
+  if (typeof valor === 'string' || typeof valor === 'number') return String(valor);
+  return '';
+}
+
+function textoONull(valor: Value | undefined): string | null {
+  if (valor == null) return null;
+  if (typeof valor === 'string' || typeof valor === 'number') return String(valor);
+  return null;
+}
+
 interface LoginParams {
   usuario: string;
   password: string;
@@ -40,7 +52,7 @@ interface LoginParams {
 
 interface AuditoriaParams {
   accion: string;
-  usuario: string;
+  usuario: string | null;
   detalle: string;
   ip: string;
 }
@@ -53,6 +65,8 @@ interface SesionDatos {
 export interface RespuestaAction {
   exito: boolean;
   mensaje?: string;
+  usuario?: string;
+  rol?: string;
 }
 
 export interface TareaActionParams {
@@ -78,11 +92,11 @@ function obtenerSecretoSesion() {
   return secreto;
 }
 
-function crearId(prefijo) {
+function crearId(prefijo: string): string {
   return `${prefijo}${randomUUID()}`;
 }
 
-function esIPPrivada(ip) {
+function esIPPrivada(ip: string | undefined | null): boolean {
   if (!ip) return true;
   if (ip === '::1' || ip === '127.0.0.1' || ip === 'localhost') return true;
   if (ip.startsWith('10.') || ip.startsWith('192.168.')) return true;
@@ -119,7 +133,7 @@ async function obtenerClavesLogin(usuario: string): Promise<{ clave: string; lim
   return claves;
 }
 
-async function accionEscrituraEstaBloqueada(usuario) {
+async function accionEscrituraEstaBloqueada(usuario: string): Promise<boolean> {
   const ip = await obtenerIPReal();
   const ahora = Date.now();
   const claves = [`accion:ip:${ip}`, `accion:user:${usuario.toLowerCase()}`];
@@ -133,7 +147,7 @@ async function accionEscrituraEstaBloqueada(usuario) {
   return false;
 }
 
-async function registrarAccionEscritura(usuario) {
+async function registrarAccionEscritura(usuario: string): Promise<void> {
   const ip = await obtenerIPReal();
   const ahora = Date.now();
   const claves = [
@@ -165,7 +179,8 @@ async function registrarAccionEscritura(usuario) {
   }
 }
 
-async function verificarRateLimitEscritura(usuario) {
+async function verificarRateLimitEscritura(usuario: string | null): Promise<RespuestaAction> {
+  if (!usuario) return { exito: false, mensaje: 'La sesión no es válida.' };
   if (await accionEscrituraEstaBloqueada(usuario)) {
     return { exito: false, mensaje: 'Demasiadas acciones. Probá de nuevo en unos minutos.' };
   }
@@ -173,7 +188,7 @@ async function verificarRateLimitEscritura(usuario) {
   return { exito: true };
 }
 
-function validarFecha(fecha) {
+function validarFecha(fecha: string | null | undefined): { valida: true; valor: string } | { valida: false; valor: null } {
   if (!fecha || fecha === 'Sin fecha') return { valida: true, valor: 'Sin fecha' };
   const fechaLimpia = String(fecha).trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaLimpia)) return { valida: false, valor: null };
@@ -185,8 +200,8 @@ function validarFecha(fecha) {
   return { valida: true, valor: fechaLimpia };
 }
 
-function validarLongitud(texto, maximo, campo) {
-  const limpio = String(texto || '').trim();
+function validarLongitud(textoIngresado: string | null | undefined, maximo: number, campo: string): { valida: true; valor: string } | { valida: false; mensaje: string } {
+  const limpio = String(textoIngresado || '').trim();
   if (limpio.length > maximo) {
     return { valida: false, mensaje: `El campo ${campo} no puede superar los ${maximo} caracteres.` };
   }
@@ -256,7 +271,7 @@ function firmarSesion(payload: string): string {
   return createHmac('sha256', obtenerSecretoSesion()).update(payload).digest('base64url');
 }
 
-function crearValorSesion(usuario, versionSesion) {
+function crearValorSesion(usuario: string, versionSesion: number): string {
   const payload = Buffer.from(JSON.stringify({
     usuario,
     versionSesion,
@@ -286,7 +301,7 @@ function leerValorSesion(valor: string | undefined): SesionDatos | null {
   }
 }
 
-async function establecerSesion(usuario, versionSesion) {
+async function establecerSesion(usuario: string, versionSesion: number): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_SESION, crearValorSesion(usuario, versionSesion), {
     httpOnly: true,
@@ -326,7 +341,7 @@ async function obtenerRolUsuario(usuario: string | null): Promise<string | null>
     sql: 'SELECT rol FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
     args: [usuario]
   });
-  return resultado.rows[0]?.rol || 'alumno';
+  return texto(resultado.rows[0]?.rol) || 'alumno';
 }
 
 async function existeMateria(id: string | undefined): Promise<boolean> {
@@ -343,7 +358,12 @@ async function obtenerAlumno(nombre: string): Promise<{ id: string; nombre: stri
     sql: 'SELECT id, nombre FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
     args: [nombre]
   });
-  return resultado.rows[0] || null;
+  const fila = resultado.rows[0];
+  if (!fila) return null;
+  const id = texto(fila.id);
+  const nombreAlumno = texto(fila.nombre);
+  if (!id || !nombreAlumno) return null;
+  return { id, nombre: nombreAlumno };
 }
 
 async function hashearPassword(password: string): Promise<string> {
@@ -399,7 +419,8 @@ export async function validarLoginAction(usuarioInput: string, passwordInput: st
     }
 
     const usuarioDB = res.rows[0];
-    const credencialesValidas = await verificarPassword(passClean, usuarioDB.password);
+    const nombreUsuario = texto(usuarioDB.nombre);
+    const credencialesValidas = await verificarPassword(passClean, textoONull(usuarioDB.password));
 
     if (!credencialesValidas) {
       await registrarFalloLogin(clavesLogin);
@@ -407,9 +428,9 @@ export async function validarLoginAction(usuarioInput: string, passwordInput: st
     }
 
     await limpiarIntentosLogin(clavesLogin);
-    await establecerSesion(usuarioDB.nombre, Number(usuarioDB.sesion_version) || 1);
-    await registrarAuditoria({ accion: 'login', usuario: usuarioDB.nombre, detalle: 'Inicio de sesión exitoso', ip: await obtenerIPReal() });
-    return { exito: true, usuario: usuarioDB.nombre, rol: usuarioDB.rol || 'alumno' };
+    await establecerSesion(nombreUsuario, Number(usuarioDB.sesion_version) || 1);
+    await registrarAuditoria({ accion: 'login', usuario: nombreUsuario, detalle: 'Inicio de sesión exitoso', ip: await obtenerIPReal() });
+    return { exito: true, usuario: nombreUsuario, rol: texto(usuarioDB.rol) || 'alumno' };
   } catch (error) {
     console.error('Error en validarLoginAction:', error);
     const detalle = String(error?.message || '').toLowerCase();
@@ -465,7 +486,7 @@ export async function cambiarPasswordAction(usuarioInput: string, passActualInpu
     if (res.rows.length === 0) {
       return { exito: false, mensaje: 'La contraseña actual es incorrecta.' };
     }
-    const credencialesValidas = await verificarPassword(passActualClean, res.rows[0].password);
+    const credencialesValidas = await verificarPassword(passActualClean, textoONull(res.rows[0].password));
     if (!credencialesValidas) {
       return { exito: false, mensaje: 'La contraseña actual es incorrecta.' };
     }
@@ -495,7 +516,7 @@ export async function obtenerAlumnosAction() {
   try {
     if (!await obtenerUsuarioSesion()) return [];
     const res = await db.execute('SELECT nombre FROM alumnos ORDER BY nombre ASC');
-    return res.rows.map((r) => r.nombre);
+    return res.rows.map((fila) => texto(fila.nombre));
   } catch (error) {
     console.error('Error al obtener alumnos:', error);
     return [];
@@ -506,7 +527,13 @@ export async function obtenerPeriodosAction(): Promise<{ id: string; anio: numbe
   try {
     if (!await obtenerUsuarioSesion()) return [];
     const res = await db.execute('SELECT id, anio, cuatrimestre, nombre, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC');
-    return res.rows;
+    return res.rows.map((fila) => ({
+      id: texto(fila.id),
+      anio: Number(fila.anio),
+      cuatrimestre: Number(fila.cuatrimestre),
+      nombre: texto(fila.nombre),
+      activo: Number(fila.activo)
+    }));
   } catch (error) {
     console.error('Error al obtener períodos:', error);
     return [];
@@ -521,7 +548,7 @@ export async function crearAlumnoAction(nombre: string): Promise<RespuestaAction
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
     const validacionNombre = validarLongitud(nombre, MAX_NOMBRE_LENGTH, 'nombre');
-    if (!validacionNombre.valida) return validacionNombre;
+    if (!validacionNombre.valida) return convertirValidacion(validacionNombre);
     const nombreFormateado = validacionNombre.valor;
     if (!nombreFormateado) return { exito: false, mensaje: 'El nombre es obligatorio.' };
     const existente = await db.execute({
@@ -550,7 +577,7 @@ export async function editarAlumnoAction(nombreAntiguo: string, nuevoNombre: str
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
     const validacionNombre = validarLongitud(nuevoNombre, MAX_NOMBRE_LENGTH, 'nombre');
-    if (!validacionNombre.valida) return validacionNombre;
+    if (!validacionNombre.valida) return convertirValidacion(validacionNombre);
     const nuevoFormateado = validacionNombre.valor;
     if (!nuevoFormateado) return { exito: false, mensaje: 'El nombre es obligatorio.' };
     const alumnoActual = await obtenerAlumno(nombreAntiguo);
@@ -606,13 +633,13 @@ export async function eliminarAlumnoAction(nombre: string): Promise<RespuestaAct
 
 // --- MATERIAS Y TAREAS ---
 
-function consultaPeriodo(periodoId, sqlConPeriodo, sqlSinPeriodo) {
+function consultaPeriodo(periodoId: string | null, sqlConPeriodo: string, sqlSinPeriodo: string) {
   return periodoId
     ? { sql: sqlConPeriodo, args: [periodoId] }
     : { sql: sqlSinPeriodo, args: [] };
 }
 
-export async function obtenerDatos(periodoId = null) {
+export async function obtenerDatos(periodoId: string | null = null) {
   try {
     if (!await obtenerUsuarioSesion()) return [];
     const [resMaterias, resTareas, resCompletadas, resNotasTareas] = await Promise.all([
@@ -656,50 +683,58 @@ export async function obtenerDatos(periodoId = null) {
     const resGrupos = await db.execute(`SELECT g.id, g.tarea_id, g.nombre, a.nombre AS alumno
       FROM grupos_tareas g LEFT JOIN integrantes_tareas i ON i.grupo_id = g.id
       LEFT JOIN alumnos a ON a.id = i.alumno_id ORDER BY g.nombre, a.nombre`);
-    const gruposPorTarea = new Map();
+    const gruposPorTarea = new Map<string, Map<string, { id: string; nombre: string; integrantes: string[] }>>();
     for (const fila of resGrupos.rows) {
-      if (!gruposPorTarea.has(fila.tarea_id)) gruposPorTarea.set(fila.tarea_id, new Map());
-      const grupos = gruposPorTarea.get(fila.tarea_id);
-      if (!grupos.has(fila.id)) grupos.set(fila.id, { id: fila.id, nombre: fila.nombre, integrantes: [] });
-      if (fila.alumno) grupos.get(fila.id).integrantes.push(fila.alumno);
+      const tareaId = texto(fila.tarea_id);
+      const grupoId = texto(fila.id);
+      if (!gruposPorTarea.has(tareaId)) gruposPorTarea.set(tareaId, new Map());
+      const grupos = gruposPorTarea.get(tareaId)!;
+      if (!grupos.has(grupoId)) grupos.set(grupoId, { id: grupoId, nombre: texto(fila.nombre), integrantes: [] });
+      const alumnoGrupo = texto(fila.alumno);
+      if (alumnoGrupo) grupos.get(grupoId)!.integrantes.push(alumnoGrupo);
     }
 
-    const tareasPorMateria = new Map();
+    const tareasPorMateria = new Map<string, Row[]>();
     resTareas.rows.forEach((tarea) => {
-      const tareasMateria = tareasPorMateria.get(tarea.materia_id) || [];
+      const materiaId = texto(tarea.materia_id);
+      const tareasMateria = tareasPorMateria.get(materiaId) || [];
       tareasMateria.push(tarea);
-      tareasPorMateria.set(tarea.materia_id, tareasMateria);
+      tareasPorMateria.set(materiaId, tareasMateria);
     });
 
-    const completadasPorTarea = new Map();
+    const completadasPorTarea = new Map<string, Row[]>();
     resCompletadas.rows.forEach((completada) => {
-      const completadasTarea = completadasPorTarea.get(completada.tarea_id) || [];
+      const tareaId = texto(completada.tarea_id);
+      const completadasTarea = completadasPorTarea.get(tareaId) || [];
       completadasTarea.push(completada);
-      completadasPorTarea.set(completada.tarea_id, completadasTarea);
+      completadasPorTarea.set(tareaId, completadasTarea);
     });
 
-    const notasPorTarea = new Map();
-    const fechasNotasPorTarea = new Map();
+    const notasPorTarea = new Map<string, Record<string, Value>>();
+    const fechasNotasPorTarea = new Map<string, Record<string, Value>>();
     resNotasTareas.rows.forEach((nota) => {
-      const notasTarea = notasPorTarea.get(nota.tarea_id) || {};
-      notasTarea[nota.alumno] = nota.nota;
-      notasPorTarea.set(nota.tarea_id, notasTarea);
+      const tareaId = texto(nota.tarea_id);
+      const alumnoNota = texto(nota.alumno);
+      const notasTarea = notasPorTarea.get(tareaId) || {};
+      notasTarea[alumnoNota] = nota.nota;
+      notasPorTarea.set(tareaId, notasTarea);
 
-      const fechasNotasTarea = fechasNotasPorTarea.get(nota.tarea_id) || {};
-      fechasNotasTarea[nota.alumno] = nota.cargada_en;
-      fechasNotasPorTarea.set(nota.tarea_id, fechasNotasTarea);
+      const fechasNotasTarea = fechasNotasPorTarea.get(tareaId) || {};
+      fechasNotasTarea[alumnoNota] = nota.cargada_en;
+      fechasNotasPorTarea.set(tareaId, fechasNotasTarea);
     });
 
     const materias = resMaterias.rows.map((m) => {
-      const tareasMateria = tareasPorMateria.get(m.id) || [];
+      const tareasMateria = tareasPorMateria.get(texto(m.id)) || [];
 
       const tareasConCompletados = tareasMateria.map((t) => {
-        const completadas = completadasPorTarea.get(t.id) || [];
-        const notas = notasPorTarea.get(t.id) || {};
-        const notaCargadaEn = fechasNotasPorTarea.get(t.id) || {};
-        const completadoPor = completadas.map((c) => c.alumno);
+        const tareaId = texto(t.id);
+        const completadas = completadasPorTarea.get(tareaId) || [];
+        const notas = notasPorTarea.get(tareaId) || {};
+        const notaCargadaEn = fechasNotasPorTarea.get(tareaId) || {};
+        const completadoPor = completadas.map((c) => texto(c.alumno));
         const completadoEn = Object.fromEntries(
-          completadas.map((c) => [c.alumno, c.completada_en])
+          completadas.map((c) => [texto(c.alumno), c.completada_en])
         );
 
         return {
@@ -712,7 +747,7 @@ export async function obtenerDatos(periodoId = null) {
           conNota: Number(t.con_nota) === 1,
           grupal: Number(t.grupal) === 1,
           cupo_maximo: Number(t.cupo_maximo) || 0,
-          grupos: [...(gruposPorTarea.get(t.id)?.values() || [])],
+          grupos: [...(gruposPorTarea.get(tareaId)?.values() || [])],
           tipo: t.tipo || 'actividad',
           url: t.url || '',
           completadoPor,
@@ -744,7 +779,13 @@ export async function obtenerProgresoPlanAction(): Promise<{ alumno: string | nu
   try {
     if (!await obtenerUsuarioSesion()) return [];
     const res = await db.execute('SELECT COALESCE(a.nombre, p.alumno) AS alumno, p.materia_codigo, p.estado, p.nota, p.actualizado_en FROM progreso_materias p LEFT JOIN alumnos a ON a.id = p.alumno_id ORDER BY alumno ASC, p.materia_codigo ASC');
-    return res.rows;
+    return res.rows.map((fila) => ({
+      alumno: textoONull(fila.alumno),
+      materia_codigo: texto(fila.materia_codigo),
+      estado: texto(fila.estado),
+      nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota),
+      actualizado_en: texto(fila.actualizado_en)
+    }));
   } catch (error) {
     console.error('Error al obtener progreso del plan:', error);
     return [];
@@ -753,7 +794,7 @@ export async function obtenerProgresoPlanAction(): Promise<{ alumno: string | nu
 
 // Trae todo el estado del dashboard en una sola llamada (materias, alumnos, parciales,
 // horarios, cronograma y progreso), evitando 7 roundtrips por cada carga/refresco.
-export async function obtenerEstadoCompleto(periodoIdSolicitado = null) {
+export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null | undefined = null) {
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return null;
@@ -796,7 +837,12 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado = null) {
   }
 }
 
-export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado, nota }) {
+export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado, nota }: {
+  alumno: string;
+  materiaCodigo: string;
+  estado: string;
+  nota?: string | number | null;
+}): Promise<RespuestaAction> {
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
@@ -844,7 +890,7 @@ export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado,
   }
 }
 
-export async function toggleTareaAction(tareaId, alumno) {
+export async function toggleTareaAction(tareaId: string, alumno: string): Promise<RespuestaAction> {
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
@@ -862,14 +908,18 @@ export async function toggleTareaAction(tareaId, alumno) {
   }
 }
 
-export async function crearMateriaAction({ nombre, anio, cuatrimestre }) {
+export async function crearMateriaAction({ nombre, anio, cuatrimestre }: {
+  nombre: string;
+  anio: string | number;
+  cuatrimestre: string | number;
+}): Promise<RespuestaAction> {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede crear materias.' };
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
     const validacionNombre = validarLongitud(nombre, MAX_NOMBRE_LENGTH, 'nombre de la materia');
-    if (!validacionNombre.valida) return validacionNombre;
+    if (!validacionNombre.valida) return convertirValidacion(validacionNombre);
     const nombreFormateado = validacionNombre.valor;
     const anioNumerico = Number(anio);
     const cuatrimestreNumerico = Number(cuatrimestre);
@@ -902,14 +952,14 @@ export async function crearMateriaAction({ nombre, anio, cuatrimestre }) {
   }
 }
 
-export async function renombrarMateriaAction(id, nuevoNombre) {
+export async function renombrarMateriaAction(id: string, nuevoNombre: string): Promise<RespuestaAction> {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede renombrar materias.' };
     const usuarioSesion = await obtenerUsuarioSesion();
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
     const validacionNombre = validarLongitud(nuevoNombre, MAX_NOMBRE_LENGTH, 'nombre de la materia');
-    if (!validacionNombre.valida) return validacionNombre;
+    if (!validacionNombre.valida) return convertirValidacion(validacionNombre);
     if (!validacionNombre.valor) return { exito: false, mensaje: 'El nombre es obligatorio.' };
     await db.execute({
       sql: 'UPDATE materias SET nombre = ? WHERE id = ?',
@@ -923,7 +973,14 @@ export async function renombrarMateriaAction(id, nuevoNombre) {
   }
 }
 
-export async function editarCondicionesMateriaAction({ id, condiciones, notaMinimaRegularizar, notaMinimaPromocionar, reglaPromocion, usuario }) {
+export async function editarCondicionesMateriaAction({ id, condiciones, notaMinimaRegularizar, notaMinimaPromocionar, reglaPromocion }: {
+  id: string;
+  condiciones: string;
+  notaMinimaRegularizar: string | number;
+  notaMinimaPromocionar: string | number;
+  reglaPromocion: string;
+  usuario?: string | null;
+}): Promise<RespuestaAction> {
   try {
     const regularizar = Number(notaMinimaRegularizar);
     const promocionar = Number(notaMinimaPromocionar);
@@ -936,7 +993,7 @@ export async function editarCondicionesMateriaAction({ id, condiciones, notaMini
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
     const validacionCondiciones = validarLongitud(condiciones, MAX_CONDICIONES_LENGTH, 'condiciones');
-    if (!validacionCondiciones.valida) return validacionCondiciones;
+    if (!validacionCondiciones.valida) return convertirValidacion(validacionCondiciones);
     if (![regularizar, promocionar].every((nota) => Number.isFinite(nota) && nota >= 1 && nota <= maximo)) {
       return { exito: false, mensaje: `Los valores mínimos deben estar entre 1 y ${maximo}.` };
     }
@@ -958,7 +1015,7 @@ export async function editarCondicionesMateriaAction({ id, condiciones, notaMini
   }
 }
 
-export async function eliminarMateriaAction(id) {
+export async function eliminarMateriaAction(id: string): Promise<RespuestaAction> {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede eliminar materias.' };
     const usuarioSesion = await obtenerUsuarioSesion();
@@ -1058,7 +1115,7 @@ export async function editarTareaAction(params: TareaActionParams): Promise<Resp
   }
 }
 
-export async function eliminarTareaAction(id) {
+export async function eliminarTareaAction(id: string): Promise<RespuestaAction> {
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede eliminar tareas.' };
     const usuarioSesion = await obtenerUsuarioSesion();
@@ -1082,12 +1139,25 @@ export async function eliminarTareaAction(id) {
 // Sincroniza tareas nuevas desde UGR Virtual. Con `confirmar: false` solo
 // detecta (vista previa); con `confirmar: true` inserta únicamente las tareas
 // cuyo `idMoodle` esté en `ids` (el admin las tilda una por una en el modal).
-export async function syncUgrAction({ confirmar = false, previaId = null, ids = [], idsAvisos = [], idsEventos = [] } = {}) {
+export async function syncUgrAction({
+  confirmar = false,
+  previaId = null,
+  ids = [],
+  idsAvisos = [],
+  idsEventos = []
+}: {
+  confirmar?: boolean;
+  previaId?: string | null;
+  ids?: string[];
+  idsAvisos?: string[];
+  idsEventos?: string[];
+} = {}) {
   try {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede sincronizar con UGR.' };
     }
     const usuarioSesion = await obtenerUsuarioSesion();
+    if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
 
@@ -1100,7 +1170,7 @@ export async function syncUgrAction({ confirmar = false, previaId = null, ids = 
         return { ...tareas, avisos: avisosDetectados, eventosSugeridos };
       }
     });
-    const { materiasLocales, cursos, mapeos, detectadas, avisos: avisosDetectados, eventosSugeridos,
+    const { materiasLocales, cursos, mapeos = [], detectadas, avisos: avisosDetectados, eventosSugeridos,
       insertadas = 0, avisosAceptados = 0, avisosRechazados = 0, eventosInsertados = 0,
       urlsActualizadas = 0, urlsParcialesActualizadas = 0 } = resultado;
 
@@ -1137,7 +1207,7 @@ export async function syncUgrAction({ confirmar = false, previaId = null, ids = 
     };
   } catch (error) {
     console.error('Error en syncUgrAction:', error);
-    return { exito: false, mensaje: error?.message || 'No se pudo sincronizar con UGR Virtual.' };
+    return { exito: false, mensaje: error instanceof Error ? error.message : 'No se pudo sincronizar con UGR Virtual.' };
   }
 }
 
@@ -1210,7 +1280,14 @@ export async function obtenerHorariosAction(periodoId: string | null): Promise<{
        WHERE CAST(h.dia AS INTEGER) BETWEEN 1 AND 5
        ORDER BY h.dia ASC, h.hora_inicio ASC`
     ));
-    return res.rows;
+    return res.rows.map((fila) => ({
+      id: texto(fila.id),
+      materia_id: texto(fila.materia_id),
+      dia: texto(fila.dia),
+      hora_inicio: texto(fila.hora_inicio),
+      hora_fin: texto(fila.hora_fin),
+      aula: texto(fila.aula)
+    }));
   } catch (error) {
     console.error('Error al obtener horarios:', error);
     return [];
@@ -1228,14 +1305,24 @@ export async function obtenerCronogramaAction(periodoId: string | null): Promise
       `SELECT id, materia_id, fecha, modalidad, tipo, titulo, detalles, url, origen
        FROM cronograma_eventos ORDER BY fecha ASC, titulo ASC`
     ));
-    return res.rows;
+    return res.rows.map((fila) => ({
+      id: texto(fila.id),
+      materia_id: texto(fila.materia_id),
+      fecha: texto(fila.fecha),
+      modalidad: texto(fila.modalidad),
+      tipo: texto(fila.tipo),
+      titulo: texto(fila.titulo),
+      detalles: texto(fila.detalles),
+      url: texto(fila.url),
+      origen: texto(fila.origen)
+    }));
   } catch (error) {
     console.error('Error al obtener cronograma:', error);
     return [];
   }
 }
 
-export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, aula, usuario }: { materiaId: string; dia: string | number; horaInicio: string; horaFin: string; aula: string; usuario: string }) {
+export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, aula }: { materiaId: string; dia: string | number; horaInicio: string; horaFin: string; aula: string; usuario?: string }): Promise<RespuestaAction> {
   try {
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede crear horarios.' };
@@ -1250,7 +1337,7 @@ export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, 
       return { exito: false, mensaje: 'Los horarios solo pueden cargarse de lunes a viernes.' };
     }
     const validacionAula = validarLongitud(aula, MAX_AULA_LENGTH, 'aula');
-    if (!validacionAula.valida) return validacionAula;
+    if (!validacionAula.valida) return convertirValidacion(validacionAula);
 
     const id = crearId('horario_');
     await db.execute({
@@ -1310,8 +1397,20 @@ export async function obtenerParcialesAction(periodoId: string | null): Promise<
     ]);
 
     return {
-      parciales: resParciales.rows,
-      notas: resNotas.rows
+      parciales: resParciales.rows.map((fila) => ({
+        id: texto(fila.id),
+        materia_id: texto(fila.materia_id),
+        nombre: texto(fila.nombre),
+        fecha: texto(fila.fecha),
+        detalles: texto(fila.detalles),
+        url: texto(fila.url)
+      })),
+      notas: resNotas.rows.map((fila) => ({
+        id: texto(fila.id),
+        parcial_id: texto(fila.parcial_id),
+        alumno: texto(fila.alumno),
+        nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota)
+      }))
     };
   } catch (error) {
     console.error('Error al obtener parciales:', error);
@@ -1329,10 +1428,10 @@ export async function crearParcialAction({ materiaId, nombre, fecha, detalles, u
     if (!rateLimit.exito) return rateLimit;
     if (!await existeMateria(materiaId)) return { exito: false, mensaje: 'La materia seleccionada no existe.' };
     const validacionNombre = validarLongitud(nombre, MAX_NOMBRE_LENGTH, 'nombre del parcial');
-    if (!validacionNombre.valida) return validacionNombre;
+    if (!validacionNombre.valida) return convertirValidacion(validacionNombre);
     if (!validacionNombre.valor) return { exito: false, mensaje: 'El nombre del parcial es obligatorio.' };
     const validacionDetalles = validarLongitud(detalles, MAX_DETALLES_LENGTH, 'detalles');
-    if (!validacionDetalles.valida) return validacionDetalles;
+    if (!validacionDetalles.valida) return convertirValidacion(validacionDetalles);
     const validacionFecha = validarFecha(fecha);
     if (!validacionFecha.valida) return { exito: false, mensaje: 'La fecha no es válida.' };
 
@@ -1359,10 +1458,10 @@ export async function editarParcialAction({ id, materiaId, nombre, fecha, detall
     if (!rateLimit.exito) return rateLimit;
     if (!await existeMateria(materiaId)) return { exito: false, mensaje: 'La materia seleccionada no existe.' };
     const validacionNombre = validarLongitud(nombre, MAX_NOMBRE_LENGTH, 'nombre del parcial');
-    if (!validacionNombre.valida) return validacionNombre;
+    if (!validacionNombre.valida) return convertirValidacion(validacionNombre);
     if (!validacionNombre.valor) return { exito: false, mensaje: 'El nombre del parcial es obligatorio.' };
     const validacionDetalles = validarLongitud(detalles, MAX_DETALLES_LENGTH, 'detalles');
-    if (!validacionDetalles.valida) return validacionDetalles;
+    if (!validacionDetalles.valida) return convertirValidacion(validacionDetalles);
     const validacionFecha = validarFecha(fecha);
     if (!validacionFecha.valida) return { exito: false, mensaje: 'La fecha no es válida.' };
 
@@ -1422,7 +1521,7 @@ export async function guardarNotaParcialAction(parcialId: string, alumno: string
       return { exito: false, mensaje: 'El parcial no existe.' };
     }
 
-    if (!parcialHabilitado(parcial.rows[0].fecha)) {
+    if (!parcialHabilitado(textoONull(parcial.rows[0].fecha))) {
       return { exito: false, mensaje: 'La nota se puede cargar a partir de la fecha del parcial.' };
     }
     const alumnoDB = await obtenerAlumno(alumno);
