@@ -1,91 +1,61 @@
-# 📚 Tareas UGR
+# Tareas UGR
 
-Portal de cursada para una comisión de estudiantes: centraliza materias, entregas, notas, trabajos grupales, cronograma, parciales, horarios y el avance de cada alumno en la carrera, complementando (no reemplazando) UGR Virtual.
+El campus guarda los archivos. Este tablero guarda el estado de la comisión.
 
-## 📂 Estructura del Proyecto
+Tareas UGR es el lugar donde una cursada deja de depender del grupo de WhatsApp, de una planilla que alguien olvidó actualizar y de entrar materia por materia a UGR Virtual para saber qué falta. Cada alumno ve qué tiene pendiente, qué ya entregó, cómo viene la promoción y qué le queda de la carrera. El administrador mantiene materias, fechas y equipos sin perseguir a nadie.
 
-La estructura del repositorio se organiza para mantener el código fuente limpio y facilitar la navegación:
+No reemplaza al campus. Lo complementa: el campus sigue siendo donde se entrega, y este tablero es donde la comisión entiende la cursada.
 
-```text
-/
-├── database/         # Esquemas y configuraciones de Base de Datos
-├── src/              # Código fuente principal de la aplicación
-├── tests/            # Suite de pruebas automatizadas
-├── ugr-sync/         # Módulo de sincronización con UGR Virtual
-└── ...               # Archivos de configuración en la raíz
+## El problema que resuelve
+
+En una comisión chica el trabajo real no es subir un PDF. Es saber, el mismo día y para todos:
+
+- qué actividad está abierta, cuál vence esta semana y cuál todavía no habilitó el docente;
+- quién entregó, a quién le falta la nota y quién quedó afuera de un grupo;
+- si con las notas de hoy la materia se regulariza, se promociona o hay que rendir final;
+- cuándo es el próximo parcial, en qué aula cursan y qué avisó la cátedra en el foro;
+- qué materias de la carrera ya están aprobadas y cuáles se desbloquean después.
+
+UGR Virtual responde eso, pero repartido en cursos, foros y calificaciones. Tareas UGR lo junta en una sola sesión, con el nombre de cada compañero y las reglas de esta cursada.
+
+## Qué puede hacer la comisión
+
+**Saber cómo viene cada uno.** La vista propia muestra pendientes, entregas sin nota, actividades futuras, completadas y trabajos grupales. El mismo corte existe para el resto de la comisión, con buscador que ignora acentos. De los compañeros se consulta el estado. La entrega y la nota se cargan en lo propio, o en el grupo del que se forma parte.
+
+**No perder una fecha.** Cada tarea tiene materia, unidad, apertura, cierre y un semáforo. La campana avisa vencimientos, actividades que se habilitan y novedades de la cátedra. El calendario del mes mezcla clases, parciales, entregas y eventos que salieron del campus. Al lado están los horarios de cursada, con aula y el próximo examen a la vista.
+
+**Trabajar en equipo sin una planilla aparte.** Una actividad puede ser grupal, con cupo máximo si hace falta. El alumno arma su grupo o se suma a uno con lugar. La entrega y la nota valen para todo el equipo, y se guardan juntas: no queda un integrante actualizado y otro no. Con progreso cargado no se cambia de grupo, y con grupos armados no se apaga la modalidad grupal a mitad de camino.
+
+**Llevar parciales y promoción en serio.** Cada materia tiene sus parciales, sus notas y sus condiciones: desde qué nota se regulariza, desde cuál se promociona, y si esa regla mira trabajos prácticos, un porcentaje de actividades o la nota del práctico. El ranking suma el puntaje de la cursada y deja comparar con un compañero qué explica la diferencia.
+
+**Ver la carrera, no solo el cuatrimestre.** El plan de estudio de la Tecnicatura en Seguridad de la Información está cargado con sus correlativas. Cada alumno marca qué aprobó o promocionó y ve qué materias le quedan habilitadas. El historial conserva entregas y notas, y el selector de período permite mirar una cursada anterior sin mezclarla con la actual.
+
+**Administrar sin ser el que anota todo a mano.** Quien tiene rol de administrador crea y edita materias, tareas, horarios, parciales y alumnos. La sincronización con UGR Virtual, hecha a pedido y con confirmación, detecta tareas nuevas (unidad y fechas incluidas), trae los avisos recientes de los foros y propone eventos para el cronograma: consultas, encuentros, entregas. Completa enlaces que faltaban y no pisa los que ya estaban. También se puede correr en seco, solo para ver qué cambiaría.
+
+## Hecho para datos de una cursada real
+
+Las notas, los grupos y el avance del plan viven en una base propia (Turso). El navegador no guarda la cursada: solo recuerda qué avisos ya se leyeron.
+
+Entrar exige usuario y contraseña. La contraseña se guarda con scrypt, la sesión va firmada y el navegador no puede leerla. Dura 30 minutos, se invalida al cambiar la clave y se borra al salir. Un intento repetido de login se bloquea un rato, igual que una ráfaga de escrituras. Un alumno no carga la nota ni la entrega de otro. Alta, baja y edición de la cursada quedan del lado del administrador. Cada acceso y cada cambio relevante queda en un registro de auditoría.
+
+La conexión con el campus usa las credenciales del entorno, nunca un usuario escrito en el código. El tablero no se ofrece a buscadores: es un espacio de la comisión, no una página pública.
+
+## Con qué está hecho
+
+Next.js 16 y React 19 para la aplicación, TypeScript en todo lo que ve el usuario, Tailwind CSS 4 para la interfaz y Turso para los datos. El sincronizador habla con UGR Virtual (Moodle) y solo se carga cuando un administrador lo dispara. La lógica de notas, grupos, fechas y plan tiene tests automáticos.
+
+Está pensado para correr en el plan gratuito de Vercel: el tablero consulta la base en una sola lectura, se refresca cada dos minutos mientras la pestaña está visible y no arrastra al servidor los binarios que la base no necesita ahí.
+
+## Ponerlo en marcha
+
+Hace falta Node.js 20 o superior y una base Turso.
+
+```bash
+npm install
+npm run migrate
+npm run dev
 ```
 
-## ✨ Qué hace
+Las variables viven en `.env.local` (hay un `.env.example` con los nombres). `SESSION_SECRET` firma las sesiones. `ADMIN_USUARIO` define al administrador que crea la migración; `npm run admin:reset-password` le genera una clave nueva. `UGRVIRTUAL_USER` y `UGRVIRTUAL_PASSWORD` solo hacen falta para sincronizar con el campus.
 
-### 📊 Estado por alumno
-El corazón de la app: cómo viene cada estudiante.
-- Tarjeta propia de **Tu situación** más acordeones por compañero, con buscador que ignora acentos.
-- Filtros con contadores: **Pendientes, Sin nota, Futuras, Completadas y Grupales**.
-- Tarjetas de tareas con materia, unidad, semáforo de fechas, estado de entrega y enlace directo al campus.
-- **Dos columnas independientes que se rellenan sin huecos** cuando hay ancho disponible (una en pantallas angostas), sin importar de qué materia o unidad sea cada tarea.
-- Entregas y notas se cargan solo en las tareas propias; de los compañeros se consulta su estado y notas.
-- En trabajos grupales: tu grupo, compañeros, otros equipos, alumnos sin grupo y cupos, con acceso a la gestión de grupos.
-- Panel del **próximo examen** con fecha, horarios de cursada y días restantes.
-
-### 📚 Materias y tareas
-- Materias con tareas organizadas por **unidad y tipo**, con fechas de apertura y cierre.
-- Marcado de entregas y carga de notas (propias y del grupo), con validaciones según el estado de la actividad.
-- Alta y edición desde el **Panel de Carga** (administradores).
-
-### 🧩 Trabajos grupales
-- Activación de modalidad grupal por tarea, con **cupo máximo opcional** por equipo.
-- Los alumnos crean o eligen su grupo; cada integrante ve y carga lo mismo que en una tarea individual.
-- Notas y entregas se aplican a todo el grupo en una **transacción**: nunca quedan integrantes actualizados a medias.
-- Reglas claras: sin cambios de grupo con progreso cargado, sin cambios de modalidad con grupos existentes.
-
-### 📝 Parciales y notas
-- Parciales por materia y fecha, con notas por alumno.
-- El semáforo distingue tareas entregadas, pendientes y con nota faltante.
-
-### 🗓️ Cronograma
-- **Calendario mensual** con clases, parciales, entregas y eventos del campus en un solo lugar.
-- Horarios de cursada por materia y día, con modal de detalle por día.
-
-### 🕘 Historial y períodos
-- Historial de entregas y notas por alumno.
-- Selector de **período de cursada** para consultar la información correspondiente.
-
-### 🏆 Ranking y promoción
-- Puntaje acumulado por tareas, actividades y parciales, con comparación entre compañeros.
-- Seguimiento de **promoción por materia** según las notas.
-
-### 🔔 Recordatorios
-- Campana de notificaciones: vencimientos, tareas que se habilitan y novedades de la comisión.
-
-### 🎯 Plan de estudio
-- Seguimiento de materias del plan con correlatividades y estados por alumno.
-
-### 🛠️ Administración
-- Panel centralizado para mantener materias, tareas, horarios, parciales y alumnos.
-- Cambio de clave para los usuarios y recuperación de acceso administrador.
-
-## 🔄 Sincronización con UGR Virtual
-
-Un sincronizador propio ([`ugr-sync/`](ugr-sync/README.md)) se conecta al campus y, con confirmación del administrador:
-- detecta **tareas nuevas** por materia (incluyendo unidad y fechas del campus),
-- publica en la campana los **avisos recientes** de los foros de cada curso,
-- propone **eventos para el cronograma** (consultas, encuentros, entregas),
-- y **completa enlaces faltantes** de tareas y parciales, sin sobrescribir URLs existentes.
-
-## 🛠️ Tecnologías
-
-| Tecnología | Para qué se usa |
-|---|---|
-| [Next.js](https://nextjs.org/) 16 + React 19 | App (App Router, Server Actions) |
-| [Tailwind CSS](https://tailwindcss.com/) 4 | Estilos |
-| [Turso](https://turso.tech/) / libSQL | Base de datos |
-| [Cheerio](https://cheerio.js.org/) | Parsing del HTML de Moodle (solo en `ugr-sync`) |
-| Node.js 20+ | Runtime |
-
-## 🧪 Tests
-
-Suite con el runner nativo de Node (`node:test`), para la lógica de la app y para el sincronizador (con fixtures HTML reales del campus).
-
-## 💡 Motivación
-
-No busca reemplazar plataformas universitarias: la idea es que el grupo no pierda fechas ni entregas y sepa en todo momento qué falta, qué viene y cómo avanza la carrera en conjunto.
+`npm test` corre la suite. `npm run build` deja la aplicación lista para publicar.

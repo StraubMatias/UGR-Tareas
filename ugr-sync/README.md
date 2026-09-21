@@ -9,7 +9,7 @@ cronograma y completa el **enlace a UGR Virtual** de tareas y parciales que qued
 sin URL.
 
 No depende de la interfaz de la app: se puede usar desde el CLI, desde el botón
-«🔄 Sincronizar UGR» del panel (vía `src/app/actions.js`) o como librería.
+«🔄 Sincronizar UGR» del panel (vía `src/app/actions.tsx`) o como librería.
 
 ## Estructura
 

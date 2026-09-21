@@ -1,6 +1,7 @@
 {
   "name": "dashboard-tareas",
   "version": "0.1.0",
+  "description": "Tablero privado de cursada: entregas, grupos, parciales, promoción y plan de estudio para una comisión.",
   "private": true,
   "type": "module",
   "scripts": {

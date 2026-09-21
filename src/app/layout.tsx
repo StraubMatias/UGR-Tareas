@@ -8,7 +8,8 @@ const geistSans = Geist({
 
 export const metadata = {
   title: "UGR - Tareas",
-  description: "Control de tareas, parciales y notas entre amigos",
+  description: "Tablero privado de cursada: entregas, grupos, parciales, promoción y plan de estudio.",
+  robots: { index: false, follow: false },
 };
 
 // La sincronización con UGR encadena varios pedidos HTTP a Moodle (login,
