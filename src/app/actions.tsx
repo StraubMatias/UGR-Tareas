@@ -433,20 +433,19 @@ export async function validarLoginAction(usuarioInput: string, passwordInput: st
     return { exito: true, usuario: nombreUsuario, rol: texto(usuarioDB.rol) || 'alumno' };
   } catch (error) {
     console.error('Error en validarLoginAction:', error);
-    const detalle = String(error?.message || '').toLowerCase();
-    if (detalle.includes('no such table') && detalle.includes('login_intentos')) {
-      return { exito: false, mensaje: 'La base necesita actualizarse. Ejecutá npm run migrate antes de iniciar la app.' };
-    }
-    if (detalle.includes('no such column') && detalle.includes('rol')) {
-      return { exito: false, mensaje: 'La base necesita actualizarse. Ejecutá npm run migrate antes de iniciar la app.' };
-    }
-    return { exito: false, mensaje: 'Error de conexión con la base de datos' };
+    return { exito: false, mensaje: 'No se pudo iniciar sesión.' };
   }
 }
 
 export async function cerrarSesionAction() {
   const cookieStore = await cookies();
-  cookieStore.delete(COOKIE_SESION);
+  cookieStore.set(COOKIE_SESION, '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 0,
+    path: '/'
+  });
   return { exito: true };
 }
 
@@ -1113,11 +1112,15 @@ export async function crearTareaAction(params: TareaActionParams): Promise<Respu
     }
     const conNotaNumerico = conNota ? 1 : 0;
     const tipoNormalizado = ['actividad', 'foro', 'trabajo_practico'].includes(tipo) ? tipo : 'actividad';
+    const cupo = Number(cupoMaximo);
+    if (!Number.isInteger(cupo) || cupo < 0 || cupo > 30) {
+      return { exito: false, mensaje: 'El cupo del grupo tiene que ser un entero entre 0 y 30.' };
+    }
 
     const id = crearId('t_');
     await db.execute({
       sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, grupal, cupo_maximo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      args: [id, materiaId, validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupal === true ? 1 : 0, cupoMaximo]
+      args: [id, materiaId, validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupal === true ? 1 : 0, cupo]
     });
     await registrarAuditoria({ accion: 'crear_tarea', usuario: usuarioSesion, detalle: `Creó la tarea ${validacionNombre.valor}`, ip: await obtenerIPReal() });
     return { exito: true };
@@ -1152,9 +1155,13 @@ export async function editarTareaAction(params: TareaActionParams): Promise<Resp
     const tipoNormalizado = ['actividad', 'foro', 'trabajo_practico'].includes(tipo) ? tipo : 'actividad';
 
     const grupalNumerico = grupal === true ? 1 : 0;
+    const cupo = Number(cupoMaximo);
+    if (!Number.isInteger(cupo) || cupo < 0 || cupo > 30) {
+      return { exito: false, mensaje: 'El cupo del grupo tiene que ser un entero entre 0 y 30.' };
+    }
     const actualizacion = await db.execute({
       sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ?, con_nota = ?, tipo = ?, grupal = ?, cupo_maximo = ? WHERE id = ?',
-      args: [validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupalNumerico, cupoMaximo, id]
+      args: [validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupalNumerico, cupo, id]
     });
     if (!actualizacion.rowsAffected) return { exito: false, mensaje: 'La tarea seleccionada no existe o no se pudo editar.' };
     await registrarAuditoria({ accion: 'editar_tarea', usuario: usuarioSesion, detalle: `Editó la tarea ${id}`, ip: await obtenerIPReal() });
@@ -1426,7 +1433,7 @@ export async function guardarNotaParcialAction(parcialId: string, alumno: string
     if (!parcialHabilitado(textoONull(parcial.rows[0].fecha))) {
       return { exito: false, mensaje: 'La nota se puede cargar a partir de la fecha del parcial.' };
     }
-    const alumnoDB = await obtenerAlumno(alumno);
+    const alumnoDB = await obtenerAlumno(alumnoSolicitado);
     if (!alumnoDB) return { exito: false, mensaje: 'El alumno no existe.' };
 
     const notaLimpia = typeof nota === 'string' ? nota.trim() : '';
@@ -1491,7 +1498,7 @@ export async function guardarNotaTareaAction(
     }
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
-    const alumnoDB = await obtenerAlumno(alumno);
+    const alumnoDB = await obtenerAlumno(alumnoSolicitado);
     if (!alumnoDB) return { exito: false, mensaje: 'El alumno no existe.' };
 
     const resultado = await actualizarProgresoTarea(db, tareaId, alumnoDB, { nota });

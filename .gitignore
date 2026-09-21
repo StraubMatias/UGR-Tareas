@@ -40,6 +40,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# restos de builds y copias locales
+build_errors*.txt
+*.bak
 .vscode/
 AGENTS.md
 CLAUDE.md

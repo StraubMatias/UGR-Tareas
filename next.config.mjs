@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  poweredByHeader: false,
   outputFileTracingExcludes: {
     '*': [
       'node_modules/@libsql/linux-x64-musl/**',
