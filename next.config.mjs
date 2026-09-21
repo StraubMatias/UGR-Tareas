@@ -1,5 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingExcludes: {
+    '*': [
+      'node_modules/@libsql/linux-x64-musl/**',
+      'node_modules/@libsql/linux-x64-gnu/**',
+      'node_modules/@libsql/linux-arm64-musl/**',
+      'node_modules/@libsql/linux-arm64-gnu/**',
+      'node_modules/@libsql/darwin-*/**',
+      'node_modules/@libsql/win32-*/**'
+    ]
+  },
+  // Sin Cache-Control global: el HTML no tiene datos de sesión y los chunks
+  // de /_next/static llevan hash. Un no-store acá obligaba a Vercel a
+  // reenviar todo el JS en cada visita (Fast Origin Transfer del plan Hobby).
   async headers() {
     return [
       {
@@ -23,8 +36,7 @@ const nextConfig = {
               "base-uri 'self'",
               "form-action 'self'"
             ].join('; ')
-          },
-          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0' }
+          }
         ]
       }
     ];

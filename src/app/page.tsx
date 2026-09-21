@@ -167,6 +167,8 @@ export default function Home() {
   const [notificacionesVistas, setNotificacionesVistas] = useState<string[]>([]);
   const notificacionesRef = useRef<HTMLDivElement | null>(null);
   const refrescandoRef = useRef<boolean>(false);
+  const periodoEspejoRef = useRef(false);
+  const pausarRefrescoRef = useRef(false);
   const [mostrarAvisoInicio, setMostrarAvisoInicio] = useState<boolean>(false);
   const [novedades, setNovedades] = useState<Novedad[]>([]);
 
@@ -497,6 +499,7 @@ export default function Home() {
       if (!estado) return false;
 
       if (!periodoSeleccionado && estado.periodoActivo) {
+        periodoEspejoRef.current = true;
         setPeriodoSeleccionado(estado.periodoActivo);
       }
       aplicarEstado(estado);
@@ -506,8 +509,21 @@ export default function Home() {
     }
   }, [periodoSeleccionado, aplicarEstado]);
 
+  pausarRefrescoRef.current = Boolean(
+    modalPasswordOpen || syncAbierto || materiaCondicionesEnEdicion || parcialEnEdicion
+    || tareaEnEdicion || materiaEnEdicion || alumnoEnEdicion
+    || Object.keys(progresoPlanEnEdicion).length > 0
+  );
+
   useEffect(() => {
-    if (!usuarioActual) return;
+    if (!usuarioActual) {
+      periodoEspejoRef.current = false;
+      return;
+    }
+    if (periodoEspejoRef.current) {
+      periodoEspejoRef.current = false;
+      return;
+    }
     // La carga empieza después de autenticar o restaurar una sesión válida.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     cargarBD();
@@ -516,13 +532,26 @@ export default function Home() {
   useEffect(() => {
     if (!usuarioActual) return undefined;
 
-    const intervalo = window.setInterval(async () => {
-      if (document.visibilityState !== 'visible' || refrescandoRef.current) return;
+    let cancelado = false;
+    let ultimoRefresco = 0;
+    const refrescarSiVisible = async () => {
+      const escribiendo = document.activeElement instanceof HTMLInputElement
+        || document.activeElement instanceof HTMLTextAreaElement
+        || document.activeElement instanceof HTMLSelectElement;
+      if (
+        cancelado
+        || document.visibilityState !== 'visible'
+        || refrescandoRef.current
+        || pausarRefrescoRef.current
+        || escribiendo
+        || Date.now() - ultimoRefresco < 15_000
+      ) return;
 
+      ultimoRefresco = Date.now();
       refrescandoRef.current = true;
       try {
         const sesionValida = await cargarBD(false);
-        if (!sesionValida) {
+        if (!cancelado && !sesionValida) {
           setUsuarioActual(null);
           setRolUsuario(null);
           setCargando(false);
@@ -530,9 +559,21 @@ export default function Home() {
       } finally {
         refrescandoRef.current = false;
       }
-    }, 30000);
+    };
 
-    return () => window.clearInterval(intervalo);
+    const intervalo = window.setInterval(refrescarSiVisible, 120_000);
+    const alVolverALaPestana = () => {
+      if (document.visibilityState === 'visible') refrescarSiVisible();
+    };
+    document.addEventListener('visibilitychange', alVolverALaPestana);
+    window.addEventListener('focus', alVolverALaPestana);
+
+    return () => {
+      cancelado = true;
+      window.clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', alVolverALaPestana);
+      window.removeEventListener('focus', alVolverALaPestana);
+    };
   }, [usuarioActual, cargarBD]);
 
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {

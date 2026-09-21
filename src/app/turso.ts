@@ -1,4 +1,6 @@
-import { createClient, type Client } from '@libsql/client';
+// El cliente HTTP habla con Turso por la red y no arrastra los binarios nativos
+// de libsql (~19 MB entre glibc y musl), que igual no se usan en Vercel.
+import { createClient, type Client } from '@libsql/client/http';
 
 let cliente: Client | null = null;
 

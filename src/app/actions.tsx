@@ -9,8 +9,8 @@ import { asignarGrupo, actualizarProgresoTarea, ErrorGrupo } from '../lib/grupos
 import { PLAN_DE_ESTUDIO } from './plan-utils';
 import { convertirValidacion } from '../lib/utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
-import { aprobarAvisos, conectarUGR, detectarAvisosMoodle, detectarTareasNuevas, rechazarAvisos } from '../../ugr-sync/lib/sync-core.mjs';
-import { sincronizarConPrevia } from '../../ugr-sync/lib/previa.mjs';
+// La sincronización con el campus arrastra cheerio. Se importa solo cuando
+// un admin sincroniza, para que el refresco del tablero no cargue ese módulo.
 
 const COOKIE_SESION = 'ugr_sesion';
 const DURACION_SESION_SEGUNDOS = 30 * 60;
@@ -683,8 +683,16 @@ export async function obtenerDatos(periodoId: string | null = null) {
     const resGrupos = await db.execute(`SELECT g.id, g.tarea_id, g.nombre, a.nombre AS alumno
       FROM grupos_tareas g LEFT JOIN integrantes_tareas i ON i.grupo_id = g.id
       LEFT JOIN alumnos a ON a.id = i.alumno_id ORDER BY g.nombre, a.nombre`);
+    return armarMaterias(resMaterias.rows, resTareas.rows, resCompletadas.rows, resNotasTareas.rows, resGrupos.rows);
+  } catch (error) {
+    console.error('Error al obtener datos de Turso:', error);
+    return [];
+  }
+}
+
+function armarMaterias(filasMaterias: Row[], filasTareas: Row[], filasCompletadas: Row[], filasNotas: Row[], filasGrupos: Row[]) {
     const gruposPorTarea = new Map<string, Map<string, { id: string; nombre: string; integrantes: string[] }>>();
-    for (const fila of resGrupos.rows) {
+    for (const fila of filasGrupos) {
       const tareaId = texto(fila.tarea_id);
       const grupoId = texto(fila.id);
       if (!gruposPorTarea.has(tareaId)) gruposPorTarea.set(tareaId, new Map());
@@ -695,7 +703,7 @@ export async function obtenerDatos(periodoId: string | null = null) {
     }
 
     const tareasPorMateria = new Map<string, Row[]>();
-    resTareas.rows.forEach((tarea) => {
+    filasTareas.forEach((tarea) => {
       const materiaId = texto(tarea.materia_id);
       const tareasMateria = tareasPorMateria.get(materiaId) || [];
       tareasMateria.push(tarea);
@@ -703,7 +711,7 @@ export async function obtenerDatos(periodoId: string | null = null) {
     });
 
     const completadasPorTarea = new Map<string, Row[]>();
-    resCompletadas.rows.forEach((completada) => {
+    filasCompletadas.forEach((completada) => {
       const tareaId = texto(completada.tarea_id);
       const completadasTarea = completadasPorTarea.get(tareaId) || [];
       completadasTarea.push(completada);
@@ -712,7 +720,7 @@ export async function obtenerDatos(periodoId: string | null = null) {
 
     const notasPorTarea = new Map<string, Record<string, Value>>();
     const fechasNotasPorTarea = new Map<string, Record<string, Value>>();
-    resNotasTareas.rows.forEach((nota) => {
+    filasNotas.forEach((nota) => {
       const tareaId = texto(nota.tarea_id);
       const alumnoNota = texto(nota.alumno);
       const notasTarea = notasPorTarea.get(tareaId) || {};
@@ -724,7 +732,7 @@ export async function obtenerDatos(periodoId: string | null = null) {
       fechasNotasPorTarea.set(tareaId, fechasNotasTarea);
     });
 
-    const materias = resMaterias.rows.map((m) => {
+    const materias = filasMaterias.map((m) => {
       const tareasMateria = tareasPorMateria.get(texto(m.id)) || [];
 
       const tareasConCompletados = tareasMateria.map((t) => {
@@ -772,10 +780,6 @@ export async function obtenerDatos(periodoId: string | null = null) {
     });
 
     return materias;
-  } catch (error) {
-    console.error('Error al obtener datos de Turso:', error);
-    return [];
-  }
 }
 
 export async function obtenerProgresoPlanAction(): Promise<{ alumno: string | null; materia_codigo: string; estado: string; nota: number | null; actualizado_en: string }[]> {
@@ -795,44 +799,182 @@ export async function obtenerProgresoPlanAction(): Promise<{ alumno: string | nu
   }
 }
 
-// Trae todo el estado del dashboard en una sola llamada (materias, alumnos, parciales,
-// horarios, cronograma y progreso), evitando 7 roundtrips por cada carga/refresco.
+// Una ida a Turso con todas las lecturas del tablero. Antes cada refresco
+// repetía la sesión y abría un pedido por tabla (~15 roundtrips).
 export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null | undefined = null) {
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return null;
 
-    const periodos = await obtenerPeriodosAction();
-    const periodoParaCargar = periodoIdSolicitado
-      || periodos.find((periodo) => Number(periodo.activo) === 1)?.id
-      || periodos[0]?.id
-      || null;
+    let periodoParaCargar = periodoIdSolicitado || null;
+    if (!periodoParaCargar) {
+      const previa = await db.execute('SELECT id, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC');
+      periodoParaCargar = texto(
+        previa.rows.find((periodo) => Number(periodo.activo) === 1)?.id || previa.rows[0]?.id
+      ) || null;
+    }
 
-    const [materias, alumnos, datosParciales, horarios, cronograma, progresoPlan, resAvisos] = await Promise.all([
-      obtenerDatos(periodoParaCargar),
-      obtenerAlumnosAction(),
-      obtenerParcialesAction(periodoParaCargar),
-      obtenerHorariosAction(periodoParaCargar),
-      obtenerCronogramaAction(periodoParaCargar),
-      obtenerProgresoPlanAction(),
-      db.execute(
-        "SELECT id, curso_nombre, materia_id, materia_nombre, foro_nombre, titulo, autor, fecha, contenido, url FROM avisos_moodle WHERE estado = 'aceptado' ORDER BY fecha DESC"
-      )
-    ]);
+    const [
+      resPeriodos,
+      resMaterias,
+      resTareas,
+      resCompletadas,
+      resNotasTareas,
+      resGrupos,
+      resAlumnos,
+      resParciales,
+      resNotasParciales,
+      resHorarios,
+      resCronograma,
+      resProgreso,
+      resAvisos,
+      resRol
+    ] = await db.batch([
+      { sql: 'SELECT id, anio, cuatrimestre, nombre, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC', args: [] },
+      consultaPeriodo(
+        periodoParaCargar,
+        `SELECT id, nombre, condiciones, nota_minima_regularizar, nota_minima_promocionar, regla_promocion
+         FROM materias WHERE periodo_id = ? ORDER BY nombre ASC`,
+        `SELECT id, nombre, condiciones, nota_minima_regularizar, nota_minima_promocionar, regla_promocion
+         FROM materias ORDER BY nombre ASC`
+      ),
+      consultaPeriodo(
+        periodoParaCargar,
+        `SELECT t.id, t.materia_id, t.nombre, t.inicio, t.fin, t.detalles, t.unidad, t.con_nota, t.tipo, t.url, t.grupal, t.cupo_maximo
+         FROM tareas t JOIN materias m ON m.id = t.materia_id WHERE m.periodo_id = ?`,
+        `SELECT id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, url, grupal, cupo_maximo FROM tareas`
+      ),
+      consultaPeriodo(
+        periodoParaCargar,
+        `SELECT c.tarea_id, COALESCE(a.nombre, c.alumno) AS alumno, c.completada_en
+         FROM completadas c
+         JOIN tareas t ON t.id = c.tarea_id
+         JOIN materias m ON m.id = t.materia_id
+         LEFT JOIN alumnos a ON a.id = c.alumno_id
+         WHERE m.periodo_id = ?`,
+        `SELECT c.tarea_id, COALESCE(a.nombre, c.alumno) AS alumno, c.completada_en
+         FROM completadas c LEFT JOIN alumnos a ON a.id = c.alumno_id`
+      ),
+      consultaPeriodo(
+        periodoParaCargar,
+        `SELECT n.tarea_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota, n.cargada_en
+         FROM notas_tareas n
+         JOIN tareas t ON t.id = n.tarea_id
+         JOIN materias m ON m.id = t.materia_id
+         LEFT JOIN alumnos a ON a.id = n.alumno_id
+         WHERE m.periodo_id = ?`,
+        `SELECT n.tarea_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota, n.cargada_en
+         FROM notas_tareas n LEFT JOIN alumnos a ON a.id = n.alumno_id`
+      ),
+      {
+        sql: `SELECT g.id, g.tarea_id, g.nombre, a.nombre AS alumno
+          FROM grupos_tareas g LEFT JOIN integrantes_tareas i ON i.grupo_id = g.id
+          LEFT JOIN alumnos a ON a.id = i.alumno_id ORDER BY g.nombre, a.nombre`,
+        args: []
+      },
+      { sql: 'SELECT nombre FROM alumnos ORDER BY nombre ASC', args: [] },
+      consultaPeriodo(
+        periodoParaCargar,
+        `SELECT p.id, p.materia_id, p.nombre, p.fecha, p.detalles, p.url
+         FROM parciales p JOIN materias m ON m.id = p.materia_id
+         WHERE m.periodo_id = ? ORDER BY p.fecha ASC`,
+        `SELECT id, materia_id, nombre, fecha, detalles, url FROM parciales ORDER BY fecha ASC`
+      ),
+      consultaPeriodo(
+        periodoParaCargar,
+        `SELECT n.id, n.parcial_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota
+         FROM notas_parciales n
+         JOIN parciales p ON p.id = n.parcial_id
+         JOIN materias m ON m.id = p.materia_id
+         LEFT JOIN alumnos a ON a.id = n.alumno_id
+         WHERE m.periodo_id = ?`,
+        `SELECT n.id, n.parcial_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota
+         FROM notas_parciales n LEFT JOIN alumnos a ON a.id = n.alumno_id`
+      ),
+      consultaPeriodo(
+        periodoParaCargar,
+        `SELECT h.id, h.materia_id, h.dia, h.hora_inicio, h.hora_fin, h.aula
+         FROM horarios h JOIN materias m ON m.id = h.materia_id
+         WHERE CAST(h.dia AS INTEGER) BETWEEN 1 AND 5 AND m.periodo_id = ?
+         ORDER BY h.dia ASC, h.hora_inicio ASC`,
+        `SELECT h.id, h.materia_id, h.dia, h.hora_inicio, h.hora_fin, h.aula
+         FROM horarios h
+         WHERE CAST(h.dia AS INTEGER) BETWEEN 1 AND 5
+         ORDER BY h.dia ASC, h.hora_inicio ASC`
+      ),
+      consultaPeriodo(
+        periodoParaCargar,
+        `SELECT c.id, c.materia_id, c.fecha, c.modalidad, c.tipo, c.titulo, c.detalles, c.url, c.origen
+         FROM cronograma_eventos c JOIN materias m ON m.id = c.materia_id
+         WHERE m.periodo_id = ? ORDER BY c.fecha ASC, c.titulo ASC`,
+        `SELECT id, materia_id, fecha, modalidad, tipo, titulo, detalles, url, origen
+         FROM cronograma_eventos ORDER BY fecha ASC, titulo ASC`
+      ),
+      {
+        sql: 'SELECT COALESCE(a.nombre, p.alumno) AS alumno, p.materia_codigo, p.estado, p.nota, p.actualizado_en FROM progreso_materias p LEFT JOIN alumnos a ON a.id = p.alumno_id ORDER BY alumno ASC, p.materia_codigo ASC',
+        args: []
+      },
+      {
+        sql: "SELECT id, curso_nombre, materia_id, materia_nombre, titulo, url FROM avisos_moodle WHERE estado = 'aceptado' ORDER BY fecha DESC",
+        args: []
+      },
+      { sql: 'SELECT rol FROM alumnos WHERE LOWER(nombre) = LOWER(?)', args: [usuarioSesion] }
+    ], 'read');
 
     return {
       usuario: usuarioSesion,
-      rol: await obtenerRolUsuario(usuarioSesion),
-      periodos,
+      rol: texto(resRol.rows[0]?.rol) || 'alumno',
+      periodos: resPeriodos.rows.map((fila) => ({
+        id: texto(fila.id),
+        anio: Number(fila.anio),
+        cuatrimestre: Number(fila.cuatrimestre),
+        nombre: texto(fila.nombre),
+        activo: Number(fila.activo)
+      })),
       periodoActivo: periodoParaCargar,
-      materias,
-      alumnos,
-      parciales: datosParciales?.parciales || [],
-      notas: datosParciales?.notas || [],
-      horarios,
-      cronograma,
-      progresoPlan,
-      avisos: resAvisos?.rows || []
+      materias: armarMaterias(resMaterias.rows, resTareas.rows, resCompletadas.rows, resNotasTareas.rows, resGrupos.rows),
+      alumnos: resAlumnos.rows.map((fila) => texto(fila.nombre)),
+      parciales: resParciales.rows.map((fila) => ({
+        id: texto(fila.id),
+        materia_id: texto(fila.materia_id),
+        nombre: texto(fila.nombre),
+        fecha: texto(fila.fecha),
+        detalles: texto(fila.detalles),
+        url: texto(fila.url)
+      })),
+      notas: resNotasParciales.rows.map((fila) => ({
+        id: texto(fila.id),
+        parcial_id: texto(fila.parcial_id),
+        alumno: texto(fila.alumno),
+        nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota)
+      })),
+      horarios: resHorarios.rows.map((fila) => ({
+        id: texto(fila.id),
+        materia_id: texto(fila.materia_id),
+        dia: texto(fila.dia),
+        hora_inicio: texto(fila.hora_inicio),
+        hora_fin: texto(fila.hora_fin),
+        aula: texto(fila.aula)
+      })),
+      cronograma: resCronograma.rows.map((fila) => ({
+        id: texto(fila.id),
+        materia_id: texto(fila.materia_id),
+        fecha: texto(fila.fecha),
+        modalidad: texto(fila.modalidad),
+        tipo: texto(fila.tipo),
+        titulo: texto(fila.titulo),
+        detalles: texto(fila.detalles),
+        url: texto(fila.url),
+        origen: texto(fila.origen)
+      })),
+      progresoPlan: resProgreso.rows.map((fila) => ({
+        alumno: textoONull(fila.alumno),
+        materia_codigo: texto(fila.materia_codigo),
+        estado: texto(fila.estado),
+        nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota),
+        actualizado_en: texto(fila.actualizado_en)
+      })),
+      avisos: resAvisos.rows
     };
   } catch (error) {
     console.error('Error en obtenerEstadoCompleto:', error);
@@ -1164,6 +1306,10 @@ export async function syncUgrAction({
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
 
+    const [{ conectarUGR, detectarAvisosMoodle, detectarTareasNuevas }, { sincronizarConPrevia }] = await Promise.all([
+      import('../../ugr-sync/lib/sync-core.mjs'),
+      import('../../ugr-sync/lib/previa.mjs')
+    ]);
     const resultado = await sincronizarConPrevia({
       db, usuario: usuarioSesion, confirmar, previaId, ids, idsAvisos, idsEventos,
       detectar: async () => {
@@ -1249,6 +1395,7 @@ export async function decidirAvisoAction({ ids = [], decision = 'aceptado', usua
     const lista = Array.isArray(ids) ? ids.filter(Boolean) : [];
     if (lista.length === 0) return { exito: false, mensaje: 'No se indicó ningún aviso.' };
 
+    const { aprobarAvisos, rechazarAvisos } = await import('../../ugr-sync/lib/sync-core.mjs');
     if (decision === 'aceptado') {
       await aprobarAvisos({ db, ids: lista });
     } else {
