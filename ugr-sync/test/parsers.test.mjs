@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from '../lib/materias.mjs';
-import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerTareas, parsearNotaCampus, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
+import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, parsearNotaCampus, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -350,6 +350,12 @@ test('la tarjeta de Moodle trae la nota del último intento, no la más alta', (
     <table class="quizreviewsummary"><tr><th>Estado</th><td>Finalizado</td></tr><tr><th>Calificación</th><td><b>10,00</b> de 10,00 (<b>100</b>%)</td></tr></table>
     <table class="quizreviewsummary"><tr><th>Estado</th><td>Finalizado</td></tr><tr><th>Calificación</th><td>0,00 de 10,00 (0%)</td></tr></table>
   `), 10);
+  const viejoPrimero = `
+    <div class="card"><h4>Intento 1</h4><table class="quizreviewsummary"><tr><th>Calificación</th><td>0,00 de 10,00</td></tr></table></div>
+    <div class="card"><h4>Intento 2</h4><table class="quizreviewsummary"><tr><th>Calificación</th><td>10,00 de 10,00</td></tr></table></div>`;
+  assert.equal(extraerNotaUltimoIntento(viejoPrimero), 10);
+  assert.equal(extraerProgresoDeActividad(viejoPrimero).entregada, true);
+  assert.equal(extraerProgresoDeActividad(viejoPrimero).nota, 10);
 });
 
 test('si el resumen no trae número, la revisión del último intento es la que hay que abrir', () => {
@@ -364,6 +370,15 @@ test('si el resumen no trae número, la revisión del último intento es la que 
   assert.equal(extraerNotaUltimoIntento(`
     <table class="quizreviewsummary"><tr><th>Calificación</th><td>10,00 de 10,00 (100%)</td></tr></table>
   `), 10);
+});
+
+test('si Moodle la tiene hecha, se marca entrega aunque todavía no haya nota', () => {
+  const progreso = priorizarNotaDeUltimoIntento(
+    [],
+    [{ materiaId: 'act', nombre: 'TP 1', id: 't1', entregada: true }]
+  );
+  assert.equal(progreso[0].entregada, true);
+  assert.equal(progreso[0].nota, null);
 });
 
 test('el último intento pisa la nota de la libreta', () => {

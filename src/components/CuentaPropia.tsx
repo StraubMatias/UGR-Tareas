@@ -105,11 +105,13 @@ export function ResumenCursada({ resumen }: { resumen: ResumenMateriaSync[] }) {
 export default function CuentaPropia({
   usuario,
   onSincronizada,
-  onCerrar
+  onCerrar,
+  onInterrumpida
 }: {
   usuario: string;
   onSincronizada?: (mensaje: string, resumen?: ResumenMateriaSync[]) => void;
   onCerrar?: () => void;
+  onInterrumpida?: () => void;
 }) {
   const [dni, setDni] = useState('');
   const [ugrPassword, setUgrPassword] = useState('');
@@ -138,6 +140,14 @@ export default function CuentaPropia({
       setMensaje(aviso);
       setResumen(resultado.resumen || []);
       onSincronizada?.(aviso, resultado.resumen);
+    } catch (error) {
+      const crudo = error instanceof Error ? error.message : '';
+      if (/unexpected response/i.test(crudo)) {
+        setError('Se cortó la respuesta, pero lo que alcanzó a guardarse ya quedó. Sincronizá de nuevo para completar.');
+        onInterrumpida?.();
+      } else {
+        setError('No se pudo sincronizar.');
+      }
     } finally {
       setEnviando(false);
     }

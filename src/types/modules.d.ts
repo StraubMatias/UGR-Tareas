@@ -92,5 +92,7 @@ declare module '../../ugr-sync/lib/previa.mjs' {
     idsEventos?: string[];
     detectar?: () => Promise<ResultadoPrevia>;
     ahora?: number;
+    alumnoId?: string;
+    alumnoNombre?: string;
   }): Promise<ResultadoPrevia>;
 }

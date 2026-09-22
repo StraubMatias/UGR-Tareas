@@ -27,4 +27,6 @@ export function sincronizarConPrevia(opciones: {
   idsEventos?: string[];
   detectar?: () => Promise<ResultadoPrevia>;
   ahora?: number;
+  alumnoId?: string;
+  alumnoNombre?: string;
 }): Promise<ResultadoPrevia>;

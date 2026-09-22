@@ -8,7 +8,7 @@ import { crearCliente } from './red.mjs';
 import { optimizarLecturas } from './lecturas.mjs';
 import { autorEsEquipoDocente, esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from './materias.mjs';
-import { extraerFechasActividad, extraerActividadesOverview, extraerNotasDeLibreta, extraerNotaUltimoIntento, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from './tareas.mjs';
+import { extraerFechasActividad, extraerActividadesOverview, extraerNotasDeLibreta, extraerProgresoDeActividad, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from './tareas.mjs';
 import {
   analizarAvisosParaCronograma,
   DIAS_HACIA_ATRAS,
@@ -223,27 +223,33 @@ export async function conectarUGRCon({ usuario, contrasena, rutaSesion }) {
 }
 
 async function notaDePagina(cliente, html) {
-  if (!html) return null;
-  const directa = extraerNotaUltimoIntento(html);
-  if (directa != null) return directa;
+  if (!html) return { nota: null, entregada: false };
+  const progreso = extraerProgresoDeActividad(html);
+  if (progreso.nota != null) return progreso;
   const revision = urlDeUltimaRevision(html);
-  if (!revision) return null;
+  if (!revision) return progreso;
   const detalle = await cliente.pedir(revision);
-  if (!detalle?.html || detalle.es_requiere_login) return null;
-  return extraerNotaUltimoIntento(detalle.html);
+  if (!detalle?.html || detalle.es_requiere_login) return progreso;
+  const deRevision = extraerProgresoDeActividad(detalle.html);
+  return {
+    nota: deRevision.nota,
+    entregada: progreso.entregada || deRevision.entregada
+  };
 }
 
 async function fechasDeDetalle({ cliente, tarea }) {
   try {
-    if (!tarea?.url) return { inicio: null, fin: null, notaIntento: null };
+    if (!tarea?.url) return { inicio: null, fin: null, notaIntento: null, entregada: false };
     const pagina = await cliente.pedir(tarea.url);
-    if (!pagina?.html || pagina.es_requiere_login) return { inicio: null, fin: null, notaIntento: null };
+    if (!pagina?.html || pagina.es_requiere_login) return { inicio: null, fin: null, notaIntento: null, entregada: false };
+    const progreso = await notaDePagina(cliente, pagina.html);
     return {
       ...extraerFechasActividad(pagina.html),
-      notaIntento: await notaDePagina(cliente, pagina.html)
+      notaIntento: progreso.nota,
+      entregada: progreso.entregada
     };
   } catch {
-    return { inicio: null, fin: null, notaIntento: null };
+    return { inicio: null, fin: null, notaIntento: null, entregada: false };
   }
 }
 
@@ -284,8 +290,8 @@ async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNom
         if (esQuiz) noLeidas.push({ materia: fila.materia, nombre: fila.nombre });
         return;
       }
-      const nota = await notaDePagina(cliente, pagina.html);
-      if (nota == null) {
+      const progreso = await notaDePagina(cliente, pagina.html);
+      if (progreso.nota == null && !progreso.entregada) {
         if (esQuiz && pareceCuestionarioHecho(pagina.html)) noLeidas.push({ materia: fila.materia, nombre: fila.nombre });
         return;
       }
@@ -296,9 +302,9 @@ async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNom
         id: fila.id,
         tabla: fila.tabla,
         fecha: fila.fecha || null,
-        nota,
+        nota: progreso.nota,
         entregada: true,
-        forzar: true
+        forzar: progreso.nota != null
       };
       notas.push(item);
       if (guardar && alumnoId) {
@@ -619,16 +625,19 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
       const fechas = await fechasDeDetalle({ cliente, tarea });
       const inicio = fechas.inicio || (tarea.inicio && tarea.inicio !== 'Sin fecha' ? tarea.inicio : 'Sin fecha');
       const fin = fechas.fin || (tarea.fin && tarea.fin !== 'Sin fecha' ? tarea.fin : 'Sin fecha');
-      return { tarea, nombreFinal, existente, inicio, fin, notaIntento: fechas.notaIntento };
+      return { tarea, nombreFinal, existente, inicio, fin, notaIntento: fechas.notaIntento, entregada: fechas.entregada };
     });
 
-    for (const { tarea, nombreFinal, existente, inicio, fin, notaIntento } of conFechas) {
-      if (notaIntento != null) {
+    for (const { tarea, nombreFinal, existente, inicio, fin, notaIntento, entregada } of conFechas) {
+      if (alumnoId && (notaIntento != null || entregada || tarea.entregada || tarea.notaCampus != null)) {
         notasIntento.push({
           materiaId: coincidencia.materia.id,
+          materiaNombre: coincidencia.materia.nombre,
           nombre: nombreFinal,
           id: existente?.id || null,
-          nota: notaIntento
+          tabla: existente ? 'tareas' : 'nueva',
+          nota: notaIntento != null ? notaIntento : tarea.notaCampus ?? null,
+          entregada: true
         });
       }
       if (existente) {
@@ -700,11 +709,6 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
   const progreso = alumnoId
     ? await leerProgresoCampus({ cliente, db, mapeos, detectadas: [...separado.tareas, ...separado.parciales], alumnoId })
     : { progresoAlumno: [] };
-  if (alumnoId) {
-    const materiaIds = [...new Set(mapeos.map((item) => item.coincidencia?.materia?.id).filter(Boolean))];
-    const desdeEnlaces = await leerNotasDeEnlaces({ cliente, db, materiaIds });
-    notasIntento.push(...desdeEnlaces.notas);
-  }
   progreso.progresoAlumno = priorizarNotaDeUltimoIntento(progreso.progresoAlumno, notasIntento);
 
   const condicionesActualizadas = await completarCondicionesCampus({ db, cliente, mapeos });

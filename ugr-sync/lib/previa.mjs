@@ -10,7 +10,7 @@ export async function prepararPrevias(db) {
   )`);
 }
 
-export async function sincronizarConPrevia({ db, usuario, confirmar = false, previaId, ids = [], idsAvisos = [], idsEventos = [], detectar, ahora = Date.now() }) {
+export async function sincronizarConPrevia({ db, usuario, confirmar = false, previaId, ids = [], idsAvisos = [], idsEventos = [], detectar, ahora = Date.now(), alumnoId, alumnoNombre }) {
   await prepararPrevias(db);
   if (!confirmar) {
     const datos = await detectar();
@@ -21,7 +21,7 @@ export async function sincronizarConPrevia({ db, usuario, confirmar = false, pre
     datos.parcialesInsertados = parciales.insertadas;
     datos.urlsActualizadas = await actualizarUrlsTareas({ db, urlsActualizar: datos.urlsActualizar });
     datos.urlsParcialesActualizadas = await actualizarUrlsParciales({ db, urlsParcialesActualizar: datos.urlsParcialesActualizar });
-    const complemento = await aplicarComplementoCampus({ db, detectado: datos });
+    const complemento = await aplicarComplementoCampus({ db, detectado: datos, alumnoId, alumnoNombre });
     datos.eventosCalendarioInsertados = complemento.eventos;
     datos.horariosInsertados = complemento.horarios;
     datos.fechasActualizadas = complemento.fechas;

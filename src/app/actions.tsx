@@ -1536,8 +1536,14 @@ export async function syncUgrAction({
       import('../../ugr-sync/lib/sync-core.mjs'),
       import('../../ugr-sync/lib/previa.mjs')
     ]);
+    const alumno = await db.execute({
+      sql: 'SELECT id FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+      args: [usuarioSesion]
+    });
+    const alumnoId = texto(alumno.rows[0]?.id);
     const resultado = await sincronizarConPrevia({
       db, usuario: usuarioSesion, confirmar, previaId, ids, idsAvisos, idsEventos,
+      alumnoId, alumnoNombre: usuarioSesion,
       detectar: async () => {
         const cliente = await conectarUGR();
         const cursos = await listarCursosDelCampus(cliente);
@@ -1553,18 +1559,13 @@ export async function syncUgrAction({
           plan: PLAN_DE_ESTUDIO,
           periodoId
         });
-        const alumno = await db.execute({
-          sql: 'SELECT id FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
-          args: [usuarioSesion]
-        });
-        const alumnoId = texto(alumno.rows[0]?.id);
         if (alumnoId && cursada.materiaIds.length > 0) {
           await db.batch(cursada.materiaIds.map((materiaId: string) => ({
             sql: 'INSERT OR IGNORE INTO inscripciones (alumno_id, materia_id) VALUES (?, ?)',
             args: [alumnoId, materiaId]
           })), 'write');
         }
-        const tareas = await detectarTareasNuevas({ db, cliente, cursos, periodoId, mapeos: cursada.mapeos });
+        const tareas = await detectarTareasNuevas({ db, cliente, cursos, periodoId, alumnoId, mapeos: cursada.mapeos });
         const { avisosDetectados, eventosSugeridos } = await detectarAvisosMoodle({ db, cliente, mapeos: cursada.mapeos });
         return { ...tareas, avisos: avisosDetectados, eventosSugeridos };
       }
@@ -1603,7 +1604,7 @@ export async function syncUgrAction({
       eventosCalendarioInsertados,
       horariosInsertados,
       fechasActualizadas,
-      avisos: avisosDetectados,
+      avisos: (avisosDetectados || []).map(({ contenidoHtml, ...aviso }) => aviso),
       eventosSugeridos,
       avisosAceptados,
       avisosRechazados,
@@ -1766,14 +1767,6 @@ async function sincronizarCursadaDelAlumno({
   const { mapeos, materiaIds, nombresPorId, nombresNuevos } = cursada;
   await inscribirAlumnoEnPeriodo(alumnoId, periodoId, materiaIds);
 
-  const notasTempranas = await cargarNotasDesdeEnlaces({
-    db,
-    cliente,
-    materiaIds,
-    alumnoId,
-    alumnoNombre
-  }) as { cargadas?: Array<{ materia?: string; nombre?: string; nota?: string }>; noLeidas?: Array<{ materia?: string; nombre?: string }> };
-
   const tareas = await detectarTareasNuevas({ db, cliente, cursos, periodoId, alumnoId, mapeos });
   const detectadas = (tareas.detectadas || []) as ItemTareaCampus[];
   const propias = detectadas.filter((item) => item.materiaId && materiaIds.includes(item.materiaId));
@@ -1789,6 +1782,13 @@ async function sincronizarCursadaDelAlumno({
   });
   await actualizarUrlsTareas({ db, urlsActualizar: tareas.urlsActualizar });
   await actualizarUrlsParciales({ db, urlsParcialesActualizar: tareas.urlsParcialesActualizar });
+  const notasTardias = await cargarNotasDesdeEnlaces({
+    db,
+    cliente,
+    materiaIds,
+    alumnoId,
+    alumnoNombre
+  }) as { cargadas?: Array<{ materia?: string; nombre?: string; nota?: string }>; noLeidas?: Array<{ materia?: string; nombre?: string }> };
 
   type ItemEventoCampus = { materiaId?: string; materiaNombre?: string; titulo?: string; fecha?: string };
   const conNombreMateria = (item: ItemEventoCampus): ItemEventoCampus => ({
@@ -1857,7 +1857,7 @@ async function sincronizarCursadaDelAlumno({
   resumen.sort((a, b) => (orden.get(a.materia) ?? 99) - (orden.get(b.materia) ?? 99));
 
   const vistas = new Set<string>();
-  const notasCargadas = [...(notasTempranas.cargadas || []), ...((complemento.notasCargadas || []) as Array<{ materia?: string; nombre?: string; nota?: string }>)]
+  const notasCargadas = [...(notasTardias.cargadas || []), ...((complemento.notasCargadas || []) as Array<{ materia?: string; nombre?: string; nota?: string }>)]
     .filter((item) => {
       const clave = `${item.materia}|${item.nombre}|${item.nota}`;
       if (!item.nombre || !item.nota || vistas.has(clave)) return false;
@@ -1865,7 +1865,7 @@ async function sincronizarCursadaDelAlumno({
       return true;
     });
   const cargadasPorNombre = new Set(notasCargadas.map((item) => String(item.nombre).toLowerCase()));
-  const notasNoLeidas = (notasTempranas.noLeidas || []).filter((item) => item?.nombre && !cargadasPorNombre.has(String(item.nombre).toLowerCase()));
+  const notasNoLeidas = (notasTardias.noLeidas || []).filter((item) => item?.nombre && !cargadasPorNombre.has(String(item.nombre).toLowerCase()));
   const anexar = (materia: string | undefined, campo: 'notasCargadas' | 'notasNoLeidas', textoLinea: string) => {
     if (!materia || !textoLinea) return;
     let fila = resumen.find((item) => item.materia === materia);

@@ -1028,8 +1028,13 @@ export default function Home() {
         await cargarBD(false);
       }
     } catch (error) {
+      const crudo = error instanceof Error ? error.message : '';
+      const cortada = /unexpected response/i.test(crudo);
       setSyncEstado('error');
-      setSyncMensaje(error?.message || 'Error inesperado al sincronizar con UGR.');
+      setSyncMensaje(cortada
+        ? 'Se cortó la respuesta del servidor. Lo que ya se había guardado sigue en la página. Tocá «Buscar de nuevo».'
+        : (crudo || 'Error inesperado al sincronizar con UGR.'));
+      if (cortada) void cargarBD(false);
     } finally {
       syncEnCurso.current = false;
     }
@@ -1759,6 +1764,7 @@ export default function Home() {
                     setResumenSync(resumen || []);
                     void cargarBD(false);
                   }}
+                  onInterrumpida={() => { void cargarBD(false); }}
                 />
               </div>
             )}
@@ -1917,6 +1923,7 @@ export default function Home() {
               setResumenSync(resumen || []);
               void cargarBD(true);
             }}
+            onInterrumpida={() => { void cargarBD(true); }}
           />
           <VistaAlumnos
             materias={materias}

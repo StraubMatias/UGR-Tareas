@@ -16,6 +16,14 @@ export function pedidoEsDeLogin(url) {
   return typeof url === 'string' && url.includes('/login/index.php');
 }
 
+const TOPE_PEDIDO_MS = 15000;
+
+function fetchConTope(url, opciones) {
+  const control = new AbortController();
+  const timer = setTimeout(() => control.abort(), TOPE_PEDIDO_MS);
+  return fetch(url, { ...opciones, signal: control.signal }).finally(() => clearTimeout(timer));
+}
+
 export async function crearCliente({ usuario, contrasena, baseUrl = UGR_BASE_URL, rutaSesion } = {}) {
   const jar = await cargarSesion(rutaSesion);
   let sesionIntentada = false;
@@ -24,8 +32,9 @@ export async function crearCliente({ usuario, contrasena, baseUrl = UGR_BASE_URL
     const url = new URL(ruta, baseUrl).toString();
     let actual = url;
     let respuesta = null;
+    try {
     for (let salto = 0; salto < 5; salto += 1) {
-      respuesta = await fetch(actual, {
+      respuesta = await fetchConTope(actual, {
         method: salto === 0 ? method : 'GET',
         headers: {
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)',
@@ -54,6 +63,12 @@ export async function crearCliente({ usuario, contrasena, baseUrl = UGR_BASE_URL
     const requiereLogin = esPaginaDeLogin(html) && /form[^>]*id="login"/i.test(html);
     await guardarSesion(jar, rutaSesion);
     return { url: actual, html, es_requiere_login: requiereLogin, status: respuesta.status };
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        return { url: actual, html: '', es_requiere_login: false, status: 0 };
+      }
+      throw error;
+    }
   }
 
   async function autenticar() {
