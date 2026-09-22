@@ -93,6 +93,8 @@ interface SyncResult {
   horariosInsertados?: number;
   fechasActualizadas?: number;
   parcialesInsertados?: number;
+  notasCargadas?: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>;
+  pendientesEntrega?: Array<{ materia?: string; nombre?: string }>;
 }
 
 interface Periodo {
@@ -1013,7 +1015,9 @@ export default function Home() {
         horariosInsertados: res.horariosInsertados ?? 0,
         fechasActualizadas: res.fechasActualizadas ?? 0,
         avisosAceptados: res.avisosAceptados ?? 0,
-        eventosInsertados: res.eventosInsertados ?? 0
+        eventosInsertados: res.eventosInsertados ?? 0,
+        notasCargadas: Array.isArray(res.notasCargadas) ? res.notasCargadas : [],
+        pendientesEntrega: Array.isArray(res.pendientesEntrega) ? res.pendientesEntrega : []
       };
       setSyncDatos(datos);
       setSyncEstado('listo');
@@ -1752,7 +1756,7 @@ export default function Home() {
               </button>
             )}
             {mensajeSyncCuenta && (
-              <span className="self-center text-xs text-slate-400 max-w-[16rem] truncate" title={mensajeSyncCuenta}>{mensajeSyncCuenta}</span>
+              <span className="self-center text-xs text-emerald-200 max-w-xl leading-snug" title={mensajeSyncCuenta}>{mensajeSyncCuenta}</span>
             )}
             {syncCuentaAbierta && (
               <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
@@ -3059,6 +3063,26 @@ export default function Home() {
 
             {syncEstado === 'listo' && syncDatos && (
               <div className="space-y-4">
+                {(syncDatos.notasCargadas?.length || 0) > 0 && (
+                  <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Notas cargadas</p>
+                    <ul className="mt-2 space-y-1">
+                      {syncDatos.notasCargadas?.map((item) => (
+                        <li key={`${item.nombre}-${item.nota}`}>Se cargó la nota {item.nota} en «{item.nombre}».</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(syncDatos.pendientesEntrega?.length || 0) > 0 && (
+                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Falta entregar en la página</p>
+                    <ul className="mt-2 space-y-1">
+                      {syncDatos.pendientesEntrega?.map((item) => (
+                        <li key={item.nombre}>Entregá «{item.nombre}» para cargarle la nota.</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2 text-[11px] font-bold">
                   <span className="rounded-lg bg-slate-800 border border-slate-700 px-2.5 py-1 text-slate-300">{syncDatos.cursos} curso(s)</span>
                   <span className="rounded-lg bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-1 text-cyan-300">{(syncDatos.mapeos ?? []).length} materia(s) de la cursada</span>

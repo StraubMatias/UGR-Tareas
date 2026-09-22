@@ -25,6 +25,8 @@ export async function sincronizarConPrevia({ db, usuario, confirmar = false, pre
     datos.eventosCalendarioInsertados = complemento.eventos;
     datos.horariosInsertados = complemento.horarios;
     datos.fechasActualizadas = complemento.fechas;
+    datos.notasCargadas = complemento.notasCargadas || [];
+    datos.pendientesEntrega = complemento.pendientesEntrega || [];
     const id = randomUUID();
     await db.batch([
       { sql: 'DELETE FROM sync_previas WHERE vence < ?', args: [ahora] },

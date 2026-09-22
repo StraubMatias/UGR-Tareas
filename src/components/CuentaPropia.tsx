@@ -7,6 +7,7 @@ export function ResumenCursada({ resumen }: { resumen: ResumenMateriaSync[] }) {
   if (resumen.length === 0) return null;
   const totalNuevas = resumen.reduce((total, fila) => total + fila.nuevas.length, 0);
   const notasCargadas = resumen.flatMap((fila) => (fila.notasCargadas || []).map((linea) => ({ materia: fila.materia, linea })));
+  const pendientesEntrega = resumen.flatMap((fila) => fila.pendientesEntrega || []);
   const notasNoLeidas = resumen.flatMap((fila) => fila.notasNoLeidas || []);
   return (
     <div className="mt-4 space-y-3 max-h-[50vh] overflow-y-auto">
@@ -15,7 +16,17 @@ export function ResumenCursada({ resumen }: { resumen: ResumenMateriaSync[] }) {
           <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Notas cargadas</p>
           <ul className="mt-2 space-y-1 text-sm text-white">
             {notasCargadas.map((item) => (
-              <li key={`${item.materia}-${item.linea}`}>{item.linea}</li>
+              <li key={`${item.materia}-${item.linea}`}>Se cargó {item.linea}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {pendientesEntrega.length > 0 && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Falta entregar en la página</p>
+          <ul className="mt-2 space-y-1 text-sm text-amber-100">
+            {pendientesEntrega.map((nombre) => (
+              <li key={nombre}>Entregá «{nombre}» para cargarle la nota.</li>
             ))}
           </ul>
         </div>

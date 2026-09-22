@@ -91,6 +91,27 @@ test('el segundo alumno no vuelve a insertar las tareas que ya cargó el primero
     ], 'write');
     const { aplicarComplementoCampus, insertarEventosCronograma } = await import('../lib/sync-core.mjs');
     const tarea = (await db.execute('SELECT id FROM tareas')).rows[0];
+    const sinEntrega = await aplicarComplementoCampus({
+      db,
+      alumnoId: 'alu_x',
+      alumnoNombre: 'Alumno X',
+      detectado: {
+        progresoAlumno: [{
+          tabla: 'nueva',
+          id: 'moodle_2218_9',
+          materiaId: 'cri',
+          nombre: 'TP 1 Criptografía',
+          nota: '8',
+          entregada: true
+        }]
+      }
+    });
+    assert.equal(sinEntrega.notas, 0);
+    assert.equal(sinEntrega.pendientesEntrega[0].nombre, 'TP 1 Criptografía');
+    await db.execute({
+      sql: "INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, datetime('now'))",
+      args: [tarea.id, 'alu_x', 'Alumno X']
+    });
     const marcas = await aplicarComplementoCampus({
       db,
       alumnoId: 'alu_x',
@@ -106,12 +127,8 @@ test('el segundo alumno no vuelve a insertar las tareas que ya cargó el primero
         }]
       }
     });
-    assert.equal(marcas.notas, 2);
-    const hecha = await db.execute({
-      sql: 'SELECT alumno_id FROM completadas WHERE tarea_id = ?',
-      args: [tarea.id]
-    });
-    assert.equal(hecha.rows[0].alumno_id, 'alu_x');
+    assert.equal(marcas.notas, 1);
+    assert.equal(marcas.notasCargadas[0].nota, '8');
     const evento = { materiaId: 'cri', fecha: '2026-10-06', titulo: 'Clase de criptografía', tipo: 'clase' };
     assert.equal(await insertarEventosCronograma({ db, eventos: [evento] }), 1);
     assert.equal(await insertarEventosCronograma({ db, eventos: [evento] }), 0);
