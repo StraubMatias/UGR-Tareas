@@ -9,6 +9,7 @@ import {
   emparejarCursosConMaterias,
   filtrarTareasDuplicadas,
   agruparResumenSync,
+  armarMensajeCursada,
   separarEvaluaciones,
   inferirTipoTarea,
   limpiarNombreCursoParaBusqueda,
@@ -246,6 +247,76 @@ test('emparejarCursosConMaterias reutiliza la materia existente y nombra la nuev
   assert.equal(plan[1].nueva, true);
   assert.match(plan[1].nombre, /GESTIÓN DE ACTIVOS/);
   assert.doesNotMatch(plan[1].nombre, /TUCS/);
+});
+
+test('emparejarCursosConMaterias da de alta extras del plan que no están en el cuatrimestre', () => {
+  const materias = [{ id: 'a', nombre: 'CIBERDELITOS' }];
+  const catalogo = [
+    { id: '2.16.1', nombre: 'Conceptos de Desarrollo de Software' },
+    { id: '2.18.2', nombre: 'Introducción a la Criptografía' }
+  ];
+  const plan = emparejarCursosConMaterias([
+    { nombre: '(V.TUCS.1.08.2) CIBERDELITOS' },
+    { nombre: '(V.TUCS.2.16.1) CONCEPTOS DE DESARROLLO DE SOFTWARE' },
+    { nombre: '(V.TUCS.2.18.2) INTRODUCCIÓN A LA CRIPTOGRAFÍA' },
+    { nombre: 'Mi Carrera - Espacio de Seguridad' }
+  ], materias, catalogo);
+  assert.equal(plan.length, 3);
+  assert.equal(plan[0].nueva, false);
+  assert.equal(plan[1].nueva, true);
+  assert.equal(plan[1].nombre, 'Conceptos de Desarrollo de Software');
+  assert.equal(plan[2].nueva, true);
+  assert.equal(plan[2].nombre, 'Introducción a la Criptografía');
+});
+
+test('el segundo alumno reutiliza la materia extra y no duplica tareas', () => {
+  const catalogo = [
+    { nombre: 'Conceptos de Desarrollo de Software' },
+    { nombre: 'Introducción a la Criptografía' },
+    { nombre: 'Tratamiento de Incidentes' }
+  ];
+  const primero = emparejarCursosConMaterias([
+    { id: '2218', nombre: '(V.TUCS.2.18.2) INTRODUCCIÓN A LA CRIPTOGRAFÍA' },
+    { id: '2001', nombre: '(V.TUCS.2.17.2) TRATAMIENTO DE INCIDENTES' },
+    { id: '2572', nombre: 'Mi Carrera - Espacio de Seguridad' }
+  ], [{ id: 'inc', nombre: 'TRATAMIENTO DE INCIDENTES' }], catalogo);
+  assert.equal(primero.length, 2);
+  const cripto = primero.find((item) => /criptograf/i.test(item.nombre));
+  assert.equal(cripto?.nueva, true);
+
+  const periodo = [
+    { id: 'inc', nombre: 'TRATAMIENTO DE INCIDENTES' },
+    { id: 'cri', nombre: 'INTRODUCCIÓN A LA CRIPTOGRAFÍA' }
+  ];
+  const segundo = emparejarCursosConMaterias([
+    { id: '2218', nombre: '(V.TUCS.2.18.2) INTRODUCCIÓN A LA CRIPTOGRAFÍA' },
+    { id: '2001', nombre: '(V.TUCS.2.17.2) TRATAMIENTO DE INCIDENTES' }
+  ], periodo, catalogo);
+  assert.equal(segundo.find((item) => item.nombre === 'INTRODUCCIÓN A LA CRIPTOGRAFÍA')?.materiaId, 'cri');
+  assert.equal(segundo.find((item) => item.nombre === 'INTRODUCCIÓN A LA CRIPTOGRAFÍA')?.nueva, false);
+
+  const { nuevas, duplicadas } = filtrarTareasDuplicadas(
+    [{ materiaId: 'cri', nombre: 'TP 1 Criptografía' }],
+    [{ materiaId: 'cri', nombre: 'TP 1 Criptografía' }]
+  );
+  assert.equal(nuevas.length, 0);
+  assert.equal(duplicadas.length, 1);
+});
+
+test('armarMensajeCursada dice a qué materias estás inscripto', () => {
+  const primero = armarMensajeCursada({
+    materias: [{ nombre: 'Introducción a la Criptografía' }, { nombre: 'Tratamiento de Incidentes' }],
+    tareasNuevas: 4
+  });
+  assert.match(primero, /Estás inscripto a 2 materias/);
+  assert.match(primero, /Criptografía/);
+  assert.match(primero, /Se cargaron 4 tarea/);
+
+  const segundo = armarMensajeCursada({
+    materias: [{ nombre: 'Introducción a la Criptografía' }, { nombre: 'Tratamiento de Incidentes' }],
+    tareasYa: 4
+  });
+  assert.match(segundo, /ya estaban cargadas/);
 });
 
 test('separarEvaluaciones manda el examen con fecha a parciales y el trabajo a tareas', () => {

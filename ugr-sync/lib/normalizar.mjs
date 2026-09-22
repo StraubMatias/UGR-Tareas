@@ -3,6 +3,8 @@
 // (case/acentos-insensitive) de los nombres de curso de Moodle contra las
 // materias cargadas en la base local.
 
+import { esCursoOrganizativo } from './materias.mjs';
+
 const MESES = {
   enero: '01', febrero: '02', marzo: '03', abril: '04', mayo: '05', junio: '06',
   julio: '07', agosto: '08', septiembre: '09', octubre: '10', noviembre: '11', diciembre: '12'
@@ -206,15 +208,66 @@ export function nombreMateriaDesdeCurso(nombreCurso) {
   return sinVersion.slice(0, 200);
 }
 
-export function emparejarCursosConMaterias(cursos, materias) {
-  return (Array.isArray(cursos) ? cursos : []).flatMap((curso) => {
-    const coincidencia = coincidirMateria(curso?.nombre, materias);
-    if (coincidencia?.materia?.id) {
-      return [{ curso, materiaId: coincidencia.materia.id, nombre: coincidencia.materia.nombre, nueva: false }];
+export function emparejarCursosConMaterias(cursos, materias, plan = []) {
+  const hayPlan = Array.isArray(plan) && plan.length > 0;
+  const vistos = new Set();
+  const resultado = [];
+  for (const curso of Array.isArray(cursos) ? cursos : []) {
+    if (esCursoOrganizativo(curso?.nombre)) continue;
+
+    let nombrePlan = '';
+    if (hayPlan) {
+      const delPlan = coincidirMateria(curso?.nombre, plan);
+      if (delPlan?.materia?.nombre) {
+        nombrePlan = delPlan.materia.nombre;
+      } else {
+        const existente = coincidirMateria(curso?.nombre, materias);
+        if (!existente?.materia?.id || vistos.has(existente.materia.id)) continue;
+        vistos.add(existente.materia.id);
+        resultado.push({ curso, materiaId: existente.materia.id, nombre: existente.materia.nombre, nueva: false });
+        continue;
+      }
     }
-    const nombre = nombreMateriaDesdeCurso(curso?.nombre);
-    return nombre ? [{ curso, materiaId: null, nombre, nueva: true }] : [];
-  });
+
+    const existente = coincidirMateria(nombrePlan || curso?.nombre, materias);
+    if (existente?.materia?.id) {
+      if (vistos.has(existente.materia.id)) continue;
+      vistos.add(existente.materia.id);
+      resultado.push({ curso, materiaId: existente.materia.id, nombre: existente.materia.nombre, nueva: false });
+      continue;
+    }
+
+    const nombre = nombrePlan || nombreMateriaDesdeCurso(curso?.nombre);
+    if (!nombre) continue;
+    const clave = `n:${limpiarTextoParaBusqueda(nombre)}`;
+    if (vistos.has(clave)) continue;
+    vistos.add(clave);
+    resultado.push({ curso, materiaId: null, nombre, nueva: true });
+  }
+  return resultado;
+}
+
+export function armarMensajeCursada({
+  materias = [],
+  tareasNuevas = 0,
+  tareasYa = 0,
+  extras = []
+} = {}) {
+  const nombres = [...new Set((Array.isArray(materias) ? materias : [])
+    .map((item) => String(item?.nombre || item || '').trim())
+    .filter(Boolean))];
+  const lista = nombres.join(', ');
+  const inscripto = nombres.length === 1
+    ? `Estás inscripto a 1 materia: ${lista}.`
+    : `Estás inscripto a ${nombres.length} materias: ${lista}.`;
+  const partes = [inscripto];
+  if (tareasNuevas) partes.push(`Se cargaron ${tareasNuevas} tarea(s) que no estaban.`);
+  else if (tareasYa) partes.push('No había tareas nuevas: ya estaban cargadas.');
+  else partes.push('No había tareas nuevas.');
+  for (const extra of extras) {
+    if (extra) partes.push(extra);
+  }
+  return partes.join(' ');
 }
 
 export function separarEvaluaciones(detectadas) {

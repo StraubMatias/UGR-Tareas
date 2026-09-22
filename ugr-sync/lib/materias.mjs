@@ -10,6 +10,65 @@ import { UGR_BASE_URL } from './constantes.mjs';
 
 const TITULOS_NO_CURSOS = ['mis cursos', 'todos los cursos', 'dashboard', 'panel'];
 
+export function extraerSesskey(html) {
+  const texto = String(html || '');
+  const cfg = texto.match(/["']sesskey["']\s*:\s*["']([^"']+)["']/);
+  if (cfg) return cfg[1];
+  const input = texto.match(/name="sesskey"[^>]*value="([^"]+)"/i) || texto.match(/value="([^"]+)"[^>]*name="sesskey"/i);
+  return input?.[1] || null;
+}
+
+export function extraerUserid(html) {
+  const texto = String(html || '');
+  const cfg = texto.match(/["']userid["']\s*:\s*(\d+)/);
+  return cfg?.[1] && cfg[1] !== '0' && cfg[1] !== '1' ? cfg[1] : null;
+}
+
+export function esCursoOrganizativo(nombre) {
+  const n = String(nombre || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!n) return true;
+  if (TITULOS_NO_CURSOS.some((titulo) => n === titulo || n.includes(titulo))) return true;
+  if (n.includes('mi carrera')) return true;
+  if (n.includes('espacio de')) return true;
+  if (/^ingreso\b/.test(n)) return true;
+  return false;
+}
+
+export function extraerCursosDeAjax(payload) {
+  const bloques = Array.isArray(payload) ? payload : [payload];
+  const cursos = [];
+  for (const bloque of bloques) {
+    if (bloque?.error) continue;
+    const data = bloque?.data;
+    const lista = Array.isArray(data?.courses)
+      ? data.courses
+      : Array.isArray(data)
+        ? data
+        : Array.isArray(bloque?.courses)
+          ? bloque.courses
+          : [];
+    for (const curso of lista) {
+      const id = String(curso?.id || '');
+      const nombre = String(curso?.fullname || curso?.shortname || '').replace(/\s+/g, ' ').trim();
+      if (!id || !/^\d+$/.test(id) || id === '1' || !nombre || esCursoOrganizativo(nombre)) continue;
+      cursos.push({
+        id,
+        nombre,
+        nombreIncompleto: esNombreIncompleto(nombre),
+        url: curso.viewurl || `/course/view.php?id=${id}`,
+        enddate: Number(curso.enddate || 0) || 0,
+        timeaccess: Number(curso.timeaccess || 0) || 0
+      });
+    }
+  }
+  return cursos;
+}
+
 function esNombreIncompleto(nombre) {
   return /\.\.\.$|…$/.test(String(nombre).trim());
 }
@@ -55,9 +114,23 @@ export function extraerCursos(html, baseUrl = UGR_BASE_URL) {
       || $(el).text()
     ).replace(/\s+/g, ' ').trim();
 
-    if (!nombre || TITULOS_NO_CURSOS.some((t) => nombre.toLowerCase().includes(t))) return;
+    if (!nombre || esCursoOrganizativo(nombre)) return;
 
     agregar({ id, nombre, nombreIncompleto: esNombreIncompleto(nombre), url: completarUrl(href, baseUrl) });
+  });
+
+  // Moodle 4: tarjetas de «Mis cursos» / dashboard (`data-course-id`).
+  $('[data-course-id]').each((_, el) => {
+    const id = String($(el).attr('data-course-id') || '');
+    if (!/^\d+$/.test(id) || id === '1') return;
+    const nombre = (
+      $(el).find('.coursename, .multiline, .course-title, [data-region="name"]').first().text()
+      || $(el).attr('data-course-name')
+      || $(el).find('a[href*="course/view.php"]').first().text()
+      || $(el).text()
+    ).replace(/\s+/g, ' ').trim();
+    if (!nombre || esCursoOrganizativo(nombre)) return;
+    agregar({ id, nombre, nombreIncompleto: esNombreIncompleto(nombre), url: completarUrl(`/course/view.php?id=${id}`, baseUrl) });
   });
 
   // 2) Selectores de cursos del tema (p. ej. el filtro del calendario):
@@ -66,7 +139,7 @@ export function extraerCursos(html, baseUrl = UGR_BASE_URL) {
     const value = $(el).attr('value') || '';
     if (!/^\d+$/.test(value) || value === '1') return;
     const nombre = $(el).text().replace(/\s+/g, ' ').trim();
-    if (!nombre || TITULOS_NO_CURSOS.some((t) => nombre.toLowerCase().includes(t))) return;
+    if (!nombre || esCursoOrganizativo(nombre)) return;
     const id = value;
     if (porId.has(id)) return; // ya vino por enlace directo (mejor nombre)
     agregar({

@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { crearCliente } from './red.mjs';
 import { optimizarLecturas } from './lecturas.mjs';
 import { autorEsEquipoDocente, esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
-import { extraerCursos, extraerNombreCursoDesdePagina } from './materias.mjs';
+import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from './materias.mjs';
 import { extraerFechasActividad, extraerActividadesOverview, extraerNotasDeLibreta } from './tareas.mjs';
 import {
   analizarAvisosParaCronograma,
@@ -28,12 +28,14 @@ import {
   emparejarCursosConMaterias,
   filtrarTareasDuplicadas,
   agruparResumenSync,
+  armarMensajeCursada,
   inferirTipoTarea,
+  limpiarTextoParaBusqueda,
   normalizarNombre,
   separarEvaluaciones
 } from './normalizar.mjs';
 
-export { emparejarCursosConMaterias, filtrarTareasDuplicadas, agruparResumenSync, separarEvaluaciones };
+export { emparejarCursosConMaterias, filtrarTareasDuplicadas, agruparResumenSync, armarMensajeCursada, limpiarTextoParaBusqueda, separarEvaluaciones };
 import { clasificarEventosCalendario, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
 import { MODULOS_CONSIGNA, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 
@@ -224,11 +226,86 @@ async function fechasDeDetalle({ cliente, tarea }) {
   }
 }
 
-// Cursos visibles para la sesión actual, con el nombre completo cuando Moodle
-// lo trunca en el listado. No escribe materias ni tareas.
+// Cursos en los que el alumno está inscripto ahora. El índice clásico y el
+// calendario suelen listar solo las 5 de la comisión; las extras de la carrera
+// (otro cuatrimestre, electivas) viven en «Mis cursos» y en el AJAX de Moodle 4.
+const VENTANA_CURSADA_SEG = 240 * 24 * 3600;
+
+function pareceCursandoTodavia(curso, ahoraSeg) {
+  const acceso = Number(curso?.timeaccess || 0);
+  const fin = Number(curso?.enddate || 0);
+  if (acceso && acceso >= ahoraSeg - VENTANA_CURSADA_SEG) return true;
+  if (fin && fin >= ahoraSeg - VENTANA_CURSADA_SEG) return true;
+  if (!acceso && !fin) return true;
+  return false;
+}
+
 export async function listarCursosDelCampus(cliente) {
-  const pageCursos = await cliente.pedir(UGR_RUTAS.cursos);
-  const cursos = extraerCursos(pageCursos.html);
+  const paginas = [];
+  for (const ruta of [UGR_RUTAS.cursos, UGR_RUTAS.misCursos, UGR_RUTAS.dashboard]) {
+    try {
+      paginas.push(await cliente.pedir(ruta));
+    } catch {
+      // Una de las vistas puede faltar según el tema; las otras alcanzan.
+    }
+  }
+  const porId = new Map();
+  const incorporar = (lista, { soloRecientes } = {}) => {
+    const ahoraSeg = Math.floor(Date.now() / 1000);
+    for (const curso of lista || []) {
+      if (!curso?.id || esCursoOrganizativo(curso.nombre)) continue;
+      const id = String(curso.id);
+      if (soloRecientes && !porId.has(id) && !pareceCursandoTodavia(curso, ahoraSeg)) continue;
+      const existente = porId.get(id);
+      if (existente && !(existente.nombreIncompleto && !curso.nombreIncompleto)) continue;
+      porId.set(id, curso);
+    }
+  };
+  for (const pagina of paginas) incorporar(extraerCursos(pagina?.html));
+
+  const sesskey = paginas.map((pagina) => extraerSesskey(pagina?.html)).find(Boolean);
+  const userid = paginas.map((pagina) => extraerUserid(pagina?.html)).find(Boolean);
+  if (sesskey && userid) {
+    try {
+      const cuerpo = JSON.stringify([{
+        index: 0,
+        methodname: 'core_enrol_get_users_courses',
+        args: { userid: Number(userid), returnusercount: false }
+      }]);
+      const pagina = await cliente.pedir(UGR_RUTAS.ajax(sesskey), {
+        method: 'POST',
+        cuerpo,
+        tipoCuerpo: 'application/json'
+      });
+      incorporar(extraerCursosDeAjax(JSON.parse(pagina.html || '[]')));
+    } catch {
+      // Si este webservice no está, quedan Mis cursos y el timeline.
+    }
+  }
+  if (sesskey) {
+    const ajax = await conPool(['inprogress', 'future', 'past', 'all'], 4, async (classification) => {
+      try {
+        const cuerpo = JSON.stringify([{
+          index: 0,
+          methodname: 'core_course_get_enrolled_courses_by_timeline_classification',
+          args: { offset: 0, limit: 100, classification, sort: 'fullname' }
+        }]);
+        const pagina = await cliente.pedir(UGR_RUTAS.ajax(sesskey), {
+          method: 'POST',
+          cuerpo,
+          tipoCuerpo: 'application/json'
+        });
+        return { classification, cursos: extraerCursosDeAjax(JSON.parse(pagina.html || '[]')) };
+      } catch {
+        return { classification, cursos: [] };
+      }
+    });
+    for (const { classification, cursos: extra } of ajax) {
+      incorporar(extra, { soloRecientes: classification === 'past' || classification === 'all' });
+    }
+  }
+
+  const cursos = [...porId.values()];
   await conPool(cursos, 4, async (curso) => {
     if (!curso.nombreIncompleto) return;
     try {
@@ -239,27 +316,27 @@ export async function listarCursosDelCampus(cliente) {
       // Si falla la resolución, nos quedamos con el nombre parcial.
     }
   });
-  return cursos;
+  return cursos.filter((curso) => !esCursoOrganizativo(curso.nombre));
 }
 
 // Recorre los cursos del campus, los mapea contra las materias locales y
 // devuelve las tareas nuevas que todavía no existen en la base.
-export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, periodoId, alumnoId } = {}) {
+export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, periodoId, alumnoId, mapeos: mapeosDados } = {}) {
   // 1) Materias locales (destino). Un período acota el match a esa cursada.
   const resMaterias = periodoId
     ? await db.execute({ sql: 'SELECT id, nombre FROM materias WHERE periodo_id = ? ORDER BY nombre', args: [periodoId] })
     : await db.execute('SELECT id, nombre FROM materias ORDER BY nombre');
   const materiasLocales = resMaterias.rows;
 
-  // 2) Cursos del campus y mapeo contra las materias locales.
-  // Moodle a veces sirve nombres truncados dentro de los selects (terminan en
-  // "...") aunque el prefijo de versión «(V.TUCS.1.07.2)» ya sea visible.
+  // 2) Cursos del campus. Si el llamador ya armó el mapeo (las materias de la
+  // carrera que cursa esa cuenta), no se vuelve a adivinar: se carga eso.
   const cursos = cursosDados || await listarCursosDelCampus(cliente);
-  const mapeos = [];
-  for (const curso of cursos) {
-    const coincidencia = coincidirMateria(curso.nombre, materiasLocales);
-    if (coincidencia) mapeos.push({ curso, coincidencia });
-  }
+  const mapeos = Array.isArray(mapeosDados) && mapeosDados.length > 0
+    ? mapeosDados.filter((item) => item?.curso && item?.coincidencia?.materia?.id)
+    : cursos.flatMap((curso) => {
+      const coincidencia = coincidirMateria(curso.nombre, materiasLocales);
+      return coincidencia ? [{ curso, coincidencia }] : [];
+    });
 
   // 3) Tareas de cada curso mapeado y detección de faltantes.
   const detectadas = [];

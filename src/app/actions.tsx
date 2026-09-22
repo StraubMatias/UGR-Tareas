@@ -69,6 +69,7 @@ export interface ResumenMateriaSync {
   yaEstaban: string[];
   cronogramaNuevo?: string[];
   cronogramaYa?: string[];
+  materiaNueva?: boolean;
 }
 
 export interface RespuestaAction {
@@ -1510,36 +1511,39 @@ async function inscribirAlumnoEnPeriodo(alumnoId: string, periodoId: string, mat
 }
 
 function armarMensajeSync({
+  materias,
   resumen,
-  materiasNuevas,
   parciales,
   eventos,
   horarios,
-  notas
+  notas,
+  armarMensajeCursada
 }: {
+  materias: Array<{ nombre: string }>;
   resumen: ResumenMateriaSync[];
-  materiasNuevas: number;
   parciales: number;
   eventos: number;
   horarios: number;
   notas: number;
+  armarMensajeCursada: (opciones: {
+    materias?: Array<{ nombre: string } | string>;
+    tareasNuevas?: number;
+    tareasYa?: number;
+    extras?: string[];
+  }) => string;
 }): string {
   const nuevas = resumen.reduce((total, fila) => total + fila.nuevas.length, 0);
   const ya = resumen.reduce((total, fila) => total + fila.yaEstaban.length, 0);
-  const partes: string[] = [];
-  if (materiasNuevas) partes.push(`${materiasNuevas} materia(s) nueva(s)`);
-  if (nuevas) partes.push(`${nuevas} tarea(s) que no estaban`);
-  if (ya) partes.push(`${ya} ya cargada(s), sin duplicar`);
+  const extras: string[] = [];
   const cronNuevo = resumen.reduce((total, fila) => total + (fila.cronogramaNuevo?.length || 0), 0);
   const cronYa = resumen.reduce((total, fila) => total + (fila.cronogramaYa?.length || 0), 0);
-  if (cronNuevo) partes.push(`${cronNuevo} fecha(s) de cronograma`);
-  if (cronYa) partes.push(`${cronYa} del cronograma ya estaban`);
-  if (parciales) partes.push(`${parciales} parcial(es)`);
-  if (!cronNuevo && eventos) partes.push(`${eventos} evento(s)`);
-  if (horarios) partes.push(`${horarios} horario(s)`);
-  if (notas) partes.push('notas publicadas en el campus');
-  if (partes.length === 0) return 'Cursada al día con el período actual. No había tareas nuevas.';
-  return `Período actual. ${partes.join(', ')}.`;
+  if (cronNuevo) extras.push(`Se cargaron ${cronNuevo} fecha(s) de cronograma.`);
+  else if (cronYa) extras.push('El cronograma ya estaba cargado.');
+  if (parciales) extras.push(`Se cargaron ${parciales} parcial(es).`);
+  if (!cronNuevo && eventos) extras.push(`Se cargaron ${eventos} evento(s).`);
+  if (horarios) extras.push(`Se cargaron ${horarios} horario(s).`);
+  if (notas) extras.push('Se copiaron las notas publicadas en el campus.');
+  return armarMensajeCursada({ materias, tareasNuevas: nuevas, tareasYa: ya, extras });
 }
 
 type ItemTareaCampus = {
@@ -1567,6 +1571,8 @@ async function sincronizarCursadaDelAlumno({
     separarEvaluaciones,
     filtrarTareasDuplicadas,
     agruparResumenSync,
+    armarMensajeCursada,
+    limpiarTextoParaBusqueda,
     insertarTareasDetectadas,
     insertarParcialesSiFaltan,
     actualizarUrlsTareas,
@@ -1575,46 +1581,72 @@ async function sincronizarCursadaDelAlumno({
     aplicarComplementoCampus
   } = await import('../../ugr-sync/lib/sync-core.mjs');
 
+  // 1) Materias de la carrera que esta cuenta está cursando (las extras
+  //    también: Criptografía, Conceptos de Desarrollo, etc.). Lo que no está
+  //    en el plan (Mi Carrera, espacios) se descarta.
   const cursos = await listarCursosDelCampus(cliente);
   const periodoId = await periodoDeCursada();
   const materiasPeriodo = await db.execute({
     sql: 'SELECT id, nombre FROM materias WHERE periodo_id = ? ORDER BY nombre',
     args: [periodoId]
   });
-  const plan = emparejarCursosConMaterias(cursos, materiasPeriodo.rows.map((fila) => ({
+  const cursando = emparejarCursosConMaterias(cursos, materiasPeriodo.rows.map((fila) => ({
     id: texto(fila.id),
     nombre: texto(fila.nombre)
-  })));
-  if (plan.length === 0) {
-    throw new Error('UGR Virtual no mostró materias para esta cuenta.');
+  })), PLAN_DE_ESTUDIO);
+  if (cursando.length === 0) {
+    throw new Error('UGR Virtual no mostró materias de la carrera para esta cuenta.');
   }
 
-  const materiaIds: string[] = [];
-  const nombresPorId = new Map<string, string>();
   const altas: { sql: string; args: string[] }[] = [];
   const nombresNuevos = new Set<string>();
-  let materiasNuevas = 0;
-  for (const item of plan) {
-    let materiaId = item.materiaId || '';
-    if (item.nueva) {
-      const nombre = item.nombre.toUpperCase();
-      if (nombresNuevos.has(nombre)) continue;
-      nombresNuevos.add(nombre);
-      materiaId = crearId('m_');
-      materiasNuevas += 1;
-      altas.push({
-        sql: 'INSERT INTO materias (id, nombre, periodo_id) VALUES (?, ?, ?)',
-        args: [materiaId, nombre, periodoId]
-      });
-    }
-    if (!materiaId || materiaIds.includes(materiaId)) continue;
-    materiaIds.push(materiaId);
-    nombresPorId.set(materiaId, item.nombre);
+  for (const item of cursando) {
+    if (!item.nueva) continue;
+    const nombre = item.nombre.toUpperCase();
+    const clave = limpiarTextoParaBusqueda(nombre);
+    if (!clave || nombresNuevos.has(clave)) continue;
+    const ya = materiasPeriodo.rows.find((fila) => limpiarTextoParaBusqueda(texto(fila.nombre)) === clave);
+    if (ya) continue;
+    nombresNuevos.add(clave);
+    altas.push({
+      sql: 'INSERT INTO materias (id, nombre, periodo_id) VALUES (?, ?, ?)',
+      args: [crearId('m_'), nombre, periodoId]
+    });
   }
   if (altas.length > 0) await db.batch(altas, 'write');
+
+  const vigentes = await db.execute({
+    sql: 'SELECT id, nombre FROM materias WHERE periodo_id = ? ORDER BY nombre',
+    args: [periodoId]
+  });
+  const materiaIds: string[] = [];
+  const nombresPorId = new Map<string, string>();
+  const mapeos: Array<{
+    curso: { id?: string | number; nombre?: string; [clave: string]: unknown };
+    coincidencia: { materia: { id: string; nombre: string }; score: number };
+  }> = [];
+  for (const item of cursando) {
+    const clave = limpiarTextoParaBusqueda(item.nombre);
+    const fila = vigentes.rows.find((materia) => {
+      if (item.materiaId && texto(materia.id) === item.materiaId) return true;
+      return clave !== '' && limpiarTextoParaBusqueda(texto(materia.nombre)) === clave;
+    });
+    const materiaId = texto(fila?.id);
+    if (!materiaId || materiaIds.includes(materiaId)) continue;
+    const nombre = texto(fila?.nombre) || item.nombre;
+    materiaIds.push(materiaId);
+    nombresPorId.set(materiaId, nombre);
+    mapeos.push({
+      curso: item.curso as { id?: string | number; nombre?: string; [clave: string]: unknown },
+      coincidencia: { materia: { id: materiaId, nombre }, score: 100 }
+    });
+  }
+  if (materiaIds.length === 0) {
+    throw new Error('UGR Virtual no mostró materias de la carrera para esta cuenta.');
+  }
   await inscribirAlumnoEnPeriodo(alumnoId, periodoId, materiaIds);
 
-  const tareas = await detectarTareasNuevas({ db, cliente, cursos, periodoId, alumnoId });
+  const tareas = await detectarTareasNuevas({ db, cliente, cursos, periodoId, alumnoId, mapeos });
   const detectadas = (tareas.detectadas || []) as ItemTareaCampus[];
   const propias = detectadas.filter((item) => item.materiaId && materiaIds.includes(item.materiaId));
   const yaCargadas = ((tareas.yaCargadas || []) as ItemTareaCampus[])
@@ -1654,10 +1686,7 @@ async function sincronizarCursadaDelAlumno({
   const avisos = await detectarAvisosMoodle({
     db,
     cliente,
-    mapeos: (tareas.mapeos || []).filter((mapeo) => {
-      const id = mapeo.coincidencia?.materia?.id;
-      return !!id && materiaIds.includes(id);
-    })
+    mapeos
   });
   const eventosAvisos = ((avisos.eventosSugeridos || []) as ItemEventoCampus[]).filter((evento) => {
     return !!evento.materiaId && materiaIds.includes(evento.materiaId);
@@ -1685,17 +1714,29 @@ async function sincronizarCursadaDelAlumno({
     yaEstaban: [...yaCargadas, ...duplicadas],
     cronogramaNuevo,
     cronogramaYa
-  });
+  }) as ResumenMateriaSync[];
+  for (const nombre of nombresPorId.values()) {
+    if (!resumen.some((fila) => fila.materia === nombre)) {
+      resumen.push({ materia: nombre, nuevas: [], yaEstaban: [], cronogramaNuevo: [], cronogramaYa: [] });
+    }
+  }
+  for (const fila of resumen) {
+    const clave = limpiarTextoParaBusqueda(fila.materia);
+    if (clave && nombresNuevos.has(clave)) fila.materiaNueva = true;
+  }
+  const orden = new Map([...nombresPorId.values()].map((nombre, indice) => [nombre, indice]));
+  resumen.sort((a, b) => (orden.get(a.materia) ?? 99) - (orden.get(b.materia) ?? 99));
 
   return {
     resumen,
     mensaje: armarMensajeSync({
+      materias: [...nombresPorId.entries()].map(([, nombre]) => ({ nombre })),
       resumen,
-      materiasNuevas,
       parciales: parcialesResultado.insertadas,
       eventos: eventosInsertados + complemento.eventos,
       horarios: complemento.horarios,
-      notas: complemento.notas
+      notas: complemento.notas,
+      armarMensajeCursada
     })
   };
 }

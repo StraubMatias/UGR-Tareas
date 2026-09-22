@@ -6,6 +6,9 @@ export const UGR_BASE_URL = 'https://virtual.ugr.edu.ar';
 export const UGR_RUTAS = {
   login: '/login/index.php',
   dashboard: '/my/',
+  // «Mis cursos» de Moodle 4: las tarjetas y, si hace falta, el pedido AJAX.
+  misCursos: '/my/courses.php',
+  ajax: (sesskey) => `/lib/ajax/service.php?sesskey=${encodeURIComponent(sesskey)}`,
   // Lista de cursos en los que el usuario está inscripto.
   cursos: '/course/index.php',
   // Índice de tareas (assign) de un curso: /mod/assign/index.php?id=ID

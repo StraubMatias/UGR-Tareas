@@ -29,7 +29,8 @@ import {
   guardarNotaParcialAction,
   crearHorarioAction,
   eliminarHorarioAction,
-  syncUgrAction
+  syncUgrAction,
+  type ResumenMateriaSync
 } from './actions';
 import {
   parcialHabilitado as parcialEstaHabilitado,
@@ -175,7 +176,7 @@ export default function Home() {
   const [registroDni, setRegistroDni] = useState('');
   const [registroClaveUgr, setRegistroClaveUgr] = useState('');
   const [enviandoAcceso, setEnviandoAcceso] = useState(false);
-  const [resumenSync, setResumenSync] = useState<{ materia: string; nuevas: string[]; yaEstaban: string[] }[]>([]);
+  const [resumenSync, setResumenSync] = useState<ResumenMateriaSync[]>([]);
   const [pestana, setPestana] = useState<'alumnos' | 'materias' | 'plan' | 'parciales' | 'horarios' | 'ranking' | 'promocion' | 'historial' | 'admin'>('alumnos');
   const [cargando, setCargando] = useState<boolean>(true);
   const [iniciado, setIniciado] = useState<boolean>(false);
@@ -1791,7 +1792,7 @@ export default function Home() {
             <h2 className="text-3xl font-black text-white mb-2 bg-gradient-to-r from-cyan-300 via-white to-amber-300 bg-clip-text text-transparent">{modoAcceso === 'registro' ? 'Crear cuenta' : 'Iniciar sesión'}</h2>
             <p className="text-sm text-slate-400 mt-3 max-w-xs mx-auto leading-relaxed">
               {modoAcceso === 'registro'
-                ? 'Elegí tu usuario y tu clave. El DNI y la clave de UGR Virtual se comprueban ahora y no se guardan: con eso se carga tu cursada del período actual.'
+                ? 'Elegí tu usuario y tu clave. El DNI y la clave de UGR Virtual se comprueban ahora y no se guardan: se detectan las materias de la carrera que estás cursando y se carga lo de esas materias.'
                 : 'Tu tablero para seguir la cursada sin perder el hilo.'}
             </p>
             <div className="portal-login-meta mt-5 flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-wider">

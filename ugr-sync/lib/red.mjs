@@ -20,7 +20,7 @@ export async function crearCliente({ usuario, contrasena, baseUrl = UGR_BASE_URL
   const jar = await cargarSesion(rutaSesion);
   let sesionIntentada = false;
 
-  async function pedirSinAutenticar(ruta, { method = 'GET', cuerpo } = {}) {
+  async function pedirSinAutenticar(ruta, { method = 'GET', cuerpo, tipoCuerpo } = {}) {
     const url = new URL(ruta, baseUrl).toString();
     const esLogin = pedidoEsDeLogin(url);
     const respuesta = await fetch(url, {
@@ -28,7 +28,7 @@ export async function crearCliente({ usuario, contrasena, baseUrl = UGR_BASE_URL
       headers: {
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)',
         ...(jar.size > 0 ? { Cookie: cabeceraCookies(jar) } : {}),
-        ...(cuerpo ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {})
+        ...(cuerpo ? { 'Content-Type': tipoCuerpo || 'application/x-www-form-urlencoded' } : {})
       },
       ...(cuerpo ? { body: cuerpo } : {}),
       redirect: 'manual'

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extraerCursos, extraerNombreCursoDesdePagina } from '../lib/materias.mjs';
+import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from '../lib/materias.mjs';
 import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerNotasDeLibreta, extraerTareas, parsearNotaCampus } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -46,6 +46,63 @@ test('extraerCursos no se engancha con el enlace genérico "Mis cursos"', async 
   const html = await readFile(path.join(DIR, 'cursos.html'), 'utf8');
   const cursos = extraerCursos(html);
   assert.equal(cursos.some((c) => c.nombre === 'Mis cursos'), false);
+});
+
+test('extraerCursos descarta el espacio de carrera y lee las tarjetas de Moodle 4', () => {
+  const html = `
+    <div class="card dashboard-card" data-region="course-content" data-course-id="2216">
+      <a href="https://virtual.ugr.edu.ar/course/view.php?id=2216" class="aalink coursename">
+        <span class="multiline">(V.TUCS.2.16.1) CONCEPTOS DE DESARROLLO DE SOFTWARE</span>
+      </a>
+    </div>
+    <div class="card dashboard-card" data-course-id="2218">
+      <span class="coursename">(V.TUCS.2.18.2) INTRODUCCIÓN A LA CRIPTOGRAFÍA</span>
+    </div>
+    <div data-course-id="2572"><span class="coursename">Mi Carrera - Espacio de Seguridad</span></div>
+    <select>
+      <option value="2572">Mi Carrera - Espacio de Seguridad</option>
+      <option value="1311">(V.TUCS.1.08.2) CIBERDELITOS</option>
+    </select>`;
+  const cursos = extraerCursos(html, 'https://virtual.ugr.edu.ar');
+  assert.ok(cursos.find((c) => c.id === '2216')?.nombre.includes('CONCEPTOS DE DESARROLLO'));
+  assert.ok(cursos.find((c) => c.id === '2218')?.nombre.includes('CRIPTOGRAFÍA'));
+  assert.ok(cursos.find((c) => c.id === '1311'));
+  assert.equal(cursos.some((c) => c.id === '2572'), false);
+});
+
+test('esCursoOrganizativo y extraerCursosDeAjax toman las extras enroladas', () => {
+  assert.equal(esCursoOrganizativo('Mi Carrera - Espacio de Seguridad'), true);
+  assert.equal(esCursoOrganizativo('Introducción a la Criptografía'), false);
+  const cursos = extraerCursosDeAjax([{
+    error: false,
+    data: {
+      courses: [
+        { id: 2216, fullname: '(V.TUCS.2.16.1) CONCEPTOS DE DESARROLLO DE SOFTWARE' },
+        { id: 2218, fullname: '(V.TUCS.2.18.2) INTRODUCCIÓN A LA CRIPTOGRAFÍA' },
+        { id: 2572, fullname: 'Mi Carrera - Espacio de Seguridad' }
+      ]
+    }
+  }]);
+  assert.deepEqual(cursos.map((c) => c.id).sort(), ['2216', '2218']);
+  assert.equal(cursos[0].timeaccess, 0);
+});
+
+test('extraerUserid lee M.cfg y extraerCursosDeAjax lee las inscripciones del alumno', () => {
+  assert.equal(extraerUserid('M.cfg = {"sesskey":"ABC","userid":42,"siteId":1};'), '42');
+  assert.equal(extraerUserid('M.cfg = {"userid":0};'), null);
+  const inscritos = extraerCursosDeAjax([{
+    error: false,
+    data: [
+      { id: 2218, fullname: '(V.TUCS.2.18.2) INTRODUCCIÓN A LA CRIPTOGRAFÍA' },
+      { id: 2216, fullname: '(V.TUCS.2.16.1) CONCEPTOS DE DESARROLLO DE SOFTWARE' },
+      { id: 2572, fullname: 'Mi Carrera - Espacio de Seguridad' }
+    ]
+  }]);
+  assert.deepEqual(inscritos.map((c) => c.id).sort(), ['2216', '2218']);
+});
+
+test('extraerSesskey lee M.cfg', () => {
+  assert.equal(extraerSesskey('M.cfg = {"sesskey":"R0I01W51bV","siteId":1};'), 'R0I01W51bV');
 });
 
 test('extraerNombreCursoDesdePagina saca el nombre completo del breadcrumb', async () => {

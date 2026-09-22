@@ -5,8 +5,30 @@ import { sincronizarCuentaUgrAction, type ResumenMateriaSync } from '../app/acti
 
 export function ResumenCursada({ resumen }: { resumen: ResumenMateriaSync[] }) {
   if (resumen.length === 0) return null;
+  const totalNuevas = resumen.reduce((total, fila) => total + fila.nuevas.length, 0);
   return (
     <div className="mt-4 space-y-3 max-h-[50vh] overflow-y-auto">
+      <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Estás inscripto a</p>
+        <p className="mt-1 text-sm font-bold text-white">
+          {resumen.length} {resumen.length === 1 ? 'materia' : 'materias'}
+        </p>
+        <ul className="mt-2 space-y-1 text-sm text-slate-200">
+          {resumen.map((materia) => (
+            <li key={`insc-${materia.materia}`}>
+              {materia.materia}
+              {materia.materiaNueva ? (
+                <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-cyan-300">nueva en la página</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-xs text-slate-400">
+          {totalNuevas > 0
+            ? `Se cargaron ${totalNuevas} tarea(s) que no estaban.`
+            : 'No había tareas nuevas: ya estaban cargadas.'}
+        </p>
+      </div>
       {resumen.map((materia) => (
         <div key={materia.materia} className="rounded-xl border border-slate-800 bg-[#0d1117] p-3">
           <p className="text-sm font-bold text-white">{materia.materia}</p>
@@ -104,7 +126,7 @@ export default function CuentaPropia({
       <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Sincronizar con UGR Virtual</p>
       <h2 className="mt-2 text-2xl font-black text-white">{usuario}</h2>
       <p className="mt-3 text-sm leading-relaxed text-slate-400">
-        Pedimos el DNI y la clave de UGR Virtual solo para esta sincronización. No se guardan en la página ni en la base. Se carga el período actual y, de cada materia, únicamente las tareas que todavía no estaban.
+        Pedimos el DNI y la clave de UGR Virtual solo para esta sincronización. No se guardan. Te dice a qué materias estás inscripto, las guarda en tu cursada y después carga únicamente las tareas que todavía no estaban.
       </p>
 
       <form onSubmit={sincronizar} className="mt-6 space-y-4" autoComplete="off">
