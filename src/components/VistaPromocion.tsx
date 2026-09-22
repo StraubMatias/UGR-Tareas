@@ -46,7 +46,9 @@ export default function VistaPromocion({
                   <span>{obtenerIconoMateria(materia.nombre)}</span> {materia.nombre}
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Regulariza desde {materia.notaMinimaRegularizar}{['activos_porcentaje', 'tp_porcentaje_nota'].includes(materia.reglaPromocion) ? '%' : ''} · Promociona desde {materia.notaMinimaPromocionar}{materia.reglaPromocion === 'activos_porcentaje' ? '%' : ''}
+                  {materia.reglaPromocion === 'metodologia'
+                    ? 'Condiciones tomadas de la metodología del campus.'
+                    : `Regulariza desde ${materia.notaMinimaRegularizar}${['activos_porcentaje', 'tp_porcentaje_nota'].includes(materia.reglaPromocion) ? '%' : ''} · Promociona desde ${materia.notaMinimaPromocionar}${materia.reglaPromocion === 'activos_porcentaje' ? '%' : ''}`}
                 </p>
               </div>
               {esAdmin && (

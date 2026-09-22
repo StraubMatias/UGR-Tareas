@@ -42,6 +42,8 @@ import {
 export { emparejarCursosConMaterias, filtrarTareasDuplicadas, agruparResumenSync, armarMensajeCursada, limpiarTextoParaBusqueda, separarEvaluaciones };
 import { clasificarEventosCalendario, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
 import { MODULOS_CONSIGNA, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
+import { cabeceraCookies } from './autenticar.mjs';
+import { extraerEnlacesDeCursada, interpretarCondiciones, textoDeArchivoCampus, urlArchivoDeRecurso } from './metodologia.mjs';
 
 // Credenciales de UGR: se leen en el momento de conectar directamente de
 // process.env, igual que las variables TURSO_* en src/app/turso.js. Por lo
@@ -606,6 +608,7 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
     ? await leerProgresoCampus({ cliente, db, mapeos, detectadas: [...separado.tareas, ...separado.parciales], alumnoId })
     : { progresoAlumno: [] };
 
+  const condicionesActualizadas = await completarCondicionesCampus({ db, cliente, mapeos });
   const fechasCalendario = (calendario.fechasParcialesActualizar || [])
     .filter((fila) => !fechasTomaParciales.some((toma) => toma.id === fila.id));
   const fechasTareas = new Map();
@@ -628,6 +631,7 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
     ...calendario,
     fechasActualizar: [...fechasTareas.values()],
     fechasParcialesActualizar: [...fechasCalendario, ...fechasTomaParciales],
+    condicionesActualizadas,
     ...progreso
   };
 }
@@ -700,6 +704,68 @@ export async function moverTareasQueSonParciales({ db, materiaIds }) {
     }
   }
   return movidas;
+}
+
+// Si la materia todavía no dice cómo se regulariza y cómo se promociona, se lee
+// la metodología del aula. Lo que ya estaba cargado no se pisa.
+export async function completarCondicionesCampus({ db, cliente, mapeos }) {
+  const pendientes = [];
+  for (const mapeo of mapeos || []) {
+    const materiaId = mapeo?.coincidencia?.materia?.id;
+    const cursoId = mapeo?.curso?.id;
+    if (!materiaId || !cursoId) continue;
+    const fila = await db.execute({
+      sql: 'SELECT condiciones FROM materias WHERE id = ?',
+      args: [materiaId]
+    });
+    if (String(fila.rows[0]?.condiciones || '').trim()) continue;
+    pendientes.push({ materiaId, cursoId });
+  }
+  const hechas = [];
+  await conPool(pendientes, 4, async ({ materiaId, cursoId }) => {
+    try {
+      const condiciones = await leerCondicionesDeCurso(cliente, cursoId);
+      if (!condiciones) return;
+      const resultado = await db.execute({
+        sql: `UPDATE materias
+              SET condiciones = ?,
+                  regla_promocion = ?,
+                  nota_minima_regularizar = COALESCE(?, nota_minima_regularizar),
+                  nota_minima_promocionar = COALESCE(?, nota_minima_promocionar)
+              WHERE id = ? AND (condiciones IS NULL OR TRIM(condiciones) = '')`,
+        args: [condiciones.condiciones, condiciones.regla, condiciones.regularizar, condiciones.promocionar, materiaId]
+      });
+      if (Number(resultado.rowsAffected || 0) > 0) hechas.push(materiaId);
+    } catch {
+      // Una metodología ilegible no frena el resto de la sincronización.
+    }
+  });
+  return hechas.length;
+}
+
+async function leerCondicionesDeCurso(cliente, cursoId) {
+  const pagina = await cliente.pedir(UGR_RUTAS.curso(cursoId));
+  const enlaces = extraerEnlacesDeCursada(pagina.html);
+  const orden = [
+    ...enlaces.filter((enlace) => enlace.tipo === 'metodologia'),
+    ...enlaces.filter((enlace) => enlace.tipo === 'programa')
+  ];
+  for (const enlace of orden) {
+    const recurso = await cliente.pedir(enlace.href);
+    const archivo = urlArchivoDeRecurso(recurso.html);
+    if (!archivo) continue;
+    const respuesta = await fetch(archivo, {
+      headers: {
+        Cookie: cabeceraCookies(cliente.jar),
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)'
+      }
+    });
+    if (!respuesta.ok) continue;
+    const texto = textoDeArchivoCampus(Buffer.from(await respuesta.arrayBuffer()));
+    const condiciones = interpretarCondiciones(texto);
+    if (condiciones) return condiciones;
+  }
+  return null;
 }
 
 async function libretaYaCerrada({ db, materiaId, alumnoId }) {

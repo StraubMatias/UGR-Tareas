@@ -1228,7 +1228,7 @@ export async function editarCondicionesMateriaAction({ id, condiciones, notaMini
   try {
     const regularizar = Number(notaMinimaRegularizar);
     const promocionar = Number(notaMinimaPromocionar);
-    const reglasValidas = ['tp_nota', 'tp_porcentaje_nota', 'auditorias_tps', 'ciberdelitos_parciales', 'riesgos_tps', 'activos_porcentaje'];
+    const reglasValidas = ['tp_nota', 'tp_porcentaje_nota', 'auditorias_tps', 'ciberdelitos_parciales', 'riesgos_tps', 'activos_porcentaje', 'metodologia'];
     const maximo = ['activos_porcentaje', 'tp_porcentaje_nota'].includes(reglaPromocion) ? 100 : 10;
     if (!await verificarAdmin()) {
       return { exito: false, mensaje: 'Solo el administrador puede editar condiciones.' };
@@ -1543,6 +1543,7 @@ function armarMensajeSync({
   horarios,
   notas,
   fechas,
+  condiciones,
   armarMensajeCursada
 }: {
   materias: Array<{ nombre: string }>;
@@ -1552,6 +1553,7 @@ function armarMensajeSync({
   horarios: number;
   notas: number;
   fechas: number;
+  condiciones: number;
   armarMensajeCursada: (opciones: {
     materias?: Array<{ nombre: string } | string>;
     tareasNuevas?: number;
@@ -1571,6 +1573,7 @@ function armarMensajeSync({
   if (horarios) extras.push(`Se cargaron ${horarios} horario(s).`);
   if (notas) extras.push('Se copiaron las notas publicadas en el campus.');
   if (fechas) extras.push(`Se actualizaron ${fechas} fecha(s) que el campus había cambiado.`);
+  if (condiciones) extras.push(`Se cargó cómo se cursa y se promociona en ${condiciones} materia(s).`);
   return armarMensajeCursada({ materias, tareasNuevas: nuevas, tareasYa: ya, extras });
 }
 
@@ -1725,6 +1728,7 @@ async function sincronizarCursadaDelAlumno({
       horarios: complemento.horarios,
       notas: complemento.notas,
       fechas: complemento.fechas,
+      condiciones: Number(tareas.condicionesActualizadas || 0),
       armarMensajeCursada
     })
   };

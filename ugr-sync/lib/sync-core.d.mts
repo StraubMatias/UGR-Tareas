@@ -13,6 +13,7 @@ export interface ResultadoTareasNuevas {
   eventosCalendario?: unknown[];
   urlsActualizar?: unknown[];
   urlsParcialesActualizar?: unknown[];
+  condicionesActualizadas?: number;
 }
 
 export interface ResultadoAvisosMoodle {

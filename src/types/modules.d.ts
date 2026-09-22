@@ -17,6 +17,7 @@ declare module '../../ugr-sync/lib/sync-core.mjs' {
     eventosCalendario?: unknown[];
     urlsActualizar?: unknown[];
     urlsParcialesActualizar?: unknown[];
+    condicionesActualizadas?: number;
   }
   export interface ResultadoAvisosMoodle {
     avisosDetectados: unknown[];
