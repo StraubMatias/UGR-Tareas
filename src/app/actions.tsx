@@ -999,16 +999,18 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
     const materiasPropias = new Set(
       inscripciones.filter((fila) => fila.alumno === usuarioSesion).map((fila) => fila.materiaId)
     );
-    const materiasVisibles = materiasPropias.size > 0
-      ? materiasArmadas.filter((materia) => materiasPropias.has(materia.id))
-      : materiasArmadas;
-    const alumnosVisibles = companeros.length > 0
-      ? companeros
-      : resAlumnos.rows.map((fila) => texto(fila.nombre));
+    const rol = texto(resRol.rows[0]?.rol) || 'alumno';
+    const verTodaLaCursada = rol === 'admin';
+    const materiaVisible = (materiaId: string) => verTodaLaCursada || materiasPropias.size === 0 || materiasPropias.has(materiaId);
+    const materiasVisibles = materiasArmadas.filter((materia) => materiaVisible(materia.id));
+    const todosLosAlumnos = resAlumnos.rows.map((fila) => texto(fila.nombre));
+    const alumnosVisibles = verTodaLaCursada
+      ? todosLosAlumnos
+      : (companeros.length > 0 ? companeros : todosLosAlumnos);
 
     return {
       usuario: usuarioSesion,
-      rol: texto(resRol.rows[0]?.rol) || 'alumno',
+      rol,
       origen: texto(cuenta?.origen) || 'comision',
       ugrUsuario: textoONull(cuenta?.ugr_usuario),
       periodos: resPeriodos.rows.map((fila) => ({
@@ -1021,7 +1023,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       periodoActivo: periodoParaCargar,
       materias: materiasVisibles,
       alumnos: alumnosVisibles,
-      parciales: resParciales.rows.filter((fila) => materiasPropias.size === 0 || materiasPropias.has(texto(fila.materia_id))).map((fila) => ({
+      parciales: resParciales.rows.filter((fila) => materiaVisible(texto(fila.materia_id))).map((fila) => ({
         id: texto(fila.id),
         materia_id: texto(fila.materia_id),
         nombre: texto(fila.nombre),
@@ -1036,7 +1038,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota)
       })),
       horarios: resHorarios.rows.filter((fila) => {
-        if (materiasPropias.size > 0 && !materiasPropias.has(texto(fila.materia_id))) return false;
+        if (!materiaVisible(texto(fila.materia_id))) return false;
         const duenio = textoONull(fila.alumno_id);
         return !duenio || duenio === texto(cuenta?.id);
       }).map((fila) => ({
@@ -1047,7 +1049,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         hora_fin: texto(fila.hora_fin),
         aula: texto(fila.aula)
       })),
-      cronograma: resCronograma.rows.filter((fila) => materiasPropias.size === 0 || materiasPropias.has(texto(fila.materia_id))).map((fila) => ({
+      cronograma: resCronograma.rows.filter((fila) => materiaVisible(texto(fila.materia_id))).map((fila) => ({
         id: texto(fila.id),
         materia_id: texto(fila.materia_id),
         fecha: texto(fila.fecha),

@@ -59,7 +59,8 @@ test('interpretarCondiciones guarda la cursada y la promoción de criptografía'
     No hayan rendido alguno de los parciales.
   `;
   const condiciones = interpretarCondiciones(texto);
-  assert.match(condiciones.condiciones, /Para regularizar/);
+  assert.match(condiciones.condiciones, /Para regularizar: los trabajos prácticos con 6 y cada parcial con 6/);
+  assert.match(condiciones.condiciones, /Para promocionar: los trabajos prácticos con 8 y cada parcial con 8/);
   assert.doesNotMatch(condiciones.condiciones, /Condición de libre/);
   assert.equal(condiciones.regularizar, 6);
   assert.equal(condiciones.promocionar, 8);
@@ -77,6 +78,8 @@ test('interpretarCondiciones usa el porcentaje de actividades cuando la metodolo
   assert.equal(condiciones.regla, 'activos_porcentaje');
   assert.equal(condiciones.regularizar, 75);
   assert.equal(condiciones.promocionar, 90);
+  assert.match(condiciones.condiciones, /75% de las actividades/);
+  assert.match(condiciones.condiciones, /el 90%/);
 });
 
 test('interpretarCondiciones de solo parciales usa la regla de los dos exámenes', () => {
@@ -88,4 +91,6 @@ test('interpretarCondiciones de solo parciales usa la regla de los dos exámenes
   assert.equal(condiciones.regla, 'ciberdelitos_parciales');
   assert.equal(condiciones.regularizar, 6);
   assert.equal(condiciones.promocionar, 8);
+  assert.match(condiciones.condiciones, /los dos parciales con 6/);
+  assert.match(condiciones.condiciones, /los dos parciales con 8/);
 });

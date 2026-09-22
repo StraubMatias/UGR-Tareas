@@ -1,4 +1,5 @@
 import { obtenerIconoMateria, type Materia } from '../core/cursada';
+import { materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
 
 interface CondicionesEdicion {
   id: string;
@@ -10,6 +11,7 @@ interface CondicionesEdicion {
 
 interface Props {
   materias: Materia[];
+  inscripciones?: InscripcionAlumno[];
   esAdmin: boolean;
   usuarioActual: string | null;
   alumnosOrdenadosPromocion: string[];
@@ -21,6 +23,7 @@ interface Props {
 // de regularización/promoción cargadas en el panel de administración.
 export default function VistaPromocion({
   materias,
+  inscripciones = [],
   esAdmin,
   usuarioActual,
   alumnosOrdenadosPromocion,
@@ -45,11 +48,11 @@ export default function VistaPromocion({
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <span>{obtenerIconoMateria(materia.nombre)}</span> {materia.nombre}
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  {materia.reglaPromocion === 'metodologia'
-                    ? 'Condiciones tomadas de la metodología del campus.'
-                    : `Regulariza desde ${materia.notaMinimaRegularizar}${['activos_porcentaje', 'tp_porcentaje_nota'].includes(materia.reglaPromocion) ? '%' : ''} · Promociona desde ${materia.notaMinimaPromocionar}${materia.reglaPromocion === 'activos_porcentaje' ? '%' : ''}`}
-                </p>
+                {materia.reglaPromocion !== 'metodologia' && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Regulariza desde {materia.notaMinimaRegularizar}{['activos_porcentaje', 'tp_porcentaje_nota'].includes(materia.reglaPromocion) ? '%' : ''} · Promociona desde {materia.notaMinimaPromocionar}{materia.reglaPromocion === 'activos_porcentaje' ? '%' : ''}
+                  </p>
+                )}
               </div>
               {esAdmin && (
                 <button
@@ -70,7 +73,10 @@ export default function VistaPromocion({
               {materia.condiciones || 'Condiciones todavía no cargadas.'}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-5">
-              {alumnosOrdenadosPromocion.map((alumno) => {
+              {alumnosOrdenadosPromocion.filter((alumno) => {
+                const cursa = materiasQueCursa(inscripciones, alumno);
+                return cursa.size === 0 || cursa.has(materia.id);
+              }).map((alumno) => {
                 const estado = obtenerEstadoMateria(materia, alumno);
                 return (
                   <div key={alumno} className={`flex items-center justify-between gap-3 bg-[#0f141c] border rounded-xl p-3 ${

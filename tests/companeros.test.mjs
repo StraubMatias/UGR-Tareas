@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { alumnosConLaMismaCursada, alumnosDeLaMateria } from '../src/lib/companeros.ts';
+import { alumnosConLaMismaCursada, alumnosDeLaMateria, materiasQueCursa } from '../src/lib/companeros.ts';
 
 const inscripciones = [
   { alumno: 'Ana', materiaId: 'm1' },
@@ -29,4 +29,9 @@ test('dos materias de más dejan afuera a ese alumno', () => {
 test('el ranking de una materia incluye a quien la cursa aunque tenga otras', () => {
   assert.deepEqual(alumnosDeLaMateria(inscripciones, 'm1'), ['Ana', 'Luis', 'Sol']);
   assert.deepEqual(alumnosDeLaMateria(inscripciones, 'm3'), ['Sol']);
+});
+
+test('las materias de un alumno son solo las de su inscripción', () => {
+  assert.deepEqual([...materiasQueCursa(inscripciones, 'Ana')].sort(), ['m1', 'm2']);
+  assert.equal(materiasQueCursa(inscripciones, 'Nadie').size, 0);
 });

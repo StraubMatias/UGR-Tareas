@@ -2,7 +2,7 @@
 
 import { startTransition, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { nombreNotificacionAviso } from '../lib/avisos';
-import { alumnosDeLaMateria } from '../lib/companeros';
+import { alumnosDeLaMateria, materiasQueCursa } from '../lib/companeros';
 import {
   validarLoginAction,
   registrarCuentaAction,
@@ -393,17 +393,20 @@ export default function Home() {
   useEffect(() => {
     if (!usuarioActual || cargando) return;
 
-    const tareasActuales = materias.flatMap((materia) => materia.tareas.map((tarea) => ({
+    const ids = materiasQueCursa(inscripciones, usuarioActual);
+    const materiasAvisos = ids.size > 0 ? materias.filter((materia) => ids.has(materia.id)) : materias;
+    const parcialesAvisos = ids.size > 0 ? parciales.filter((parcial) => ids.has(parcial.materia_id)) : parciales;
+    const tareasActuales = materiasAvisos.flatMap((materia) => materia.tareas.map((tarea) => ({
       id: `tarea-${tarea.id}`,
       tipo: 'nueva-tarea',
       nombre: tarea.nombre,
       materia: materia.nombre
     })));
-    const parcialesActuales = parciales.map((parcial) => ({
+    const parcialesActuales = parcialesAvisos.map((parcial) => ({
       id: `nuevo-parcial-${parcial.id}`,
       tipo: 'nuevo-parcial',
       nombre: parcial.nombre,
-      materia: materias.find((materia) => materia.id === parcial.materia_id)?.nombre || 'Materia'
+      materia: materiasAvisos.find((materia) => materia.id === parcial.materia_id)?.nombre || 'Materia'
     }));
     const elementosActuales = [...tareasActuales, ...parcialesActuales];
     const claveNovedades = `ugr_novedades_conocidas_${encodeURIComponent(usuarioActual)}`;
@@ -426,7 +429,7 @@ export default function Home() {
       setNovedades(nuevas);
     });
     localStorage.setItem(claveNovedades, JSON.stringify(elementosActuales.map((elemento) => elemento.id)));
-  }, [usuarioActual, cargando, materias, parciales]);
+  }, [usuarioActual, cargando, materias, parciales, inscripciones]);
 
   // PERSISTENCIA DE SESIÓN
   useEffect(() => {
@@ -1234,7 +1237,11 @@ export default function Home() {
   }
 
   const restoDeAlumnos = alumnos.filter((a) => a !== usuarioActual);
-  const parcialesOrdenados = ordenarParciales(parciales);
+  const idsCursada = materiasQueCursa(inscripciones, usuarioActual || '');
+  const materiasDeLaCursada = idsCursada.size > 0 ? materias.filter((materia) => idsCursada.has(materia.id)) : materias;
+  const parcialesDeLaCursada = idsCursada.size > 0 ? parciales.filter((parcial) => idsCursada.has(parcial.materia_id)) : parciales;
+  const nombresDeLaCursada = new Set(materiasDeLaCursada.map((materia) => materia.nombre));
+  const parcialesOrdenados = ordenarParciales(parcialesDeLaCursada);
   const proximoParcial = parcialesOrdenados.find(
     (parcial) => {
       const ms = obtenerFechaParcialEnMs(parcial.fecha);
@@ -1248,14 +1255,14 @@ export default function Home() {
     ? ([
       ...novedades,
       // Avisos aprobados de los foros del campus (solo los que el admin publicó).
-      ...avisos.map((aviso) => ({
+      ...avisos.filter((aviso) => idsCursada.size === 0 || nombresDeLaCursada.has(aviso.materia_nombre)).map((aviso) => ({
         id: `aviso-${aviso.id}`,
         tipo: 'aviso-nuevo',
         nombre: nombreNotificacionAviso(aviso, cronograma),
         materia: aviso.materia_nombre || aviso.curso_nombre || 'Materia',
         url: aviso.url || ''
       })),
-      ...materias.flatMap((materia) => materia.tareas
+      ...materiasDeLaCursada.flatMap((materia) => materia.tareas
         .map((tarea) => ({ tarea, materia }))
         .filter(({ tarea }) => {
           const dias = obtenerDiasHastaTarea(tarea.fin);
@@ -1268,16 +1275,16 @@ export default function Home() {
           materia: materia.nombre,
           dias: obtenerDiasHastaTarea(tarea.fin)
         }))),
-      ...parciales
+      ...parcialesDeLaCursada
         .map((parcial) => ({
           id: `parcial-${parcial.id}`,
           tipo: 'parcial',
           nombre: parcial.nombre,
-          materia: materias.find((materia) => materia.id === parcial.materia_id)?.nombre || 'Materia',
+          materia: materiasDeLaCursada.find((materia) => materia.id === parcial.materia_id)?.nombre || 'Materia',
           dias: obtenerDiasHastaFecha(parcial.fecha)
         }))
         .filter(({ dias }) => dias === 1),
-      ...materias.flatMap((materia) => materia.tareas
+      ...materiasDeLaCursada.flatMap((materia) => materia.tareas
         .map((tarea) => ({
           id: `apertura-${tarea.id}`,
           tipo: 'apertura',
@@ -2093,6 +2100,7 @@ export default function Home() {
 
                   <VistaAlumnos
                     materias={materias}
+                    inscripciones={inscripciones}
                     alumnos={alumnos}
                     usuarioActual={usuarioActual}
                     situacionPropiaAbierta={situacionPropiaAbierta}
@@ -2137,6 +2145,7 @@ export default function Home() {
               {pestana === 'promocion' && (
                 <VistaPromocion
                   materias={materias}
+                  inscripciones={inscripciones}
                   esAdmin={esAdmin}
                   usuarioActual={usuarioActual}
                   alumnosOrdenadosPromocion={alumnosOrdenadosPromocion}

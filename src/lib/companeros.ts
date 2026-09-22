@@ -39,3 +39,9 @@ export function alumnosDeLaMateria(inscripciones: InscripcionAlumno[], materiaId
   );
   return [...nombres].sort((a, b) => a.localeCompare(b, 'es'));
 }
+
+export function materiasQueCursa(inscripciones: InscripcionAlumno[], alumno: string): Set<string> {
+  return new Set(
+    inscripciones.filter((fila) => fila.alumno === alumno).map((fila) => fila.materiaId)
+  );
+}

@@ -148,7 +148,12 @@ export function interpretarCondiciones(texto) {
   const n = limpiarTextoParaBusqueda(condiciones);
   const porcentajes = [...condiciones.matchAll(/(\d{2,3})\s*%/g)].map((item) => Number(item[1]));
   if (porcentajes.includes(75) && porcentajes.some((valor) => valor >= 90)) {
-    return { condiciones, regularizar: 75, promocionar: Math.max(...porcentajes.filter((valor) => valor >= 90)), regla: 'activos_porcentaje' };
+    return {
+      condiciones: resumirCondiciones({ condiciones, regularizar: 75, promocionar: Math.max(...porcentajes.filter((valor) => valor >= 90)), regla: 'activos_porcentaje' }),
+      regularizar: 75,
+      promocionar: Math.max(...porcentajes.filter((valor) => valor >= 90)),
+      regla: 'activos_porcentaje'
+    };
   }
   const regularizar = notaDeTramo(n, 'regulariz', 'promocion');
   const promocionar = notaDeTramo(n, 'promocion', 'condicion de libre');
@@ -160,15 +165,59 @@ export function interpretarCondiciones(texto) {
     && !mencionaPracticos(antesDePromocion)
     && !mencionaPracticos(despuesDePromocion);
   if (promoSoloParciales && regularizar && promocionar) {
-    return { condiciones, regularizar, promocionar, regla: 'ciberdelitos_parciales' };
+    return {
+      condiciones: resumirCondiciones({ condiciones, regularizar, promocionar, regla: 'ciberdelitos_parciales' }),
+      regularizar,
+      promocionar,
+      regla: 'ciberdelitos_parciales'
+    };
   }
   if (!regularizar && !promocionar) return null;
-  return {
+  const resultado = {
     condiciones,
     regularizar: regularizar || null,
     promocionar: promocionar || null,
     regla: 'metodologia'
   };
+  resultado.condiciones = resumirCondiciones(resultado);
+  return resultado;
+}
+
+export function resumirCondiciones({ condiciones, regularizar, promocionar, regla }) {
+  if (regla === 'activos_porcentaje') {
+    return `Para regularizar: completar al menos el ${regularizar}% de las actividades. Para promocionar: el ${promocionar}%.`;
+  }
+  if (regla === 'ciberdelitos_parciales') {
+    return `Para regularizar: los dos parciales con ${regularizar}. Para promocionar: los dos parciales con ${promocionar}.`;
+  }
+  const n = limpiarTextoParaBusqueda(condiciones);
+  const regular = n.split('promocion')[0] || n;
+  const promo = n.includes('promocion') ? n.slice(n.indexOf('promocion')) : '';
+  return `Para regularizar: ${fraseDeCursada(regular, regularizar)}. Para promocionar: ${fraseDeCursada(promo, promocionar)}.`;
+}
+
+function fraseDeCursada(trozo, nota) {
+  const practicos = /trabajos? practicos?|\btps?\b|actividades practicas/.test(trozo);
+  const parciales = /parcial/.test(trozo);
+  const recuperatorio = /recuperatorio/.test(trozo);
+  const todos = /\btod[oa]s\b/.test(trozo);
+  const algunos = /cantidad estipulada|al menos|estipulad/.test(trozo);
+  const sinPromedio = /no se considera el promedio/.test(trozo);
+  const notaTxt = nota ? ` con ${nota}` : '';
+  const partes = [];
+  if (practicos) {
+    if (todos) partes.push(`todos los trabajos prácticos${notaTxt}`);
+    else if (algunos) partes.push(`los trabajos prácticos que pida el docente${notaTxt}`);
+    else partes.push(`los trabajos prácticos${notaTxt}`);
+  }
+  if (parciales) {
+    const extra = sinPromedio ? ', sin promedio' : '';
+    if (recuperatorio) partes.push(`los dos parciales (o sus recuperatorios)${notaTxt}`);
+    else partes.push(`cada parcial${notaTxt}${extra}`);
+  }
+  if (partes.length === 0) return nota ? `nota mínima de ${nota}` : 'según la metodología del campus';
+  if (partes.length === 1) return partes[0];
+  return `${partes.slice(0, -1).join(' y ')} y ${partes.at(-1)}`;
 }
 
 function notaDeTramo(texto, desde, hasta) {

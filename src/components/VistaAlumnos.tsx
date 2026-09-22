@@ -2,12 +2,14 @@
 
 import { useId, useState, type Dispatch, type SetStateAction } from 'react';
 import type { Materia, Tarea } from '../core/cursada';
+import type { InscripcionAlumno } from '../lib/companeros';
 import EstadoAlumno from './EstadoAlumno';
 
 const normalizar = (texto: string) => texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
 interface Props {
   materias?: Materia[];
+  inscripciones?: InscripcionAlumno[];
   alumnos?: string[];
   usuarioActual: string | null;
   situacionPropiaAbierta: boolean;
@@ -22,14 +24,14 @@ interface Props {
 }
 
 export default function VistaAlumnos({
-  materias = [], alumnos = [], usuarioActual, situacionPropiaAbierta,
+  materias = [], inscripciones = [], alumnos = [], usuarioActual, situacionPropiaAbierta,
   setSituacionPropiaAbierta, alumnosDesplegados, toggleDesplegarAlumno, ...acciones
 }: Props) {
   const [busqueda, setBusqueda] = useState('');
   const busquedaId = useId();
   const companeros = alumnos.filter((alumno) => alumno !== usuarioActual);
   const visibles = companeros.filter((alumno) => normalizar(alumno).includes(normalizar(busqueda)));
-  const propsCompartidas = { materias, alumnos, usuarioActual, ...acciones };
+  const propsCompartidas = { materias, inscripciones, alumnos, usuarioActual, ...acciones };
 
   return (
     <div className="estado-alumnos min-w-0 space-y-6">

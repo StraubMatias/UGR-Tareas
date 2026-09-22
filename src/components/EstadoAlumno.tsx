@@ -1,7 +1,8 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { agruparTareasPorUnidad, obtenerResumenTareasAlumno, type Materia, type Tarea } from '../core/cursada';
+import { obtenerResumenTareasAlumno, type Materia, type Tarea } from '../core/cursada';
+import { materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
 import EstadoTareaAlumno from './EstadoTareaAlumno';
 
 const ESTADOS = [
@@ -16,6 +17,7 @@ type ClaveFiltro = 'pendientes' | 'faltaNota' | 'futuras' | 'completadas' | 'gru
 interface Props {
   alumno: string;
   materias: Materia[];
+  inscripciones?: InscripcionAlumno[];
   abierto: boolean;
   alAlternar: () => void;
   alumnos: string[];
@@ -27,13 +29,15 @@ interface Props {
   handleGuardarNotaTareaOnBlur: (tareaId: string, alumno: string) => void;
 }
 
-export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ...acciones }: Props) {
+export default function EstadoAlumno({ alumno, materias, inscripciones = [], abierto, alAlternar, ...acciones }: Props) {
   const [filtro, setFiltro] = useState<ClaveFiltro>('pendientes');
   const contenidoId = useId();
-  const resumen = obtenerResumenTareasAlumno(alumno, materias);
+  const idsCursada = materiasQueCursa(inscripciones, alumno);
+  const materiasDelAlumno = idsCursada.size > 0 ? materias.filter((materia) => idsCursada.has(materia.id)) : materias;
+  const resumen = obtenerResumenTareasAlumno(alumno, materiasDelAlumno);
   const propia = alumno === acciones.usuarioActual;
   const seleccionadas = filtro === 'grupales'
-    ? materias.flatMap((materia) => materia.tareas || []).filter((tarea) => tarea.grupal)
+    ? materiasDelAlumno.flatMap((materia) => materia.tareas || []).filter((tarea) => tarea.grupal)
     : resumen[filtro];
   const ids = new Set(seleccionadas.map((tarea) => tarea.id));
   const filtros = [...ESTADOS, ['grupales', 'Grupales']];
@@ -73,7 +77,7 @@ export default function EstadoAlumno({ alumno, materias, abierto, alAlternar, ..
               </p>
                                                 ) : (
               <div className="estado-tareas-contenedor flex flex-wrap gap-2">
-                {materias
+                {materiasDelAlumno
                   .flatMap((materia) => 
                     (materia.tareas || [])
                       .filter((tarea) => ids.has(tarea.id))
