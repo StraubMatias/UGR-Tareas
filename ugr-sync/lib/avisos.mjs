@@ -37,7 +37,7 @@ function completarUrl(href, baseUrl) {
 // avisos (es el complemento de esForoInformativo de tareas.mjs, que los descarta
 // como consignas para el tablero de tareas).
 const PATRONES_FORO_DE_AVISOS = [
-  /^(avisos?|novedades?|noticias?|anuncios?|comunicados?)$/,
+  /\b(?:avisos?|novedades|noticias|anuncios|comunicados)\b/,
   /consulta(s)?/,
   /^foro\s+(general|principal)$/,
   // Avisos de organización: horarios de clases sincrónicas, encuentros, etc.
@@ -113,28 +113,24 @@ export function extraerDiscusionesDeForo(html, baseUrl = '') {
     const autor = limpiarTexto(
       fila.find('td.author a, .author a, [data-region="author-name"]').first().text()
     );
-    const actualizado = limpiarTexto(fila.find('time[datetime]').first().attr('datetime') || '');
+    // La fila trae el inicio y el último mensaje. El más reciente decide si el
+    // hilo sigue vivo: un recordatorio nuevo en un debate viejo también entra.
+    const tiempos = fila.find('time[datetime]').map((_, el) => parsearFechaMoodle($(el).attr('datetime'))).get().filter(Boolean);
+    const actualizado = tiempos.sort().at(-1) || null;
 
     discusiones.push({
       id,
       titulo,
       url: completarUrl(href, baseUrl),
       autor,
-      actualizado: parsearFechaMoodle(actualizado) || null
+      actualizado
     });
   });
 
   return discusiones;
 }
 
-// Parser de la página de una discusión (/mod/forum/discuss.php?d=N). El primer
-// post del DOM es el que abre el hilo (el anuncio del profesor). Cada hilo = un
-// aviso, así que se devuelve un solo post.
-export function extraerPrimerPostDeHilo(html, baseUrl = '') {
-  const $ = load(html);
-  const post = $('article.forum-post-container, article.forumpost, .forum-post-container, [data-post-id], .forumpost').first();
-  if (!post.length) return null;
-
+function leerPost($, post, baseUrl) {
   const id = post.attr('data-post-id') || '';
   const titulo = limpiarTexto(
     post.find('[data-region="post-subject"], [data-region-content="forum-post-core-subject"], h3[class*="subject"] a, .discussionname').first().text()
@@ -175,6 +171,32 @@ export function extraerPrimerPostDeHilo(html, baseUrl = '') {
     contenidoHtml,
     urlHilo
   };
+}
+
+// Todos los posts del hilo, en el orden del DOM (el primero abre la discusión).
+// Un recordatorio del docente suele ser una respuesta, no el mensaje original.
+export function extraerPostsDeHilo(html, baseUrl = '') {
+  const $ = load(html || '');
+  let nodos = $('article.forum-post-container, article.forumpost').toArray();
+  if (nodos.length === 0) nodos = $('[data-post-id], .forum-post-container, .forumpost').toArray();
+
+  const posts = [];
+  const vistos = new Set();
+  for (const nodo of nodos) {
+    const leido = leerPost($, $(nodo), baseUrl);
+    if (!leido) continue;
+    const clave = leido.id || `${leido.fecha}|${leido.titulo}|${leido.contenido}`;
+    if (vistos.has(clave)) continue;
+    vistos.add(clave);
+    posts.push(leido);
+  }
+  return posts;
+}
+
+// Parser de la página de una discusión (/mod/forum/discuss.php?d=N). El primer
+// post del DOM es el que abre el hilo.
+export function extraerPrimerPostDeHilo(html, baseUrl = '') {
+  return extraerPostsDeHilo(html, baseUrl)[0] || null;
 }
 
 // --- Análisis del texto de un aviso para sugerir un evento al cronograma ---
@@ -498,6 +520,21 @@ export function filtrarEventosDeAviso({ titulo, contenido }, eventos) {
     if (evento.tipo === 'consulta') return /\b(?:clase|encuentro)\b/.test(texto);
     return false;
   });
+}
+
+// Un aviso entra a la campana aunque no se pueda clavar una fecha de cronograma,
+// si cuenta un cambio concreto de la cursada. El material, la grabación y la
+// publicación de notas siguen afuera.
+export function avisoEsRelevante({ titulo, contenido }) {
+  const texto = limpiarTextoParaBusqueda(`${titulo || ''} ${contenido || ''}`);
+  if (!texto) return false;
+  const ruido = /\b(?:grabacion|material|diapositivas|bibliografia|calificaciones|notas|resultados|bienvenidos)\b/.test(texto);
+  const programa = /\b(?:vence|vencimiento|entregar|entrega|reprogram|posterg|prorroga|nueva clase|clase extra|apertura|cierre|habilit|suspend|cancela|sin clases|no hay clases|no tendremos|aula|zoom|meet|encuentro)\b/.test(texto);
+  if (!programa) return false;
+  if (!ruido) return true;
+  // «La grabación del encuentro» no es un cambio de cursada. Una prórroga o
+  // una suspensión sí, aunque el texto también mencione el material.
+  return /\b(?:vence|vencimiento|entregar|entrega|prorroga|reprogram|posterg|sin clases|no hay clases|no tendremos|suspend|cancela|aula|habilit)\b/.test(texto);
 }
 
 // Versión de una sola sugerencia (compatibilidad): devuelve el primer evento

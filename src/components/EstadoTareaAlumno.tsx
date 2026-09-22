@@ -72,7 +72,7 @@ export default function EstadoTareaAlumno({
             <label className="flex items-center justify-between gap-3 text-slate-300">
               <span>{tarea.grupal ? 'Nota del grupo' : 'Tu nota'} (1 a 10)</span>
               <input type="text" inputMode="decimal" pattern="[0-9]+([.,][0-9]+)?"
-                aria-label={`Nota de ${tarea.nombre}`} placeholder="Nota" disabled={!puedeGestionar}
+                aria-label={`Nota de ${tarea.nombre}`} placeholder="Nota" disabled readOnly
                 value={notasTareasInputs[`${tarea.id}_${alumno}`] ?? ''}
                 onChange={(e) => handleNotaTareaChangeLocal(tarea.id, alumno, e.target.value)}
                 onBlur={() => handleGuardarNotaTareaOnBlur(tarea.id, alumno)}

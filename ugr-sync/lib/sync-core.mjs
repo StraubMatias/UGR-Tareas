@@ -8,13 +8,14 @@ import { crearCliente } from './red.mjs';
 import { optimizarLecturas } from './lecturas.mjs';
 import { autorEsEquipoDocente, esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
 import { extraerCursos, extraerNombreCursoDesdePagina } from './materias.mjs';
-import { extraerFechasActividad, extraerActividadesOverview } from './tareas.mjs';
+import { extraerFechasActividad, extraerActividadesOverview, extraerNotasDeLibreta } from './tareas.mjs';
 import {
   analizarAvisosParaCronograma,
   DIAS_HACIA_ATRAS,
+  avisoEsRelevante,
   extraerDiscusionesDeForo,
   extraerForosDelIndice,
-  extraerPrimerPostDeHilo,
+  extraerPostsDeHilo,
   fechaHoyLocal,
   filtrarEventosDeAviso,
   sumarDias
@@ -24,9 +25,16 @@ import {
   coincidirMateria,
   coincidirNombreTarea,
   coincidirParcial,
+  emparejarCursosConMaterias,
+  filtrarTareasDuplicadas,
+  agruparResumenSync,
   inferirTipoTarea,
-  normalizarNombre
+  normalizarNombre,
+  separarEvaluaciones
 } from './normalizar.mjs';
+
+export { emparejarCursosConMaterias, filtrarTareasDuplicadas, agruparResumenSync, separarEvaluaciones };
+import { clasificarEventosCalendario, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
 import { MODULOS_CONSIGNA, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 
 // Credenciales de UGR: se leen en el momento de conectar directamente de
@@ -198,6 +206,14 @@ export async function conectarUGR() {
   return optimizarLecturas(await crearCliente({ usuario, contrasena }));
 }
 
+// Sesión propia del alumno. No usa ni pisa la cookie del sincronizador de la comisión.
+export async function conectarUGRCon({ usuario, contrasena, rutaSesion }) {
+  if (!usuario || !contrasena) {
+    throw new Error('Faltan las credenciales de UGR Virtual de esta cuenta.');
+  }
+  return optimizarLecturas(await crearCliente({ usuario, contrasena, rutaSesion }));
+}
+
 async function fechasDeDetalle({ cliente, tarea }) {
   try {
     if (!tarea?.url) return { inicio: null, fin: null };
@@ -208,24 +224,11 @@ async function fechasDeDetalle({ cliente, tarea }) {
   }
 }
 
-// Recorre los cursos del campus, los mapea contra las materias locales y
-// devuelve las tareas nuevas que todavía no existen en la base.
-export async function detectarTareasNuevas({ db, cliente }) {
-  // 1) Materias locales (destino).
-  const resMaterias = await db.execute('SELECT id, nombre FROM materias ORDER BY nombre');
-  const materiasLocales = resMaterias.rows;
-
-  // 2) Cursos del campus y mapeo contra las materias locales.
+// Cursos visibles para la sesión actual, con el nombre completo cuando Moodle
+// lo trunca en el listado. No escribe materias ni tareas.
+export async function listarCursosDelCampus(cliente) {
   const pageCursos = await cliente.pedir(UGR_RUTAS.cursos);
   const cursos = extraerCursos(pageCursos.html);
-
-  // Moodle a veces sirve nombres truncados dentro de los selects (terminan en
-  // "...") aunque el prefijo de versión «(V.TUCS.1.07.2)» ya sea visible.
-  // El nombre completo está en la página del curso: lo resolvemos antes de
-  // mapear contra las materias locales.
-  const mapeos = [];
-  // La resolución del nombre completo es independiente por curso: se hace en
-  // paralelo (concurrencia 4) en vez de encadenar un pedido HTTP por curso.
   await conPool(cursos, 4, async (curso) => {
     if (!curso.nombreIncompleto) return;
     try {
@@ -236,6 +239,23 @@ export async function detectarTareasNuevas({ db, cliente }) {
       // Si falla la resolución, nos quedamos con el nombre parcial.
     }
   });
+  return cursos;
+}
+
+// Recorre los cursos del campus, los mapea contra las materias locales y
+// devuelve las tareas nuevas que todavía no existen en la base.
+export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, periodoId, alumnoId } = {}) {
+  // 1) Materias locales (destino). Un período acota el match a esa cursada.
+  const resMaterias = periodoId
+    ? await db.execute({ sql: 'SELECT id, nombre FROM materias WHERE periodo_id = ? ORDER BY nombre', args: [periodoId] })
+    : await db.execute('SELECT id, nombre FROM materias ORDER BY nombre');
+  const materiasLocales = resMaterias.rows;
+
+  // 2) Cursos del campus y mapeo contra las materias locales.
+  // Moodle a veces sirve nombres truncados dentro de los selects (terminan en
+  // "...") aunque el prefijo de versión «(V.TUCS.1.07.2)» ya sea visible.
+  const cursos = cursosDados || await listarCursosDelCampus(cliente);
+  const mapeos = [];
   for (const curso of cursos) {
     const coincidencia = coincidirMateria(curso.nombre, materiasLocales);
     if (coincidencia) mapeos.push({ curso, coincidencia });
@@ -243,6 +263,7 @@ export async function detectarTareasNuevas({ db, cliente }) {
 
   // 3) Tareas de cada curso mapeado y detección de faltantes.
   const detectadas = [];
+  const yaCargadas = [];
   // Tareas locales que ya existen pero quedaron sin enlace: las cargamos en
   // esta misma pasada (backfill de la columna `url`).
   const urlsActualizar = [];
@@ -286,7 +307,7 @@ export async function detectarTareasNuevas({ db, cliente }) {
     // match por nombre tolera sufijos explicativos («(Video 5m)»), para que el
     // backfill también alcance a las actividades cargadas a mano.
     const resExistentes = await db.execute({
-      sql: 'SELECT id, nombre, url FROM tareas WHERE materia_id = ?',
+      sql: 'SELECT id, nombre, url, inicio, fin FROM tareas WHERE materia_id = ?',
       args: [coincidencia.materia.id]
     });
     const existentesPorClave = new Map(
@@ -313,6 +334,11 @@ export async function detectarTareasNuevas({ db, cliente }) {
       const existente = existentesPorClave.get(clave)
         || resExistentes.rows.find((t) => coincidirNombreTarea(t.nombre, nombreFinal));
       if (existente) {
+        yaCargadas.push({
+          materiaId: coincidencia.materia.id,
+          materiaNombre: coincidencia.materia.nombre,
+          nombre: nombreFinal
+        });
         if (!existente.url && tarea.url) {
           urlsActualizar.push({ id: existente.id, url: tarea.url });
         }
@@ -365,12 +391,141 @@ export async function detectarTareasNuevas({ db, cliente }) {
   const ordenMaterias = new Map(mapeos.map((m, i) => [m.coincidencia.materia.id, i]));
   detectadas.sort((a, b) => ordenMaterias.get(a.materiaId) - ordenMaterias.get(b.materiaId));
 
-  return { materiasLocales, cursos, mapeos, detectadas, urlsActualizar, urlsParcialesActualizar };
+  const calendario = await completarDesdeCalendario({ cliente, db, mapeos, detectadas, periodoId });
+  const progreso = alumnoId
+    ? await leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId })
+    : { progresoAlumno: [] };
+
+  return { materiasLocales, cursos, mapeos, detectadas, yaCargadas, urlsActualizar, urlsParcialesActualizar, ...calendario, ...progreso };
 }
 
-// Inserta las tareas detectadas en la base. Devuelve cuántas insertó.
+// El calendario del curso trae las clases y los vencimientos que el overview no
+// muestra. Completa fechas vacías o distintas y arma el cronograma que falta.
+async function completarDesdeCalendario({ cliente, db, mapeos, detectadas, periodoId }) {
+  const paginas = await conPool(mapeos, 4, async ({ curso, coincidencia }) => {
+    try {
+      const proximos = await cliente.pedir(UGR_RUTAS.calendarioCurso(curso.id));
+      const eventos = extraerEventosCalendario(proximos.html);
+      const periodo = periodoId ? await db.execute({ sql: 'SELECT anio, cuatrimestre FROM periodos WHERE id = ?', args: [periodoId] }) : { rows: [] };
+      const anio = Number(periodo.rows[0]?.anio) || new Date().getFullYear();
+      const cuatrimestre = Number(periodo.rows[0]?.cuatrimestre) || 2;
+      const meses = await conPool(timestampsDeMesesDelPeriodo(anio, cuatrimestre), 4, async (time) => {
+        const pagina = await cliente.pedir(UGR_RUTAS.calendarioMes(curso.id, time));
+        return extraerEventosCalendario(pagina.html);
+      });
+      for (const extra of meses.flat()) eventos.push(extra);
+      return { materiaId: coincidencia.materia.id, eventos };
+    } catch {
+      return null;
+    }
+  });
+
+  const eventosCalendario = [];
+  const horariosNuevos = [];
+  const parchesTareas = new Map();
+  const parchesParciales = new Map();
+
+  for (const pagina of paginas) {
+    if (!pagina) continue;
+    const tareas = await db.execute({
+      sql: 'SELECT id, nombre, inicio, fin FROM tareas WHERE materia_id = ?',
+      args: [pagina.materiaId]
+    });
+    const parciales = await db.execute({
+      sql: 'SELECT id, nombre, fecha FROM parciales WHERE materia_id = ?',
+      args: [pagina.materiaId]
+    });
+    const actividades = [
+      ...tareas.rows.map((fila) => ({ id: fila.id, nombre: fila.nombre, tabla: 'tareas', inicio: fila.inicio, fin: fila.fin })),
+      ...parciales.rows.map((fila) => ({ id: fila.id, nombre: fila.nombre, tabla: 'parciales', fin: fila.fecha })),
+      ...detectadas.filter((item) => item.materiaId === pagina.materiaId).map((item) => ({
+        id: item.idMoodle, nombre: item.nombre, tabla: 'nueva', inicio: item.inicio, fin: item.fin
+      }))
+    ];
+    const clasificado = clasificarEventosCalendario({
+      eventos: pagina.eventos,
+      actividades,
+      materiaId: pagina.materiaId
+    });
+    eventosCalendario.push(...clasificado.cronograma);
+    horariosNuevos.push(...clasificado.horarios);
+    for (const fecha of clasificado.fechas) {
+      if (fecha.tabla === 'nueva') {
+        const nueva = detectadas.find((item) => item.idMoodle === fecha.id);
+        if (!nueva) continue;
+        if (fecha.campo === 'inicio' && (!nueva.inicio || nueva.inicio === 'Sin fecha')) nueva.inicio = fecha.fecha;
+        if (fecha.campo === 'fin' && (!nueva.fin || nueva.fin === 'Sin fecha')) nueva.fin = fecha.fecha;
+        continue;
+      }
+      const destino = fecha.tabla === 'parciales' ? parchesParciales : parchesTareas;
+      const actual = destino.get(fecha.id) || { id: fecha.id };
+      const guardada = actividades.find((item) => item.id === fecha.id);
+      const previa = fecha.campo === 'inicio' ? guardada?.inicio : (fecha.tabla === 'parciales' ? guardada?.fin : guardada?.fin);
+      if (fecha.fecha && previa !== fecha.fecha) {
+        actual[fecha.campo === 'inicio' ? 'inicio' : 'fin'] = fecha.fecha;
+        destino.set(fecha.id, actual);
+      }
+    }
+  }
+
+  return {
+    eventosCalendario,
+    horariosNuevos,
+    fechasActualizar: [...parchesTareas.values()],
+    fechasParcialesActualizar: [...parchesParciales.values()]
+  };
+}
+
+async function leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId }) {
+  const libretas = await conPool(mapeos, 4, async ({ curso, coincidencia }) => {
+    try {
+      const pagina = await cliente.pedir(UGR_RUTAS.libreta(curso.id));
+      return { materiaId: coincidencia.materia.id, notas: extraerNotasDeLibreta(pagina.html) };
+    } catch {
+      return { materiaId: coincidencia.materia.id, notas: [] };
+    }
+  });
+  const progresoAlumno = [];
+  for (const libreta of libretas) {
+    const tareas = await db.execute({ sql: 'SELECT id, nombre FROM tareas WHERE materia_id = ?', args: [libreta.materiaId] });
+    const parciales = await db.execute({ sql: 'SELECT id, nombre FROM parciales WHERE materia_id = ?', args: [libreta.materiaId] });
+    for (const item of libreta.notas) {
+      const tarea = tareas.rows.find((fila) => coincidirNombreTarea(fila.nombre, item.nombre))
+        || detectadas.find((fila) => fila.materiaId === libreta.materiaId && coincidirNombreTarea(fila.nombre, item.nombre));
+      const parcial = parciales.rows.find((fila) => coincidirNombreTarea(fila.nombre, item.nombre));
+      if (tarea) {
+        progresoAlumno.push({
+          alumnoId,
+          tabla: tarea.id ? 'tareas' : 'nueva',
+          id: tarea.id || tarea.idMoodle,
+          nota: item.nota,
+          entregada: true
+        });
+      }
+      if (parcial) {
+        progresoAlumno.push({ alumnoId, tabla: 'parciales', id: parcial.id, nota: item.nota, entregada: true });
+      }
+    }
+  }
+  return { progresoAlumno };
+}
+
+// Inserta las tareas detectadas en la base. Si otra sync ya cargó la misma
+// consigna en esa materia, se omite: no se duplica. Devuelve cuántas insertó.
 export async function insertarTareasDetectadas({ db, detectadas }) {
-  const inserts = detectadas.map((t) => ({
+  const lista = Array.isArray(detectadas) ? detectadas : [];
+  if (lista.length === 0) return 0;
+  const materiaIds = [...new Set(lista.map((tarea) => tarea.materiaId).filter(Boolean))];
+  const existentes = [];
+  for (const materiaId of materiaIds) {
+    const res = await db.execute({
+      sql: 'SELECT materia_id, nombre FROM tareas WHERE materia_id = ?',
+      args: [materiaId]
+    });
+    for (const fila of res.rows) existentes.push({ materiaId: fila.materia_id, nombre: fila.nombre });
+  }
+  const { nuevas } = filtrarTareasDuplicadas(lista, existentes);
+  const inserts = nuevas.map((t) => ({
     sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     args: [
       `t_${randomUUID()}`,
@@ -389,6 +544,33 @@ export async function insertarTareasDetectadas({ db, detectadas }) {
   if (inserts.length === 0) return 0;
   await db.batch(inserts, 'write');
   return inserts.length;
+}
+
+export async function insertarParcialesSiFaltan({ db, detectadas }) {
+  const lista = Array.isArray(detectadas) ? detectadas : [];
+  const escrituras = [];
+  const omitidas = [];
+  const vistas = [];
+  for (const item of lista) {
+    if (!item?.materiaId || !item?.nombre || !item?.fin) continue;
+    const res = await db.execute({
+      sql: 'SELECT id, nombre, fecha FROM parciales WHERE materia_id = ?',
+      args: [item.materiaId]
+    });
+    const existentes = [...res.rows, ...vistas.filter((fila) => fila.materia_id === item.materiaId)];
+    if (coincidirParcial({ parciales: existentes, nombre: item.nombre, fin: item.fin })) {
+      omitidas.push(item);
+      continue;
+    }
+    const id = `parcial_${randomUUID()}`;
+    escrituras.push({
+      sql: 'INSERT INTO parciales (id, materia_id, nombre, fecha, detalles, url) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [id, item.materiaId, String(item.nombre).slice(0, 100), item.fin, item.detalles || 'Importada desde UGR Virtual', item.url || '']
+    });
+    vistas.push({ materia_id: item.materiaId, nombre: item.nombre, fecha: item.fin });
+  }
+  if (escrituras.length > 0) await db.batch(escrituras, 'write');
+  return { insertadas: escrituras.length, omitidas };
 }
 
 // Completa la columna `url` de tareas que ya existían en la base (por ejemplo,
@@ -412,6 +594,116 @@ export async function actualizarUrlsTareas({ db, urlsActualizar }) {
 // los detecta cuando la misma actividad aparece en Moodle y completa el link
 // para que «Ver en UGR» funcione también en Parciales y en Estado por Alumno.
 // Acepta una lista de { id, url } y devuelve cuántas actualizó.
+export async function aplicarComplementoCampus({ db, detectado, alumnoId, alumnoNombre } = {}) {
+  if (!detectado) return { eventos: 0, horarios: 0, fechas: 0, notas: 0 };
+  const eventos = await insertarEventosCronograma({ db, eventos: detectado.eventosCalendario || [] });
+  const horarios = await insertarHorariosDetectados({ db, horarios: detectado.horariosNuevos || [], alumnoId });
+  const fechas = await actualizarFechasCampus({
+    db,
+    tareas: detectado.fechasActualizar,
+    parciales: detectado.fechasParcialesActualizar
+  });
+  const notas = alumnoId
+    ? await aplicarProgresoCampus({ db, progreso: detectado.progresoAlumno, alumnoId, alumnoNombre })
+    : 0;
+  return { eventos, horarios, fechas, notas };
+}
+
+async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
+  if (!Array.isArray(progreso) || progreso.length === 0 || !alumnoId) return 0;
+  const escrituras = [];
+  for (const item of progreso) {
+    if (!item?.id || item.tabla === 'nueva') continue;
+    if (item.tabla === 'tareas') {
+      if (item.entregada) {
+        escrituras.push({
+          sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en)
+                VALUES (?, ?, ?, datetime('now'))
+                ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id`,
+          args: [item.id, alumnoId, alumnoNombre || '']
+        });
+      }
+      if (item.nota != null) {
+        escrituras.push({
+          sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en)
+                VALUES (?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(tarea_id, alumno) DO UPDATE SET
+                  alumno_id = excluded.alumno_id,
+                  nota = excluded.nota,
+                  cargada_en = excluded.cargada_en`,
+          args: [`nota_tarea_${item.id}_${alumnoId}`, item.id, alumnoId, alumnoNombre || '', item.nota]
+        });
+      }
+    }
+    if (item.tabla === 'parciales' && item.nota != null) {
+      const existe = await db.execute({
+        sql: 'SELECT id FROM notas_parciales WHERE parcial_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))',
+        args: [item.id, alumnoId, alumnoNombre || '']
+      });
+      if (existe.rows.length > 0) {
+        escrituras.push({
+          sql: 'UPDATE notas_parciales SET nota = ?, alumno_id = ?, alumno = ? WHERE id = ?',
+          args: [item.nota, alumnoId, alumnoNombre || '', existe.rows[0].id]
+        });
+      } else {
+        escrituras.push({
+          sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno_id, alumno, nota) VALUES (?, ?, ?, ?, ?)',
+          args: [`nota_${item.id}_${alumnoId}`, item.id, alumnoId, alumnoNombre || '', item.nota]
+        });
+      }
+    }
+  }
+  if (escrituras.length === 0) return 0;
+  await db.batch(escrituras, 'write');
+  return escrituras.length;
+}
+
+async function insertarHorariosDetectados({ db, horarios, alumnoId }) {
+  if (!Array.isArray(horarios) || horarios.length === 0) return 0;
+  const inserts = [];
+  for (const horario of horarios) {
+    if (!horario?.materiaId || !horario.dia || !horario.horaInicio) continue;
+    const existe = await db.execute({
+      sql: `SELECT 1 FROM horarios
+            WHERE materia_id = ? AND CAST(dia AS INTEGER) = ? AND hora_inicio = ?
+              AND (alumno_id IS NULL OR alumno_id = ?)`,
+      args: [horario.materiaId, Number(horario.dia), horario.horaInicio, alumnoId || null]
+    });
+    if (existe.rows.length > 0) continue;
+    inserts.push({
+      sql: 'INSERT INTO horarios (id, materia_id, dia, hora_inicio, hora_fin, aula, alumno_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: [`h_${randomUUID()}`, horario.materiaId, String(horario.dia), horario.horaInicio, horario.horaFin || horario.horaInicio, horario.aula || 'Virtual', alumnoId || null]
+    });
+  }
+  if (inserts.length === 0) return 0;
+  await db.batch(inserts, 'write');
+  return inserts.length;
+}
+
+async function actualizarFechasCampus({ db, tareas, parciales }) {
+  const updates = [];
+  for (const fila of tareas || []) {
+    if (!fila?.id || (!fila.inicio && !fila.fin)) continue;
+    updates.push({
+      sql: `UPDATE tareas
+            SET inicio = CASE WHEN ? != '' THEN ? ELSE inicio END,
+                fin = CASE WHEN ? != '' THEN ? ELSE fin END
+            WHERE id = ?`,
+      args: [fila.inicio || '', fila.inicio || '', fila.fin || '', fila.fin || '', fila.id]
+    });
+  }
+  for (const fila of parciales || []) {
+    if (!fila?.id || !fila.fin) continue;
+    updates.push({
+      sql: 'UPDATE parciales SET fecha = ? WHERE id = ?',
+      args: [fila.fin, fila.id]
+    });
+  }
+  if (updates.length === 0) return 0;
+  await db.batch(updates, 'write');
+  return updates.length;
+}
+
 export async function actualizarUrlsParciales({ db, urlsParcialesActualizar }) {
   if (!Array.isArray(urlsParcialesActualizar) || urlsParcialesActualizar.length === 0) return 0;
   const updates = urlsParcialesActualizar
@@ -525,39 +817,44 @@ export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy, diasAtras
       const posts = await conPool(nuevas, 4, async (d) => {
         try {
           const pagina = await cliente.pedir(d.url);
-          return extraerPrimerPostDeHilo(pagina.html, UGR_BASE_URL);
+          return extraerPostsDeHilo(pagina.html, UGR_BASE_URL);
         } catch {
-          return null;
+          return [];
         }
       });
 
       for (let i = 0; i < nuevas.length; i += 1) {
         const discusion = nuevas[i];
-        const post = posts[i];
+        const delHilo = posts[i] || [];
+        // El anuncio puede ser el post que abre el hilo o un recordatorio
+        // posterior del docente. Se queda el primero de la ventana que sea
+        // suyo y que le sirva a la cursada.
+        let post = null;
+        let analisis = [];
+        for (const candidato of delHilo) {
+          if (!candidato.fecha || candidato.fecha < fechaMinima) continue;
+          const esDeDocente = await autorEsEquipoDocente({
+            autor: candidato.autor,
+            autorId: candidato.autorId,
+            cursoId: curso.id,
+            docentes,
+            cliente,
+            cache: cachePerfilDocente
+          });
+          if (!esDeDocente) continue;
+          const eventos = filtrarEventosDeAviso(candidato, analizarAvisosParaCronograma({
+            titulo: candidato.titulo,
+            contenido: candidato.contenido,
+            materiaNombre: coincidencia.materia.nombre,
+            hoy: fechaBase,
+            fechaPublicacion: candidato.fecha
+          }));
+          if (eventos.length === 0 && !avisoEsRelevante(candidato)) continue;
+          post = candidato;
+          analisis = eventos;
+          break;
+        }
         if (!post) continue;
-        // Regla confirmada: solo avisos publicados dentro de la ventana (desde
-        // `fechaMinima` hacia adelante); los más viejos se descartan.
-        if (!post.fecha || post.fecha < fechaMinima) continue;
-        // Regla confirmada: solo anuncios del equipo docente. Las preguntas y
-        // comentarios de compañeros no llegan a la campana ni al cronograma.
-        const esDeDocente = await autorEsEquipoDocente({
-          autor: post.autor,
-          autorId: post.autorId,
-          cursoId: curso.id,
-          docentes,
-          cliente,
-          cache: cachePerfilDocente
-        });
-        if (!esDeDocente) continue;
-
-        const analisis = filtrarEventosDeAviso(post, analizarAvisosParaCronograma({
-          titulo: post.titulo,
-          contenido: post.contenido,
-          materiaNombre: coincidencia.materia.nombre,
-          hoy: fechaBase,
-          fechaPublicacion: post.fecha
-        }));
-        if (analisis.length === 0) continue;
         const id = `aviso_${curso.id}_${discusion.id}`;
 
         avisosDetectados.push({

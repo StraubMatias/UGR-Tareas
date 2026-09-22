@@ -514,6 +514,40 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     await crearEsquemaGrupos(db);
   });
 
+  await ejecutarMigracion(18, 'cuentas propias y vínculo con UGR Virtual', async () => {
+    await agregarColumnaSiFalta('alumnos', 'origen', "TEXT NOT NULL DEFAULT 'comision'");
+    await agregarColumnaSiFalta('alumnos', 'ugr_usuario', 'TEXT');
+    await agregarColumnaSiFalta('alumnos', 'ugr_secreto', 'TEXT');
+    await agregarColumnaSiFalta('alumnos', 'ugr_vinculado_en', 'TEXT');
+    await db.execute("UPDATE alumnos SET origen = 'comision' WHERE origen IS NULL OR origen = ''");
+    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS alumnos_ugr_usuario ON alumnos(ugr_usuario) WHERE ugr_usuario IS NOT NULL');
+  });
+
+  await ejecutarMigracion(19, 'inscripción de cada alumno a sus materias', async () => {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS inscripciones (
+        alumno_id TEXT NOT NULL,
+        materia_id TEXT NOT NULL,
+        PRIMARY KEY (alumno_id, materia_id)
+      )
+    `);
+    await db.execute(`
+      INSERT OR IGNORE INTO inscripciones (alumno_id, materia_id)
+      SELECT a.id, m.id
+      FROM alumnos a
+      CROSS JOIN materias m
+      WHERE COALESCE(a.origen, 'comision') = 'comision'
+    `);
+  });
+
+  await ejecutarMigracion(20, 'no guardar credenciales de UGR Virtual', async () => {
+    await db.execute('UPDATE alumnos SET ugr_usuario = NULL, ugr_secreto = NULL, ugr_vinculado_en = NULL');
+  });
+
+  await ejecutarMigracion(21, 'horario semanal por alumno', async () => {
+    await agregarColumnaSiFalta('horarios', 'alumno_id', 'TEXT');
+  });
+
   await db.close?.();
 }
 

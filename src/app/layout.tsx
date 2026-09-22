@@ -12,6 +12,12 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 // La sincronización con UGR encadena varios pedidos HTTP a Moodle (login,
 // cursos, tareas, detalles). Vercel usa este límite para la función que
 // ejecuta las Server Actions de esta ruta: 60s es el tope del plan Hobby.

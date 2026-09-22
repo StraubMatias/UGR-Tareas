@@ -19,6 +19,7 @@ import { createClient } from '@libsql/client';
 import {
   actualizarUrlsParciales,
   actualizarUrlsTareas,
+  aplicarComplementoCampus,
   aprobarAvisos,
   conectarUGR,
   detectarAvisosMoodle,
@@ -66,7 +67,8 @@ async function main() {
   console.log('✅ Sesión lista.');
 
   // 1) Tareas nuevas + backfill de enlaces.
-  const { materiasLocales, cursos, mapeos, detectadas, urlsActualizar, urlsParcialesActualizar } = await detectarTareasNuevas({ db, cliente });
+  const detectado = await detectarTareasNuevas({ db, cliente });
+  const { materiasLocales, cursos, mapeos, detectadas, urlsActualizar, urlsParcialesActualizar, eventosCalendario = [], horariosNuevos = [] } = detectado;
   // 2) Avisos de los foros del campus publicados desde hace 7 días hacia
   // adelante + eventos espontáneos (clase extra, consulta, entrega, …). Se
   // registran siempre que el sync no sea seco (para no volver a proponerlos);
@@ -118,10 +120,22 @@ async function main() {
     console.log('✅ No hay tareas nuevas ni avisos nuevos para agregar.');
   }
 
+  if (eventosCalendario.length > 0) {
+    console.log(`\n📅 ${eventosCalendario.length} evento(s) del calendario del campus.`);
+  }
+  if (horariosNuevos.length > 0) {
+    console.log(`🕒 ${horariosNuevos.length} horario(s) semanal(es) del campus.`);
+  }
+
   if (flags.soloSeco) {
     console.log('\n📋 Modo seco: no se escribió nada.');
     await db.close?.();
     return;
+  }
+
+  const complemento = await aplicarComplementoCampus({ db, detectado });
+  if (complemento.eventos || complemento.horarios || complemento.fechas) {
+    console.log(`📅 Calendario: ${complemento.eventos} evento(s), ${complemento.horarios} horario(s), ${complemento.fechas} fecha(s) alineada(s).`);
   }
 
   // Registrar las sugerencias de avisos. Nunca duplica: la clave

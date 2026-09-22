@@ -268,21 +268,22 @@ export default function VistaMaterias({
                                 <input
                                   type="checkbox"
                                   checked={tareaCompletadaPor(t, usuarioActual)}
-                                  disabled={!tareaPuedeGestionarse(t)}
+                                  disabled={!esAdmin}
                                   onChange={() => usuarioActual && toggleTareaDesdeCliente(t.id, usuarioActual, t)}
                                   className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
                                 />
-                                Entregada
+                                {tareaCompletadaPor(t, usuarioActual) ? 'Entregada en UGR Virtual' : 'Todavía no figura entregada en UGR Virtual'}
                               </label>
                               <label className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">
-                                {t.grupal ? 'Nota del grupo (1 a 10)' : 'Tu nota (1 a 10)'}
+                                {t.grupal ? 'Nota del grupo (UGR Virtual)' : 'Nota en UGR Virtual'}
                               </label>
                               <input
                                 type="text"
                                 inputMode="decimal"
                                 pattern="[0-9]+([.,][0-9]+)?"
                                 placeholder="-"
-                                disabled={!tareaPuedeGestionarse(t)}
+                                disabled={!esAdmin}
+                                readOnly={!esAdmin}
                                 value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
                                 onChange={(e) => usuarioActual && handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
                                 onBlur={() => usuarioActual && handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
@@ -292,7 +293,7 @@ export default function VistaMaterias({
                           ) : (
                           <div>
                             <label className="flex items-center gap-2 text-sm font-bold text-slate-300 mb-3">
-                              <input type="checkbox" checked={tareaCompletadaPor(t, usuarioActual)} disabled={!tareaPuedeGestionarse(t)} onChange={() => usuarioActual && toggleTareaDesdeCliente(t.id, usuarioActual, t)} />
+                              <input type="checkbox" checked={tareaCompletadaPor(t, usuarioActual)} disabled={!esAdmin} onChange={() => usuarioActual && toggleTareaDesdeCliente(t.id, usuarioActual, t)} />
                               {t.grupal ? 'Entrega del grupo' : 'Entregada'}
                             </label>
                             <span className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">Completada por:</span>

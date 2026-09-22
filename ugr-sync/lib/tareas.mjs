@@ -36,8 +36,8 @@ function completarUrl(href, baseUrl) {
 
 // Rótulos que pueden aparecer en el bloque «Apertura»/«Cierre» de la página de una
 // tarea (div[data-region="activity-dates"]).
-const ROTULOS_APERTURA = ['apertura', 'disponible desde', 'empieza', 'inicio'];
-const ROTULOS_CIERRE = ['cierre', 'vencimiento', 'fecha de entrega', 'hasta', 'entrega'];
+const ROTULOS_APERTURA = ['apertura', 'abre', 'abrirá', 'abrira', 'disponible desde', 'empieza', 'inicio'];
+const ROTULOS_CIERRE = ['cierre', 'cierra', 'cerrará', 'cerrara', 'vencimiento', 'fecha de entrega', 'fecha límite', 'fecha limite', 'hasta'];
 
 // Fecha desde una celda: prioriza timestamp numérico (data-mdl-overview-value o
 // data-timestamp), luego <time datetime="..."> y por último el texto visible.
@@ -158,7 +158,7 @@ export function extraerTareas(html, baseUrl = '') {
 // son consignas: se descartan para no ensuciar el tablero (ver
 // esForoInformativo).
 const PATRONES_FORO_INFORMATIVO = [
-  /^(avisos?|novedades?|noticias?|anuncios?)$/,
+  /\b(?:avisos?|novedades|noticias|anuncios|comunicados)\b/,
   /consulta(s)?/,
   /^foro\s+(general|principal)$/,
   // Avisos de organización: horarios de clases sincrónicas, encuentros, etc.
@@ -169,7 +169,7 @@ const PATRONES_FORO_INFORMATIVO = [
 // Patrones de anuncios/organización que aplican también fuera de los foros
 // (p. ej. una encuesta «choice» de «Horario adicional de encuentro…»).
 const PATRONES_ANUNCIO_GENERAL = [
-  /^(avisos?|novedades?|noticias?|anuncios?)$/,
+  /\b(?:avisos?|novedades|noticias|anuncios|comunicados)\b/,
   /encuentr[oa]s?\s*(sincr|virtual)/,
   /horari[oa]\s+(de\s+)?encuentro/
 ];
@@ -281,8 +281,11 @@ export function extraerActividadesOverview(html, baseUrl = '') {
         if (!celda.length) return null;
         return fechaDeCelda($, celda);
       };
-      const inicio = fechaItem('allowsubmissionsfromdate') || 'Sin fecha';
-      const fin = fechaItem('duedate') || 'Sin fecha';
+      const inicio = fechaItem('allowsubmissionsfromdate') || fechaItem('timeopen') || 'Sin fecha';
+      const fin = fechaItem('duedate') || fechaItem('timeclose') || fechaItem('cutoffdate') || 'Sin fecha';
+      const notaCampus = parsearNotaCampus($(fila).find('td[data-mdl-overview-item="Calificación"]').attr('data-mdl-overview-value')
+        || $(fila).find('td[data-mdl-overview-item="Calificación"]').text());
+      const entregada = entregadaEnCelda($(fila).find('td[data-mdl-overview-item="submitted"], td[data-mdl-overview-item="submissionstatus"]'));
 
       // Sección del curso («General», «Unidad 2», …) dentro de la celda de nombre.
       const unidad = parsearUnidadMoodle(limpiarTexto($(celdaNombre).find('.small').first().text()));
@@ -295,7 +298,9 @@ export function extraerActividadesOverview(html, baseUrl = '') {
         fin,
         unidad,
         tipo: esForo ? 'foro' : inferirTipoTarea(nombre),
-        conNota: esForo || modulo === 'feedback' ? false : true
+        conNota: esForo || modulo === 'feedback' ? false : true,
+        notaCampus,
+        entregada: entregada || notaCampus != null
       });
       vistos.add(cmid);
     });
@@ -328,4 +333,39 @@ export function extraerFechasActividad(html) {
   });
 
   return resultado;
+}
+
+export function parsearNotaCampus(texto) {
+  const limpio = String(texto || '').replace(/\s+/g, ' ').trim();
+  if (!limpio || limpio === '-' || /^acciones/i.test(limpio)) return null;
+  const numero = limpio.replace(',', '.').match(/(\d+(?:\.\d+)?)/);
+  if (!numero) return null;
+  const valor = Number(numero[1]);
+  if (!Number.isFinite(valor) || valor < 1 || valor > 10) return null;
+  return Math.round(valor * 100) / 100;
+}
+
+function entregadaEnCelda(celda) {
+  if (!celda || celda.length === 0) return false;
+  const valor = String(celda.attr('data-mdl-overview-value') || '').trim();
+  if (valor === '1' || valor === 'true') return true;
+  return /enviad|entregad|submitted|graded/i.test(celda.text());
+}
+
+export function extraerNotasDeLibreta(html) {
+  if (!html) return [];
+  const $ = load(html);
+  const notas = [];
+  const vistos = new Set();
+  $('a.gradeitemheader[href*="/mod/"]').each((_, enlace) => {
+    const href = $(enlace).attr('href') || '';
+    const id = (href.match(/[?&]id=(\d+)/) || [])[1];
+    const nombre = limpiarTexto($(enlace).text());
+    const fila = $(enlace).closest('tr');
+    const nota = parsearNotaCampus(fila.find('td.column-grade, td[class*="column-grade"]').first().text());
+    if (!id || !nombre || nota == null || vistos.has(id)) return;
+    vistos.add(id);
+    notas.push({ id, nombre, nota, url: completarUrl(href, '') });
+  });
+  return notas;
 }

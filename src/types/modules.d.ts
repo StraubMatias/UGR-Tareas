@@ -1,13 +1,18 @@
+declare module '../../ugr-sync/lib/autenticar.mjs' {
+  export function validarCredencialesUgr(opciones: { usuario?: string; contrasena?: string }): Promise<{ usuario: string }>;
+}
+
 declare module '../../ugr-sync/lib/sync-core.mjs' {
   export interface MapeoCurso {
     curso?: { id?: string | number; nombre?: string };
-    coincidencia?: { materia?: { nombre?: string } };
+    coincidencia?: { materia?: { id?: string; nombre?: string } };
   }
   export interface ResultadoTareasNuevas {
     materiasLocales?: unknown[];
     cursos?: unknown[];
     mapeos?: MapeoCurso[];
     detectadas?: unknown[];
+    yaCargadas?: unknown[];
     urlsActualizar?: unknown[];
     urlsParcialesActualizar?: unknown[];
   }
@@ -18,6 +23,12 @@ declare module '../../ugr-sync/lib/sync-core.mjs' {
   export function aprobarAvisos(opciones: { db: unknown; ids: string[] }): Promise<number>;
   export function rechazarAvisos(opciones: { db: unknown; ids: string[] }): Promise<number>;
   export function conectarUGR(): Promise<unknown>;
+  export function conectarUGRCon(opciones: { usuario?: string; contrasena?: string; rutaSesion?: string | null }): Promise<unknown>;
+  export function listarCursosDelCampus(cliente: unknown): Promise<Array<{ id?: string | number; nombre?: string }>>;
+  export function emparejarCursosConMaterias(cursos: unknown[], materias: unknown[]): Array<{ curso: unknown; materiaId: string | null; nombre: string; nueva: boolean }>;
+  export function separarEvaluaciones(detectadas: unknown[]): { tareas: unknown[]; parciales: unknown[] };
+  export function filtrarTareasDuplicadas(candidatas?: unknown[], existentes?: unknown[]): { nuevas: unknown[]; duplicadas: unknown[] };
+  export function agruparResumenSync(opciones?: { nuevas?: unknown[]; yaEstaban?: unknown[] }): Array<{ materia: string; nuevas: string[]; yaEstaban: string[] }>;
   export function detectarAvisosMoodle(opciones: {
     db: unknown;
     cliente: unknown;
@@ -25,7 +36,13 @@ declare module '../../ugr-sync/lib/sync-core.mjs' {
     hoy?: string;
     diasAtras?: number;
   }): Promise<ResultadoAvisosMoodle>;
-  export function detectarTareasNuevas(opciones: { db: unknown; cliente: unknown }): Promise<ResultadoTareasNuevas>;
+  export function detectarTareasNuevas(opciones: { db: unknown; cliente: unknown; cursos?: unknown[]; periodoId?: string; alumnoId?: string }): Promise<ResultadoTareasNuevas>;
+  export function insertarTareasDetectadas(opciones: { db: unknown; detectadas: unknown[] }): Promise<number>;
+  export function insertarParcialesSiFaltan(opciones: { db: unknown; detectadas: unknown[] }): Promise<{ insertadas: number; omitidas: unknown[] }>;
+  export function actualizarUrlsTareas(opciones: { db: unknown; urlsActualizar: unknown }): Promise<number>;
+  export function actualizarUrlsParciales(opciones: { db: unknown; urlsParcialesActualizar: unknown }): Promise<number>;
+  export function insertarEventosCronograma(opciones: { db: unknown; eventos: unknown[] }): Promise<number>;
+  export function aplicarComplementoCampus(opciones: { db: unknown; detectado: unknown; alumnoId?: string; alumnoNombre?: string }): Promise<{ eventos: number; horarios: number; fechas: number; notas: number }>;
 }
 
 declare module '../../ugr-sync/lib/previa.mjs' {
@@ -39,6 +56,9 @@ declare module '../../ugr-sync/lib/previa.mjs' {
     avisosAceptados?: number;
     avisosRechazados?: number;
     eventosInsertados?: number;
+    eventosCalendarioInsertados?: number;
+    horariosInsertados?: number;
+    fechasActualizadas?: number;
     previaId?: string;
     confirmar?: boolean;
   }

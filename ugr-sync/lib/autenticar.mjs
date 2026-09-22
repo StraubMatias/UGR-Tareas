@@ -187,12 +187,29 @@ export async function iniciarSesion({ usuario, contrasena, baseUrl = UGR_BASE_UR
   return { jar, html: cuerpoPost, url: accion };
 }
 
+// Comprueba usuario y contraseña contra UGR Virtual con un jar propio.
+// No toca la sesión del sincronizador de la comisión.
+export async function validarCredencialesUgr({ usuario, contrasena } = {}) {
+  const user = String(usuario || '').trim();
+  const pass = String(contrasena || '');
+  if (!user || !pass) {
+    throw new Error('Faltan el usuario y la contraseña de UGR Virtual.');
+  }
+  const resultado = await iniciarSesion({ usuario: user, contrasena: pass, jar: new Map() });
+  if (String(resultado?.url || '').includes('/login/index.php')) {
+    throw new Error('UGR Virtual no aceptó el acceso.');
+  }
+  return { usuario: user };
+}
+
 export async function guardarSesion(jar, ruta = RUTA_SESION) {
+  if (!ruta) return;
   await mkdir(path.dirname(ruta), { recursive: true });
   await writeFile(ruta, JSON.stringify(cookiesAJSON(jar), null, 2), 'utf8');
 }
 
 export async function cargarSesion(ruta = RUTA_SESION) {
+  if (!ruta) return new Map();
   try {
     const contenido = await readFile(ruta, 'utf8');
     return cookiesDesdeJSON(JSON.parse(contenido));

@@ -12,7 +12,10 @@ import {
   esPaginaDeLogin,
   extraerAccionLogin,
   extraerLogintoken,
-  normalizarCookie
+  guardarSesion,
+  cargarSesion,
+  normalizarCookie,
+  validarCredencialesUgr
 } from '../lib/autenticar.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -64,6 +67,20 @@ test('normalizarCookie descarta entradas sin nombre=valor', () => {
   const c = normalizarCookie('MoodleSession=abc; path=/; HttpOnly');
   assert.deepEqual(c.nombre, 'MoodleSession');
   assert.deepEqual(c.valor, 'abc');
+});
+
+test('validarCredencialesUgr no consulta el campus si faltan datos', async () => {
+  await assert.rejects(
+    () => validarCredencialesUgr({ usuario: ' ', contrasena: '' }),
+    /usuario y la contraseña/
+  );
+});
+
+test('una sincronización sin ruta no deja la sesión de UGR en disco', async () => {
+  const jar = new Map([['MoodleSession', 'secreto']]);
+  await guardarSesion(jar, null);
+  const cargada = await cargarSesion(null);
+  assert.equal(cargada.size, 0);
 });
 
 test('cookiesAJSON / cookiesDesdeJSON son ida y vuelta', () => {

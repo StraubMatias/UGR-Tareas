@@ -131,7 +131,9 @@ export default function VistaHorarios({
                         </span>
                       )}
                     </div>
-                    {cantidadEventos > 0 && (() => {
+                    {cantidadEventos > 0 && (
+                      <div className="calendar-day-chips hidden sm:block">
+                    {(() => {
                       const esSoloSinClases = eventos.horarios.length === 0
                         && eventos.parciales.length === 0
                         && eventos.tareas.length === 0
@@ -216,6 +218,8 @@ export default function VistaHorarios({
                         </div>
                       );
                     })()}
+                      </div>
+                    )}
                   </button>
                 );
               })}

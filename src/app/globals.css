@@ -572,21 +572,71 @@ textarea {
 }
 
 @media (max-width: 640px) {
+  html,
+  body {
+    overflow-x: clip;
+  }
+
+  body {
+    background-attachment: scroll;
+    background-size: auto, auto, 30px 30px, 30px 30px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .portal-header-actions > button,
+  .portal-nav > button {
+    min-height: 2.75rem;
+  }
+
+  .portal-nav {
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    padding-bottom: 0.75rem;
+  }
+
+  .portal-nav > button {
+    scroll-snap-align: start;
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+
+  .portal-login {
+    margin-top: 1rem;
+    padding: 1.25rem;
+  }
+
   .calendar-empty {
-    min-height: 2.25rem;
+    min-height: 1.5rem;
   }
 
   .calendar-day {
-    min-height: 6.75rem;
-    padding: 0.3rem;
+    min-height: 3.25rem;
+    padding: 0.25rem;
   }
 
   .calendar-day-empty {
-    min-height: 2.5rem;
+    min-height: 1.5rem;
   }
 
-  .calendar-event {
-    padding: 0.25rem 0.25rem;
-    font-size: 0.58rem;
+  .calendar-date {
+    min-width: 1.35rem;
+    height: 1.35rem;
+    font-size: 0.7rem;
+  }
+
+  .calendar-modal {
+    width: calc(100vw - 1.25rem);
+    max-height: calc(100dvh - 1.5rem);
+    padding: 1rem;
+  }
+
+  .fixed.inset-0 > section,
+  .fixed.inset-0 > div {
+    max-width: calc(100vw - 1rem);
   }
 }

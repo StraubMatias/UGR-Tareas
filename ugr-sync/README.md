@@ -69,14 +69,22 @@ node --test ugr-sync/test
    sin URL (los del cronograma) reciben el link real a Moodle cuando la actividad
    aparece en el campus. Solo se escribe cuando la columna `url` está vacía: nunca
    pisa un enlace existente.
-4. **Detecta avisos y eventos espontáneos**: recorre los foros «informativos» de
-   cada curso (Avisos, Novedades, Consultas, …) y toma los hilos **publicados en
-   los últimos 7 días** (ni hilos viejos ni avisos cuya fecha ya pasó). Cada aviso
-   se registra una sola vez (clave `curso_id + hilo_id`: el upsert nunca duplica)
-   y, si se confirma, se **publica en la campana** de la app. Del texto del aviso
-   se sugieren además eventos al cronograma (clases de consulta, encuentros,
-   entregas, exámenes, «sin clases») con fecha del día actual o en adelante
-   (p. ej. «el martes 15 a las 20:00 tendremos un encuentro» → evento del 2026-09-15).
+4. **Trae el calendario del curso**, el que ve el alumno en UGR Virtual: clases
+   sincrónicas, encuentros y revisiones entran al cronograma (sin duplicar la
+   misma fecha y título). Si la misma clase se repite, también queda el horario
+   semanal. «Vencimiento de…», «Se abre…» y «Se cierra…» no se copian como una
+   clase nueva: completan la fecha de la tarea o el parcial que ya existe.
+5. **Detecta avisos y eventos espontáneos**: recorre los foros informativos de
+   cada curso, aunque el nombre no sea exacto («Avisos», «Avisos de la cátedra»,
+   «Foro de novedades», Consultas, …). Toma los hilos con actividad en los
+   **últimos 7 días** y, dentro del hilo, el anuncio del docente: el mensaje que
+   lo abre o un recordatorio posterior. Cada aviso se registra una sola vez
+   (clave `curso_id + hilo_id`). Si se confirma, va a la campana. Un cambio de
+   cursada sin fecha firme (aula nueva, prórroga) entra igual; el material, la
+   grabación y la publicación de notas no. Cuando el texto sí tiene una fecha de
+   hoy en adelante, además se sugiere el evento al cronograma (consulta,
+   encuentro, entrega, examen, «sin clases»). Las fechas de vencimiento se leen
+   en hora de Argentina, que es la que muestra el campus.
 
 El recorrido es **paralelo** (concurrencia 4): overviews de todos los cursos,
 índices de foros, páginas de foro y post de cada hilo se piden de a cuatro. Además,

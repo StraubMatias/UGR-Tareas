@@ -21,7 +21,11 @@ export const UGR_RUTAS = {
   overviewCurso: (cursoId, modulos) =>
     `/course/overview.php?id=${cursoId}&${(modulos || []).map((m) => `expand[]=${m}`).join('&')}`,
   // Página de un curso (para datos generales): /course/view.php?id=ID
-  curso: (cursoId) => `/course/view.php?id=${cursoId}`
+  curso: (cursoId) => `/course/view.php?id=${cursoId}`,
+  // Próximos eventos del curso, tal como los ve el alumno en el calendario.
+  calendarioCurso: (cursoId) => `/calendar/view.php?view=upcoming&course=${cursoId}`,
+  calendarioMes: (cursoId, time) => `/calendar/view.php?view=month&course=${cursoId}&time=${time}`,
+  libreta: (cursoId) => `/grade/report/user/index.php?id=${cursoId}`
 };
 
 // Tipos de módulo de Moodle que son «consignas» para el tablero (se importan

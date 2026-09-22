@@ -20,7 +20,7 @@ UGR Virtual responde eso, pero repartido en cursos, foros y calificaciones. Tare
 
 ## Qué puede hacer la comisión
 
-**Saber cómo viene cada uno.** La vista propia muestra pendientes, entregas sin nota, actividades futuras, completadas y trabajos grupales. El mismo corte existe para el resto de la comisión, con buscador que ignora acentos. De los compañeros se consulta el estado. La entrega y la nota se cargan en lo propio, o en el grupo del que se forma parte.
+**Saber cómo viene cada uno.** La vista propia muestra pendientes, entregas sin nota, actividades futuras, completadas y trabajos grupales. El mismo corte existe para el resto de la comisión, con buscador que ignora acentos. De los compañeros se consulta el estado. La entrega y la nota se copian de UGR Virtual al sincronizar; el alumno no las carga a mano.
 
 **No perder una fecha.** Cada tarea tiene materia, unidad, apertura, cierre y un semáforo. La campana avisa vencimientos, actividades que se habilitan y novedades de la cátedra. El calendario del mes mezcla clases, parciales, entregas y eventos que salieron del campus. Al lado están los horarios de cursada, con aula y el próximo examen a la vista.
 
@@ -29,6 +29,8 @@ UGR Virtual responde eso, pero repartido en cursos, foros y calificaciones. Tare
 **Llevar parciales y promoción en serio.** Cada materia tiene sus parciales, sus notas y sus condiciones: desde qué nota se regulariza, desde cuál se promociona, y si esa regla mira trabajos prácticos, un porcentaje de actividades o la nota del práctico. El ranking suma el puntaje de la cursada y deja comparar con un compañero qué explica la diferencia.
 
 **Ver la carrera, no solo el cuatrimestre.** El plan de estudio de la Tecnicatura en Seguridad de la Información está cargado con sus correlativas. Cada alumno marca qué aprobó o promocionó y ve qué materias le quedan habilitadas. El historial conserva entregas y notas, y el selector de período permite mirar una cursada anterior sin mezclarla con la actual.
+
+**Empezar con una cuenta propia.** Cualquier alumno de la UGR puede crear su usuario y su clave. En el alta escribe también el DNI y la contraseña de UGR Virtual: el campus los comprueba en el momento y no quedan guardados. Si UGR acepta, se carga el período actual y las materias de esa cuenta. Cada sincronización pide otra vez DNI y clave, y de cada materia solo sube las tareas que todavía no estaban: no se duplican. El ranking muestra a quienes cursan esa misma materia.
 
 **Administrar sin ser el que anota todo a mano.** Quien tiene rol de administrador crea y edita materias, tareas, horarios, parciales y alumnos. La sincronización con UGR Virtual, hecha a pedido y con confirmación, detecta tareas nuevas (unidad y fechas incluidas), trae los avisos recientes de los foros y propone eventos para el cronograma: consultas, encuentros, entregas. Completa enlaces que faltaban y no pisa los que ya estaban. También se puede correr en seco, solo para ver qué cambiaría.
 
@@ -42,7 +44,7 @@ La conexión con el campus usa las credenciales del entorno, nunca un usuario es
 
 ## Con qué está hecho
 
-Next.js 16 y React 19 para la aplicación, TypeScript en todo lo que ve el usuario, Tailwind CSS 4 para la interfaz y Turso para los datos. El sincronizador habla con UGR Virtual (Moodle) y solo se carga cuando un administrador lo dispara. La lógica de notas, grupos, fechas y plan tiene tests automáticos.
+Next.js 16 y React 19 para la aplicación, TypeScript en todo lo que ve el usuario, Tailwind CSS 4 para la interfaz y Turso para los datos. El sincronizador habla con UGR Virtual (Moodle) y solo se carga cuando alguien sincroniza. La lógica de notas, grupos, fechas y plan tiene tests automáticos.
 
 Está pensado para correr en el plan gratuito de Vercel: el tablero consulta la base en una sola lectura, se refresca cada dos minutos mientras la pestaña está visible y no arrastra al servidor los binarios que la base no necesita ahí.
 
@@ -56,6 +58,6 @@ npm run migrate
 npm run dev
 ```
 
-Las variables viven en `.env.local` (hay un `.env.example` con los nombres). `SESSION_SECRET` firma las sesiones. `ADMIN_USUARIO` define al administrador que crea la migración; `npm run admin:reset-password` le genera una clave nueva. `UGRVIRTUAL_USER` y `UGRVIRTUAL_PASSWORD` solo hacen falta para sincronizar con el campus.
+Las variables viven en `.env.local` (hay un `.env.example` con los nombres). `SESSION_SECRET` firma las sesiones. `ADMIN_USUARIO` define al administrador que crea la migración; `npm run admin:reset-password` le genera una clave nueva. `UGRVIRTUAL_USER` y `UGRVIRTUAL_PASSWORD` solo hacen falta para la sincronización de la comisión.
 
 `npm test` corre la suite. `npm run build` deja la aplicación lista para publicar.

@@ -149,7 +149,8 @@ export default function VistaParciales({
                               inputMode="decimal"
                               pattern="[0-9]+([.,][0-9]+)?"
                               placeholder="-"
-                              disabled={!parcialDisponible}
+                              disabled
+                              readOnly
                               value={valorMiNota}
                               onChange={(e) => handleNotaChangeLocal(p.id, usuarioActual, e.target.value)}
                               onBlur={() => handleGuardarNotaOnBlur(p.id, usuarioActual)}

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerNombreCursoDesdePagina } from '../lib/materias.mjs';
-import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerTareas } from '../lib/tareas.mjs';
+import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerNotasDeLibreta, extraerTareas, parsearNotaCampus } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -137,6 +137,8 @@ test('esForoInformativo descarta avisos y foros de consultas, conserva consignas
   assert.equal(esForoInformativo('Los encuentros sincrónicos para ambas comisiones conjuntamente, serán los días lunes'), true);
   assert.equal(esForoInformativo('Horario adicional de encuentro sincrónico'), true);
 
+  assert.equal(esForoInformativo('Avisos de la cátedra'), true);
+  assert.equal(esForoInformativo('Foro de novedades'), true);
   assert.equal(esForoInformativo('Hallazgos de la Semana'), false);
   assert.equal(esForoInformativo('Presentación individual'), false);
   assert.equal(esForoInformativo('Casos de exfiltración por Metadatos y Borrado (in)seguro'), false);
@@ -222,6 +224,39 @@ test('extraerActividadesOverview no captura nada sin overview o sin filas', asyn
     extraerActividadesOverview('<html><body><div id="quiz_overview"><table><tr><td>x</td></tr></table></div></body></html>'),
     []
   );
+});
+
+test('parsearNotaCampus lee la calificación que publica el campus', () => {
+  assert.equal(parsearNotaCampus('10.00000'), 10);
+  assert.equal(parsearNotaCampus('10,00 Acciones'), 10);
+  assert.equal(parsearNotaCampus('-'), null);
+  assert.equal(parsearNotaCampus('11'), null);
+});
+
+test('extraerNotasDeLibreta toma el ítem y la nota de la libreta del alumno', () => {
+  const notas = extraerNotasDeLibreta(`
+    <table class="user-grade">
+      <tr>
+        <th><a class="gradeitemheader" href="https://virtual.ugr.edu.ar/mod/quiz/view.php?id=215115">Lea y responda (Basadre)</a></th>
+        <td class="column-grade">10,00 Acciones</td>
+      </tr>
+      <tr>
+        <th><a class="gradeitemheader" href="https://virtual.ugr.edu.ar/mod/quiz/view.php?id=999">Sin nota</a></th>
+        <td class="column-grade">-</td>
+      </tr>
+    </table>
+  `);
+  assert.equal(notas.length, 1);
+  assert.equal(notas[0].id, '215115');
+  assert.equal(notas[0].nota, 10);
+});
+
+test('extraerFechasActividad entiende Abre y Cierra, los rótulos actuales de Moodle', () => {
+  const html = `<div data-region="activity-dates">
+    <div>Abre: jueves, 10 de septiembre de 2026, 00:00</div>
+    <div>Cierra: viernes, 16 de octubre de 2026, 23:59</div>
+  </div>`;
+  assert.deepEqual(extraerFechasActividad(html), { inicio: '2026-09-10', fin: '2026-10-16' });
 });
 
 test('extraerFechasActividad lee la apertura y el cierre del detalle de la tarea', async () => {

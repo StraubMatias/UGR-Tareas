@@ -59,15 +59,23 @@ export function parsearFechaMoodle(texto) {
   return null;
 }
 
+const ZONA_CAMPUS = 'America/Argentina/Buenos_Aires';
+
 export function parsearTimestampMoodle(timestampMs) {
   if (!timestampMs && timestampMs !== 0) return null;
   const numero = Number(timestampMs);
   if (Number.isNaN(numero)) return null;
-  // Moodle suele mandar el timestamp en segundos; la app usa milisegundos.
+  // Moodle manda el instante en segundos. El día que ve el alumno es el de
+  // Argentina: en el servidor (UTC) el cierre de las 23:59 cae al día siguiente.
   const ms = numero < 1e11 ? numero * 1000 : numero;
   const fecha = new Date(ms);
   if (Number.isNaN(fecha.getTime())) return null;
-  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: ZONA_CAMPUS,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(fecha);
 }
 
 const NUMEROS_ROMANOS = { i: 1, v: 5, x: 10 };
@@ -101,6 +109,12 @@ export function parsearUnidadMoodle(texto) {
   // «UII», «U. II», «UII.» (forma compacta que usa Moodle en nombres de tareas)
   const corta = t.match(/(?:^|[\s(,])(U\s*\.?\s*[IVX]{1,5})/i);
   if (corta) return romanoANumero(corta[1].replace(/[^ivx]/gi, ''));
+
+  // La sección del curso a veces dice «Módulo 2», «Tema 3» o «Semana 4».
+  const seccion = t.match(/\b(?:m[oó]dulo|tema|semana)\s*(?:num(?:ero)?\.?\s*|nro\.?\s*|n[º°o]?\.?\s*)?(\d{1,2})\b/i);
+  if (seccion) return Number(seccion[1]) >= 1 ? Number(seccion[1]) : null;
+  const seccionRomana = t.match(/\b(?:m[oó]dulo|tema|semana)\s*([ivx]{1,5})\b/i);
+  if (seccionRomana) return romanoANumero(seccionRomana[1]);
 
   return null;
 }
@@ -175,10 +189,95 @@ export function coincidirParcial({ parciales, nombre, fin }) {
     if (porNombre) return porNombre;
   }
   const finLimpio = String(fin || '').trim();
-  if (finLimpio && finLimpio !== 'Sin fecha') {
+  // La misma fecha solo alcanza cuando la actividad parece una evaluación.
+  // Un trabajo práctico que vence el día del parcial no es el parcial.
+  if (finLimpio && finLimpio !== 'Sin fecha' && pareceEvaluacion(nombre)) {
     return lista.find((p) => p.fecha === finLimpio) || null;
   }
   return null;
+}
+
+export function nombreMateriaDesdeCurso(nombreCurso) {
+  const sinVersion = String(nombreCurso || '')
+    .replace(/\(\s*V\s*\.?\s*(?:TUCS|T\.U\.C\.S\.)?\s*[\d.]+\s*\)/gi, ' ')
+    .replace(/\bV\s*\.?\s*(?:TUCS|T\.U\.C\.S\.)?\s*[\d.]+\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return sinVersion.slice(0, 200);
+}
+
+export function emparejarCursosConMaterias(cursos, materias) {
+  return (Array.isArray(cursos) ? cursos : []).flatMap((curso) => {
+    const coincidencia = coincidirMateria(curso?.nombre, materias);
+    if (coincidencia?.materia?.id) {
+      return [{ curso, materiaId: coincidencia.materia.id, nombre: coincidencia.materia.nombre, nueva: false }];
+    }
+    const nombre = nombreMateriaDesdeCurso(curso?.nombre);
+    return nombre ? [{ curso, materiaId: null, nombre, nueva: true }] : [];
+  });
+}
+
+export function separarEvaluaciones(detectadas) {
+  const tareas = [];
+  const parciales = [];
+  for (const item of Array.isArray(detectadas) ? detectadas : []) {
+    if (pareceEvaluacion(item?.nombre) && item?.fin && item.fin !== 'Sin fecha') parciales.push(item);
+    else tareas.push(item);
+  }
+  return { tareas, parciales };
+}
+
+function idMateriaDeItem(item) {
+  return item?.materiaId || item?.materia_id || '';
+}
+
+// Una tarea del campus no se vuelve a insertar si ya hay otra en la misma
+// materia con el mismo nombre (o uno equivalente: sufijo «(FORO)», etc.).
+export function filtrarTareasDuplicadas(candidatas = [], existentes = []) {
+  const nuevas = [];
+  const duplicadas = [];
+  const vistas = (Array.isArray(existentes) ? existentes : []).map((item) => ({
+    materiaId: idMateriaDeItem(item),
+    nombre: item?.nombre
+  }));
+  for (const candidata of Array.isArray(candidatas) ? candidatas : []) {
+    const materiaId = idMateriaDeItem(candidata);
+    const clave = claveTareaParaEmparejar(candidata?.nombre);
+    const yaEsta = vistas.some((item) => {
+      if (item.materiaId !== materiaId) return false;
+      const claveExistente = claveTareaParaEmparejar(item.nombre);
+      return (clave && claveExistente && clave === claveExistente) || coincidirNombreTarea(item.nombre, candidata?.nombre);
+    });
+    if (yaEsta) {
+      duplicadas.push(candidata);
+      continue;
+    }
+    nuevas.push(candidata);
+    vistas.push({ materiaId, nombre: candidata?.nombre });
+  }
+  return { nuevas, duplicadas };
+}
+
+export function agruparResumenSync({ nuevas = [], yaEstaban = [] } = {}) {
+  const mapa = new Map();
+  const asegurar = (item) => {
+    const id = idMateriaDeItem(item) || item?.materiaNombre || item?.materia || 'materia';
+    const nombre = item?.materiaNombre || item?.materia || 'Materia';
+    if (!mapa.has(id)) mapa.set(id, { materia: nombre, nuevas: [], yaEstaban: [] });
+    return mapa.get(id);
+  };
+  for (const item of nuevas) {
+    if (item?.nombre) asegurar(item).nuevas.push(item.nombre);
+  }
+  for (const item of yaEstaban) {
+    if (item?.nombre) asegurar(item).yaEstaban.push(item.nombre);
+  }
+  return [...mapa.values()];
+}
+
+export function pareceEvaluacion(nombre) {
+  const n = limpiarTextoParaBusqueda(nombre);
+  return /\b(?:parcial(?:ito)?|examen|evaluacion|recuperatorio|coloquio|integrador)\b/.test(n);
 }
 
 // Inferir el tipo de tarea según el nombre, igual que hace la app

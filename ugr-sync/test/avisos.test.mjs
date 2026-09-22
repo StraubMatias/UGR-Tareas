@@ -10,11 +10,13 @@ import {
   esForoDeAvisos,
   extraerDiscusionesDeForo,
   extraerForosDelIndice,
+  avisoEsRelevante,
+  extraerPostsDeHilo,
   extraerPrimerPostDeHilo,
   fechaHoyLocal,
   sumarDias
 } from '../lib/avisos.mjs';
-import { conPool } from '../lib/sync-core.mjs';
+import { conPool, detectarAvisosMoodle } from '../lib/sync-core.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const HOY = '2026-09-15'; // martes
@@ -24,6 +26,8 @@ test('esForoDeAvisos identifica los foros informativos (Avisos/Consultas/…)', 
   assert.equal(esForoDeAvisos('Novedades'), true);
   assert.equal(esForoDeAvisos('Foro de Consultas'), true);
   assert.equal(esForoDeAvisos('Anuncios'), true);
+  assert.equal(esForoDeAvisos('Avisos de la cátedra'), true);
+  assert.equal(esForoDeAvisos('Foro de novedades'), true);
   assert.equal(esForoDeAvisos('Hallazgos de la Semana'), false);
   assert.equal(esForoDeAvisos('Descubramos activos en nuestro WiFi hogareño'), false);
 });
@@ -67,6 +71,76 @@ test('extraerPrimerPostDeHilo lee el post que abre el hilo', async () => {
   assert.equal(post.fecha, '2026-09-15');
   assert.ok(post.contenido.includes('clase de consulta por Zoom'));
   assert.ok(post.urlHilo.includes('/mod/forum/discuss.php?d=991721'));
+});
+
+test('avisoEsRelevante deja pasar un cambio de cursada y frena el material', () => {
+  assert.equal(avisoEsRelevante({
+    titulo: 'Cambio de aula',
+    contenido: 'Desde esta clase cursamos en el aula 4.'
+  }), true);
+  assert.equal(avisoEsRelevante({
+    titulo: 'Prórroga',
+    contenido: 'Se prorrogó la entrega del trabajo práctico. La nueva fecha se confirma después.'
+  }), true);
+  assert.equal(avisoEsRelevante({
+    titulo: 'Material de la clase',
+    contenido: 'Mañana estará disponible la grabación de la clase.'
+  }), false);
+  assert.equal(avisoEsRelevante({
+    titulo: 'Notas',
+    contenido: 'Mañana publicaremos las notas del parcial.'
+  }), false);
+});
+
+test('extraerPostsDeHilo lee también el recordatorio posterior del docente', () => {
+  const html = `
+    <article class="forumpost" data-post-id="1">
+      <h3 class="subject">Avisos de la unidad</h3>
+      <div class="author">por <a href="/user/view.php?id=7">Alumno</a> <time datetime="2026-09-01T10:00:00-03:00">1 de septiembre de 2026</time></div>
+      <div class="posting">¿Alguien sabe el aula?</div>
+    </article>
+    <article class="forumpost" data-post-id="2">
+      <h3 class="subject">Re: Avisos de la unidad</h3>
+      <div class="author">por <a href="/user/view.php?id=42">Docente</a> <time datetime="2026-09-15T10:00:00-03:00">15 de septiembre de 2026</time></div>
+      <div class="posting">Cursamos en el aula 4.</div>
+    </article>`;
+  const posts = extraerPostsDeHilo(html);
+  assert.equal(posts.length, 2);
+  assert.equal(posts[1].autor, 'Docente');
+  assert.equal(posts[1].fecha, '2026-09-15');
+  assert.ok(posts[1].contenido.includes('aula 4'));
+});
+
+test('un cambio de aula sin fecha llega a la campana y no inventa un evento', async () => {
+  const html = `<article class="forumpost" data-post-id="8">
+    <h3 class="subject">Cambio de aula</h3>
+    <div class="author">por <a href="/user/view.php?id=42">Juan Pérez</a>
+      <time datetime="2026-09-15T10:00:00-03:00">martes, 15 de septiembre de 2026, 10:00</time>
+    </div>
+    <div class="posting">Desde esta clase cursamos en el aula 4.</div>
+  </article>`;
+  const cliente = { async pedir(ruta) {
+    const clave = new URL(ruta, 'https://virtual.ugr.edu.ar').pathname;
+    const paginas = {
+      '/mod/forum/index.php': '<table><tr><td><a href="/mod/forum/view.php?id=10">Avisos de la cátedra</a></td></tr></table>',
+      '/course/view.php': '<div class="summarytext"><a href="/user/view.php?id=42">Juan Pérez</a></div>',
+      '/mod/forum/view.php': '<table><tr><td><a href="/mod/forum/discuss.php?d=11">Cambio de aula</a></td></tr></table>',
+      '/mod/forum/discuss.php': html
+    };
+    return { html: paginas[clave] };
+  } };
+  const { avisosDetectados, eventosSugeridos } = await detectarAvisosMoodle({
+    db: { async execute() { return { rows: [] }; } },
+    cliente,
+    hoy: '2026-09-15',
+    mapeos: [{
+      curso: { id: '9', nombre: 'Auditorías' },
+      coincidencia: { materia: { id: 'm', nombre: 'Auditorías' } }
+    }]
+  });
+  assert.equal(avisosDetectados.length, 1);
+  assert.equal(avisosDetectados[0].titulo, 'Cambio de aula');
+  assert.deepEqual(eventosSugeridos, []);
 });
 
 test('extraerPrimerPostDeHilo devuelve null sin posts', () => {

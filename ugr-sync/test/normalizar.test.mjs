@@ -6,6 +6,10 @@ import {
   coincidirMateria,
   coincidirNombreTarea,
   coincidirParcial,
+  emparejarCursosConMaterias,
+  filtrarTareasDuplicadas,
+  agruparResumenSync,
+  separarEvaluaciones,
   inferirTipoTarea,
   limpiarNombreCursoParaBusqueda,
   limpiarTextoParaBusqueda,
@@ -32,6 +36,11 @@ test('parsearTimestampMoodle convierte timestamp a YYYY-MM-DD', () => {
   assert.equal(parsearTimestampMoodle('nope'), null);
 });
 
+test('parsearTimestampMoodle usa el día que muestra el campus, no el de UTC', () => {
+  // 25/09/2026 23:59 en Argentina es 26/09/2026 02:59 UTC.
+  assert.equal(parsearTimestampMoodle(1790391540), '2026-09-25');
+});
+
 test('parsearUnidadMoodle convierte rótulos de unidad de Moodle a número', () => {
   assert.equal(parsearUnidadMoodle('Unidad II'), 2);
   assert.equal(parsearUnidadMoodle('Unidad 2'), 2);
@@ -41,6 +50,9 @@ test('parsearUnidadMoodle convierte rótulos de unidad de Moodle a número', () 
   assert.equal(parsearUnidadMoodle('U. II'), 2);
   assert.equal(parsearUnidadMoodle('Trabajo nro. 2, UII.'), 2);
   assert.equal(parsearUnidadMoodle('Auditorías de SI, UII Tarea nro.1'), 2);
+  assert.equal(parsearUnidadMoodle('Módulo 2'), 2);
+  assert.equal(parsearUnidadMoodle('Tema 3'), 3);
+  assert.equal(parsearUnidadMoodle('Semana 4'), 4);
   assert.equal(parsearUnidadMoodle('Sin unidad'), null);
   assert.equal(parsearUnidadMoodle(''), null);
   assert.equal(parsearUnidadMoodle(null), null);
@@ -150,6 +162,13 @@ test('coincidirParcial empareja un parcial ya cargado desde UGR', () => {
   // La coincidencia por fecha respeta la materia: acá se pasa solo el listado
   // de la materia ya filtrada, así que también cubre ese caso por construcción.
   assert.equal(coincidirParcial({ parciales: [], nombre: 'Evaluación de avance', fin: '2026-09-28' }), null);
+
+  // Un trabajo que casualmente vence el mismo día no es el parcial.
+  assert.equal(coincidirParcial({
+    parciales: [parcialActivos],
+    nombre: 'Trabajo nro. 2, UII.',
+    fin: '2026-09-28'
+  }), null);
 });
 
 test('limpiarTextoParaBusqueda normaliza mayúsculas y acentos', () => {
@@ -212,4 +231,59 @@ test('coincidirMateria mapea los cursos reales de UGR Virtual (prefijo V.TUCS.x.
 
   const r3 = coincidirMateria('(V.TUCS.1.08.2) CIBERDELITOS', materias);
   assert.equal(r3?.materia.id, 'c');
+});
+
+test('emparejarCursosConMaterias reutiliza la materia existente y nombra la nueva', () => {
+  const materias = [{ id: 'a', nombre: 'CIBERDELITOS' }];
+  const plan = emparejarCursosConMaterias([
+    { nombre: '(V.TUCS.1.08.2) CIBERDELITOS' },
+    { nombre: '(V.TUCS.1.09.2) GESTIÓN DE ACTIVOS DE LA INFORMACIÓN' },
+    { nombre: '   ' }
+  ], materias);
+  assert.equal(plan.length, 2);
+  assert.equal(plan[0].nueva, false);
+  assert.equal(plan[0].materiaId, 'a');
+  assert.equal(plan[1].nueva, true);
+  assert.match(plan[1].nombre, /GESTIÓN DE ACTIVOS/);
+  assert.doesNotMatch(plan[1].nombre, /TUCS/);
+});
+
+test('separarEvaluaciones manda el examen con fecha a parciales y el trabajo a tareas', () => {
+  const { tareas, parciales } = separarEvaluaciones([
+    { nombre: 'TP 1', fin: '2026-09-25' },
+    { nombre: 'Examen parcial', fin: '2026-10-02' },
+    { nombre: 'Parcialito', fin: 'Sin fecha' }
+  ]);
+  assert.equal(tareas.length, 2);
+  assert.equal(parciales.length, 1);
+  assert.equal(parciales[0].nombre, 'Examen parcial');
+});
+
+test('filtrarTareasDuplicadas no deja dos TPs iguales en la misma materia', () => {
+  const { nuevas, duplicadas } = filtrarTareasDuplicadas(
+    [
+      { materiaId: 'm1', nombre: 'TP 1: contexto' },
+      { materiaId: 'm1', nombre: 'TP 1: contexto (FORO)' },
+      { materiaId: 'm2', nombre: 'TP 1: contexto' }
+    ],
+    [{ materiaId: 'm1', nombre: 'TP 1: contexto' }]
+  );
+  assert.equal(nuevas.length, 1);
+  assert.equal(nuevas[0].materiaId, 'm2');
+  assert.equal(duplicadas.length, 2);
+});
+
+test('agruparResumenSync junta por materia lo nuevo y lo que ya estaba', () => {
+  const resumen = agruparResumenSync({
+    nuevas: [{ materiaId: 'm1', materiaNombre: 'Ciberdelitos', nombre: 'Foro 1' }],
+    yaEstaban: [
+      { materiaId: 'm1', materiaNombre: 'Ciberdelitos', nombre: 'TP 1' },
+      { materiaId: 'm2', materiaNombre: 'Auditorías', nombre: 'Quiz' }
+    ]
+  });
+  const ciber = resumen.find((fila) => fila.materia === 'Ciberdelitos');
+  const auditorias = resumen.find((fila) => fila.materia === 'Auditorías');
+  assert.deepEqual(ciber?.nuevas, ['Foro 1']);
+  assert.deepEqual(ciber?.yaEstaban, ['TP 1']);
+  assert.deepEqual(auditorias?.yaEstaban, ['Quiz']);
 });

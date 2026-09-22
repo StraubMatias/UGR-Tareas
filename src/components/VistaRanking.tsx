@@ -32,26 +32,25 @@ export default function VistaRanking({
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6 border-b border-slate-800 pb-4">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-              <span>🏆</span> Ranking de la cursada
+              <span>🏆</span> Ranking por materia
             </h2>
-            <p className="text-sm text-slate-400 mt-1">Puntaje acumulado de tareas, foros y parciales.</p>
+            <p className="text-sm text-slate-400 mt-1">Quienes cursan esta materia, con el puntaje de sus tareas, foros y parciales.</p>
           </div>
           <div className="flex flex-col items-stretch gap-2 sm:items-end">
             <label htmlFor="materia-ranking" className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Vista del ranking
+              Materia
             </label>
             <select
               id="materia-ranking"
               value={materiaRanking}
               onChange={(e) => setMateriaRanking(e.target.value)}
-              className="rounded-xl border border-slate-700 bg-[#0f141c] px-3 py-2 text-sm font-semibold text-white outline-none transition-colors focus:border-emerald-400 cursor-pointer"
+              className="w-full sm:w-auto max-w-full rounded-xl border border-slate-700 bg-[#0f141c] px-3 py-2.5 text-sm font-semibold text-white outline-none transition-colors focus:border-emerald-400 cursor-pointer"
             >
-              <option value="general">Todas las materias</option>
               {materias.map((materia) => (
                 <option key={materia.id} value={materia.id}>{etiquetaMateria(materia.nombre)}</option>
               ))}
             </select>
-            <span className="text-xs text-slate-500">Se actualiza al marcar tareas</span>
+            <span className="text-xs text-slate-500">Se ve a quien cursa esta materia</span>
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { actualizarUrlsTareas, actualizarUrlsParciales, insertarAvisosDetectados, insertarTareasDetectadas, aprobarAvisos, rechazarAvisos, insertarEventosCronograma } from './sync-core.mjs';
+import { actualizarUrlsTareas, actualizarUrlsParciales, aplicarComplementoCampus, insertarAvisosDetectados, insertarTareasDetectadas, aprobarAvisos, rechazarAvisos, insertarEventosCronograma } from './sync-core.mjs';
 
 // Persistente también en serverless. Solo el servidor escribe el contenido;
 // el navegador recibe un identificador y devuelve selecciones, nunca datos a insertar.
@@ -19,6 +19,10 @@ export async function sincronizarConPrevia({ db, usuario, confirmar = false, pre
     await insertarAvisosDetectados({ db, avisos: datos.avisos });
     datos.urlsActualizadas = await actualizarUrlsTareas({ db, urlsActualizar: datos.urlsActualizar });
     datos.urlsParcialesActualizadas = await actualizarUrlsParciales({ db, urlsParcialesActualizar: datos.urlsParcialesActualizar });
+    const complemento = await aplicarComplementoCampus({ db, detectado: datos });
+    datos.eventosCalendarioInsertados = complemento.eventos;
+    datos.horariosInsertados = complemento.horarios;
+    datos.fechasActualizadas = complemento.fechas;
     const id = randomUUID();
     await db.batch([
       { sql: 'DELETE FROM sync_previas WHERE vence < ?', args: [ahora] },

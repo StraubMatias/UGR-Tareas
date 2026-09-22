@@ -2,8 +2,10 @@
 
 import { startTransition, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { nombreNotificacionAviso } from '../lib/avisos';
+import { alumnosDeLaMateria } from '../lib/companeros';
 import {
   validarLoginAction,
+  registrarCuentaAction,
   cerrarSesionAction,
   obtenerSesionAction,
   obtenerEstadoCompleto,
@@ -85,6 +87,9 @@ interface SyncResult {
   urlsActualizadas: number;
   avisosAceptados: number;
   eventosInsertados: number;
+  eventosCalendarioInsertados?: number;
+  horariosInsertados?: number;
+  fechasActualizadas?: number;
 }
 
 interface Periodo {
@@ -152,14 +157,25 @@ import VistaAlumnos from '../components/VistaAlumnos';
 import VistaPlan from '../components/VistaPlan';
 import VistaHorarios from '../components/VistaHorarios';
 import VistaHistorial from '../components/VistaHistorial';
+import CuentaPropia, { ResumenCursada } from '../components/CuentaPropia';
 
 export default function Home() {
   const [materias, setMaterias] = useState<Materia[]>([]);
   const [alumnos, setAlumnos] = useState<string[]>([]);
+  const [inscripciones, setInscripciones] = useState<{ alumno: string; materiaId: string }[]>([]);
   const [periodos, setPeriodos] = useState<Periodo[]>([]);
   const [periodoSeleccionado, setPeriodoSeleccionado] = useState<string>('');
   const [usuarioActual, setUsuarioActual] = useState<string | null>(null);
   const [rolUsuario, setRolUsuario] = useState<string | null>(null);
+  const [origenCuenta, setOrigenCuenta] = useState<string | null>(null);
+  const [ugrUsuarioCuenta, setUgrUsuarioCuenta] = useState<string | null>(null);
+  const [modoAcceso, setModoAcceso] = useState<'login' | 'registro'>('login');
+  const [registroPass, setRegistroPass] = useState('');
+  const [registroConfirmacion, setRegistroConfirmacion] = useState('');
+  const [registroDni, setRegistroDni] = useState('');
+  const [registroClaveUgr, setRegistroClaveUgr] = useState('');
+  const [enviandoAcceso, setEnviandoAcceso] = useState(false);
+  const [resumenSync, setResumenSync] = useState<{ materia: string; nuevas: string[]; yaEstaban: string[] }[]>([]);
   const [pestana, setPestana] = useState<'alumnos' | 'materias' | 'plan' | 'parciales' | 'horarios' | 'ranking' | 'promocion' | 'historial' | 'admin'>('alumnos');
   const [cargando, setCargando] = useState<boolean>(true);
   const [iniciado, setIniciado] = useState<boolean>(false);
@@ -178,6 +194,8 @@ export default function Home() {
   const [syncDatos, setSyncDatos] = useState<SyncResult | null>(null);
   const syncEnCurso = useRef<boolean>(false);
   const [syncMensaje, setSyncMensaje] = useState<string>('');
+  const [syncCuentaAbierta, setSyncCuentaAbierta] = useState(false);
+  const [mensajeSyncCuenta, setMensajeSyncCuenta] = useState('');
   const [syncSeleccionados, setSyncSeleccionados] = useState<Set<string>>(() => new Set());
   const [syncAvisosSeleccionados, setSyncAvisosSeleccionados] = useState<Set<string>>(() => new Set());
   const [syncEventosSeleccionados, setSyncEventosSeleccionados] = useState<Set<string>>(() => new Set());
@@ -217,7 +235,7 @@ export default function Home() {
   const [situacionPropiaAbierta, setSituacionPropiaAbierta] = useState(true);
   const [historialPropioAbierto, setHistorialPropioAbierto] = useState(true);
   const [alumnoComparar, setAlumnoComparar] = useState('');
-  const [materiaRanking, setMateriaRanking] = useState('general');
+  const [materiaRanking, setMateriaRanking] = useState('');
   // Foco de tarea al llegar desde "Estado por Alumno" hacia Materias (scroll + resaltado)
   const [tareaFoco, setTareaFoco] = useState<{ materiaId: string; tareaId: string } | null>(null);
   const [tareaFocoVisible, setTareaFocoVisible] = useState(false);
@@ -419,6 +437,8 @@ export default function Home() {
           startTransition(() => {
             setUsuarioActual(sesion.usuario);
             setRolUsuario(sesion.rol);
+            setOrigenCuenta(sesion.origen || 'comision');
+            setUgrUsuarioCuenta(sesion.ugrUsuario || null);
             setMostrarAvisoInicio(true);
           });
         }
@@ -439,15 +459,19 @@ export default function Home() {
     };
   }, []);
 
-  const iniciarSesionLocal = (usuario: string, rol: string) => {
+  const iniciarSesionLocal = (usuario: string, rol: string, origen = 'comision', ugrUsuario: string | null = null) => {
     setUsuarioActual(usuario);
     setRolUsuario(rol);
+    setOrigenCuenta(origen);
+    setUgrUsuarioCuenta(ugrUsuario);
   };
 
   const cerrarSesionLocal = async () => {
     await cerrarSesionAction();
     setUsuarioActual(null);
     setRolUsuario(null);
+    setOrigenCuenta(null);
+    setUgrUsuarioCuenta(null);
   };
 
 
@@ -460,6 +484,7 @@ export default function Home() {
     setPeriodos(estado.periodos || []);
     setMaterias(estado.materias || []);
     setAlumnos(estado.alumnos || []);
+    setInscripciones(estado.inscripciones || []);
     setParciales(estado.parciales || []);
     setNotas(estado.notas || []);
     setHorarios(estado.horarios || []);
@@ -467,6 +492,8 @@ export default function Home() {
     setProgresoPlan(estado.progresoPlan || []);
     setAvisos(estado.avisos || []);
     if (estado.rol) setRolUsuario(estado.rol);
+    if (estado.origen) setOrigenCuenta(estado.origen);
+    if ('ugrUsuario' in estado) setUgrUsuarioCuenta(estado.ugrUsuario || null);
 
     // Inicializar inputs de notas locales
     const mapaNotas: Record<string, string> = {};
@@ -489,6 +516,11 @@ export default function Home() {
       setMateriaSel((valorActual) => valorActual || estado.materias[0].id);
       setMateriaParcialSel((valorActual) => valorActual || estado.materias[0].id);
       setMateriaHorarioSel((valorActual) => valorActual || estado.materias[0].id);
+      setMateriaRanking((valorActual) => (
+        valorActual && estado.materias.some((materia: { id: string }) => materia.id === valorActual)
+          ? valorActual
+          : estado.materias[0].id
+      ));
     }
   }, []);
 
@@ -513,6 +545,7 @@ export default function Home() {
     modalPasswordOpen || syncAbierto || materiaCondicionesEnEdicion || parcialEnEdicion
     || tareaEnEdicion || materiaEnEdicion || alumnoEnEdicion
     || Object.keys(progresoPlanEnEdicion).length > 0
+    || syncCuentaAbierta
   );
 
   useEffect(() => {
@@ -554,6 +587,8 @@ export default function Home() {
         if (!cancelado && !sesionValida) {
           setUsuarioActual(null);
           setRolUsuario(null);
+          setOrigenCuenta(null);
+          setUgrUsuarioCuenta(null);
           setCargando(false);
         }
       } finally {
@@ -576,20 +611,49 @@ export default function Home() {
     };
   }, [usuarioActual, cargarBD]);
 
+  const handleRegistro = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setErrorLogin('');
+    setEnviandoAcceso(true);
+    const dniIngresado = registroDni;
+    const claveUgrIngresada = registroClaveUgr;
+    setRegistroClaveUgr('');
+    try {
+      const res = await registrarCuentaAction(inputUser, registroPass, registroConfirmacion, dniIngresado, claveUgrIngresada);
+      setRegistroDni('');
+      if (res.exito && res.usuario) {
+        iniciarSesionLocal(res.usuario, res.rol || 'alumno', res.origen || 'propio', null);
+        setMensajeSyncCuenta(res.mensaje || '');
+        setResumenSync(res.resumen || []);
+        setInputUser('');
+        setRegistroPass('');
+        setRegistroConfirmacion('');
+        return;
+      }
+      setErrorLogin(res.mensaje || 'No se pudo crear la cuenta.');
+    } finally {
+      setEnviandoAcceso(false);
+    }
+  };
+
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!inputUser.trim() || !inputPass.trim()) return;
+    setEnviandoAcceso(true);
+    try {
+      const res = await validarLoginAction(inputUser, inputPass);
 
-    const res = await validarLoginAction(inputUser, inputPass);
-
-    if (res.exito && res.usuario) {
-      iniciarSesionLocal(res.usuario, res.rol || 'alumno');
-      setMostrarAvisoInicio(true);
-      setErrorLogin('');
-      setInputUser('');
-      setInputPass('');
-    } else {
-      setErrorLogin(res.mensaje || 'No se pudo iniciar sesión.');
+      if (res.exito && res.usuario) {
+        iniciarSesionLocal(res.usuario, res.rol || 'alumno', res.origen || 'comision', res.ugrUsuario || null);
+        setMostrarAvisoInicio(true);
+        setErrorLogin('');
+        setInputUser('');
+        setInputPass('');
+      } else {
+        setErrorLogin(res.mensaje || 'No se pudo iniciar sesión.');
+      }
+    } finally {
+      setEnviandoAcceso(false);
     }
   };
 
@@ -935,6 +999,9 @@ export default function Home() {
         eventosSugeridos: Array.isArray(res.eventosSugeridos) ? res.eventosSugeridos as EventoSync[] : [],
         insertadas: res.insertadas ?? 0,
         urlsActualizadas: res.urlsActualizadas ?? 0,
+        eventosCalendarioInsertados: res.eventosCalendarioInsertados ?? 0,
+        horariosInsertados: res.horariosInsertados ?? 0,
+        fechasActualizadas: res.fechasActualizadas ?? 0,
         avisosAceptados: res.avisosAceptados ?? 0,
         eventosInsertados: res.eventosInsertados ?? 0
       };
@@ -1305,10 +1372,11 @@ export default function Home() {
       cronograma: eventosCronogramaDia
     };
   };
-  const materiasDelRanking = materiaRanking === 'general'
-    ? materias
-    : materias.filter((materia) => materia.id === materiaRanking);
-  const ranking = alumnos
+  const materiasDelRanking = materias.filter((materia) => materia.id === materiaRanking);
+  const alumnosDelRanking = materiaRanking
+    ? alumnosDeLaMateria(inscripciones, materiaRanking)
+    : [];
+  const ranking = (alumnosDelRanking.length > 0 ? alumnosDelRanking : alumnos)
     .map((alumno) => {
       const tareasCompletadas = materiasDelRanking.flatMap((materia) => materia.tareas)
         .filter((tarea) => tareaCompletadaPor(tarea, alumno));
@@ -1327,7 +1395,6 @@ export default function Home() {
       const notasAlumno = notas
         .filter((nota) => nota.alumno === alumno)
         .filter((nota) => {
-          if (materiaRanking === 'general') return true;
           const parcial = parciales.find((item) => item.id === nota.parcial_id);
           return materiasDelRanking.some((materia) => materia.id === parcial?.materia_id);
         })
@@ -1357,7 +1424,7 @@ export default function Home() {
             nota: valor
           };
         })
-        .filter((parcial) => materiaRanking === 'general' || materiasDelRanking.some((materia) => materia.nombre === parcial.materia))
+        .filter((parcial) => materiasDelRanking.some((materia) => materia.nombre === parcial.materia))
         .filter((parcial) => Number.isFinite(parcial.nota) && parcial.nota >= 0 && parcial.nota <= 10);
       const ultimaCompletadaEn = tareasCompletadas
         .map((tarea) => fechaEntregaTarea(tarea, alumno))
@@ -1506,13 +1573,13 @@ export default function Home() {
   const diasPagina = Math.max(0, Math.floor((Date.now() - fechaCreacionPagina.getTime()) / (1000 * 60 * 60 * 24)));
 
   return (
-    <main className="portal-shell min-h-screen bg-[#0f141c]/70 text-slate-200 px-4 pb-4 sm:px-6 md:px-10 font-sans selection:bg-cyan-400 selection:text-slate-950">
+    <main className="portal-shell min-h-screen bg-[#0f141c]/70 text-slate-200 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[env(safe-area-inset-top)] sm:px-6 md:px-10 font-sans selection:bg-cyan-400 selection:text-slate-950">
       <header className="portal-header max-w-9xl mx-auto mb-4 border border-t-0 p-4 sm:p-5 rounded-b-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-        <div>
+        <div className="min-w-0 w-full">
           <p className="portal-kicker mb-3">Portal de cursada · UGR</p>
-          <div className="flex items-center gap-3 mb-1">
-            <span className="text-2xl" aria-hidden="true">✦</span>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          <div className="flex items-start sm:items-center gap-3 mb-1">
+            <span className="text-2xl shrink-0" aria-hidden="true">✦</span>
+            <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
               UGR - Tareas y Parciales
             </h1>
             <span className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-300">
@@ -1548,7 +1615,7 @@ export default function Home() {
         </div>
 
         {usuarioActual && (
-          <div className="portal-header-actions flex flex-wrap items-center gap-3">
+          <div className="portal-header-actions flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
             <div ref={notificacionesRef} className="relative">
               <button
                 type="button"
@@ -1640,6 +1707,31 @@ export default function Home() {
             >
               🔑 Cambiar Clave
             </button>
+            {usuarioActual && !esAdmin && (
+              <button
+                type="button"
+                onClick={() => setSyncCuentaAbierta(true)}
+                className="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+              >
+                Sincronizar UGR
+              </button>
+            )}
+            {mensajeSyncCuenta && (
+              <span className="self-center text-xs text-slate-400 max-w-[16rem] truncate" title={mensajeSyncCuenta}>{mensajeSyncCuenta}</span>
+            )}
+            {syncCuentaAbierta && (
+              <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+                <CuentaPropia
+                  usuario={usuarioActual}
+                  onCerrar={() => setSyncCuentaAbierta(false)}
+                  onSincronizada={(mensaje, resumen) => {
+                    setMensajeSyncCuenta(mensaje);
+                    setResumenSync(resumen || []);
+                    void cargarBD(false);
+                  }}
+                />
+              </div>
+            )}
             {esAdmin && (
               <button
                 onClick={abrirSyncUGR}
@@ -1696,8 +1788,12 @@ export default function Home() {
               </svg>
             </div>
             <p className="portal-kicker mb-2">Acceso personal</p>
-            <h2 className="text-3xl font-black text-white mb-2 bg-gradient-to-r from-cyan-300 via-white to-amber-300 bg-clip-text text-transparent">Iniciar sesión</h2>
-            <p className="text-sm text-slate-400 mt-3 max-w-xs mx-auto leading-relaxed">Tu tablero para seguir la cursada sin perder el hilo.</p>
+            <h2 className="text-3xl font-black text-white mb-2 bg-gradient-to-r from-cyan-300 via-white to-amber-300 bg-clip-text text-transparent">{modoAcceso === 'registro' ? 'Crear cuenta' : 'Iniciar sesión'}</h2>
+            <p className="text-sm text-slate-400 mt-3 max-w-xs mx-auto leading-relaxed">
+              {modoAcceso === 'registro'
+                ? 'Elegí tu usuario y tu clave. El DNI y la clave de UGR Virtual se comprueban ahora y no se guardan: con eso se carga tu cursada del período actual.'
+                : 'Tu tablero para seguir la cursada sin perder el hilo.'}
+            </p>
             <div className="portal-login-meta mt-5 flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-wider">
               <span>2° cuatrimestre</span>
               <span aria-hidden="true">·</span>
@@ -1705,7 +1801,7 @@ export default function Home() {
             </div>
           </div>
           
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={modoAcceso === 'registro' ? handleRegistro : handleLogin} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">Usuario</label>
               <input
@@ -1721,11 +1817,51 @@ export default function Home() {
               <input
                 type="password"
                 placeholder="••••••••"
-                value={inputPass}
-                onChange={(e) => setInputPass(e.target.value)}
+                value={modoAcceso === 'registro' ? registroPass : inputPass}
+                onChange={(e) => (modoAcceso === 'registro' ? setRegistroPass(e.target.value) : setInputPass(e.target.value))}
                 className="w-full bg-[#0d1117] border border-slate-800 rounded-xl p-3.5 text-base text-white focus:outline-none transition-all"
               />
             </div>
+            {modoAcceso === 'registro' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Repetir contraseña</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={registroConfirmacion}
+                  onChange={(e) => setRegistroConfirmacion(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-slate-800 rounded-xl p-3.5 text-base text-white focus:outline-none transition-all"
+                />
+              </div>
+            )}
+            {modoAcceso === 'registro' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">DNI de UGR Virtual</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="El mismo DNI con el que entrás al campus"
+                  value={registroDni}
+                  onChange={(e) => setRegistroDni(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-slate-800 rounded-xl p-3.5 text-base text-white focus:outline-none transition-all"
+                />
+              </div>
+            )}
+            {modoAcceso === 'registro' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Contraseña de UGR Virtual</label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="No se guarda"
+                  value={registroClaveUgr}
+                  onChange={(e) => setRegistroClaveUgr(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-slate-800 rounded-xl p-3.5 text-base text-white focus:outline-none transition-all"
+                />
+                <p className="mt-1 text-xs text-slate-500">Sirve para comprobar que sos alumno de la UGR y cargar tus materias. Después se descarta.</p>
+              </div>
+            )}
             
             {errorLogin && (
               <p className="text-sm text-red-400 text-center bg-red-950/30 border border-red-900/30 p-3 rounded-lg">
@@ -1735,14 +1871,26 @@ export default function Home() {
             
             <button
               type="submit"
-              className="portal-login-button w-full font-bold py-3.5 rounded-xl text-sm uppercase tracking-wider transition-all duration-200 cursor-pointer"
+              disabled={enviandoAcceso}
+              className="portal-login-button w-full font-bold py-3.5 rounded-xl text-sm uppercase tracking-wider transition-all duration-200 cursor-pointer disabled:opacity-50"
             >
-              Entrar
+              {enviandoAcceso
+                ? (modoAcceso === 'registro' ? 'Comprobando UGR…' : 'Entrando…')
+                : (modoAcceso === 'registro' ? 'Crear cuenta' : 'Entrar')}
             </button>
           </form>
 
-          {/* BOTÓN CAMBIAR CONTRASEÑA EN EL LOGIN */}
-          <div className="mt-6 text-center border-t border-slate-800/80 pt-4">
+          <div className="mt-6 text-center border-t border-slate-800/80 pt-4 space-y-3">
+            <button
+              type="button"
+              onClick={() => {
+                setModoAcceso(modoAcceso === 'registro' ? 'login' : 'registro');
+                setErrorLogin('');
+              }}
+              className="block w-full text-xs text-cyan-300 hover:text-cyan-200 underline font-medium cursor-pointer"
+            >
+              {modoAcceso === 'registro' ? 'Ya tengo cuenta' : 'Crear una cuenta propia'}
+            </button>
             <button
               type="button"
               onClick={() => setModalPasswordOpen(true)}
@@ -1752,10 +1900,38 @@ export default function Home() {
             </button>
           </div>
         </div>
+      ) : origenCuenta === 'propio' && materias.length === 0 && !cargando ? (
+        <CuentaPropia
+          usuario={usuarioActual}
+          onSincronizada={(mensaje, resumen) => {
+            setMensajeSyncCuenta(mensaje);
+            setResumenSync(resumen || []);
+            void cargarBD(true);
+          }}
+        />
       ) : (
         <div className="max-w-9xl mx-auto">
+          {resumenSync.length > 0 && (
+            <section className="mb-6 rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-cyan-200">Resultado de la sincronización</p>
+                  {mensajeSyncCuenta && <p className="mt-1 text-sm text-slate-300">{mensajeSyncCuenta}</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setResumenSync([])}
+                  className="text-slate-400 hover:text-white text-lg leading-none cursor-pointer"
+                  aria-label="Cerrar resumen de sincronización"
+                >
+                  ×
+                </button>
+              </div>
+              <ResumenCursada resumen={resumenSync} />
+            </section>
+          )}
           {/* NAVEGACIÓN */}
-          <div className="portal-nav sticky top-0 z-40 -mx-4 px-4 py-3 sm:-mx-6 sm:px-6 md:-mx-10 md:px-10 mb-8 border-b shadow-lg backdrop-blur-sm flex flex-nowrap gap-3 overflow-x-auto">
+          <div className="portal-nav sticky top-0 z-40 -mx-3 px-3 py-3 sm:-mx-6 sm:px-6 md:-mx-10 md:px-10 mb-6 sm:mb-8 border-b shadow-lg backdrop-blur-sm flex flex-nowrap gap-2 sm:gap-3 overflow-x-auto">
             <button
               onClick={() => navegarA('alumnos')}
               className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
@@ -1764,7 +1940,7 @@ export default function Home() {
                   : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
               }`}
             >
-              <span>👥</span> Estado por Alumno
+              <span>👥</span> <span className="sm:hidden">Estado</span><span className="hidden sm:inline">Estado por Alumno</span>
             </button>
             <button
               onClick={() => navegarA('materias')}
@@ -1794,7 +1970,7 @@ export default function Home() {
                   : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
               }`}
             >
-              <span>🧭</span> Plan de estudio
+              <span>🧭</span> <span className="sm:hidden">Plan</span><span className="hidden sm:inline">Plan de estudio</span>
             </button>
             <button
               onClick={() => navegarA('promocion')}
@@ -3032,6 +3208,16 @@ export default function Home() {
                   </div>
                 )}
 
+                {(syncDatos.eventosCalendarioInsertados ?? 0) > 0 && (
+                  <div className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-4 text-sm text-cyan-100">
+                    📅 Se agregaron {syncDatos.eventosCalendarioInsertados} evento(s) del calendario del campus.
+                  </div>
+                )}
+                {(syncDatos.horariosInsertados ?? 0) > 0 && (
+                  <div className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-4 text-sm text-cyan-100">
+                    🕒 Se cargaron {syncDatos.horariosInsertados} horario(s) semanal(es).
+                  </div>
+                )}
                 {syncDatos.urlsActualizadas > 0 && (
                   <div className="rounded-xl border border-blue-500/40 bg-blue-500/10 p-4 text-sm text-blue-200">
                     🔗 Se actualizó el enlace de {syncDatos.urlsActualizadas} tarea(s) ya existente(s).
