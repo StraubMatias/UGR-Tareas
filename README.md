@@ -1,63 +1,69 @@
-# Tareas UGR
+# UGR — Tareas y Parciales
 
-El campus guarda los archivos. Este tablero guarda el estado de la comisión.
+La cursada de la Tecnicatura, junta en un solo lugar.
 
-Tareas UGR es el lugar donde una cursada deja de depender del grupo de WhatsApp, de una planilla que alguien olvidó actualizar y de entrar materia por materia a UGR Virtual para saber qué falta. Cada alumno ve qué tiene pendiente, qué ya entregó, cómo viene la promoción y qué le queda de la carrera. El administrador mantiene materias, fechas y equipos sin perseguir a nadie.
+UGR Virtual sigue siendo donde se entrega y donde la cátedra publica. Este tablero es donde se entiende el cuatrimestre: qué te falta, cuándo cursás, cuándo se toma el parcial, cómo venís para regularizar o promocionar, y qué te queda de la carrera.
 
-No reemplaza al campus. Lo complementa: el campus sigue siendo donde se entrega, y este tablero es donde la comisión entiende la cursada.
+![Ingreso al tablero](docs/capturas/entrar.jpg)
 
-## El problema que resuelve
+## Para qué está
 
-En una comisión chica el trabajo real no es subir un PDF. Es saber, el mismo día y para todos:
+En la comisión el trabajo no es solo subir un archivo. Es saber, el mismo día y para todos:
 
-- qué actividad está abierta, cuál vence esta semana y cuál todavía no habilitó el docente;
+- qué actividad está abierta, cuál vence esta semana y cuál todavía no se habilitó;
 - quién entregó, a quién le falta la nota y quién quedó afuera de un grupo;
 - si con las notas de hoy la materia se regulariza, se promociona o hay que rendir final;
-- cuándo es el próximo parcial, en qué aula cursan y qué avisó la cátedra en el foro;
+- cuándo es el próximo parcial y en qué horario se cursa;
 - qué materias de la carrera ya están aprobadas y cuáles se desbloquean después.
 
-UGR Virtual responde eso, pero repartido en cursos, foros y calificaciones. Tareas UGR lo junta en una sola sesión, con el nombre de cada compañero y las reglas de esta cursada.
+Eso hoy está repartido entre cursos, foros, calificaciones y el grupo de la comisión. Acá se lee de una vez.
 
-## Qué puede hacer la comisión
+## Tu situación, materia por materia
 
-**Saber cómo viene cada uno.** La vista propia muestra pendientes, entregas sin nota, actividades futuras, completadas y trabajos grupales. El mismo corte existe para el resto de la comisión, con buscador que ignora acentos. De los compañeros se consulta el estado. La entrega y la nota se copian de UGR Virtual al sincronizar; el alumno no las carga a mano.
+Entrá y lo primero que ves es lo tuyo: pendientes, entregas sin nota, actividades que todavía no abrieron, completadas y trabajos grupales. Al lado, el próximo examen y el horario de cursada.
 
-**No perder una fecha.** Cada tarea tiene materia, unidad, apertura, cierre y un semáforo. La campana avisa vencimientos, actividades que se habilitan y novedades de la cátedra. El calendario del mes mezcla clases, parciales, entregas y eventos que salieron del campus. Al lado están los horarios de cursada, con aula y el próximo examen a la vista.
+![Estado de la cursada, con pendientes y el próximo examen](docs/capturas/estado.jpg)
 
-**Trabajar en equipo sin una planilla aparte.** Una actividad puede ser grupal, con cupo máximo si hace falta. El alumno arma su grupo o se suma a uno con lugar. La entrega y la nota valen para todo el equipo, y se guardan juntas: no queda un integrante actualizado y otro no. Con progreso cargado no se cambia de grupo, y con grupos armados no se apaga la modalidad grupal a mitad de camino.
+Cada tarea muestra la materia, la unidad, cuándo abre, cuándo vence y un semáforo de los días que quedan. Desde la tarjeta se abre la consigna en UGR Virtual.
 
-**Llevar parciales y promoción en serio.** Cada materia tiene sus parciales, sus notas y sus condiciones: desde qué nota se regulariza, desde cuál se promociona, y si esa regla mira trabajos prácticos, un porcentaje de actividades o la nota del práctico. El ranking suma el puntaje de la cursada y deja comparar con un compañero qué explica la diferencia.
+La entrega y la nota no se cargan a mano. Se copian del campus cuando sincronizás. Si el profesor alarga un plazo o corrige una fecha, la próxima sincronización deja la fecha nueva: el campus manda.
 
-**Ver la carrera, no solo el cuatrimestre.** El plan de estudio de la Tecnicatura en Seguridad de la Información está cargado con sus correlativas. Cada alumno marca qué aprobó o promocionó y ve qué materias le quedan habilitadas. El historial conserva entregas y notas, y el selector de período permite mirar una cursada anterior sin mezclarla con la actual.
+![Tareas de una materia, con apertura, vencimiento y enlace al campus](docs/capturas/materias.jpg)
 
-**Empezar con una cuenta propia.** Cualquier alumno de la UGR puede crear su usuario y su clave. En el alta escribe también el DNI y la contraseña de UGR Virtual: el campus los comprueba en el momento y no quedan guardados. Si UGR acepta, el sincronizar te dice a qué materias de la carrera estás inscripto, guarda esa cursada en el período actual y después carga únicamente las tareas que todavía no estaban. El compañero que sincroniza después se anota en las mismas materias y no duplica lo que ya está. El ranking muestra a quienes cursan esa misma materia.
+De un compañero se puede consultar el estado. La nota de otro no se escribe desde acá.
 
-**Administrar sin ser el que anota todo a mano.** Quien tiene rol de administrador crea y edita materias, tareas, horarios, parciales y alumnos. La sincronización con UGR Virtual, hecha a pedido y con confirmación, detecta tareas nuevas (unidad y fechas incluidas), trae los avisos recientes de los foros y propone eventos para el cronograma: consultas, encuentros, entregas. Completa enlaces que faltaban y no pisa los que ya estaban. También se puede correr en seco, solo para ver qué cambiaría.
+## El mes, en un calendario
 
-## Hecho para datos de una cursada real
+Clases, entregas y parciales van al mismo mes. La campana avisa lo que vence, lo que se habilita mañana y los avisos de la cátedra que importan para la cursada.
 
-Las notas, los grupos y el avance del plan viven en una base propia (Turso). El navegador no guarda la cursada: solo recuerda qué avisos ya se leyeron.
+![Calendario del cuatrimestre con clases y entregas](docs/capturas/cronograma.jpg)
 
-Entrar exige usuario y contraseña. La contraseña se guarda con scrypt, la sesión va firmada y el navegador no puede leerla. Dura 30 minutos, se invalida al cambiar la clave y se borra al salir. Un intento repetido de login se bloquea un rato, igual que una ráfaga de escrituras. Un alumno no carga la nota ni la entrega de otro. Alta, baja y edición de la cursada quedan del lado del administrador. Cada acceso y cada cambio relevante queda en un registro de auditoría.
+## El parcial es un día
 
-La conexión con el campus usa las credenciales del entorno, nunca un usuario escrito en el código. El tablero no se ofrece a buscadores: es un espacio de la comisión, no una página pública.
+Si la actividad se llama parcial o evaluación, no es una tarea con apertura y cierre. Es un examen: se toma el día de cursada, en el horario de la clase. Hasta ese día la nota no existe. Después de rendirlo, la siguiente sincronización la trae del campus.
 
-## Con qué está hecho
+![Parciales de una materia, con la fecha en que se toman](docs/capturas/parciales.jpg)
 
-Next.js 16 y React 19 para la aplicación, TypeScript en todo lo que ve el usuario, Tailwind CSS 4 para la interfaz y Turso para los datos. El sincronizador habla con UGR Virtual (Moodle) y solo se carga cuando alguien sincroniza. La lógica de notas, grupos, fechas y plan tiene tests automáticos.
+## Promoción, ranking y grupos
 
-Está pensado para correr en el plan gratuito de Vercel: el tablero consulta la base en una sola lectura, se refresca cada dos minutos mientras la pestaña está visible y no arrastra al servidor los binarios que la base no necesita ahí.
+Cada materia tiene su regla: desde qué nota se regulariza, desde cuál se promociona, y si eso mira los trabajos prácticos. Se ve el estado de la comisión en esa materia, sin armar una planilla aparte.
 
-## Ponerlo en marcha
+![Condiciones de promoción de una materia](docs/capturas/promocion.jpg)
 
-Hace falta Node.js 20 o superior y una base Turso.
+El ranking es por materia: entran quienes la están cursando, con el puntaje de tareas, foros y parciales.
 
-```bash
-npm install
-npm run migrate
-npm run dev
-```
+Si el trabajo es grupal, se arma el equipo en el tablero, con cupo si la consigna lo pide. La entrega y la nota valen para todo el grupo.
 
-Las variables viven en `.env.local` (hay un `.env.example` con los nombres). `SESSION_SECRET` firma las sesiones. `ADMIN_USUARIO` define al administrador que crea la migración; `npm run admin:reset-password` le genera una clave nueva. `UGRVIRTUAL_USER` y `UGRVIRTUAL_PASSWORD` solo hacen falta para la sincronización de la comisión.
+## La carrera, no solo este cuatrimestre
 
-`npm test` corre la suite. `npm run build` deja la aplicación lista para publicar.
+El plan de la tecnicatura está cargado con códigos y correlativas. Marcás lo que ya aprobaste o promocionaste y ves qué materias te quedan habilitadas. El historial guarda entregas y notas de períodos anteriores, sin mezclarlos con el actual.
+
+![Plan de estudio con correlativas](docs/capturas/plan.jpg)
+
+## Cómo se entra
+
+Cada alumno crea su usuario y su clave. En el alta se escribe también el DNI y la contraseña de UGR Virtual: el campus los comprueba en el momento y no quedan guardados en esta página.
+
+Si UGR acepta, sincronizar dice a qué materias de la carrera estás inscripto, guarda esa cursada en el período actual y carga las tareas, el cronograma y los parciales que todavía no estaban. El compañero que sincroniza después se anota en las mismas materias y no duplica lo que ya está.
+
+A partir de ahí, cada sincronización vuelve a mirar el campus: fechas nuevas, parciales y notas que la cátedra haya publicado.
