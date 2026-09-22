@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { alumnosConAlgunaMateriaEnComun, alumnosConLaMismaCursada, alumnosDeLaMateria, materiasEnComun, materiasQueCursa } from '../src/lib/companeros.ts';
+import { alumnosConAlgunaMateriaEnComun, alumnosConLaMismaCursada, alumnosDeLaMateria, alumnosEnEstado, materiasEnComun, materiasQueCursa } from '../src/lib/companeros.ts';
 
 const inscripciones = [
   { alumno: 'Ana', materiaId: 'm1' },
@@ -41,4 +41,13 @@ test('el estado muestra a quien comparte una materia y oculta el resto de su cur
   assert.deepEqual([...materiasEnComun(inscripciones, 'Ana', 'Sol')].sort(), ['m1', 'm2']);
   assert.equal(materiasEnComun(inscripciones, 'Ana', 'Nico').size, 0);
   assert.deepEqual(alumnosConAlgunaMateriaEnComun(inscripciones, 'Nico'), ['Nico']);
+});
+
+test('una cuenta nueva sin cursada figura en el estado, y el admin ve a todos', () => {
+  const registrados = ['Ana', 'Luis', 'Sol', 'Nico', 'Eva'];
+  const todos = ['Ana', 'Eva', 'Luis', 'Nico', 'Sol'];
+  assert.deepEqual(alumnosEnEstado(inscripciones, 'Ana', registrados), ['Ana', 'Eva', 'Luis', 'Sol']);
+  assert.equal(alumnosEnEstado(inscripciones, 'Ana', registrados).includes('Nico'), false);
+  assert.deepEqual(alumnosEnEstado(inscripciones, 'Eva', registrados), todos);
+  assert.deepEqual(alumnosEnEstado(inscripciones, 'Ana', registrados, true), todos);
 });

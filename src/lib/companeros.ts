@@ -40,8 +40,24 @@ export function alumnosDeLaMateria(inscripciones: InscripcionAlumno[], materiaId
   return [...nombres].sort((a, b) => a.localeCompare(b, 'es'));
 }
 
-// Quien comparte al menos una materia entra al estado por alumno.
-// Al abrir su ficha se ven solo esas materias en común, no el resto de su cursada.
+// Estado por alumno: el admin ve a todos los registrados.
+// El resto ve a quien comparte una materia y a quien todavía no sincronizó.
+// Quien cursa otra cosa y nada en común no entra: su ficha no mostraría tareas propias.
+export function alumnosEnEstado(
+  inscripciones: InscripcionAlumno[],
+  alumno: string,
+  registrados: string[],
+  esAdmin = false
+): string[] {
+  if (esAdmin) return [...registrados].sort((a, b) => a.localeCompare(b, 'es'));
+  const propias = materiasQueCursa(inscripciones, alumno);
+  if (propias.size === 0) return [...registrados].sort((a, b) => a.localeCompare(b, 'es'));
+  const inscriptos = new Set(inscripciones.map((fila) => fila.alumno));
+  const esperando = registrados.filter((nombre) => !inscriptos.has(nombre));
+  return [...new Set([...alumnosConAlgunaMateriaEnComun(inscripciones, alumno), ...esperando])]
+    .sort((a, b) => a.localeCompare(b, 'es'));
+}
+
 export function alumnosConAlgunaMateriaEnComun(
   inscripciones: InscripcionAlumno[],
   alumno: string

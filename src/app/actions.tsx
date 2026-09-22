@@ -858,6 +858,11 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       ? await db.execute({ sql: 'SELECT 1 FROM inscripciones WHERE alumno_id = ? LIMIT 1', args: [texto(cuenta?.id)] })
       : { rows: [] };
     if (texto(cuenta?.origen) === 'propio' && yaInscripto.rows.length === 0) {
+      const [nombres, inscriptos] = await Promise.all([
+        db.execute('SELECT nombre FROM alumnos ORDER BY nombre ASC'),
+        db.execute(`SELECT a.nombre AS alumno, i.materia_id
+                    FROM inscripciones i JOIN alumnos a ON a.id = i.alumno_id`)
+      ]);
       return {
         usuario: usuarioSesion,
         rol: 'alumno',
@@ -867,13 +872,17 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         periodoActivo: null,
         materias: [],
         alumnos: [usuarioSesion],
+        registrados: nombres.rows.map((fila) => texto(fila.nombre)),
         parciales: [],
         notas: [],
         horarios: [],
         cronograma: [],
         progresoPlan: [],
         avisos: [],
-        inscripciones: []
+        inscripciones: inscriptos.rows.map((fila) => ({
+          alumno: texto(fila.alumno),
+          materiaId: texto(fila.materia_id)
+        }))
       };
     }
 
@@ -944,7 +953,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
           LEFT JOIN alumnos a ON a.id = i.alumno_id ORDER BY g.nombre, a.nombre`,
         args: []
       },
-      { sql: "SELECT nombre FROM alumnos WHERE COALESCE(origen, 'comision') = 'comision' ORDER BY nombre ASC", args: [] },
+      { sql: 'SELECT nombre FROM alumnos ORDER BY nombre ASC', args: [] },
       consultaPeriodo(
         periodoParaCargar,
         `SELECT p.id, p.materia_id, p.nombre, p.fecha, p.detalles, p.url
@@ -1019,7 +1028,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
     const todosLosAlumnos = resAlumnos.rows.map((fila) => texto(fila.nombre));
     const alumnosVisibles = verTodaLaCursada
       ? todosLosAlumnos
-      : (companeros.length > 0 ? companeros : todosLosAlumnos);
+      : companeros;
 
     return {
       usuario: usuarioSesion,
@@ -1036,6 +1045,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       periodoActivo: periodoParaCargar,
       materias: materiasVisibles,
       alumnos: alumnosVisibles,
+      registrados: todosLosAlumnos,
       parciales: resParciales.rows.filter((fila) => materiaVisible(texto(fila.materia_id))).map((fila) => ({
         id: texto(fila.id),
         materia_id: texto(fila.materia_id),

@@ -35,13 +35,21 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
   const contenidoId = useId();
   const propia = alumno === acciones.usuarioActual;
   const suyas = materiasQueCursa(inscripciones, alumno);
-  const idsCursada = esAdmin
-    ? (suyas.size > 0 ? suyas : new Set(materias.map((materia) => materia.id)))
-    : propia
-      ? suyas
-      : materiasEnComun(inscripciones, acciones.usuarioActual || '', alumno);
+  const propiasDelViewer = materiasQueCursa(inscripciones, acciones.usuarioActual || '');
+  const idsCursada = esAdmin || propia
+    ? suyas
+    : materiasEnComun(inscripciones, acciones.usuarioActual || '', alumno);
   const materiasDelAlumno = materias.filter((materia) => idsCursada.has(materia.id));
   const resumen = obtenerResumenTareasAlumno(alumno, materiasDelAlumno);
+  const avisoCursada = propia && suyas.size === 0
+    ? 'Tu cuenta todavía no tiene cursada'
+    : suyas.size === 0
+      ? 'Todavía no sincronizó su cursada'
+      : materiasDelAlumno.length === 0 && propiasDelViewer.size === 0
+        ? 'Sincronizá para ver las materias en común'
+        : materiasDelAlumno.length === 0
+          ? 'No cursan materias en común'
+          : '';
   const seleccionadas = filtro === 'grupales'
     ? materiasDelAlumno.flatMap((materia) => materia.tareas || []).filter((tarea) => tarea.grupal)
     : resumen[filtro];
@@ -55,7 +63,7 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
           className="w-full flex flex-wrap items-center justify-between gap-3 p-5 text-left hover:bg-white/[0.025] cursor-pointer">
           <span className="min-w-0">
             <span className="estado-alumno-nombre block text-white break-words">{alumno}</span>
-            <span className="estado-alumno-resumen block text-xs text-slate-400 mt-1">{propia ? 'Tu situación · ' : ''}{resumen.completadas.length} de {resumen.total} tareas completadas</span>
+            <span className="estado-alumno-resumen block text-xs text-slate-400 mt-1">{avisoCursada || `${propia ? 'Tu situación · ' : ''}${resumen.completadas.length} de ${resumen.total} tareas completadas`}</span>
           </span>
           <span className="flex items-center flex-wrap gap-2 text-xs text-slate-300">
             <span className={resumen.pendientes.length ? 'text-amber-300' : 'text-emerald-300'}>{resumen.pendientes.length} pendientes</span>
