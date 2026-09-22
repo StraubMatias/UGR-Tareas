@@ -70,6 +70,50 @@ test('el segundo alumno no vuelve a insertar las tareas que ya cargó el primero
     assert.equal(await insertarTareasDetectadas({ db, detectadas }), 1);
     assert.equal(await insertarTareasDetectadas({ db, detectadas }), 0);
     assert.equal((await db.execute('SELECT COUNT(*) AS n FROM tareas')).rows[0].n, 1);
+
+    await db.batch([
+      `CREATE TABLE completadas (
+        tarea_id TEXT, alumno_id TEXT, alumno TEXT, completada_en TEXT,
+        UNIQUE(tarea_id, alumno)
+      )`,
+      `CREATE TABLE notas_tareas (
+        id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT, cargada_en TEXT,
+        UNIQUE(tarea_id, alumno)
+      )`,
+      `CREATE TABLE parciales (id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, fecha TEXT)`,
+      `CREATE TABLE notas_parciales (id TEXT PRIMARY KEY, parcial_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT)`,
+      `CREATE TABLE cronograma_eventos (
+        id TEXT PRIMARY KEY, materia_id TEXT, fecha TEXT, modalidad TEXT, tipo TEXT,
+        titulo TEXT, detalles TEXT, url TEXT, origen TEXT,
+        UNIQUE(materia_id, fecha, titulo)
+      )`
+    ], 'write');
+    const { aplicarComplementoCampus, insertarEventosCronograma } = await import('../lib/sync-core.mjs');
+    const tarea = (await db.execute('SELECT id FROM tareas')).rows[0];
+    const marcas = await aplicarComplementoCampus({
+      db,
+      alumnoId: 'alu_x',
+      alumnoNombre: 'Alumno X',
+      detectado: {
+        progresoAlumno: [{
+          tabla: 'nueva',
+          id: 'moodle_2218_9',
+          materiaId: 'cri',
+          nombre: 'TP 1 Criptografía',
+          nota: '8',
+          entregada: true
+        }]
+      }
+    });
+    assert.equal(marcas.notas, 2);
+    const hecha = await db.execute({
+      sql: 'SELECT alumno_id FROM completadas WHERE tarea_id = ?',
+      args: [tarea.id]
+    });
+    assert.equal(hecha.rows[0].alumno_id, 'alu_x');
+    const evento = { materiaId: 'cri', fecha: '2026-10-06', titulo: 'Clase de criptografía', tipo: 'clase' };
+    assert.equal(await insertarEventosCronograma({ db, eventos: [evento] }), 1);
+    assert.equal(await insertarEventosCronograma({ db, eventos: [evento] }), 0);
   } finally {
     db.close();
     await rm(dir, { recursive: true, force: true });

@@ -573,6 +573,8 @@ async function leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId })
       if (tarea) {
         progresoAlumno.push({
           alumnoId,
+          materiaId: libreta.materiaId,
+          nombre: item.nombre,
           tabla: tarea.id ? 'tareas' : 'nueva',
           id: tarea.id || tarea.idMoodle,
           nota: item.nota,
@@ -580,7 +582,15 @@ async function leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId })
         });
       }
       if (parcial) {
-        progresoAlumno.push({ alumnoId, tabla: 'parciales', id: parcial.id, nota: item.nota, entregada: true });
+        progresoAlumno.push({
+          alumnoId,
+          materiaId: libreta.materiaId,
+          nombre: item.nombre,
+          tabla: 'parciales',
+          id: parcial.id,
+          nota: item.nota,
+          entregada: true
+        });
       }
     }
   }
@@ -686,18 +696,47 @@ export async function aplicarComplementoCampus({ db, detectado, alumnoId, alumno
   return { eventos, horarios, fechas, notas };
 }
 
+async function filaPorNombre(db, cache, tabla, materiaId, nombre) {
+  if (!materiaId || !nombre) return null;
+  const clave = `${tabla}|${materiaId}`;
+  if (!cache.has(clave)) {
+    const sql = tabla === 'parciales'
+      ? 'SELECT id, nombre FROM parciales WHERE materia_id = ?'
+      : 'SELECT id, nombre FROM tareas WHERE materia_id = ?';
+    cache.set(clave, (await db.execute({ sql, args: [materiaId] })).rows);
+  }
+  return cache.get(clave).find((fila) => coincidirNombreTarea(fila.nombre, nombre)) || null;
+}
+
 async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
   if (!Array.isArray(progreso) || progreso.length === 0 || !alumnoId) return 0;
+  const cache = new Map();
   const escrituras = [];
   for (const item of progreso) {
-    if (!item?.id || item.tabla === 'nueva') continue;
-    if (item.tabla === 'tareas') {
+    let tabla = item?.tabla;
+    let id = item?.id;
+    const esNueva = !id || tabla === 'nueva' || String(id).startsWith('moodle_');
+    if (esNueva) {
+      const tarea = await filaPorNombre(db, cache, 'tareas', item.materiaId, item.nombre);
+      const parcial = tarea ? null : await filaPorNombre(db, cache, 'parciales', item.materiaId, item.nombre);
+      if (tarea) {
+        tabla = 'tareas';
+        id = tarea.id;
+      } else if (parcial) {
+        tabla = 'parciales';
+        id = parcial.id;
+      } else {
+        continue;
+      }
+    }
+    if (!id) continue;
+    if (tabla === 'tareas') {
       if (item.entregada) {
         escrituras.push({
           sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en)
                 VALUES (?, ?, ?, datetime('now'))
                 ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id`,
-          args: [item.id, alumnoId, alumnoNombre || '']
+          args: [id, alumnoId, alumnoNombre || '']
         });
       }
       if (item.nota != null) {
@@ -708,14 +747,14 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
                   alumno_id = excluded.alumno_id,
                   nota = excluded.nota,
                   cargada_en = excluded.cargada_en`,
-          args: [`nota_tarea_${item.id}_${alumnoId}`, item.id, alumnoId, alumnoNombre || '', item.nota]
+          args: [`nota_tarea_${id}_${alumnoId}`, id, alumnoId, alumnoNombre || '', item.nota]
         });
       }
     }
-    if (item.tabla === 'parciales' && item.nota != null) {
+    if (tabla === 'parciales' && item.nota != null) {
       const existe = await db.execute({
         sql: 'SELECT id FROM notas_parciales WHERE parcial_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))',
-        args: [item.id, alumnoId, alumnoNombre || '']
+        args: [id, alumnoId, alumnoNombre || '']
       });
       if (existe.rows.length > 0) {
         escrituras.push({
@@ -725,7 +764,7 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
       } else {
         escrituras.push({
           sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno_id, alumno, nota) VALUES (?, ?, ?, ?, ?)',
-          args: [`nota_${item.id}_${alumnoId}`, item.id, alumnoId, alumnoNombre || '', item.nota]
+          args: [`nota_${id}_${alumnoId}`, id, alumnoId, alumnoNombre || '', item.nota]
         });
       }
     }
