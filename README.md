@@ -1,6 +1,6 @@
 # UGR — Tareas y Parciales
 
-La cursada de la Tecnicatura, junta en un solo lugar.
+La cursada de la Tecnicatura, junta en un solo lugar
 
 UGR Virtual sigue siendo donde se entrega y donde la cátedra publica. Este tablero es donde se entiende el cuatrimestre: qué te falta, cuándo cursás, cuándo se toma el parcial, cómo venís para regularizar o promocionar, y qué te queda de la carrera.
 

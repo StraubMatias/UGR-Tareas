@@ -577,6 +577,11 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     }
   });
 
+  await ejecutarMigracion(24, 'ip de alta de cuenta propia', async () => {
+    await agregarColumnaSiFalta('alumnos', 'creado_ip', 'TEXT');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_alumnos_creado_ip ON alumnos(creado_ip)');
+  });
+
   await db.close?.();
 }
 

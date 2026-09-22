@@ -10,7 +10,7 @@ import { PLAN_DE_ESTUDIO } from './plan-utils';
 import { convertirValidacion } from '../lib/utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
 import { alumnosConLaMismaCursada } from '../lib/companeros';
-import { cuentaPropiaVencida } from '../lib/cuentas';
+import { cuentaPropiaVencida, ipPermiteOtraCuenta, sentenciaLimpiarGruposVacios, sentenciasBorrarAlumno } from '../lib/cuentas';
 // La sincronización con el campus arrastra cheerio. Se importa solo cuando
 // un admin sincroniza, para que el refresco del tablero no cargue ese módulo.
 
@@ -210,33 +210,25 @@ function esNombreRepetido(error: unknown): boolean {
 async function borrarCuentasSinSincronizar(): Promise<void> {
   try {
     const candidatas = await db.execute(`
-      SELECT a.id, COALESCE(a.origen, 'comision') AS origen, a.creado_en, a.sincronizado_en,
+      SELECT a.id, a.nombre, COALESCE(a.origen, 'comision') AS origen, a.creado_en, a.sincronizado_en,
              (SELECT COUNT(*) FROM inscripciones i WHERE i.alumno_id = a.id) AS inscripciones
       FROM alumnos a
       WHERE COALESCE(a.origen, 'comision') = 'propio'
         AND (a.sincronizado_en IS NULL OR a.sincronizado_en = '')
     `);
-    const ids = candidatas.rows
+    const cuentas = candidatas.rows
       .filter((fila) => cuentaPropiaVencida({
         origen: texto(fila.origen),
         creadoEn: texto(fila.creado_en),
         sincronizadoEn: texto(fila.sincronizado_en),
         inscripciones: Number(fila.inscripciones || 0)
       }))
-      .map((fila) => texto(fila.id))
-      .filter(Boolean);
-    if (ids.length === 0) return;
-    const marcas = ids.map(() => '?').join(',');
+      .map((fila) => ({ id: texto(fila.id), nombre: texto(fila.nombre) }))
+      .filter((cuenta) => cuenta.id && cuenta.nombre);
+    if (cuentas.length === 0) return;
     await db.batch([
-      { sql: `DELETE FROM integrantes_tareas WHERE alumno_id IN (${marcas})`, args: ids },
-      { sql: 'DELETE FROM grupos_tareas WHERE NOT EXISTS (SELECT 1 FROM integrantes_tareas WHERE grupo_id = grupos_tareas.id)', args: [] },
-      { sql: `DELETE FROM completadas WHERE alumno_id IN (${marcas})`, args: ids },
-      { sql: `DELETE FROM notas_parciales WHERE alumno_id IN (${marcas})`, args: ids },
-      { sql: `DELETE FROM notas_tareas WHERE alumno_id IN (${marcas})`, args: ids },
-      { sql: `DELETE FROM progreso_materias WHERE alumno_id IN (${marcas})`, args: ids },
-      { sql: `DELETE FROM inscripciones WHERE alumno_id IN (${marcas})`, args: ids },
-      { sql: `DELETE FROM horarios WHERE alumno_id IN (${marcas})`, args: ids },
-      { sql: `DELETE FROM alumnos WHERE id IN (${marcas})`, args: ids }
+      ...cuentas.flatMap((cuenta) => sentenciasBorrarAlumno(cuenta.id, cuenta.nombre)),
+      sentenciaLimpiarGruposVacios()
     ], 'write');
   } catch (error) {
     console.error('No se pudieron borrar las cuentas sin sincronizar:', error instanceof Error ? error.message : 'falló');
@@ -559,9 +551,18 @@ export async function registrarCuentaAction(
       return { exito: false, mensaje: 'Las contraseñas no coinciden.' };
     }
 
-    const claves = [{ clave: `alta-ip:${await obtenerIPReal()}`, limite: LIMITE_LOGIN_IP }];
+    const ip = await obtenerIPReal();
+    const claves = [{ clave: `alta-ip:${ip}`, limite: LIMITE_LOGIN_IP }];
     if (await loginEstaBloqueado(claves)) {
       return { exito: false, mensaje: MENSAJE_LOGIN_BLOQUEADO };
+    }
+    const deLaMismaIp = await db.execute({
+      sql: `SELECT COUNT(*) AS total FROM alumnos
+            WHERE creado_ip = ? AND COALESCE(origen, 'comision') = 'propio'`,
+      args: [ip]
+    });
+    if (!ipPermiteOtraCuenta(Number(deLaMismaIp.rows[0]?.total || 0))) {
+      return { exito: false, mensaje: 'Desde esta conexión ya hay dos cuentas. Si se borra una, se puede crear otra.' };
     }
 
     const existente = await db.execute({
@@ -576,8 +577,8 @@ export async function registrarCuentaAction(
     const id = crearId('a_');
     try {
       await db.execute({
-        sql: `INSERT INTO alumnos (id, nombre, password, rol, origen, creado_en) VALUES (?, ?, ?, 'alumno', 'propio', ?)`,
-        args: [id, usuario, await hashearPassword(password), new Date().toISOString()]
+        sql: `INSERT INTO alumnos (id, nombre, password, rol, origen, creado_en, creado_ip) VALUES (?, ?, ?, 'alumno', 'propio', ?, ?)`,
+        args: [id, usuario, await hashearPassword(password), new Date().toISOString(), ip]
       });
     } catch (error) {
       if (esNombreRepetido(error)) return { exito: false, mensaje: 'Ese usuario ya existe.' };
@@ -732,14 +733,8 @@ export async function eliminarAlumnoAction(nombre: string): Promise<RespuestaAct
     const alumnoActual = await obtenerAlumno(nombre);
     if (!alumnoActual) return { exito: false, mensaje: 'El alumno no existe.' };
     await db.batch([
-      { sql: 'DELETE FROM integrantes_tareas WHERE alumno_id = ?', args: [alumnoActual.id] },
-      { sql: 'DELETE FROM grupos_tareas WHERE NOT EXISTS (SELECT 1 FROM integrantes_tareas WHERE grupo_id = grupos_tareas.id)', args: [] },
-      { sql: 'DELETE FROM completadas WHERE alumno_id = ?', args: [alumnoActual.id] },
-      { sql: 'DELETE FROM notas_parciales WHERE alumno_id = ?', args: [alumnoActual.id] },
-      { sql: 'DELETE FROM notas_tareas WHERE alumno_id = ?', args: [alumnoActual.id] },
-      { sql: 'DELETE FROM progreso_materias WHERE alumno_id = ?', args: [alumnoActual.id] },
-      { sql: 'DELETE FROM inscripciones WHERE alumno_id = ?', args: [alumnoActual.id] },
-      { sql: 'DELETE FROM alumnos WHERE id = ?', args: [alumnoActual.id] }
+      ...sentenciasBorrarAlumno(alumnoActual.id, alumnoActual.nombre),
+      sentenciaLimpiarGruposVacios()
     ], 'write');
     await registrarAuditoria({ accion: 'eliminar_alumno', usuario: usuarioSesion, detalle: `Eliminó al alumno ${alumnoActual.nombre}`, ip: await obtenerIPReal() });
     return { exito: true };

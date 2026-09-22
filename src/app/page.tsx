@@ -1809,7 +1809,7 @@ export default function Home() {
             <h2 className="text-3xl font-black text-white mb-2 bg-gradient-to-r from-cyan-300 via-white to-amber-300 bg-clip-text text-transparent">{modoAcceso === 'registro' ? 'Crear cuenta' : 'Iniciar sesión'}</h2>
             <p className="text-sm text-slate-400 mt-3 max-w-xs mx-auto leading-relaxed">
               {modoAcceso === 'registro'
-                ? 'Elegí un usuario que no esté usado y tu clave. El tablero queda vacío hasta que sincronices con UGR Virtual. Si pasan 7 días sin sincronizar, la cuenta se borra. El DNI y la clave del campus se piden en ese momento y no se guardan.'
+                ? 'Elegí un usuario que no esté usado y tu clave. El tablero queda vacío hasta que sincronices con UGR Virtual. Si pasan 7 días sin sincronizar, la cuenta se borra. Desde una misma conexión se pueden crear hasta dos cuentas. El DNI y la clave del campus se piden al sincronizar y no se guardan.'
                 : 'Tu tablero para seguir la cursada sin perder el hilo.'}
             </p>
             <div className="portal-login-meta mt-5 flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-wider">
