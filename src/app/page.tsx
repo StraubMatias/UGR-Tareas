@@ -561,7 +561,6 @@ export default function Home() {
       return;
     }
     // La carga empieza después de autenticar o restaurar una sesión válida.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     cargarBD();
   }, [usuarioActual, cargarBD]);
 
