@@ -9,7 +9,7 @@
 //      id en data-mdl-overview-cmid y fechas como <span data-timestamp="...">.
 import { load } from 'cheerio';
 import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE } from './constantes.mjs';
-import { inferirTipoTarea, limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle } from './normalizar.mjs';
+import { inferirTipoTarea, limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
 
 function indiceColumna(encabezados, rotulos) {
   for (let i = 0; i < encabezados.length; i += 1) {
@@ -343,6 +343,92 @@ export function parsearNotaCampus(texto) {
   const valor = Number(numero[1]);
   if (!Number.isFinite(valor) || valor < 1 || valor > 10) return null;
   return Math.round(valor * 100) / 100;
+}
+
+// Acepta 0: un intento finalizado en 0 es una nota, no un campo vacío.
+export function parsearNotaPublicada(texto) {
+  const limpio = String(texto || '').replace(/\s+/g, ' ').trim();
+  if (!limpio || limpio === '-' || /^acciones/i.test(limpio)) return null;
+  const normalizado = limpio.replace(',', '.');
+  const explicita = normalizado.match(/(\d+(?:\.\d+)?)\s*(?:de|\/)\s*\d+/i);
+  const numero = explicita || normalizado.match(/(\d+(?:\.\d+)?)/);
+  if (!numero) return null;
+  const valor = Number(numero[1]);
+  if (!Number.isFinite(valor) || valor < 0 || valor > 10) return null;
+  return Math.round(valor * 100) / 100;
+}
+
+function notaDeCuerpoDeIntento(cuerpo) {
+  const enCurso = /en curso|sin finalizar|in progress/i.test(cuerpo);
+  const cerrado = /finalizado|completado|completed/i.test(cuerpo);
+  if (enCurso && !cerrado) return null;
+  const todas = String(cuerpo).matchAll(/Calificaci[oó]n(?:\s+m[aá]s alta|\s+para aprobar)?\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/gi);
+  for (const encontrada of todas) {
+    if (/m[aá]s alta|para aprobar/i.test(encontrada[0])) continue;
+    const nota = parsearNotaPublicada(encontrada[1]);
+    if (nota != null) return nota;
+  }
+  return null;
+}
+
+// La nota que vale es la del último intento terminado. «Calificación más alta»
+// se usa solo si la página no lista intentos.
+export function extraerNotaUltimoIntento(html) {
+  if (!html) return null;
+  const $ = load(html);
+  const intentos = [];
+  const texto = $('body').text().replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ');
+  const bloques = texto.matchAll(/Intento\s+(\d+)(?!\d)([\s\S]*?)(?=Intento\s+\d+(?!\d)|$)/gi);
+  for (const bloque of bloques) {
+    const nota = notaDeCuerpoDeIntento(bloque[2]);
+    if (nota == null) continue;
+    intentos.push({ n: Number(bloque[1]), nota });
+  }
+  $('table').each((_, tabla) => {
+    const encabezados = $(tabla).find('th').toArray().map((th) => limpiarTexto($(th).text()).toLowerCase());
+    const textoEncabezado = encabezados.join(' ');
+    if (!/intento/.test(textoEncabezado) || !/calific/.test(textoEncabezado)) return;
+    const columnaNota = encabezados.findIndex((encabezado) => /calific/.test(encabezado) && !/aprobar|m[aá]s alta/.test(encabezado));
+    $(tabla).find('tbody tr').each((__, fila) => {
+      const celdas = $(fila).find('th, td').toArray().map((celda) => limpiarTexto($(celda).text()));
+      const numero = Number(String(celdas[0] || '').match(/\d+/)?.[0]);
+      if (!Number.isFinite(numero)) return;
+      const cruda = columnaNota >= 0 ? celdas[columnaNota] : celdas.find((celda) => parsearNotaPublicada(celda) != null);
+      const nota = parsearNotaPublicada(cruda);
+      if (nota == null) return;
+      if (/en curso|sin finalizar|in progress/i.test(celdas.join(' ')) && !/finalizado|completado|completed/i.test(celdas.join(' '))) return;
+      intentos.push({ n: numero, nota });
+    });
+  });
+  if (intentos.length > 0) {
+    intentos.sort((a, b) => b.n - a.n || 0);
+    return intentos[0].nota;
+  }
+  const suelta = texto.match(/(?:su calificaci[oó]n(?:\s+final)?(?:\s+es)?|calificaci[oó]n m[aá]s alta)\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/i);
+  return suelta ? parsearNotaPublicada(suelta[1]) : null;
+}
+
+export function priorizarNotaDeUltimoIntento(progreso = [], intentos = []) {
+  const salida = progreso.map((item) => ({ ...item }));
+  for (const intento of intentos) {
+    if (intento?.nota == null || !intento.materiaId || !intento.nombre) continue;
+    const indice = salida.findIndex((item) => item.materiaId === intento.materiaId && (
+      (intento.id && item.id === intento.id)
+      || coincidirNombreTarea(item.nombre, intento.nombre)
+    ));
+    const fila = {
+      materiaId: intento.materiaId,
+      nombre: intento.nombre,
+      tabla: intento.id ? 'tareas' : 'nueva',
+      id: intento.id || null,
+      nota: intento.nota,
+      entregada: true,
+      forzar: true
+    };
+    if (indice >= 0) salida[indice] = { ...salida[indice], ...fila };
+    else salida.push(fila);
+  }
+  return salida;
 }
 
 function entregadaEnCelda(celda) {

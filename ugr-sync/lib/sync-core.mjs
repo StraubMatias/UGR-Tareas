@@ -8,7 +8,7 @@ import { crearCliente } from './red.mjs';
 import { optimizarLecturas } from './lecturas.mjs';
 import { autorEsEquipoDocente, esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from './materias.mjs';
-import { extraerFechasActividad, extraerActividadesOverview, extraerNotasDeLibreta } from './tareas.mjs';
+import { extraerFechasActividad, extraerActividadesOverview, extraerNotasDeLibreta, extraerNotaUltimoIntento, priorizarNotaDeUltimoIntento } from './tareas.mjs';
 import {
   analizarAvisosParaCronograma,
   DIAS_HACIA_ATRAS,
@@ -224,11 +224,14 @@ export async function conectarUGRCon({ usuario, contrasena, rutaSesion }) {
 
 async function fechasDeDetalle({ cliente, tarea }) {
   try {
-    if (!tarea?.url) return { inicio: null, fin: null };
+    if (!tarea?.url) return { inicio: null, fin: null, notaIntento: null };
     const pagina = await cliente.pedir(tarea.url);
-    return extraerFechasActividad(pagina.html);
+    return {
+      ...extraerFechasActividad(pagina.html),
+      notaIntento: extraerNotaUltimoIntento(pagina.html)
+    };
   } catch {
-    return { inicio: null, fin: null };
+    return { inicio: null, fin: null, notaIntento: null };
   }
 }
 
@@ -431,6 +434,7 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
   // clase. El cierre del campus es el mismo día y no se guarda aparte.
   const fechasTomaParciales = [];
   const fechasTareasRevisar = [];
+  const notasIntento = [];
 
   // Los overviews de todos los cursos se piden en paralelo (concurrencia 4) y el
   // detalle de fechas se lee SOLO para las actividades que todavía no existen en
@@ -534,10 +538,18 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
       const fechas = await fechasDeDetalle({ cliente, tarea });
       const inicio = fechas.inicio || (tarea.inicio && tarea.inicio !== 'Sin fecha' ? tarea.inicio : 'Sin fecha');
       const fin = fechas.fin || (tarea.fin && tarea.fin !== 'Sin fecha' ? tarea.fin : 'Sin fecha');
-      return { tarea, nombreFinal, existente, inicio, fin };
+      return { tarea, nombreFinal, existente, inicio, fin, notaIntento: fechas.notaIntento };
     });
 
-    for (const { tarea, nombreFinal, existente, inicio, fin } of conFechas) {
+    for (const { tarea, nombreFinal, existente, inicio, fin, notaIntento } of conFechas) {
+      if (notaIntento != null) {
+        notasIntento.push({
+          materiaId: coincidencia.materia.id,
+          nombre: nombreFinal,
+          id: existente?.id || null,
+          nota: notaIntento
+        });
+      }
       if (existente) {
         const parche = fechasACorregir(existente, { inicio, fin });
         if (parche.inicio || parche.fin) fechasTareasRevisar.push({ id: existente.id, ...parche });
@@ -607,6 +619,7 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
   const progreso = alumnoId
     ? await leerProgresoCampus({ cliente, db, mapeos, detectadas: [...separado.tareas, ...separado.parciales], alumnoId })
     : { progresoAlumno: [] };
+  progreso.progresoAlumno = priorizarNotaDeUltimoIntento(progreso.progresoAlumno, notasIntento);
 
   const condicionesActualizadas = await completarCondicionesCampus({ db, cliente, mapeos });
   const fechasCalendario = (calendario.fechasParcialesActualizar || [])
@@ -1100,6 +1113,7 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
         });
       }
       if (item.nota != null) {
+        const guardaCerrada = item.forzar ? '' : 'WHERE notas_tareas.cerrada = 0';
         escrituras.push({
           sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en, cerrada)
                 VALUES (?, ?, ?, ?, ?, datetime('now'), 1)
@@ -1108,7 +1122,7 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
                   nota = excluded.nota,
                   cargada_en = excluded.cargada_en,
                   cerrada = 1
-                WHERE notas_tareas.cerrada = 0`,
+                ${guardaCerrada}`,
           args: [`nota_tarea_${id}_${alumnoId}`, id, alumnoId, alumnoNombre || '', item.nota]
         });
       }
@@ -1119,10 +1133,10 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
         sql: 'SELECT id, cerrada FROM notas_parciales WHERE parcial_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))',
         args: [id, alumnoId, alumnoNombre || '']
       });
-      if (Number(existe.rows[0]?.cerrada) === 1) continue;
+      if (Number(existe.rows[0]?.cerrada) === 1 && !item.forzar) continue;
       if (existe.rows.length > 0) {
         escrituras.push({
-          sql: 'UPDATE notas_parciales SET nota = ?, alumno_id = ?, alumno = ?, cerrada = 1 WHERE id = ? AND cerrada = 0',
+          sql: `UPDATE notas_parciales SET nota = ?, alumno_id = ?, alumno = ?, cerrada = 1 WHERE id = ?${item.forzar ? '' : ' AND cerrada = 0'}`,
           args: [item.nota, alumnoId, alumnoNombre || '', existe.rows[0].id]
         });
       } else {
