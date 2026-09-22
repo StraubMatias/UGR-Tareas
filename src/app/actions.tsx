@@ -1542,6 +1542,7 @@ function armarMensajeSync({
   eventos,
   horarios,
   notas,
+  fechas,
   armarMensajeCursada
 }: {
   materias: Array<{ nombre: string }>;
@@ -1550,6 +1551,7 @@ function armarMensajeSync({
   eventos: number;
   horarios: number;
   notas: number;
+  fechas: number;
   armarMensajeCursada: (opciones: {
     materias?: Array<{ nombre: string } | string>;
     tareasNuevas?: number;
@@ -1568,6 +1570,7 @@ function armarMensajeSync({
   if (!cronNuevo && eventos) extras.push(`Se cargaron ${eventos} evento(s).`);
   if (horarios) extras.push(`Se cargaron ${horarios} horario(s).`);
   if (notas) extras.push('Se copiaron las notas publicadas en el campus.');
+  if (fechas) extras.push(`Se actualizaron ${fechas} fecha(s) que el campus había cambiado.`);
   return armarMensajeCursada({ materias, tareasNuevas: nuevas, tareasYa: ya, extras });
 }
 
@@ -1721,6 +1724,7 @@ async function sincronizarCursadaDelAlumno({
       eventos: eventosInsertados + complemento.eventos,
       horarios: complemento.horarios,
       notas: complemento.notas,
+      fechas: complemento.fechas,
       armarMensajeCursada
     })
   };

@@ -27,11 +27,14 @@ import {
   coincidirParcial,
   emparejarCursosConMaterias,
   filtrarTareasDuplicadas,
+  fechasACorregir,
   agruparResumenSync,
   armarMensajeCursada,
   inferirTipoTarea,
   limpiarTextoParaBusqueda,
+  fechaDeEvaluacion,
   pareceEvaluacion,
+  parcialYaSeRindio,
   normalizarNombre,
   separarEvaluaciones
 } from './normalizar.mjs';
@@ -422,6 +425,10 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
   // Parciales ya cargados que también quedaron sin enlace (los que se cargan
   // desde el cronograma no traen URL de UGR): se completan acá mismo.
   const urlsParcialesActualizar = [];
+  // La fecha en que se toma cada parcial: el día que abre, en el horario de
+  // clase. El cierre del campus es el mismo día y no se guarda aparte.
+  const fechasTomaParciales = [];
+  const fechasTareasRevisar = [];
 
   // Los overviews de todos los cursos se piden en paralelo (concurrencia 4) y el
   // detalle de fechas se lee SOLO para las actividades que todavía no existen en
@@ -476,10 +483,21 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
       sql: 'SELECT id, nombre, fecha, url FROM parciales WHERE materia_id = ?',
       args: [coincidencia.materia.id]
     });
+    let resHorarios = { rows: [] };
+    try {
+      resHorarios = await db.execute({
+        sql: 'SELECT dia FROM horarios WHERE materia_id = ? AND alumno_id IS NULL',
+        args: [coincidencia.materia.id]
+      });
+    } catch {
+      resHorarios = { rows: [] };
+    }
 
-    // Solo las candidatas que todavía no existen necesitan el detalle
-    // (apertura/vencimiento): las ya importadas se resuelven sin pedidos HTTP.
+    // Lo ya cargado se vuelve a mirar: el profesor puede correr un vencimiento
+    // o corregir una fecha. La actividad dice la fecha posta; los foros, que
+    // no tienen plazo, se comparan con lo que traiga el índice.
     const candidatas = [];
+    const aRevisar = [];
     for (const tarea of tareasUnicas) {
       const nombreFinal = normalizarNombre({ nombre: tarea.nombre, cursoNombre: curso.nombre });
       const clave = claveTareaParaEmparejar(nombreFinal);
@@ -494,6 +512,15 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
         if (!existente.url && tarea.url) {
           urlsActualizar.push({ id: existente.id, url: tarea.url });
         }
+        // La página de la actividad es la fecha que editó el profesor. El índice
+        // a veces no trae la apertura, así que no alcanza para dar por buena
+        // la que ya teníamos guardada.
+        if (tarea.url && tarea.tipo !== 'foro') {
+          aRevisar.push({ tarea, nombreFinal, existente });
+        } else {
+          const parche = fechasACorregir(existente, tarea);
+          if (parche.inicio || parche.fin) fechasTareasRevisar.push({ id: existente.id, ...parche });
+        }
         continue;
       }
       candidatas.push({ tarea, nombreFinal });
@@ -501,14 +528,19 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
 
     // La apertura no viene en el índice: se lee del detalle de cada candidata,
     // en paralelo (concurrencia 4).
-    const conFechas = await conPool(candidatas, 4, async ({ tarea, nombreFinal }) => {
+    const conFechas = await conPool([...candidatas, ...aRevisar], 4, async ({ tarea, nombreFinal, existente }) => {
       const fechas = await fechasDeDetalle({ cliente, tarea });
       const inicio = fechas.inicio || (tarea.inicio && tarea.inicio !== 'Sin fecha' ? tarea.inicio : 'Sin fecha');
       const fin = fechas.fin || (tarea.fin && tarea.fin !== 'Sin fecha' ? tarea.fin : 'Sin fecha');
-      return { tarea, nombreFinal, inicio, fin };
+      return { tarea, nombreFinal, existente, inicio, fin };
     });
 
-    for (const { tarea, nombreFinal, inicio, fin } of conFechas) {
+    for (const { tarea, nombreFinal, existente, inicio, fin } of conFechas) {
+      if (existente) {
+        const parche = fechasACorregir(existente, { inicio, fin });
+        if (parche.inicio || parche.fin) fechasTareasRevisar.push({ id: existente.id, ...parche });
+        continue;
+      }
       // Ya está resuelto como parcial en VistaParciales: no se ofrece como tarea
       // nueva ni se intenta insertar. Además, si ese parcial quedó sin enlace
       // (los cargados por cronograma no traen URL), aprovechamos para completarlo
@@ -517,10 +549,35 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
       // por la misma fecha de fin en la misma materia (cubre los parcialitos
       // cargados desde el cronograma con otro nombre, como el «Avance de medio
       // cursado» de Gestión de Activos).
-      const parcial = coincidirParcial({ parciales: resParciales.rows, nombre: nombreFinal, fin });
-      if (parcial) {
-        if (!parcial.url && tarea.url) {
-          urlsParcialesActualizar.push({ id: parcial.id, url: tarea.url });
+      const fechaToma = fechaDeEvaluacion({ inicio, fin }, resHorarios.rows);
+      const parcial = coincidirParcial({
+        parciales: resParciales.rows,
+        nombre: nombreFinal,
+        fin: fechaToma || fin
+      });
+      if (parcial || (pareceEvaluacion(nombreFinal) && fechaToma)) {
+        if (parcial) {
+          if (!parcial.url && tarea.url) {
+            urlsParcialesActualizar.push({ id: parcial.id, url: tarea.url });
+          }
+          if (fechaToma && parcial.fecha !== fechaToma) {
+            fechasTomaParciales.push({ id: parcial.id, fin: fechaToma });
+          }
+        } else {
+          detectadas.push({
+            materiaId: coincidencia.materia.id,
+            materiaNombre: coincidencia.materia.nombre,
+            cursoNombre: curso.nombre,
+            idMoodle: `moodle_${curso.id}_${tarea.id}`,
+            nombre: nombreFinal,
+            inicio: fechaToma,
+            fin: fechaToma,
+            unidad: tarea.unidad ?? null,
+            conNota: tarea.conNota,
+            tipo: tarea.tipo || inferirTipoTarea(nombreFinal),
+            url: tarea.url || '',
+            detalles: 'Importada desde UGR Virtual'
+          });
         }
         continue;
       }
@@ -549,6 +606,16 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
     ? await leerProgresoCampus({ cliente, db, mapeos, detectadas: [...separado.tareas, ...separado.parciales], alumnoId })
     : { progresoAlumno: [] };
 
+  const fechasCalendario = (calendario.fechasParcialesActualizar || [])
+    .filter((fila) => !fechasTomaParciales.some((toma) => toma.id === fila.id));
+  const fechasTareas = new Map();
+  for (const fila of calendario.fechasActualizar || []) {
+    if (fila?.id) fechasTareas.set(fila.id, { ...fila });
+  }
+  for (const fila of fechasTareasRevisar) {
+    const previa = fechasTareas.get(fila.id) || { id: fila.id };
+    fechasTareas.set(fila.id, { ...previa, ...fila });
+  }
   return {
     materiasLocales,
     cursos,
@@ -559,6 +626,8 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
     urlsActualizar,
     urlsParcialesActualizar,
     ...calendario,
+    fechasActualizar: [...fechasTareas.values()],
+    fechasParcialesActualizar: [...fechasCalendario, ...fechasTomaParciales],
     ...progreso
   };
 }
@@ -576,11 +645,18 @@ export async function moverTareasQueSonParciales({ db, materiaIds }) {
       sql: 'SELECT id, nombre, fecha, url FROM parciales WHERE materia_id = ?',
       args: [materiaId]
     });
+    let horarios = { rows: [] };
+    try {
+      horarios = await db.execute({
+        sql: 'SELECT dia FROM horarios WHERE materia_id = ? AND alumno_id IS NULL',
+        args: [materiaId]
+      });
+    } catch {
+      horarios = { rows: [] };
+    }
     for (const tarea of tareas.rows) {
       if (!pareceEvaluacion(tarea.nombre)) continue;
-      const fecha = (tarea.fin && tarea.fin !== 'Sin fecha')
-        ? tarea.fin
-        : ((tarea.inicio && tarea.inicio !== 'Sin fecha') ? tarea.inicio : null);
+      const fecha = fechaDeEvaluacion(tarea, horarios.rows);
       if (!fecha) continue;
       let parcial = coincidirParcial({ parciales: parciales.rows, nombre: tarea.nombre, fin: fecha });
       if (!parcial) {
@@ -607,13 +683,19 @@ export async function moverTareasQueSonParciales({ db, materiaIds }) {
           args: [`nota_${parcial.id}_${nota.alumno_id || nota.alumno}`, parcial.id, nota.alumno_id || '', nota.alumno || '', nota.nota]
         });
       }
-      await db.batch([
-        { sql: 'DELETE FROM completadas WHERE tarea_id = ?', args: [tarea.id] },
-        { sql: 'DELETE FROM notas_tareas WHERE tarea_id = ?', args: [tarea.id] },
-        { sql: 'DELETE FROM integrantes_tareas WHERE tarea_id = ?', args: [tarea.id] },
-        { sql: 'DELETE FROM grupos_tareas WHERE tarea_id = ?', args: [tarea.id] },
-        { sql: 'DELETE FROM tareas WHERE id = ?', args: [tarea.id] }
-      ], 'write');
+      await db.execute({ sql: 'DELETE FROM completadas WHERE tarea_id = ?', args: [tarea.id] });
+      await db.execute({ sql: 'DELETE FROM notas_tareas WHERE tarea_id = ?', args: [tarea.id] });
+      for (const sql of [
+        'DELETE FROM integrantes_tareas WHERE tarea_id = ?',
+        'DELETE FROM grupos_tareas WHERE tarea_id = ?'
+      ]) {
+        try {
+          await db.execute({ sql, args: [tarea.id] });
+        } catch {
+          // La tarea puede no tener grupo.
+        }
+      }
+      await db.execute({ sql: 'DELETE FROM tareas WHERE id = ?', args: [tarea.id] });
       movidas += 1;
     }
   }
@@ -722,12 +804,16 @@ async function completarDesdeCalendario({ cliente, db, mapeos, detectadas, perio
         if (fecha.campo === 'fin' && (!nueva.fin || nueva.fin === 'Sin fecha')) nueva.fin = fecha.fecha;
         continue;
       }
+      if (fecha.tabla === 'parciales' && fecha.campo !== 'inicio') continue;
       const destino = fecha.tabla === 'parciales' ? parchesParciales : parchesTareas;
       const actual = destino.get(fecha.id) || { id: fecha.id };
       const guardada = actividades.find((item) => item.id === fecha.id);
-      const previa = fecha.campo === 'inicio' ? guardada?.inicio : (fecha.tabla === 'parciales' ? guardada?.fin : guardada?.fin);
+      const previa = fecha.campo === 'inicio' && fecha.tabla !== 'parciales'
+        ? guardada?.inicio
+        : guardada?.fin;
       if (fecha.fecha && previa !== fecha.fecha) {
-        actual[fecha.campo === 'inicio' ? 'inicio' : 'fin'] = fecha.fecha;
+        const campo = fecha.tabla === 'parciales' ? 'fin' : (fecha.campo === 'inicio' ? 'inicio' : 'fin');
+        actual[campo] = fecha.fecha;
         destino.set(fecha.id, actual);
       }
     }
@@ -758,7 +844,7 @@ async function leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId })
   const progresoAlumno = [];
   for (const libreta of libretas) {
     const tareas = await db.execute({ sql: 'SELECT id, nombre FROM tareas WHERE materia_id = ?', args: [libreta.materiaId] });
-    const parciales = await db.execute({ sql: 'SELECT id, nombre FROM parciales WHERE materia_id = ?', args: [libreta.materiaId] });
+    const parciales = await db.execute({ sql: 'SELECT id, nombre, fecha FROM parciales WHERE materia_id = ?', args: [libreta.materiaId] });
     for (const item of libreta.notas) {
       const tarea = tareas.rows.find((fila) => coincidirNombreTarea(fila.nombre, item.nombre))
         || detectadas.find((fila) => fila.materiaId === libreta.materiaId && coincidirNombreTarea(fila.nombre, item.nombre));
@@ -781,6 +867,7 @@ async function leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId })
           nombre: item.nombre,
           tabla: 'parciales',
           id: parcial.id,
+          fecha: parcial.fecha,
           nota: item.nota,
           entregada: true
         });
@@ -894,7 +981,7 @@ async function filaPorNombre(db, cache, tabla, materiaId, nombre) {
   const clave = `${tabla}|${materiaId}`;
   if (!cache.has(clave)) {
     const sql = tabla === 'parciales'
-      ? 'SELECT id, nombre FROM parciales WHERE materia_id = ?'
+      ? 'SELECT id, nombre, fecha FROM parciales WHERE materia_id = ?'
       : 'SELECT id, nombre FROM tareas WHERE materia_id = ?';
     cache.set(clave, (await db.execute({ sql, args: [materiaId] })).rows);
   }
@@ -918,6 +1005,7 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
       } else if (parcial) {
         tabla = 'parciales';
         id = parcial.id;
+        item.fecha = item.fecha || parcial.fecha;
       } else {
         continue;
       }
@@ -947,6 +1035,7 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
       }
     }
     if (tabla === 'parciales' && item.nota != null) {
+      if (!parcialYaSeRindio(item.fecha)) continue;
       const existe = await db.execute({
         sql: 'SELECT id, cerrada FROM notas_parciales WHERE parcial_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))',
         args: [id, alumnoId, alumnoNombre || '']

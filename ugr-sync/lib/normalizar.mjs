@@ -270,6 +270,18 @@ export function armarMensajeCursada({
   return partes.join(' ');
 }
 
+// El campus puede mover una fecha después de cargarla (más plazo, un error
+// del profesor). Una fecha vacía del índice no borra la que ya teníamos.
+export function fechasACorregir(guardada, campus) {
+  const parche = {};
+  for (const campo of ['inicio', 'fin']) {
+    const nueva = campus?.[campo];
+    if (!nueva || nueva === 'Sin fecha') continue;
+    if (guardada?.[campo] !== nueva) parche[campo] = nueva;
+  }
+  return parche;
+}
+
 export function separarEvaluaciones(detectadas) {
   const tareas = [];
   const parciales = [];
@@ -284,10 +296,43 @@ export function separarEvaluaciones(detectadas) {
   return { tareas, parciales };
 }
 
-function fechaDeEvaluacion(item) {
-  if (item?.fin && item.fin !== 'Sin fecha') return item.fin;
-  if (item?.inicio && item.inicio !== 'Sin fecha') return item.inicio;
-  return null;
+export function fechaDeEvaluacion(item, horarios = []) {
+  // El parcial se toma un día, en el horario de la clase. El campus lo muestra
+  // como que abre y cierra ese mismo día: en la página es una sola fecha.
+  const inicio = fechaUtil(item?.inicio);
+  const fin = fechaUtil(item?.fin);
+  if (inicio && fin && inicio !== fin) {
+    const enClase = (fecha) => (horarios || []).some((horario) => Number(horario?.dia) === diaDeSemana(fecha));
+    const abreEnClase = enClase(inicio);
+    const cierraEnClase = enClase(fin);
+    if (abreEnClase && !cierraEnClase) return inicio;
+    if (cierraEnClase && !abreEnClase) return fin;
+  }
+  return inicio || fin;
+}
+
+function fechaUtil(fecha) {
+  if (!fecha || fecha === 'Sin fecha') return null;
+  return fecha;
+}
+
+function diaDeSemana(fecha) {
+  const cuando = new Date(`${fecha}T12:00:00-03:00`);
+  if (Number.isNaN(cuando.getTime())) return null;
+  const corto = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    weekday: 'short'
+  }).format(cuando);
+  return { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }[corto] || null;
+}
+
+export function parcialYaSeRindio(fecha, hoy = fechaHoyArgentina()) {
+  if (!fecha || fecha === 'Sin fecha') return false;
+  return fecha <= hoy;
+}
+
+function fechaHoyArgentina() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 }
 
 function idMateriaDeItem(item) {
@@ -350,7 +395,7 @@ export function agruparResumenSync({ nuevas = [], yaEstaban = [], cronogramaNuev
 
 export function pareceEvaluacion(nombre) {
   const n = limpiarTextoParaBusqueda(nombre);
-  return /\b(?:parcial(?:ito)?|examen|evaluacion|recuperatorio|coloquio|integrador)\b/.test(n);
+  return /\b(?:parcial(?:es|ito)?|examen(?:es)?|evaluacion(?:es)?|recuperatorio|coloquio|integrador)\b/.test(n);
 }
 
 // Inferir el tipo de tarea según el nombre, igual que hace la app

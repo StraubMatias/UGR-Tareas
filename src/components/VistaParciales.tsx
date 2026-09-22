@@ -114,10 +114,11 @@ export default function VistaParciales({
                           </h3>
                           {!parcialDisponible && (
                             <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-300 bg-blue-500/10 border border-blue-500/30 rounded-full px-2.5 py-1">
-                              <span>⏰</span>
+                              <span>📅</span>
                               {(() => {
-                                const diasParaAbrir = obtenerDiasHastaFecha(p.fecha);
-                                return diasParaAbrir === 0 ? 'Abre hoy' : `Abre en ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'}`;
+                                const dias = obtenerDiasHastaFecha(p.fecha);
+                                if (dias === 0) return 'Se toma hoy. La nota entra al sincronizar, después de rendirlo.';
+                                return `Se toma en ${dias} ${dias === 1 ? 'día' : 'días'}. La nota entra al sincronizar, después de rendirlo.`;
                               })()}
                             </p>
                           )}

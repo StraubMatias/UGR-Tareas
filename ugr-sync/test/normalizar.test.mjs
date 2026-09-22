@@ -319,17 +319,57 @@ test('armarMensajeCursada dice a qué materias estás inscripto', () => {
   assert.match(segundo, /ya estaban cargadas/);
 });
 
+test('fechasACorregir actualiza el plazo que el campus cambió y no borra una fecha vacía', async () => {
+  const { fechasACorregir } = await import('../lib/normalizar.mjs');
+  assert.deepEqual(
+    fechasACorregir({ inicio: '2026-09-11', fin: '2026-09-26' }, { inicio: '2026-09-11', fin: '2026-10-06' }),
+    { fin: '2026-10-06' }
+  );
+  assert.deepEqual(
+    fechasACorregir({ inicio: '2026-09-11', fin: '2026-09-26' }, { inicio: 'Sin fecha', fin: 'Sin fecha' }),
+    {}
+  );
+  assert.deepEqual(
+    fechasACorregir({ inicio: '2026-10-28', fin: '2026-10-28' }, { inicio: '2026-10-28', fin: '2026-10-28' }),
+    {}
+  );
+});
+
 test('separarEvaluaciones manda el examen con fecha a parciales y el trabajo a tareas', () => {
   const { tareas, parciales } = separarEvaluaciones([
     { nombre: 'TP 1', fin: '2026-09-25' },
     { nombre: 'Examen parcial', fin: '2026-10-02' },
-    { nombre: 'Parcial 1', inicio: '2026-11-03', fin: 'Sin fecha' },
+    { nombre: 'Parcial 1', inicio: '2026-11-03', fin: '2026-11-10' },
+    { nombre: 'Evaluación 2', inicio: '2026-11-20', fin: '2026-11-20' },
     { nombre: 'Parcialito', fin: 'Sin fecha' }
   ]);
   assert.equal(tareas.length, 2);
-  assert.equal(parciales.length, 2);
+  assert.equal(parciales.length, 3);
   assert.equal(parciales[0].nombre, 'Examen parcial');
   assert.equal(parciales.find((item) => item.nombre === 'Parcial 1').fin, '2026-11-03');
+  assert.equal(parciales.find((item) => item.nombre === 'Evaluación 2').fin, '2026-11-20');
+});
+
+test('la fecha del parcial es el día de clase, no la otra punta del campus', async () => {
+  const { fechaDeEvaluacion } = await import('../lib/normalizar.mjs');
+  const miercoles = [{ dia: 3 }];
+  assert.equal(
+    fechaDeEvaluacion({ inicio: '2026-09-28', fin: '2026-10-28' }, miercoles),
+    '2026-10-28'
+  );
+  assert.equal(
+    fechaDeEvaluacion({ inicio: '2026-09-28', fin: '2026-10-28' }, [{ dia: 1 }]),
+    '2026-09-28'
+  );
+  assert.equal(fechaDeEvaluacion({ inicio: '2026-10-28', fin: '2026-10-28' }), '2026-10-28');
+});
+
+test('la nota de un parcial no existe hasta el día en que se rinde', async () => {
+  const { parcialYaSeRindio } = await import('../lib/normalizar.mjs');
+  assert.equal(parcialYaSeRindio('2026-09-20', '2026-09-21'), true);
+  assert.equal(parcialYaSeRindio('2026-09-21', '2026-09-21'), true);
+  assert.equal(parcialYaSeRindio('2026-10-28', '2026-09-21'), false);
+  assert.equal(parcialYaSeRindio('Sin fecha', '2026-09-21'), false);
 });
 
 test('filtrarTareasDuplicadas no deja dos TPs iguales en la misma materia', () => {
