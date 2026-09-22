@@ -164,6 +164,7 @@ import CuentaPropia, { ResumenCursada } from '../components/CuentaPropia';
 export default function Home() {
   const [materias, setMaterias] = useState<Materia[]>([]);
   const [alumnos, setAlumnos] = useState<string[]>([]);
+  const [registrados, setRegistrados] = useState<string[]>([]);
   const [inscripciones, setInscripciones] = useState<{ alumno: string; materiaId: string }[]>([]);
   const [periodos, setPeriodos] = useState<Periodo[]>([]);
   const [periodoSeleccionado, setPeriodoSeleccionado] = useState<string>('');
@@ -487,6 +488,7 @@ export default function Home() {
     setPeriodos(estado.periodos || []);
     setMaterias(estado.materias || []);
     setAlumnos(estado.alumnos || []);
+    setRegistrados(estado.registrados || estado.alumnos || []);
     setInscripciones(estado.inscripciones || []);
     setParciales(estado.parciales || []);
     setNotas(estado.notas || []);
@@ -1890,8 +1892,8 @@ export default function Home() {
           </div>
         </div>
       ) : origenCuenta === 'propio' && materias.length === 0 && !cargando ? (
-        <div className="mx-auto mt-6 max-w-xl space-y-4">
-          <section className="rounded-2xl border border-slate-800 bg-[#121821] p-6">
+        <div className="mx-auto mt-6 max-w-9xl space-y-4">
+          <section className="mx-auto max-w-xl rounded-2xl border border-slate-800 bg-[#121821] p-6">
             <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Tablero vacío</p>
             <h2 className="mt-2 text-2xl font-black text-white">Todavía no hay cursada</h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-400">
@@ -1905,6 +1907,23 @@ export default function Home() {
               setResumenSync(resumen || []);
               void cargarBD(true);
             }}
+          />
+          <VistaAlumnos
+            materias={materias}
+            inscripciones={inscripciones}
+            alumnos={alumnos}
+            registrados={registrados}
+            esAdmin={false}
+            usuarioActual={usuarioActual}
+            situacionPropiaAbierta={situacionPropiaAbierta}
+            setSituacionPropiaAbierta={setSituacionPropiaAbierta}
+            alumnosDesplegados={alumnosDesplegados}
+            toggleDesplegarAlumno={toggleDesplegarAlumno}
+            toggleTareaDesdeCliente={toggleTareaDesdeCliente}
+            irATareaEnMaterias={irATareaEnMaterias}
+            notasTareasInputs={notasTareasInputs}
+            handleNotaTareaChangeLocal={handleNotaTareaChangeLocal}
+            handleGuardarNotaTareaOnBlur={handleGuardarNotaTareaOnBlur}
           />
         </div>
       ) : (
@@ -2090,6 +2109,7 @@ export default function Home() {
                     materias={materias}
                     inscripciones={inscripciones}
                     alumnos={alumnos}
+                    registrados={registrados}
                     esAdmin={esAdmin}
                     usuarioActual={usuarioActual}
                     situacionPropiaAbierta={situacionPropiaAbierta}

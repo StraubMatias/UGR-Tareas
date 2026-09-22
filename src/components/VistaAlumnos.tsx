@@ -2,7 +2,7 @@
 
 import { useId, useState, type Dispatch, type SetStateAction } from 'react';
 import type { Materia, Tarea } from '../core/cursada';
-import { alumnosConAlgunaMateriaEnComun, type InscripcionAlumno } from '../lib/companeros';
+import { alumnosEnEstado, type InscripcionAlumno } from '../lib/companeros';
 import EstadoAlumno from './EstadoAlumno';
 
 const normalizar = (texto: string) => texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -11,6 +11,7 @@ interface Props {
   materias?: Materia[];
   inscripciones?: InscripcionAlumno[];
   alumnos?: string[];
+  registrados?: string[];
   usuarioActual: string | null;
   esAdmin?: boolean;
   situacionPropiaAbierta: boolean;
@@ -25,12 +26,12 @@ interface Props {
 }
 
 export default function VistaAlumnos({
-  materias = [], inscripciones = [], alumnos = [], usuarioActual, esAdmin = false, situacionPropiaAbierta,
+  materias = [], inscripciones = [], alumnos = [], registrados, usuarioActual, esAdmin = false, situacionPropiaAbierta,
   setSituacionPropiaAbierta, alumnosDesplegados, toggleDesplegarAlumno, ...acciones
 }: Props) {
   const [busqueda, setBusqueda] = useState('');
   const busquedaId = useId();
-  const companeros = (esAdmin ? alumnos : alumnosConAlgunaMateriaEnComun(inscripciones, usuarioActual || ''))
+  const companeros = alumnosEnEstado(inscripciones, usuarioActual || '', registrados?.length ? registrados : alumnos, esAdmin)
     .filter((alumno) => alumno !== usuarioActual);
   const visibles = companeros.filter((alumno) => normalizar(alumno).includes(normalizar(busqueda)));
   const propsCompartidas = { materias, inscripciones, alumnos, usuarioActual, esAdmin, ...acciones };
