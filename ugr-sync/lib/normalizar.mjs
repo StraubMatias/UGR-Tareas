@@ -274,10 +274,20 @@ export function separarEvaluaciones(detectadas) {
   const tareas = [];
   const parciales = [];
   for (const item of Array.isArray(detectadas) ? detectadas : []) {
-    if (pareceEvaluacion(item?.nombre) && item?.fin && item.fin !== 'Sin fecha') parciales.push(item);
-    else tareas.push(item);
+    const fecha = fechaDeEvaluacion(item);
+    if (pareceEvaluacion(item?.nombre) && fecha) {
+      parciales.push({ ...item, fin: fecha });
+    } else {
+      tareas.push(item);
+    }
   }
   return { tareas, parciales };
+}
+
+function fechaDeEvaluacion(item) {
+  if (item?.fin && item.fin !== 'Sin fecha') return item.fin;
+  if (item?.inicio && item.inicio !== 'Sin fecha') return item.inicio;
+  return null;
 }
 
 function idMateriaDeItem(item) {

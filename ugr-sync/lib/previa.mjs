@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { actualizarUrlsTareas, actualizarUrlsParciales, aplicarComplementoCampus, insertarAvisosDetectados, insertarTareasDetectadas, aprobarAvisos, rechazarAvisos, insertarEventosCronograma } from './sync-core.mjs';
+import { actualizarUrlsTareas, actualizarUrlsParciales, aplicarComplementoCampus, insertarAvisosDetectados, insertarParcialesSiFaltan, insertarTareasDetectadas, aprobarAvisos, rechazarAvisos, insertarEventosCronograma } from './sync-core.mjs';
 
 // Persistente también en serverless. Solo el servidor escribe el contenido;
 // el navegador recibe un identificador y devuelve selecciones, nunca datos a insertar.
@@ -17,6 +17,8 @@ export async function sincronizarConPrevia({ db, usuario, confirmar = false, pre
     // Conserva el comportamiento previo: registrar pendientes y completar
     // enlaces existentes no depende de que haya novedades seleccionables.
     await insertarAvisosDetectados({ db, avisos: datos.avisos });
+    const parciales = await insertarParcialesSiFaltan({ db, detectadas: datos.parcialesDetectados || [] });
+    datos.parcialesInsertados = parciales.insertadas;
     datos.urlsActualizadas = await actualizarUrlsTareas({ db, urlsActualizar: datos.urlsActualizar });
     datos.urlsParcialesActualizadas = await actualizarUrlsParciales({ db, urlsParcialesActualizar: datos.urlsParcialesActualizar });
     const complemento = await aplicarComplementoCampus({ db, detectado: datos });

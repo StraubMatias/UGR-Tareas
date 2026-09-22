@@ -9,6 +9,7 @@ export interface ResultadoTareasNuevas {
   mapeos?: MapeoCurso[];
   detectadas?: unknown[];
   yaCargadas?: unknown[];
+  parcialesDetectados?: unknown[];
   eventosCalendario?: unknown[];
   urlsActualizar?: unknown[];
   urlsParcialesActualizar?: unknown[];

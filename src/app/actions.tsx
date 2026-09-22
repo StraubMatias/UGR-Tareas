@@ -1453,7 +1453,7 @@ export async function syncUgrAction({
     });
     const { materiasLocales, cursos, mapeos = [], detectadas, avisos: avisosDetectados, eventosSugeridos,
       insertadas = 0, avisosAceptados = 0, avisosRechazados = 0, eventosInsertados = 0,
-      urlsActualizadas = 0, urlsParcialesActualizadas = 0,
+      urlsActualizadas = 0, urlsParcialesActualizadas = 0, parcialesInsertados = 0,
       eventosCalendarioInsertados = 0, horariosInsertados = 0, fechasActualizadas = 0 } = resultado;
 
     if (confirmar) {
@@ -1481,6 +1481,7 @@ export async function syncUgrAction({
       insertadas,
       urlsActualizadas,
       urlsParcialesActualizadas,
+      parcialesInsertados,
       eventosCalendarioInsertados,
       horariosInsertados,
       fechasActualizadas,
@@ -1592,7 +1593,6 @@ async function sincronizarCursadaDelAlumno({
     asegurarMateriasDeLaCursada,
     detectarTareasNuevas,
     detectarAvisosMoodle,
-    separarEvaluaciones,
     filtrarTareasDuplicadas,
     agruparResumenSync,
     armarMensajeCursada,
@@ -1635,12 +1635,13 @@ async function sincronizarCursadaDelAlumno({
   const propias = detectadas.filter((item) => item.materiaId && materiaIds.includes(item.materiaId));
   const yaCargadas = ((tareas.yaCargadas || []) as ItemTareaCampus[])
     .filter((item) => item.materiaId && materiaIds.includes(item.materiaId));
-  const { tareas: candidatas, parciales } = separarEvaluaciones(propias);
-  const { nuevas: faltantes, duplicadas } = filtrarTareasDuplicadas(candidatas, yaCargadas);
+  const { nuevas: faltantes, duplicadas } = filtrarTareasDuplicadas(propias, yaCargadas);
   await insertarTareasDetectadas({ db, detectadas: faltantes });
+  const parcialesFuente = ((tareas.parcialesDetectados || []) as ItemTareaCampus[])
+    .filter((item) => item.materiaId && materiaIds.includes(item.materiaId) && item.nombre && item.fin);
   const parcialesResultado = await insertarParcialesSiFaltan({
     db,
-    detectadas: (parciales as ItemTareaCampus[]).filter((item) => item.materiaId && item.nombre && item.fin)
+    detectadas: parcialesFuente
   });
   await actualizarUrlsTareas({ db, urlsActualizar: tareas.urlsActualizar });
   await actualizarUrlsParciales({ db, urlsParcialesActualizar: tareas.urlsParcialesActualizar });

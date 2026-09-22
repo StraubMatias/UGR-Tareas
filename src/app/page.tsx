@@ -91,6 +91,7 @@ interface SyncResult {
   eventosCalendarioInsertados?: number;
   horariosInsertados?: number;
   fechasActualizadas?: number;
+  parcialesInsertados?: number;
 }
 
 interface Periodo {
@@ -3209,6 +3210,11 @@ export default function Home() {
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500 pt-2">📭 No hay avisos nuevos en los foros del campus.</p>
+                )}
+                {(syncDatos.parcialesInsertados ?? 0) > 0 && (
+                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
+                    Se pasaron {syncDatos.parcialesInsertados} examen(es) al apartado de parciales.
+                  </div>
                 )}
                 {syncDatos.insertadas > 0 && (
                   <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">

@@ -12,6 +12,7 @@ export interface ResultadoPrevia extends ResultadoTareasNuevas {
   eventosCalendarioInsertados?: number;
   horariosInsertados?: number;
   fechasActualizadas?: number;
+  parcialesInsertados?: number;
   previaId?: string;
   confirmar?: boolean;
 }

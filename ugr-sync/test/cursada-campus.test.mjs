@@ -4,7 +4,7 @@ import { createClient } from '@libsql/client';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asegurarMateriasDeLaCursada, insertarTareasDetectadas, listarCursosDelCampus } from '../lib/sync-core.mjs';
+import { asegurarMateriasDeLaCursada, insertarTareasDetectadas, listarCursosDelCampus, moverTareasQueSonParciales } from '../lib/sync-core.mjs';
 
 function htmlCampus() {
   return 'M.cfg = {"sesskey":"S3SSK3Y","userid":42,"sitename":"UGR"};';
@@ -78,10 +78,11 @@ test('el segundo alumno no vuelve a insertar las tareas que ya cargó el primero
       )`,
       `CREATE TABLE notas_tareas (
         id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT, cargada_en TEXT,
+        cerrada INTEGER NOT NULL DEFAULT 0,
         UNIQUE(tarea_id, alumno)
       )`,
       `CREATE TABLE parciales (id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, fecha TEXT)`,
-      `CREATE TABLE notas_parciales (id TEXT PRIMARY KEY, parcial_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT)`,
+      `CREATE TABLE notas_parciales (id TEXT PRIMARY KEY, parcial_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT, cerrada INTEGER NOT NULL DEFAULT 0)`,
       `CREATE TABLE cronograma_eventos (
         id TEXT PRIMARY KEY, materia_id TEXT, fecha TEXT, modalidad TEXT, tipo TEXT,
         titulo TEXT, detalles TEXT, url TEXT, origen TEXT,
@@ -159,6 +160,44 @@ test('asegurarMateriasDeLaCursada crea las extras de otro cuatrimestre y las map
     assert.equal(repetida.materiasNuevas, 0);
     assert.equal(repetida.mapeos.length, 3);
     assert.equal((await db.execute('SELECT COUNT(*) AS n FROM materias')).rows[0].n, 3);
+  } finally {
+    db.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('un parcial cargado como tarea pasa al apartado de parciales', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ugr-parcial-'));
+  const db = createClient({ url: `file:${join(dir, 'test.db')}` });
+  try {
+    await db.batch([
+      `CREATE TABLE tareas (
+        id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, inicio TEXT, fin TEXT,
+        detalles TEXT, url TEXT
+      )`,
+      `CREATE TABLE parciales (
+        id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, fecha TEXT, detalles TEXT, url TEXT
+      )`,
+      `CREATE TABLE notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT)`,
+      `CREATE TABLE notas_parciales (id TEXT PRIMARY KEY, parcial_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT)`,
+      `CREATE TABLE completadas (tarea_id TEXT, alumno_id TEXT, alumno TEXT, completada_en TEXT)`,
+      `CREATE TABLE integrantes_tareas (tarea_id TEXT, alumno_id TEXT)`,
+      `CREATE TABLE grupos_tareas (tarea_id TEXT, id TEXT)`
+    ], 'write');
+    await db.execute({
+      sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, url) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: ['t1', 'cri', 'Parcial 1', '2026-11-03', 'Sin fecha', '', '']
+    });
+    await db.execute({
+      sql: 'INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota) VALUES (?, ?, ?, ?, ?)',
+      args: ['n1', 't1', 'alu_x', 'Alumno X', '8']
+    });
+    assert.equal(await moverTareasQueSonParciales({ db, materiaIds: ['cri'] }), 1);
+    assert.equal((await db.execute('SELECT COUNT(*) AS n FROM tareas')).rows[0].n, 0);
+    const parcial = (await db.execute('SELECT nombre, fecha FROM parciales')).rows[0];
+    assert.equal(parcial.nombre, 'Parcial 1');
+    assert.equal(parcial.fecha, '2026-11-03');
+    assert.equal((await db.execute('SELECT nota FROM notas_parciales')).rows[0].nota, '8');
   } finally {
     db.close();
     await rm(dir, { recursive: true, force: true });

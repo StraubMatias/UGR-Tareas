@@ -323,11 +323,13 @@ test('separarEvaluaciones manda el examen con fecha a parciales y el trabajo a t
   const { tareas, parciales } = separarEvaluaciones([
     { nombre: 'TP 1', fin: '2026-09-25' },
     { nombre: 'Examen parcial', fin: '2026-10-02' },
+    { nombre: 'Parcial 1', inicio: '2026-11-03', fin: 'Sin fecha' },
     { nombre: 'Parcialito', fin: 'Sin fecha' }
   ]);
   assert.equal(tareas.length, 2);
-  assert.equal(parciales.length, 1);
+  assert.equal(parciales.length, 2);
   assert.equal(parciales[0].nombre, 'Examen parcial');
+  assert.equal(parciales.find((item) => item.nombre === 'Parcial 1').fin, '2026-11-03');
 });
 
 test('filtrarTareasDuplicadas no deja dos TPs iguales en la misma materia', () => {

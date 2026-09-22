@@ -31,6 +31,7 @@ import {
   armarMensajeCursada,
   inferirTipoTarea,
   limpiarTextoParaBusqueda,
+  pareceEvaluacion,
   normalizarNombre,
   separarEvaluaciones
 } from './normalizar.mjs';
@@ -407,6 +408,11 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
       return coincidencia ? [{ curso, coincidencia }] : [];
     });
 
+  await moverTareasQueSonParciales({
+    db,
+    materiaIds: [...new Set(mapeos.map((item) => item.coincidencia.materia.id).filter(Boolean))]
+  });
+
   // 3) Tareas de cada curso mapeado y detección de faltantes.
   const detectadas = [];
   const yaCargadas = [];
@@ -536,19 +542,132 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
   });
   const ordenMaterias = new Map(mapeos.map((m, i) => [m.coincidencia.materia.id, i]));
   detectadas.sort((a, b) => ordenMaterias.get(a.materiaId) - ordenMaterias.get(b.materiaId));
+  const separado = separarEvaluaciones(detectadas);
 
-  const calendario = await completarDesdeCalendario({ cliente, db, mapeos, detectadas, periodoId });
+  const calendario = await completarDesdeCalendario({ cliente, db, mapeos, detectadas: separado.tareas, periodoId });
   const progreso = alumnoId
-    ? await leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId })
+    ? await leerProgresoCampus({ cliente, db, mapeos, detectadas: [...separado.tareas, ...separado.parciales], alumnoId })
     : { progresoAlumno: [] };
 
-  return { materiasLocales, cursos, mapeos, detectadas, yaCargadas, urlsActualizar, urlsParcialesActualizar, ...calendario, ...progreso };
+  return {
+    materiasLocales,
+    cursos,
+    mapeos,
+    detectadas: separado.tareas,
+    parcialesDetectados: separado.parciales,
+    yaCargadas,
+    urlsActualizar,
+    urlsParcialesActualizar,
+    ...calendario,
+    ...progreso
+  };
 }
 
 // El calendario del curso trae las clases y los vencimientos que el overview no
 // muestra. Completa fechas vacías o distintas y arma el cronograma que falta.
+export async function moverTareasQueSonParciales({ db, materiaIds }) {
+  let movidas = 0;
+  for (const materiaId of [...new Set((materiaIds || []).filter(Boolean))]) {
+    const tareas = await db.execute({
+      sql: 'SELECT id, nombre, inicio, fin, url, detalles FROM tareas WHERE materia_id = ?',
+      args: [materiaId]
+    });
+    const parciales = await db.execute({
+      sql: 'SELECT id, nombre, fecha, url FROM parciales WHERE materia_id = ?',
+      args: [materiaId]
+    });
+    for (const tarea of tareas.rows) {
+      if (!pareceEvaluacion(tarea.nombre)) continue;
+      const fecha = (tarea.fin && tarea.fin !== 'Sin fecha')
+        ? tarea.fin
+        : ((tarea.inicio && tarea.inicio !== 'Sin fecha') ? tarea.inicio : null);
+      if (!fecha) continue;
+      let parcial = coincidirParcial({ parciales: parciales.rows, nombre: tarea.nombre, fin: fecha });
+      if (!parcial) {
+        const id = `parcial_${randomUUID()}`;
+        await db.execute({
+          sql: 'INSERT INTO parciales (id, materia_id, nombre, fecha, detalles, url) VALUES (?, ?, ?, ?, ?, ?)',
+          args: [id, materiaId, String(tarea.nombre).slice(0, 100), fecha, tarea.detalles || 'Importada desde UGR Virtual', tarea.url || '']
+        });
+        parcial = { id, nombre: tarea.nombre, fecha };
+        parciales.rows.push(parcial);
+      }
+      const notas = await db.execute({
+        sql: 'SELECT alumno_id, alumno, nota FROM notas_tareas WHERE tarea_id = ?',
+        args: [tarea.id]
+      });
+      for (const nota of notas.rows) {
+        const existe = await db.execute({
+          sql: 'SELECT id FROM notas_parciales WHERE parcial_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))',
+          args: [parcial.id, nota.alumno_id || '', nota.alumno || '']
+        });
+        if (existe.rows.length > 0) continue;
+        await db.execute({
+          sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno_id, alumno, nota) VALUES (?, ?, ?, ?, ?)',
+          args: [`nota_${parcial.id}_${nota.alumno_id || nota.alumno}`, parcial.id, nota.alumno_id || '', nota.alumno || '', nota.nota]
+        });
+      }
+      await db.batch([
+        { sql: 'DELETE FROM completadas WHERE tarea_id = ?', args: [tarea.id] },
+        { sql: 'DELETE FROM notas_tareas WHERE tarea_id = ?', args: [tarea.id] },
+        { sql: 'DELETE FROM integrantes_tareas WHERE tarea_id = ?', args: [tarea.id] },
+        { sql: 'DELETE FROM grupos_tareas WHERE tarea_id = ?', args: [tarea.id] },
+        { sql: 'DELETE FROM tareas WHERE id = ?', args: [tarea.id] }
+      ], 'write');
+      movidas += 1;
+    }
+  }
+  return movidas;
+}
+
+async function libretaYaCerrada({ db, materiaId, alumnoId }) {
+  try {
+    const tareas = await db.execute({
+      sql: `SELECT t.id FROM tareas t
+            WHERE t.materia_id = ? AND t.con_nota = 1
+              AND NOT EXISTS (
+                SELECT 1 FROM notas_tareas n
+                WHERE n.tarea_id = t.id AND n.alumno_id = ? AND n.cerrada = 1
+              )`,
+      args: [materiaId, alumnoId]
+    });
+    if (tareas.rows.length > 0) return false;
+    const parciales = await db.execute({
+      sql: `SELECT p.id FROM parciales p
+            WHERE p.materia_id = ?
+              AND NOT EXISTS (
+                SELECT 1 FROM notas_parciales n
+                WHERE n.parcial_id = p.id AND n.alumno_id = ? AND n.cerrada = 1
+              )`,
+      args: [materiaId, alumnoId]
+    });
+    const hayCalificables = tareas.rows.length + parciales.rows.length;
+    if (hayCalificables > 0) return false;
+    const totales = await db.execute({
+      sql: `SELECT
+              (SELECT COUNT(*) FROM tareas WHERE materia_id = ? AND con_nota = 1) AS tareas,
+              (SELECT COUNT(*) FROM parciales WHERE materia_id = ?) AS parciales`,
+      args: [materiaId, materiaId]
+    });
+    return Number(totales.rows[0]?.tareas || 0) + Number(totales.rows[0]?.parciales || 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function completarDesdeCalendario({ cliente, db, mapeos, detectadas, periodoId }) {
-  const paginas = await conPool(mapeos, 4, async ({ curso, coincidencia }) => {
+  const pendientes = [];
+  for (const mapeo of mapeos) {
+    const materiaId = mapeo?.coincidencia?.materia?.id;
+    if (!materiaId) continue;
+    const ya = await db.execute({
+      sql: 'SELECT 1 FROM cronograma_eventos WHERE materia_id = ? LIMIT 1',
+      args: [materiaId]
+    });
+    if (ya.rows.length > 0) continue;
+    pendientes.push(mapeo);
+  }
+  const paginas = await conPool(pendientes, 4, async ({ curso, coincidencia }) => {
     try {
       const proximos = await cliente.pedir(UGR_RUTAS.calendarioCurso(curso.id));
       const eventos = extraerEventosCalendario(proximos.html);
@@ -624,11 +743,16 @@ async function completarDesdeCalendario({ cliente, db, mapeos, detectadas, perio
 
 async function leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId }) {
   const libretas = await conPool(mapeos, 4, async ({ curso, coincidencia }) => {
+    const materiaId = coincidencia.materia.id;
+    const hayNuevas = detectadas.some((item) => item.materiaId === materiaId);
+    if (!hayNuevas && await libretaYaCerrada({ db, materiaId, alumnoId })) {
+      return { materiaId, notas: [] };
+    }
     try {
       const pagina = await cliente.pedir(UGR_RUTAS.libreta(curso.id));
-      return { materiaId: coincidencia.materia.id, notas: extraerNotasDeLibreta(pagina.html) };
+      return { materiaId, notas: extraerNotasDeLibreta(pagina.html) };
     } catch {
-      return { materiaId: coincidencia.materia.id, notas: [] };
+      return { materiaId, notas: [] };
     }
   });
   const progresoAlumno = [];
@@ -810,29 +934,32 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
       }
       if (item.nota != null) {
         escrituras.push({
-          sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en)
-                VALUES (?, ?, ?, ?, ?, datetime('now'))
+          sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en, cerrada)
+                VALUES (?, ?, ?, ?, ?, datetime('now'), 1)
                 ON CONFLICT(tarea_id, alumno) DO UPDATE SET
                   alumno_id = excluded.alumno_id,
                   nota = excluded.nota,
-                  cargada_en = excluded.cargada_en`,
+                  cargada_en = excluded.cargada_en,
+                  cerrada = 1
+                WHERE notas_tareas.cerrada = 0`,
           args: [`nota_tarea_${id}_${alumnoId}`, id, alumnoId, alumnoNombre || '', item.nota]
         });
       }
     }
     if (tabla === 'parciales' && item.nota != null) {
       const existe = await db.execute({
-        sql: 'SELECT id FROM notas_parciales WHERE parcial_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))',
+        sql: 'SELECT id, cerrada FROM notas_parciales WHERE parcial_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))',
         args: [id, alumnoId, alumnoNombre || '']
       });
+      if (Number(existe.rows[0]?.cerrada) === 1) continue;
       if (existe.rows.length > 0) {
         escrituras.push({
-          sql: 'UPDATE notas_parciales SET nota = ?, alumno_id = ?, alumno = ? WHERE id = ?',
+          sql: 'UPDATE notas_parciales SET nota = ?, alumno_id = ?, alumno = ?, cerrada = 1 WHERE id = ? AND cerrada = 0',
           args: [item.nota, alumnoId, alumnoNombre || '', existe.rows[0].id]
         });
       } else {
         escrituras.push({
-          sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno_id, alumno, nota) VALUES (?, ?, ?, ?, ?)',
+          sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno_id, alumno, nota, cerrada) VALUES (?, ?, ?, ?, ?, 1)',
           args: [`nota_${id}_${alumnoId}`, id, alumnoId, alumnoNombre || '', item.nota]
         });
       }

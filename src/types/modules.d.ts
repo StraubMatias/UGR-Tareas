@@ -13,6 +13,7 @@ declare module '../../ugr-sync/lib/sync-core.mjs' {
     mapeos?: MapeoCurso[];
     detectadas?: unknown[];
     yaCargadas?: unknown[];
+    parcialesDetectados?: unknown[];
     eventosCalendario?: unknown[];
     urlsActualizar?: unknown[];
     urlsParcialesActualizar?: unknown[];
@@ -75,6 +76,7 @@ declare module '../../ugr-sync/lib/previa.mjs' {
     eventosCalendarioInsertados?: number;
     horariosInsertados?: number;
     fechasActualizadas?: number;
+    parcialesInsertados?: number;
     previaId?: string;
     confirmar?: boolean;
   }

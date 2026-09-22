@@ -548,6 +548,11 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     await agregarColumnaSiFalta('horarios', 'alumno_id', 'TEXT');
   });
 
+  await ejecutarMigracion(22, 'cerrar notas ya verificadas contra el campus', async () => {
+    await agregarColumnaSiFalta('notas_tareas', 'cerrada', 'INTEGER NOT NULL DEFAULT 0');
+    await agregarColumnaSiFalta('notas_parciales', 'cerrada', 'INTEGER NOT NULL DEFAULT 0');
+  });
+
   await db.close?.();
 }
 
