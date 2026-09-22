@@ -67,6 +67,8 @@ export interface ResumenMateriaSync {
   materia: string;
   nuevas: string[];
   yaEstaban: string[];
+  cronogramaNuevo?: string[];
+  cronogramaYa?: string[];
 }
 
 export interface RespuestaAction {
@@ -1528,8 +1530,12 @@ function armarMensajeSync({
   if (materiasNuevas) partes.push(`${materiasNuevas} materia(s) nueva(s)`);
   if (nuevas) partes.push(`${nuevas} tarea(s) que no estaban`);
   if (ya) partes.push(`${ya} ya cargada(s), sin duplicar`);
+  const cronNuevo = resumen.reduce((total, fila) => total + (fila.cronogramaNuevo?.length || 0), 0);
+  const cronYa = resumen.reduce((total, fila) => total + (fila.cronogramaYa?.length || 0), 0);
+  if (cronNuevo) partes.push(`${cronNuevo} fecha(s) de cronograma`);
+  if (cronYa) partes.push(`${cronYa} del cronograma ya estaban`);
   if (parciales) partes.push(`${parciales} parcial(es)`);
-  if (eventos) partes.push(`${eventos} evento(s)`);
+  if (!cronNuevo && eventos) partes.push(`${eventos} evento(s)`);
   if (horarios) partes.push(`${horarios} horario(s)`);
   if (notas) partes.push('notas publicadas en el campus');
   if (partes.length === 0) return 'Cursada al día con el período actual. No había tareas nuevas.';
@@ -1584,6 +1590,7 @@ async function sincronizarCursadaDelAlumno({
   }
 
   const materiaIds: string[] = [];
+  const nombresPorId = new Map<string, string>();
   const altas: { sql: string; args: string[] }[] = [];
   const nombresNuevos = new Set<string>();
   let materiasNuevas = 0;
@@ -1602,6 +1609,7 @@ async function sincronizarCursadaDelAlumno({
     }
     if (!materiaId || materiaIds.includes(materiaId)) continue;
     materiaIds.push(materiaId);
+    nombresPorId.set(materiaId, item.nombre);
   }
   if (altas.length > 0) await db.batch(altas, 'write');
   await inscribirAlumnoEnPeriodo(alumnoId, periodoId, materiaIds);
@@ -1620,6 +1628,22 @@ async function sincronizarCursadaDelAlumno({
   });
   await actualizarUrlsTareas({ db, urlsActualizar: tareas.urlsActualizar });
   await actualizarUrlsParciales({ db, urlsParcialesActualizar: tareas.urlsParcialesActualizar });
+
+  type ItemEventoCampus = { materiaId?: string; materiaNombre?: string; titulo?: string; fecha?: string };
+  const conNombreMateria = (item: ItemEventoCampus): ItemEventoCampus => ({
+    ...item,
+    materiaNombre: nombresPorId.get(item.materiaId || '') || item.materiaNombre
+  });
+  const claveEvento = (item: ItemEventoCampus) => `${item.materiaId}|${item.fecha}|${String(item.titulo || '').slice(0, 200)}`;
+  const existentesCron = new Set<string>();
+  for (const materiaId of materiaIds) {
+    const yaCron = await db.execute({
+      sql: 'SELECT fecha, titulo FROM cronograma_eventos WHERE materia_id = ?',
+      args: [materiaId]
+    });
+    for (const fila of yaCron.rows) existentesCron.add(`${materiaId}|${fila.fecha}|${fila.titulo}`);
+  }
+
   const complemento = await aplicarComplementoCampus({
     db,
     detectado: tareas,
@@ -1635,17 +1659,32 @@ async function sincronizarCursadaDelAlumno({
       return !!id && materiaIds.includes(id);
     })
   });
+  const eventosAvisos = ((avisos.eventosSugeridos || []) as ItemEventoCampus[]).filter((evento) => {
+    return !!evento.materiaId && materiaIds.includes(evento.materiaId);
+  });
   const eventosInsertados = await insertarEventosCronograma({
     db,
-    eventos: (avisos.eventosSugeridos || []).filter((evento) => {
-      const fila = evento as { materiaId?: string };
-      return fila.materiaId && materiaIds.includes(fila.materiaId);
-    })
+    eventos: eventosAvisos
   });
+
+  const vistosCron = new Set<string>();
+  const cronogramaNuevo: ItemEventoCampus[] = [];
+  const cronogramaYa: ItemEventoCampus[] = [];
+  const eventosCampus = ((tareas.eventosCalendario || []) as ItemEventoCampus[])
+    .filter((item) => item.materiaId && materiaIds.includes(item.materiaId));
+  for (const item of [...eventosCampus, ...eventosAvisos].map(conNombreMateria)) {
+    const clave = claveEvento(item);
+    if (!item.titulo || vistosCron.has(clave)) continue;
+    vistosCron.add(clave);
+    if (existentesCron.has(clave)) cronogramaYa.push(item);
+    else cronogramaNuevo.push(item);
+  }
 
   const resumen = agruparResumenSync({
     nuevas: faltantes,
-    yaEstaban: [...yaCargadas, ...duplicadas]
+    yaEstaban: [...yaCargadas, ...duplicadas],
+    cronogramaNuevo,
+    cronogramaYa
   });
 
   return {

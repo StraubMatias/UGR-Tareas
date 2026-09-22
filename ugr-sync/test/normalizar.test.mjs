@@ -279,11 +279,15 @@ test('agruparResumenSync junta por materia lo nuevo y lo que ya estaba', () => {
     yaEstaban: [
       { materiaId: 'm1', materiaNombre: 'Ciberdelitos', nombre: 'TP 1' },
       { materiaId: 'm2', materiaNombre: 'Auditorías', nombre: 'Quiz' }
-    ]
+    ],
+    cronogramaNuevo: [{ materiaId: 'm1', materiaNombre: 'Ciberdelitos', titulo: 'Clase sincrónica' }],
+    cronogramaYa: [{ materiaId: 'm2', materiaNombre: 'Auditorías', titulo: 'Consulta' }]
   });
   const ciber = resumen.find((fila) => fila.materia === 'Ciberdelitos');
   const auditorias = resumen.find((fila) => fila.materia === 'Auditorías');
   assert.deepEqual(ciber?.nuevas, ['Foro 1']);
   assert.deepEqual(ciber?.yaEstaban, ['TP 1']);
+  assert.deepEqual(ciber?.cronogramaNuevo, ['Clase sincrónica']);
   assert.deepEqual(auditorias?.yaEstaban, ['Quiz']);
+  assert.deepEqual(auditorias?.cronogramaYa, ['Consulta']);
 });

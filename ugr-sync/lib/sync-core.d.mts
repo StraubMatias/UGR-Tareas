@@ -9,6 +9,7 @@ export interface ResultadoTareasNuevas {
   mapeos?: MapeoCurso[];
   detectadas?: unknown[];
   yaCargadas?: unknown[];
+  eventosCalendario?: unknown[];
   urlsActualizar?: unknown[];
   urlsParcialesActualizar?: unknown[];
 }
@@ -26,7 +27,7 @@ export function listarCursosDelCampus(cliente: unknown): Promise<Array<{ id?: st
 export function emparejarCursosConMaterias(cursos: unknown[], materias: unknown[]): Array<{ curso: unknown; materiaId: string | null; nombre: string; nueva: boolean }>;
 export function separarEvaluaciones(detectadas: unknown[]): { tareas: unknown[]; parciales: unknown[] };
 export function filtrarTareasDuplicadas(candidatas?: unknown[], existentes?: unknown[]): { nuevas: unknown[]; duplicadas: unknown[] };
-export function agruparResumenSync(opciones?: { nuevas?: unknown[]; yaEstaban?: unknown[] }): Array<{ materia: string; nuevas: string[]; yaEstaban: string[] }>;
+export function agruparResumenSync(opciones?: { nuevas?: unknown[]; yaEstaban?: unknown[]; cronogramaNuevo?: unknown[]; cronogramaYa?: unknown[] }): Array<{ materia: string; nuevas: string[]; yaEstaban: string[]; cronogramaNuevo: string[]; cronogramaYa: string[] }>;
 export function detectarAvisosMoodle(opciones: {
   db: unknown;
   cliente: unknown;

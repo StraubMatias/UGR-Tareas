@@ -258,12 +258,14 @@ export function filtrarTareasDuplicadas(candidatas = [], existentes = []) {
   return { nuevas, duplicadas };
 }
 
-export function agruparResumenSync({ nuevas = [], yaEstaban = [] } = {}) {
+export function agruparResumenSync({ nuevas = [], yaEstaban = [], cronogramaNuevo = [], cronogramaYa = [] } = {}) {
   const mapa = new Map();
   const asegurar = (item) => {
     const id = idMateriaDeItem(item) || item?.materiaNombre || item?.materia || 'materia';
     const nombre = item?.materiaNombre || item?.materia || 'Materia';
-    if (!mapa.has(id)) mapa.set(id, { materia: nombre, nuevas: [], yaEstaban: [] });
+    if (!mapa.has(id)) {
+      mapa.set(id, { materia: nombre, nuevas: [], yaEstaban: [], cronogramaNuevo: [], cronogramaYa: [] });
+    }
     return mapa.get(id);
   };
   for (const item of nuevas) {
@@ -271,6 +273,14 @@ export function agruparResumenSync({ nuevas = [], yaEstaban = [] } = {}) {
   }
   for (const item of yaEstaban) {
     if (item?.nombre) asegurar(item).yaEstaban.push(item.nombre);
+  }
+  for (const item of cronogramaNuevo) {
+    const titulo = item?.titulo || item?.nombre;
+    if (titulo) asegurar(item).cronogramaNuevo.push(titulo);
+  }
+  for (const item of cronogramaYa) {
+    const titulo = item?.titulo || item?.nombre;
+    if (titulo) asegurar(item).cronogramaYa.push(titulo);
   }
   return [...mapa.values()];
 }

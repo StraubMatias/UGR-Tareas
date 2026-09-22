@@ -32,6 +32,26 @@ export function ResumenCursada({ resumen }: { resumen: ResumenMateriaSync[] }) {
               </ul>
             </div>
           )}
+          {(materia.cronogramaNuevo?.length || 0) > 0 && (
+            <div className="mt-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Cronograma que no estaba</p>
+              <ul className="mt-1 space-y-0.5 text-sm text-slate-200">
+                {materia.cronogramaNuevo?.map((nombre) => (
+                  <li key={nombre}>+ {nombre}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {(materia.cronogramaYa?.length || 0) > 0 && (
+            <div className="mt-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Cronograma ya cargado</p>
+              <ul className="mt-1 space-y-0.5 text-sm text-slate-400">
+                {materia.cronogramaYa?.map((nombre) => (
+                  <li key={nombre}>· {nombre}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       ))}
     </div>

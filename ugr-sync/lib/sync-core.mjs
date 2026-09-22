@@ -597,7 +597,7 @@ export async function actualizarUrlsTareas({ db, urlsActualizar }) {
 export async function aplicarComplementoCampus({ db, detectado, alumnoId, alumnoNombre } = {}) {
   if (!detectado) return { eventos: 0, horarios: 0, fechas: 0, notas: 0 };
   const eventos = await insertarEventosCronograma({ db, eventos: detectado.eventosCalendario || [] });
-  const horarios = await insertarHorariosDetectados({ db, horarios: detectado.horariosNuevos || [], alumnoId });
+  const horarios = await insertarHorariosDetectados({ db, horarios: detectado.horariosNuevos || [] });
   const fechas = await actualizarFechasCampus({
     db,
     tareas: detectado.fechasActualizar,
@@ -658,7 +658,7 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
   return escrituras.length;
 }
 
-async function insertarHorariosDetectados({ db, horarios, alumnoId }) {
+async function insertarHorariosDetectados({ db, horarios }) {
   if (!Array.isArray(horarios) || horarios.length === 0) return 0;
   const inserts = [];
   for (const horario of horarios) {
@@ -666,13 +666,19 @@ async function insertarHorariosDetectados({ db, horarios, alumnoId }) {
     const existe = await db.execute({
       sql: `SELECT 1 FROM horarios
             WHERE materia_id = ? AND CAST(dia AS INTEGER) = ? AND hora_inicio = ?
-              AND (alumno_id IS NULL OR alumno_id = ?)`,
-      args: [horario.materiaId, Number(horario.dia), horario.horaInicio, alumnoId || null]
+              AND alumno_id IS NULL`,
+      args: [horario.materiaId, Number(horario.dia), horario.horaInicio]
     });
     if (existe.rows.length > 0) continue;
+    await db.execute({
+      sql: `DELETE FROM horarios
+            WHERE materia_id = ? AND CAST(dia AS INTEGER) = ? AND hora_inicio = ?
+              AND alumno_id IS NOT NULL`,
+      args: [horario.materiaId, Number(horario.dia), horario.horaInicio]
+    });
     inserts.push({
       sql: 'INSERT INTO horarios (id, materia_id, dia, hora_inicio, hora_fin, aula, alumno_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      args: [`h_${randomUUID()}`, horario.materiaId, String(horario.dia), horario.horaInicio, horario.horaFin || horario.horaInicio, horario.aula || 'Virtual', alumnoId || null]
+      args: [`h_${randomUUID()}`, horario.materiaId, String(horario.dia), horario.horaInicio, horario.horaFin || horario.horaInicio, horario.aula || 'Virtual', null]
     });
   }
   if (inserts.length === 0) return 0;
@@ -959,23 +965,38 @@ export async function rechazarAvisos({ db, ids }) {
 // para «Ver en UGR»). INSERT OR IGNORE: no duplica por (materia, fecha, titulo).
 export async function insertarEventosCronograma({ db, eventos }) {
   if (!Array.isArray(eventos) || eventos.length === 0) return 0;
-  const inserts = eventos
-    .filter((e) => e && e.materiaId && e.fecha && e.titulo)
-    .map((e) => ({
+  const validos = eventos.filter((e) => e && e.materiaId && e.fecha && e.titulo);
+  const materiaIds = [...new Set(validos.map((e) => e.materiaId))];
+  const existentes = new Set();
+  for (const materiaId of materiaIds) {
+    const res = await db.execute({
+      sql: 'SELECT fecha, titulo FROM cronograma_eventos WHERE materia_id = ?',
+      args: [materiaId]
+    });
+    for (const fila of res.rows) existentes.add(`${materiaId}|${fila.fecha}|${fila.titulo}`);
+  }
+  const inserts = [];
+  for (const e of validos) {
+    const titulo = String(e.titulo).slice(0, 200);
+    const clave = `${e.materiaId}|${e.fecha}|${titulo}`;
+    if (existentes.has(clave)) continue;
+    existentes.add(clave);
+    inserts.push({
       sql: `INSERT OR IGNORE INTO cronograma_eventos
             (id, materia_id, fecha, modalidad, tipo, titulo, detalles, url, origen)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ugr')`,
       args: [
-        `cronograma_${e.materiaId}_${e.fecha}_${String(e.titulo).slice(0, 60)}_${randomUUID().slice(0, 8)}`,
+        `cronograma_${e.materiaId}_${e.fecha}_${titulo.slice(0, 60)}_${randomUUID().slice(0, 8)}`,
         e.materiaId,
         e.fecha,
         e.modalidad || 'sincrónico',
         e.tipo || 'clase',
-        String(e.titulo).slice(0, 200),
+        titulo,
         e.detalles || '',
         e.url || ''
       ]
-    }));
+    });
+  }
   if (inserts.length === 0) return 0;
   await db.batch(inserts, 'write');
   return inserts.length;
