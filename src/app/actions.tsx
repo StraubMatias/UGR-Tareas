@@ -1113,11 +1113,14 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       materiasArmadas.map((materia) => materia.id)
     );
     const materiasPropias = new Set(
-      inscripciones.filter((fila) => fila.alumno === usuarioSesion).map((fila) => fila.materiaId)
+      inscripciones
+        .filter((fila) => fila.alumno.toLowerCase() === usuarioSesion.toLowerCase())
+        .map((fila) => fila.materiaId)
     );
     const rol = texto(resRol.rows[0]?.rol) || 'alumno';
     const verTodaLaCursada = rol === 'admin';
-    const materiaVisible = (materiaId: string) => verTodaLaCursada || materiasPropias.size === 0 || materiasPropias.has(materiaId);
+    const materiaVisible = (materiaId: string) => verTodaLaCursada || materiasPropias.has(materiaId);
+    const materiaDeLaCursada = (materiaId: string) => materiasPropias.has(materiaId);
     const materiasVisibles = materiasArmadas.filter((materia) => materiaVisible(materia.id));
     const todosLosAlumnos = resAlumnos.rows.map((fila) => texto(fila.nombre));
     const alumnosVisibles = verTodaLaCursada
@@ -1155,7 +1158,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota)
       })),
       horarios: resHorarios.rows.filter((fila) => {
-        if (!materiaVisible(texto(fila.materia_id))) return false;
+        if (!materiaDeLaCursada(texto(fila.materia_id))) return false;
         const duenio = textoONull(fila.alumno_id);
         return !duenio || duenio === texto(cuenta?.id);
       }).map((fila) => ({
@@ -1166,7 +1169,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         hora_fin: texto(fila.hora_fin),
         aula: texto(fila.aula)
       })),
-      cronograma: resCronograma.rows.filter((fila) => materiaVisible(texto(fila.materia_id))).map((fila) => ({
+      cronograma: resCronograma.rows.filter((fila) => materiaDeLaCursada(texto(fila.materia_id))).map((fila) => ({
         id: texto(fila.id),
         materia_id: texto(fila.materia_id),
         fecha: texto(fila.fecha),
@@ -1184,7 +1187,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota),
         actualizado_en: texto(fila.actualizado_en)
       })),
-      avisos: resAvisos.rows,
+      avisos: resAvisos.rows.filter((fila) => materiaDeLaCursada(texto(fila.materia_id))),
       inscripciones
     };
   } catch (error) {

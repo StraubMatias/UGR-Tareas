@@ -33,7 +33,12 @@ test('el ranking de una materia incluye a quien la cursa aunque tenga otras', ()
 
 test('las materias de un alumno son solo las de su inscripción', () => {
   assert.deepEqual([...materiasQueCursa(inscripciones, 'Ana')].sort(), ['m1', 'm2']);
+  assert.deepEqual([...materiasQueCursa(inscripciones, 'ana')].sort(), ['m1', 'm2']);
   assert.equal(materiasQueCursa(inscripciones, 'Nadie').size, 0);
+});
+
+test('sin inscripción el cronograma queda vacío, no se ven las materias de otros', () => {
+  assert.equal(materiasQueCursa(inscripciones, 'Eva').size, 0);
 });
 
 test('el estado muestra a quien comparte una materia y oculta el resto de su cursada', () => {

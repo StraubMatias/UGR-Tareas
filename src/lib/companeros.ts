@@ -82,7 +82,10 @@ export function materiasEnComun(
 }
 
 export function materiasQueCursa(inscripciones: InscripcionAlumno[], alumno: string): Set<string> {
+  const nombre = String(alumno || '').toLowerCase();
   return new Set(
-    inscripciones.filter((fila) => fila.alumno === alumno).map((fila) => fila.materiaId)
+    inscripciones
+      .filter((fila) => fila.alumno.toLowerCase() === nombre)
+      .map((fila) => fila.materiaId)
   );
 }

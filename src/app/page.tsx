@@ -397,8 +397,8 @@ export default function Home() {
     if (!usuarioActual || cargando) return;
 
     const ids = materiasQueCursa(inscripciones, usuarioActual);
-    const materiasAvisos = ids.size > 0 ? materias.filter((materia) => ids.has(materia.id)) : materias;
-    const parcialesAvisos = ids.size > 0 ? parciales.filter((parcial) => ids.has(parcial.materia_id)) : parciales;
+    const materiasAvisos = materias.filter((materia) => ids.has(materia.id));
+    const parcialesAvisos = parciales.filter((parcial) => ids.has(parcial.materia_id));
     const tareasActuales = materiasAvisos.flatMap((materia) => materia.tareas.map((tarea) => ({
       id: `tarea-${tarea.id}`,
       tipo: 'nueva-tarea',
@@ -1251,9 +1251,11 @@ export default function Home() {
 
   const restoDeAlumnos = alumnos.filter((a) => a !== usuarioActual);
   const idsCursada = materiasQueCursa(inscripciones, usuarioActual || '');
-  const materiasDeLaCursada = idsCursada.size > 0 ? materias.filter((materia) => idsCursada.has(materia.id)) : materias;
-  const parcialesDeLaCursada = idsCursada.size > 0 ? parciales.filter((parcial) => idsCursada.has(parcial.materia_id)) : parciales;
+  const materiasDeLaCursada = materias.filter((materia) => idsCursada.has(materia.id));
+  const parcialesDeLaCursada = parciales.filter((parcial) => idsCursada.has(parcial.materia_id));
   const nombresDeLaCursada = new Set(materiasDeLaCursada.map((materia) => materia.nombre));
+  const cronogramaDeLaCursada = cronograma.filter((evento) => idsCursada.has(evento.materia_id));
+  const horariosDeLaCursada = horarios.filter((horario) => idsCursada.has(horario.materia_id));
   const parcialesOrdenados = ordenarParciales(parcialesDeLaCursada);
   const proximoParcial = parcialesOrdenados.find(
     (parcial) => {
@@ -1268,10 +1270,10 @@ export default function Home() {
     ? ([
       ...novedades,
       // Avisos aprobados de los foros del campus (solo los que el admin publicó).
-      ...avisos.filter((aviso) => idsCursada.size === 0 || nombresDeLaCursada.has(aviso.materia_nombre)).map((aviso) => ({
+      ...avisos.filter((aviso) => nombresDeLaCursada.has(aviso.materia_nombre)).map((aviso) => ({
         id: `aviso-${aviso.id}`,
         tipo: 'aviso-nuevo',
-        nombre: nombreNotificacionAviso(aviso, cronograma),
+        nombre: nombreNotificacionAviso(aviso, cronogramaDeLaCursada),
         materia: aviso.materia_nombre || aviso.curso_nombre || 'Materia',
         url: aviso.url || ''
       })),
@@ -1368,14 +1370,14 @@ export default function Home() {
     if (indice < desplazamientoMes) return null;
     return new Date(mesCalendario.getFullYear(), mesCalendario.getMonth(), indice - desplazamientoMes + 1);
   });
-  const tareasCalendario = materias.flatMap((materia) => materia.tareas.map((tarea) => ({ tarea, materia })));
+  const tareasCalendario = materiasDeLaCursada.flatMap((materia) => materia.tareas.map((tarea) => ({ tarea, materia })));
   const eventosDelDiaCalendario = (fecha: Date | null) => {
     if (!fecha || !fechaDentroDelCronograma(fecha)) return { parciales: [], tareas: [], horarios: [], cronograma: [] };
 
     const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
     const diaSemana = obtenerDiaSemanaHorario(fecha);
 
-    const eventosCronogramaDia = cronograma.filter((evento) => obtenerClaveDiaCalendario(evento.fecha) === claveDia);
+    const eventosCronogramaDia = cronogramaDeLaCursada.filter((evento) => obtenerClaveDiaCalendario(evento.fecha) === claveDia);
     const materiasSinCursadaDia = new Set(
       eventosCronogramaDia
         // Un evento «sin clases» del cronograma cancela la cursada fija de esa
@@ -1385,7 +1387,7 @@ export default function Home() {
         .map((evento) => evento.materia_id)
     );
 
-    const horariosDelDia = horarios
+    const horariosDelDia = horariosDeLaCursada
       .filter((horario) => Number(horario.dia) === diaSemana)
       .filter((horario) => !materiasSinCursadaDia.has(horario.materia_id));
     const porMateria = new Map<string, typeof horariosDelDia>();
@@ -1404,7 +1406,7 @@ export default function Home() {
     }).sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio)) || String(a.materia_id).localeCompare(String(b.materia_id)));
 
     return {
-      parciales: parciales.filter((parcial) => obtenerClaveDiaCalendario(parcial.fecha) === claveDia),
+      parciales: parcialesDeLaCursada.filter((parcial) => obtenerClaveDiaCalendario(parcial.fecha) === claveDia),
       tareas: tareasCalendario.filter(({ tarea }) => obtenerClaveDiaCalendario(tarea.fin) === claveDia),
       horarios: horariosReales,
       cronograma: eventosCronogramaDia
@@ -2267,11 +2269,11 @@ export default function Home() {
                   mesCalendario={mesCalendario}
                   setMesCalendario={setMesCalendario}
                   nombresMeses={nombresMeses}
-                  horarios={horarios}
-                  parciales={parciales}
+                  horarios={horariosDeLaCursada}
+                  parciales={parcialesDeLaCursada}
                   tareasCalendario={tareasCalendario}
-                  cronograma={cronograma}
-                  materias={materias}
+                  cronograma={cronogramaDeLaCursada}
+                  materias={materiasDeLaCursada}
                   diasCalendario={diasCalendario}
                   claveHoyCalendario={claveHoyCalendario}
                   eventosDelDiaCalendario={eventosDelDiaCalendario}
