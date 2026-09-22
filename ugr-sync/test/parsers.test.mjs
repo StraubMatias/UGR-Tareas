@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from '../lib/materias.mjs';
-import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerTareas, parsearNotaCampus, priorizarNotaDeUltimoIntento } from '../lib/tareas.mjs';
+import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerTareas, parsearNotaCampus, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -309,6 +309,53 @@ test('la nota del cuestionario es la del último intento terminado, no la más a
       <h4>Intento 2</h4><p>Estado Finalizado</p><p>Calificación 0,00 de 10,00 (0%)</p>
     </body>`;
   assert.equal(extraerNotaUltimoIntento(conCurso), 0);
+});
+
+test('la tarjeta de Moodle trae la nota del último intento, no la más alta', () => {
+  const html = `
+    <body>
+      <p>Calificación para aprobar: 10,00 de 10,00</p>
+      <p>Calificación más alta: 10,00 / 10,00</p>
+      <h3>Resumen de sus intentos previos</h3>
+      <ul>
+        <li class="col">
+          <div class="card">
+            <h4 class="card-title">Intento 2</h4>
+            <table class="generaltable quizreviewsummary">
+              <tr><th class="cell" scope="row">Estado</th><td class="cell">Finalizado</td></tr>
+              <tr><th class="cell" scope="row">Calificación</th><td class="cell">10,00 de 10,00 (100%)</td></tr>
+            </table>
+            <a href="https://virtual.ugr.edu.ar/mod/quiz/review.php?attempt=22">Revisión</a>
+          </div>
+        </li>
+        <li class="col">
+          <div class="card">
+            <h4 class="card-title">Intento 1</h4>
+            <table class="generaltable quizreviewsummary">
+              <tr><th class="cell" scope="row">Estado</th><td class="cell">Finalizado</td></tr>
+              <tr><th class="cell" scope="row">Calificación</th><td class="cell">0,00 de 10,00 (0%)</td></tr>
+            </table>
+            <a href="https://virtual.ugr.edu.ar/mod/quiz/review.php?attempt=11">Revisión</a>
+          </div>
+        </li>
+      </ul>
+    </body>`;
+  assert.equal(extraerNotaUltimoIntento(html), 10);
+  assert.equal(urlDeUltimaRevision(html), 'https://virtual.ugr.edu.ar/mod/quiz/review.php?attempt=22');
+});
+
+test('si el resumen no trae número, la revisión del último intento es la que hay que abrir', () => {
+  const html = `
+    <div class="card">
+      <h4 class="card-title">Intento 2</h4>
+      <table><tr><th>Estado</th><td>Finalizado</td></tr><tr><th>Calificación</th><td>Sin calificar</td></tr></table>
+      <a href="/mod/quiz/review.php?attempt=22">Revisión</a>
+    </div>`;
+  assert.equal(extraerNotaUltimoIntento(html), null);
+  assert.equal(urlDeUltimaRevision(html, 'https://virtual.ugr.edu.ar'), 'https://virtual.ugr.edu.ar/mod/quiz/review.php?attempt=22');
+  assert.equal(extraerNotaUltimoIntento(`
+    <table class="quizreviewsummary"><tr><th>Calificación</th><td>10,00 de 10,00 (100%)</td></tr></table>
+  `), 10);
 });
 
 test('el último intento pisa la nota de la libreta', () => {

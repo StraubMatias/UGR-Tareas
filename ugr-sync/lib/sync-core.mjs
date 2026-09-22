@@ -8,7 +8,7 @@ import { crearCliente } from './red.mjs';
 import { optimizarLecturas } from './lecturas.mjs';
 import { autorEsEquipoDocente, esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from './materias.mjs';
-import { extraerFechasActividad, extraerActividadesOverview, extraerNotasDeLibreta, extraerNotaUltimoIntento, priorizarNotaDeUltimoIntento } from './tareas.mjs';
+import { extraerFechasActividad, extraerActividadesOverview, extraerNotasDeLibreta, extraerNotaUltimoIntento, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from './tareas.mjs';
 import {
   analizarAvisosParaCronograma,
   DIAS_HACIA_ATRAS,
@@ -222,17 +222,69 @@ export async function conectarUGRCon({ usuario, contrasena, rutaSesion }) {
   return optimizarLecturas(await crearCliente({ usuario, contrasena, rutaSesion }));
 }
 
+async function notaDePagina(cliente, html) {
+  if (!html) return null;
+  const directa = extraerNotaUltimoIntento(html);
+  if (directa != null) return directa;
+  const revision = urlDeUltimaRevision(html);
+  if (!revision) return null;
+  const detalle = await cliente.pedir(revision);
+  if (!detalle?.html || detalle.es_requiere_login) return null;
+  return extraerNotaUltimoIntento(detalle.html);
+}
+
 async function fechasDeDetalle({ cliente, tarea }) {
   try {
     if (!tarea?.url) return { inicio: null, fin: null, notaIntento: null };
     const pagina = await cliente.pedir(tarea.url);
+    if (!pagina?.html || pagina.es_requiere_login) return { inicio: null, fin: null, notaIntento: null };
     return {
       ...extraerFechasActividad(pagina.html),
-      notaIntento: extraerNotaUltimoIntento(pagina.html)
+      notaIntento: await notaDePagina(cliente, pagina.html)
     };
   } catch {
     return { inicio: null, fin: null, notaIntento: null };
   }
+}
+
+// La nota no está en el índice del curso: está en la página de cada actividad
+// («Ver en UGR»). Se abre con la sesión de quien sincroniza.
+async function leerNotasDeEnlaces({ cliente, db, materiaIds }) {
+  if (!cliente || !materiaIds?.length) return [];
+  const marcas = materiaIds.map(() => '?').join(', ');
+  const tareas = await db.execute({
+    sql: `SELECT id, materia_id, nombre, url FROM tareas
+          WHERE materia_id IN (${marcas}) AND TRIM(COALESCE(url, '')) != '' AND COALESCE(tipo, '') != 'foro'`,
+    args: materiaIds
+  });
+  const parciales = await db.execute({
+    sql: `SELECT id, materia_id, nombre, url, fecha FROM parciales
+          WHERE materia_id IN (${marcas}) AND TRIM(COALESCE(url, '')) != ''`,
+    args: materiaIds
+  });
+  const lista = [
+    ...tareas.rows.map((fila) => ({ ...fila, tabla: 'tareas', fecha: null })),
+    ...parciales.rows.map((fila) => ({ ...fila, tabla: 'parciales' }))
+  ];
+  const notas = await conPool(lista, 4, async (fila) => {
+    try {
+      const pagina = await cliente.pedir(fila.url);
+      if (!pagina?.html || pagina.es_requiere_login) return null;
+      const nota = await notaDePagina(cliente, pagina.html);
+      if (nota == null) return null;
+      return {
+        materiaId: fila.materia_id,
+        nombre: fila.nombre,
+        id: fila.id,
+        tabla: fila.tabla,
+        fecha: fila.fecha || null,
+        nota
+      };
+    } catch {
+      return null;
+    }
+  });
+  return notas.filter(Boolean);
 }
 
 // Cursos en los que el alumno está inscripto ahora. El índice clásico y el
@@ -619,6 +671,11 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
   const progreso = alumnoId
     ? await leerProgresoCampus({ cliente, db, mapeos, detectadas: [...separado.tareas, ...separado.parciales], alumnoId })
     : { progresoAlumno: [] };
+  if (alumnoId) {
+    const materiaIds = [...new Set(mapeos.map((item) => item.coincidencia?.materia?.id).filter(Boolean))];
+    const desdeEnlaces = await leerNotasDeEnlaces({ cliente, db, materiaIds });
+    notasIntento.push(...desdeEnlaces);
+  }
   progreso.progresoAlumno = priorizarNotaDeUltimoIntento(progreso.progresoAlumno, notasIntento);
 
   const condicionesActualizadas = await completarCondicionesCampus({ db, cliente, mapeos });

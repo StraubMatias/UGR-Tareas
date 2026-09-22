@@ -22,51 +22,38 @@ export async function crearCliente({ usuario, contrasena, baseUrl = UGR_BASE_URL
 
   async function pedirSinAutenticar(ruta, { method = 'GET', cuerpo, tipoCuerpo } = {}) {
     const url = new URL(ruta, baseUrl).toString();
-    const esLogin = pedidoEsDeLogin(url);
-    const respuesta = await fetch(url, {
-      method,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)',
-        ...(jar.size > 0 ? { Cookie: cabeceraCookies(jar) } : {}),
-        ...(cuerpo ? { 'Content-Type': tipoCuerpo || 'application/x-www-form-urlencoded' } : {})
-      },
-      ...(cuerpo ? { body: cuerpo } : {}),
-      redirect: 'manual'
-    });
-    const setCookie = respuesta.headers.get('set-cookie');
-    if (setCookie) combinarJar(jar, crearJarCookies([setCookie]).entries());
+    let actual = url;
+    let respuesta = null;
+    for (let salto = 0; salto < 5; salto += 1) {
+      respuesta = await fetch(actual, {
+        method: salto === 0 ? method : 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)',
+          ...(jar.size > 0 ? { Cookie: cabeceraCookies(jar) } : {}),
+          ...(salto === 0 && cuerpo ? { 'Content-Type': tipoCuerpo || 'application/x-www-form-urlencoded' } : {})
+        },
+        ...(salto === 0 && cuerpo ? { body: cuerpo } : {}),
+        redirect: 'manual'
+      });
+      const setCookie = respuesta.headers.getSetCookie?.() || [];
+      const cruda = setCookie.length > 0 ? setCookie : [respuesta.headers.get('set-cookie')].filter(Boolean);
+      if (cruda.length > 0) combinarJar(jar, crearJarCookies(cruda).entries());
 
-    // Redirección a otro lado (normalmente Moodle redirige a la página final).
-    if (!esLogin && respuesta.status >= 300 && respuesta.status < 400) {
+      if (respuesta.status < 300 || respuesta.status >= 400) break;
       const destino = respuesta.headers.get('location');
-      if (destino) {
-        const urlDestino = new URL(destino, baseUrl);
-        if (urlDestino.pathname.includes('/login/index.php')) {
-          // Sesión caducada: forzamos re-login más abajo.
-          await guardarSesion(jar, rutaSesion);
-          return { url: urlDestino.toString(), html: '', es_requiere_login: true };
-        }
-        const final = await fetch(urlDestino.toString(), {
-          method: 'GET',
-          headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)', Cookie: cabeceraCookies(jar) },
-          redirect: 'manual'
-        });
-        const setCookieFinal = final.headers.get('set-cookie');
-        if (setCookieFinal) combinarJar(jar, crearJarCookies([setCookieFinal]).entries());
-        const htmlFinal = await final.text();
+      if (!destino) break;
+      const urlDestino = new URL(destino, actual);
+      if (urlDestino.pathname.includes('/login/index.php')) {
         await guardarSesion(jar, rutaSesion);
-        return {
-          url: urlDestino.toString(),
-          html: htmlFinal,
-          es_requiere_login: esPaginaDeLogin(htmlFinal)
-        };
+        return { url: urlDestino.toString(), html: '', es_requiere_login: true, status: respuesta.status };
       }
+      actual = urlDestino.toString();
     }
 
     const html = await respuesta.text();
     const requiereLogin = esPaginaDeLogin(html) && /form[^>]*id="login"/i.test(html);
     await guardarSesion(jar, rutaSesion);
-    return { url, html, es_requiere_login: requiereLogin, status: respuesta.status };
+    return { url: actual, html, es_requiere_login: requiereLogin, status: respuesta.status };
   }
 
   async function autenticar() {

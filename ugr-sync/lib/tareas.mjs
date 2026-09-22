@@ -371,11 +371,44 @@ function notaDeCuerpoDeIntento(cuerpo) {
   return null;
 }
 
+function intentoEnCurso(estado) {
+  return /en curso|sin finalizar|in progress/i.test(estado) && !/finalizado|finished|completado|completed/i.test(estado);
+}
+
+function notaDeRotuloCalificacion(texto) {
+  const limpio = limpiarTexto(texto);
+  if (!limpio || /m[aá]s alta|para aprobar|to pass|highest/i.test(limpio)) return null;
+  return parsearNotaPublicada(limpio);
+}
+
+// Tarjetas de Moodle 4.5: h4 «Intento N» y tabla quizreviewsummary con fila Calificación.
+function notaDeTarjetasDeIntento($) {
+  const intentos = [];
+  $('h4').each((_, h4) => {
+    const titulo = limpiarTexto($(h4).text());
+    const numero = Number(titulo.match(/^intento\s+(\d+)$/i)?.[1]);
+    if (!numero) return;
+    const tarjeta = $(h4).closest('.card, li, section');
+    const alcance = tarjeta.length && tarjeta.find('h4').length === 1 ? tarjeta : $(h4).parent();
+    const estado = limpiarTexto(alcance.find('tr').filter((__, tr) => /estado|status/i.test($(tr).find('th').first().text())).first().find('td').text());
+    if (intentoEnCurso(estado || limpiarTexto(alcance.text()))) return;
+    const fila = alcance.find('tr').filter((__, tr) => /^calificaci[oó]n$|^grade$/i.test(limpiarTexto($(tr).find('th').first().text()))).first();
+    const nota = notaDeRotuloCalificacion(fila.find('td').first().text());
+    if (nota == null) return;
+    intentos.push({ n: numero, nota });
+  });
+  if (intentos.length === 0) return null;
+  intentos.sort((a, b) => b.n - a.n);
+  return intentos[0].nota;
+}
+
 // La nota que vale es la del último intento terminado. «Calificación más alta»
 // se usa solo si la página no lista intentos.
 export function extraerNotaUltimoIntento(html) {
   if (!html) return null;
   const $ = load(html);
+  const deTarjetas = notaDeTarjetasDeIntento($);
+  if (deTarjetas != null) return deTarjetas;
   const intentos = [];
   const texto = $('body').text().replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ');
   const bloques = texto.matchAll(/Intento\s+(\d+)(?!\d)([\s\S]*?)(?=Intento\s+\d+(?!\d)|$)/gi);
@@ -396,7 +429,7 @@ export function extraerNotaUltimoIntento(html) {
       const cruda = columnaNota >= 0 ? celdas[columnaNota] : celdas.find((celda) => parsearNotaPublicada(celda) != null);
       const nota = parsearNotaPublicada(cruda);
       if (nota == null) return;
-      if (/en curso|sin finalizar|in progress/i.test(celdas.join(' ')) && !/finalizado|completado|completed/i.test(celdas.join(' '))) return;
+      if (intentoEnCurso(celdas.join(' '))) return;
       intentos.push({ n: numero, nota });
     });
   });
@@ -404,8 +437,40 @@ export function extraerNotaUltimoIntento(html) {
     intentos.sort((a, b) => b.n - a.n || 0);
     return intentos[0].nota;
   }
+  const sueltas = [];
+  $('tr').each((_, tr) => {
+    const rotulo = limpiarTexto($(tr).find('th').first().text());
+    if (!/^calificaci[oó]n$|^grade$/i.test(rotulo)) return;
+    const nota = notaDeRotuloCalificacion($(tr).find('td').first().text());
+    if (nota != null) sueltas.push(nota);
+  });
+  if (sueltas.length === 1) return sueltas[0];
   const suelta = texto.match(/(?:su calificaci[oó]n(?:\s+final)?(?:\s+es)?|calificaci[oó]n m[aá]s alta)\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/i);
   return suelta ? parsearNotaPublicada(suelta[1]) : null;
+}
+
+// Si el cuestionario no publica el número en el resumen, el último intento
+// terminado enlaza a review.php, que sí lo muestra.
+export function urlDeUltimaRevision(html, baseUrl = '') {
+  if (!html) return null;
+  const $ = load(html);
+  const candidatos = [];
+  $('h4').each((_, h4) => {
+    const numero = Number(limpiarTexto($(h4).text()).match(/^intento\s+(\d+)$/i)?.[1]);
+    if (!numero) return;
+    const tarjeta = $(h4).closest('.card, li, section');
+    const alcance = tarjeta.length && tarjeta.find('h4').length === 1 ? tarjeta : $(h4).parent();
+    const estado = limpiarTexto(alcance.text());
+    if (intentoEnCurso(estado)) return;
+    const href = alcance.find('a[href*="review.php"]').attr('href');
+    if (href) candidatos.push({ n: numero, href });
+  });
+  if (candidatos.length === 0) {
+    const href = $('a[href*="/mod/quiz/review.php"]').last().attr('href');
+    return href ? completarUrl(href, baseUrl) : null;
+  }
+  candidatos.sort((a, b) => b.n - a.n);
+  return completarUrl(candidatos[0].href, baseUrl);
 }
 
 export function priorizarNotaDeUltimoIntento(progreso = [], intentos = []) {
@@ -416,11 +481,13 @@ export function priorizarNotaDeUltimoIntento(progreso = [], intentos = []) {
       (intento.id && item.id === intento.id)
       || coincidirNombreTarea(item.nombre, intento.nombre)
     ));
+    const previa = indice >= 0 ? salida[indice] : null;
     const fila = {
       materiaId: intento.materiaId,
       nombre: intento.nombre,
-      tabla: intento.id ? 'tareas' : 'nueva',
-      id: intento.id || null,
+      tabla: intento.tabla || previa?.tabla || (intento.id ? 'tareas' : 'nueva'),
+      id: intento.id || previa?.id || null,
+      fecha: intento.fecha || previa?.fecha,
       nota: intento.nota,
       entregada: true,
       forzar: true
@@ -443,12 +510,12 @@ export function extraerNotasDeLibreta(html) {
   const $ = load(html);
   const notas = [];
   const vistos = new Set();
-  $('a.gradeitemheader[href*="/mod/"]').each((_, enlace) => {
-    const href = $(enlace).attr('href') || '';
+  $('tr').each((_, tr) => {
+    const enlace = $(tr).find('a.gradeitemheader[href*="/mod/"], a[href*="/mod/"][href*="view.php"]').first();
+    const href = enlace.attr('href') || '';
     const id = (href.match(/[?&]id=(\d+)/) || [])[1];
-    const nombre = limpiarTexto($(enlace).text());
-    const fila = $(enlace).closest('tr');
-    const nota = parsearNotaCampus(fila.find('td.column-grade, td[class*="column-grade"]').first().text());
+    const nombre = limpiarTexto(enlace.text());
+    const nota = parsearNotaCampus($(tr).find('td.column-grade, td[class*="column-grade"], td.grade').first().text());
     if (!id || !nombre || nota == null || vistos.has(id)) return;
     vistos.add(id);
     notas.push({ id, nombre, nota, url: completarUrl(href, '') });
