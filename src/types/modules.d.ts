@@ -60,7 +60,8 @@ declare module '../../ugr-sync/lib/sync-core.mjs' {
   export function actualizarUrlsTareas(opciones: { db: unknown; urlsActualizar: unknown }): Promise<number>;
   export function actualizarUrlsParciales(opciones: { db: unknown; urlsParcialesActualizar: unknown }): Promise<number>;
   export function insertarEventosCronograma(opciones: { db: unknown; eventos: unknown[] }): Promise<number>;
-  export function aplicarComplementoCampus(opciones: { db: unknown; detectado: unknown; alumnoId?: string; alumnoNombre?: string }): Promise<{ eventos: number; horarios: number; fechas: number; notas: number }>;
+  export function aplicarComplementoCampus(opciones: { db: unknown; detectado: unknown; alumnoId?: string; alumnoNombre?: string }): Promise<{ eventos: number; horarios: number; fechas: number; notas: number; notasCargadas?: Array<{ materia?: string; nombre?: string; nota?: string }> }>;
+  export function cargarNotasDesdeEnlaces(opciones: { cliente: unknown; db: unknown; materiaIds?: string[]; alumnoId?: string; alumnoNombre?: string }): Promise<{ notas: unknown[]; cargadas: Array<{ materia?: string; nombre?: string; nota?: string }>; noLeidas: Array<{ materia?: string; nombre?: string }> }>;
 }
 
 declare module '../../ugr-sync/lib/previa.mjs' {

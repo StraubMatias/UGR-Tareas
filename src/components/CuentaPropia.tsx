@@ -6,8 +6,30 @@ import { sincronizarCuentaUgrAction, type ResumenMateriaSync } from '../app/acti
 export function ResumenCursada({ resumen }: { resumen: ResumenMateriaSync[] }) {
   if (resumen.length === 0) return null;
   const totalNuevas = resumen.reduce((total, fila) => total + fila.nuevas.length, 0);
+  const notasCargadas = resumen.flatMap((fila) => (fila.notasCargadas || []).map((linea) => ({ materia: fila.materia, linea })));
+  const notasNoLeidas = resumen.flatMap((fila) => fila.notasNoLeidas || []);
   return (
     <div className="mt-4 space-y-3 max-h-[50vh] overflow-y-auto">
+      {notasCargadas.length > 0 && (
+        <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Notas cargadas</p>
+          <ul className="mt-2 space-y-1 text-sm text-white">
+            {notasCargadas.map((item) => (
+              <li key={`${item.materia}-${item.linea}`}>{item.linea}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {notasNoLeidas.length > 0 && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Sin nota en la actividad</p>
+          <ul className="mt-2 space-y-1 text-sm text-amber-100">
+            {notasNoLeidas.map((nombre) => (
+              <li key={nombre}>{nombre}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
         <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Estás inscripto a</p>
         <p className="mt-1 text-sm font-bold text-white">

@@ -342,6 +342,14 @@ test('la tarjeta de Moodle trae la nota del último intento, no la más alta', (
     </body>`;
   assert.equal(extraerNotaUltimoIntento(html), 10);
   assert.equal(urlDeUltimaRevision(html), 'https://virtual.ugr.edu.ar/mod/quiz/review.php?attempt=22');
+  assert.equal(extraerNotaUltimoIntento(`
+    <p>Calificación para aprobar: 10,00 de 10,00</p>
+    <h3>Tu calificación final en este cuestionario es 10,00 de 10,00.</h3>
+  `), 10);
+  assert.equal(extraerNotaUltimoIntento(`
+    <table class="quizreviewsummary"><tr><th>Estado</th><td>Finalizado</td></tr><tr><th>Calificación</th><td><b>10,00</b> de 10,00 (<b>100</b>%)</td></tr></table>
+    <table class="quizreviewsummary"><tr><th>Estado</th><td>Finalizado</td></tr><tr><th>Calificación</th><td>0,00 de 10,00 (0%)</td></tr></table>
+  `), 10);
 });
 
 test('si el resumen no trae número, la revisión del último intento es la que hay que abrir', () => {

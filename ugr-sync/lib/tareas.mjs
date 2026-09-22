@@ -375,24 +375,53 @@ function intentoEnCurso(estado) {
   return /en curso|sin finalizar|in progress/i.test(estado) && !/finalizado|finished|completado|completed/i.test(estado);
 }
 
+function esRotuloDeNota(rotulo) {
+  const texto = limpiarTexto(rotulo).toLowerCase();
+  if (!texto || /m[aá]s alta|para aprobar|to pass|highest/.test(texto)) return false;
+  return /^(calificaci[oó]n|grade|nota)\b/.test(texto);
+}
+
 function notaDeRotuloCalificacion(texto) {
   const limpio = limpiarTexto(texto);
   if (!limpio || /m[aá]s alta|para aprobar|to pass|highest/i.test(limpio)) return null;
   return parsearNotaPublicada(limpio);
 }
 
+function numeroDeIntento(titulo) {
+  return Number(limpiarTexto(titulo).match(/^intento\b(?:\s+n[ºo°.]*)?\s*(\d+)/i)?.[1]);
+}
+
+// Moodle 4.5 lista el intento más nuevo primero. Cada uno es una tabla
+// quizreviewsummary con la fila Calificación.
+function notaDeResumenesDeIntento($) {
+  const notas = [];
+  $('table.quizreviewsummary').each((_, tabla) => {
+    let estado = '';
+    let nota = null;
+    $(tabla).find('tr').each((__, tr) => {
+      const rotulo = limpiarTexto($(tr).find('th').first().text());
+      const valor = limpiarTexto($(tr).find('td').first().text());
+      if (/estado|status/i.test(rotulo)) estado = valor;
+      if (esRotuloDeNota(rotulo)) nota = notaDeRotuloCalificacion(valor);
+    });
+    if (intentoEnCurso(estado)) return;
+    if (nota == null) return;
+    notas.push(nota);
+  });
+  return notas.length > 0 ? notas[0] : null;
+}
+
 // Tarjetas de Moodle 4.5: h4 «Intento N» y tabla quizreviewsummary con fila Calificación.
 function notaDeTarjetasDeIntento($) {
   const intentos = [];
   $('h4').each((_, h4) => {
-    const titulo = limpiarTexto($(h4).text());
-    const numero = Number(titulo.match(/^intento\s+(\d+)$/i)?.[1]);
+    const numero = numeroDeIntento($(h4).text());
     if (!numero) return;
     const tarjeta = $(h4).closest('.card, li, section');
     const alcance = tarjeta.length && tarjeta.find('h4').length === 1 ? tarjeta : $(h4).parent();
     const estado = limpiarTexto(alcance.find('tr').filter((__, tr) => /estado|status/i.test($(tr).find('th').first().text())).first().find('td').text());
     if (intentoEnCurso(estado || limpiarTexto(alcance.text()))) return;
-    const fila = alcance.find('tr').filter((__, tr) => /^calificaci[oó]n$|^grade$/i.test(limpiarTexto($(tr).find('th').first().text()))).first();
+    const fila = alcance.find('tr').filter((__, tr) => esRotuloDeNota($(tr).find('th').first().text())).first();
     const nota = notaDeRotuloCalificacion(fila.find('td').first().text());
     if (nota == null) return;
     intentos.push({ n: numero, nota });
@@ -407,6 +436,8 @@ function notaDeTarjetasDeIntento($) {
 export function extraerNotaUltimoIntento(html) {
   if (!html) return null;
   const $ = load(html);
+  const deResumen = notaDeResumenesDeIntento($);
+  if (deResumen != null) return deResumen;
   const deTarjetas = notaDeTarjetasDeIntento($);
   if (deTarjetas != null) return deTarjetas;
   const intentos = [];
@@ -440,12 +471,14 @@ export function extraerNotaUltimoIntento(html) {
   const sueltas = [];
   $('tr').each((_, tr) => {
     const rotulo = limpiarTexto($(tr).find('th').first().text());
-    if (!/^calificaci[oó]n$|^grade$/i.test(rotulo)) return;
+    if (!esRotuloDeNota(rotulo)) return;
     const nota = notaDeRotuloCalificacion($(tr).find('td').first().text());
     if (nota != null) sueltas.push(nota);
   });
   if (sueltas.length === 1) return sueltas[0];
-  const suelta = texto.match(/(?:su calificaci[oó]n(?:\s+final)?(?:\s+es)?|calificaci[oó]n m[aá]s alta)\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/i);
+  const final = texto.match(/calificaci[oó]n final(?:\s+en\s+este\s+cuestionario)?(?:\s+es)?\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/i);
+  if (final) return parsearNotaPublicada(final[1]);
+  const suelta = texto.match(/(?:su calificaci[oó]n(?:\s+es)?|calificaci[oó]n m[aá]s alta)\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/i);
   return suelta ? parsearNotaPublicada(suelta[1]) : null;
 }
 
@@ -456,7 +489,7 @@ export function urlDeUltimaRevision(html, baseUrl = '') {
   const $ = load(html);
   const candidatos = [];
   $('h4').each((_, h4) => {
-    const numero = Number(limpiarTexto($(h4).text()).match(/^intento\s+(\d+)$/i)?.[1]);
+    const numero = numeroDeIntento($(h4).text());
     if (!numero) return;
     const tarjeta = $(h4).closest('.card, li, section');
     const alcance = tarjeta.length && tarjeta.find('h4').length === 1 ? tarjeta : $(h4).parent();
@@ -466,7 +499,7 @@ export function urlDeUltimaRevision(html, baseUrl = '') {
     if (href) candidatos.push({ n: numero, href });
   });
   if (candidatos.length === 0) {
-    const href = $('a[href*="/mod/quiz/review.php"]').last().attr('href');
+    const href = $('a[href*="/mod/quiz/review.php"]').first().attr('href');
     return href ? completarUrl(href, baseUrl) : null;
   }
   candidatos.sort((a, b) => b.n - a.n);

@@ -71,6 +71,8 @@ export interface ResumenMateriaSync {
   cronogramaNuevo?: string[];
   cronogramaYa?: string[];
   materiaNueva?: boolean;
+  notasCargadas?: string[];
+  notasNoLeidas?: string[];
 }
 
 export interface RespuestaAction {
@@ -1657,7 +1659,8 @@ function armarMensajeSync({
   parciales,
   eventos,
   horarios,
-  notas,
+  notasCargadas = [],
+  notasNoLeidas = [],
   fechas,
   condiciones,
   armarMensajeCursada
@@ -1667,7 +1670,8 @@ function armarMensajeSync({
   parciales: number;
   eventos: number;
   horarios: number;
-  notas: number;
+  notasCargadas?: Array<{ nombre?: string; nota?: string }>;
+  notasNoLeidas?: Array<{ nombre?: string }>;
   fechas: number;
   condiciones: number;
   armarMensajeCursada: (opciones: {
@@ -1687,10 +1691,19 @@ function armarMensajeSync({
   if (parciales) extras.push(`Se cargaron ${parciales} parcial(es).`);
   if (!cronNuevo && eventos) extras.push(`Se cargaron ${eventos} evento(s).`);
   if (horarios) extras.push(`Se cargaron ${horarios} horario(s).`);
-  if (notas) extras.push('Se copiaron las notas publicadas en el campus.');
   if (fechas) extras.push(`Se actualizaron ${fechas} fecha(s) que el campus había cambiado.`);
   if (condiciones) extras.push(`Se cargó cómo se cursa y se promociona en ${condiciones} materia(s).`);
-  return armarMensajeCursada({ materias, tareasNuevas: nuevas, tareasYa: ya, extras });
+  const avisosNota: string[] = [];
+  if (notasCargadas.length === 1) {
+    avisosNota.push(`Se cargó la nota ${notasCargadas[0].nota} en «${notasCargadas[0].nombre}».`);
+  } else if (notasCargadas.length > 1) {
+    avisosNota.push(`Se cargaron ${notasCargadas.length} notas: ${notasCargadas.map((item) => `«${item.nombre}» (${item.nota})`).join(', ')}.`);
+  }
+  for (const item of notasNoLeidas) {
+    if (item?.nombre) avisosNota.push(`No pude leer la nota de «${item.nombre}».`);
+  }
+  const base = armarMensajeCursada({ materias, tareasNuevas: nuevas, tareasYa: ya, extras });
+  return avisosNota.length ? `${avisosNota.join(' ')} ${base}` : base;
 }
 
 type ItemTareaCampus = {
@@ -1724,7 +1737,8 @@ async function sincronizarCursadaDelAlumno({
     actualizarUrlsTareas,
     actualizarUrlsParciales,
     insertarEventosCronograma,
-    aplicarComplementoCampus
+    aplicarComplementoCampus,
+    cargarNotasDesdeEnlaces
   } = await import('../../ugr-sync/lib/sync-core.mjs');
 
   // 1) Materias de la carrera que esta cuenta está cursando (las extras
@@ -1751,6 +1765,14 @@ async function sincronizarCursadaDelAlumno({
   }
   const { mapeos, materiaIds, nombresPorId, nombresNuevos } = cursada;
   await inscribirAlumnoEnPeriodo(alumnoId, periodoId, materiaIds);
+
+  const notasTempranas = await cargarNotasDesdeEnlaces({
+    db,
+    cliente,
+    materiaIds,
+    alumnoId,
+    alumnoNombre
+  }) as { cargadas?: Array<{ materia?: string; nombre?: string; nota?: string }>; noLeidas?: Array<{ materia?: string; nombre?: string }> };
 
   const tareas = await detectarTareasNuevas({ db, cliente, cursos, periodoId, alumnoId, mapeos });
   const detectadas = (tareas.detectadas || []) as ItemTareaCampus[];
@@ -1834,6 +1856,30 @@ async function sincronizarCursadaDelAlumno({
   const orden = new Map([...nombresPorId.values()].map((nombre, indice) => [nombre, indice]));
   resumen.sort((a, b) => (orden.get(a.materia) ?? 99) - (orden.get(b.materia) ?? 99));
 
+  const vistas = new Set<string>();
+  const notasCargadas = [...(notasTempranas.cargadas || []), ...((complemento.notasCargadas || []) as Array<{ materia?: string; nombre?: string; nota?: string }>)]
+    .filter((item) => {
+      const clave = `${item.materia}|${item.nombre}|${item.nota}`;
+      if (!item.nombre || !item.nota || vistas.has(clave)) return false;
+      vistas.add(clave);
+      return true;
+    });
+  const cargadasPorNombre = new Set(notasCargadas.map((item) => String(item.nombre).toLowerCase()));
+  const notasNoLeidas = (notasTempranas.noLeidas || []).filter((item) => item?.nombre && !cargadasPorNombre.has(String(item.nombre).toLowerCase()));
+  const anexar = (materia: string | undefined, campo: 'notasCargadas' | 'notasNoLeidas', textoLinea: string) => {
+    if (!materia || !textoLinea) return;
+    let fila = resumen.find((item) => item.materia === materia);
+    if (!fila) {
+      fila = { materia, nuevas: [], yaEstaban: [], cronogramaNuevo: [], cronogramaYa: [] };
+      resumen.push(fila);
+    }
+    const lista = fila[campo] || [];
+    if (!lista.includes(textoLinea)) lista.push(textoLinea);
+    fila[campo] = lista;
+  };
+  for (const item of notasCargadas) anexar(item.materia, 'notasCargadas', `${item.nombre}: ${item.nota}`);
+  for (const item of notasNoLeidas) anexar(item.materia, 'notasNoLeidas', String(item.nombre));
+
   return {
     resumen,
     mensaje: armarMensajeSync({
@@ -1842,7 +1888,8 @@ async function sincronizarCursadaDelAlumno({
       parciales: parcialesResultado.insertadas,
       eventos: eventosInsertados + complemento.eventos,
       horarios: complemento.horarios,
-      notas: complemento.notas,
+      notasCargadas,
+      notasNoLeidas,
       fechas: complemento.fechas,
       condiciones: Number(tareas.condicionesActualizadas || 0),
       armarMensajeCursada
