@@ -2090,6 +2090,7 @@ export default function Home() {
                     materias={materias}
                     inscripciones={inscripciones}
                     alumnos={alumnos}
+                    esAdmin={esAdmin}
                     usuarioActual={usuarioActual}
                     situacionPropiaAbierta={situacionPropiaAbierta}
                     setSituacionPropiaAbierta={setSituacionPropiaAbierta}

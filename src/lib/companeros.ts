@@ -40,6 +40,31 @@ export function alumnosDeLaMateria(inscripciones: InscripcionAlumno[], materiaId
   return [...nombres].sort((a, b) => a.localeCompare(b, 'es'));
 }
 
+// Quien comparte al menos una materia entra al estado por alumno.
+// Al abrir su ficha se ven solo esas materias en común, no el resto de su cursada.
+export function alumnosConAlgunaMateriaEnComun(
+  inscripciones: InscripcionAlumno[],
+  alumno: string
+): string[] {
+  const propias = materiasQueCursa(inscripciones, alumno);
+  if (propias.size === 0) return [];
+  const nombres = new Set<string>();
+  for (const fila of inscripciones) {
+    if (propias.has(fila.materiaId)) nombres.add(fila.alumno);
+  }
+  return [...nombres].sort((a, b) => a.localeCompare(b, 'es'));
+}
+
+export function materiasEnComun(
+  inscripciones: InscripcionAlumno[],
+  alumno: string,
+  otro: string
+): Set<string> {
+  const propias = materiasQueCursa(inscripciones, alumno);
+  const suyas = materiasQueCursa(inscripciones, otro);
+  return new Set([...propias].filter((materiaId) => suyas.has(materiaId)));
+}
+
 export function materiasQueCursa(inscripciones: InscripcionAlumno[], alumno: string): Set<string> {
   return new Set(
     inscripciones.filter((fila) => fila.alumno === alumno).map((fila) => fila.materiaId)

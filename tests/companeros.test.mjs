@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { alumnosConLaMismaCursada, alumnosDeLaMateria, materiasQueCursa } from '../src/lib/companeros.ts';
+import { alumnosConAlgunaMateriaEnComun, alumnosConLaMismaCursada, alumnosDeLaMateria, materiasEnComun, materiasQueCursa } from '../src/lib/companeros.ts';
 
 const inscripciones = [
   { alumno: 'Ana', materiaId: 'm1' },
@@ -34,4 +34,11 @@ test('el ranking de una materia incluye a quien la cursa aunque tenga otras', ()
 test('las materias de un alumno son solo las de su inscripción', () => {
   assert.deepEqual([...materiasQueCursa(inscripciones, 'Ana')].sort(), ['m1', 'm2']);
   assert.equal(materiasQueCursa(inscripciones, 'Nadie').size, 0);
+});
+
+test('el estado muestra a quien comparte una materia y oculta el resto de su cursada', () => {
+  assert.deepEqual(alumnosConAlgunaMateriaEnComun(inscripciones, 'Ana'), ['Ana', 'Luis', 'Sol']);
+  assert.deepEqual([...materiasEnComun(inscripciones, 'Ana', 'Sol')].sort(), ['m1', 'm2']);
+  assert.equal(materiasEnComun(inscripciones, 'Ana', 'Nico').size, 0);
+  assert.deepEqual(alumnosConAlgunaMateriaEnComun(inscripciones, 'Nico'), ['Nico']);
 });

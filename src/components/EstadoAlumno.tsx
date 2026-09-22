@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { obtenerResumenTareasAlumno, type Materia, type Tarea } from '../core/cursada';
-import { alumnosDeLaMateria, materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
+import { alumnosDeLaMateria, materiasEnComun, materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
 import EstadoTareaAlumno from './EstadoTareaAlumno';
 
 const ESTADOS = [
@@ -22,6 +22,7 @@ interface Props {
   alAlternar: () => void;
   alumnos: string[];
   usuarioActual: string | null;
+  esAdmin?: boolean;
   irATareaEnMaterias: (tareaId: string) => void;
   toggleTareaDesdeCliente: (tareaId: string, alumno: string, tarea: Tarea) => void;
   notasTareasInputs: Record<string, string>;
@@ -29,13 +30,18 @@ interface Props {
   handleGuardarNotaTareaOnBlur: (tareaId: string, alumno: string) => void;
 }
 
-export default function EstadoAlumno({ alumno, materias, inscripciones = [], abierto, alAlternar, ...acciones }: Props) {
+export default function EstadoAlumno({ alumno, materias, inscripciones = [], abierto, alAlternar, esAdmin = false, ...acciones }: Props) {
   const [filtro, setFiltro] = useState<ClaveFiltro>('pendientes');
   const contenidoId = useId();
-  const idsCursada = materiasQueCursa(inscripciones, alumno);
-  const materiasDelAlumno = idsCursada.size > 0 ? materias.filter((materia) => idsCursada.has(materia.id)) : materias;
-  const resumen = obtenerResumenTareasAlumno(alumno, materiasDelAlumno);
   const propia = alumno === acciones.usuarioActual;
+  const suyas = materiasQueCursa(inscripciones, alumno);
+  const idsCursada = esAdmin
+    ? (suyas.size > 0 ? suyas : new Set(materias.map((materia) => materia.id)))
+    : propia
+      ? suyas
+      : materiasEnComun(inscripciones, acciones.usuarioActual || '', alumno);
+  const materiasDelAlumno = materias.filter((materia) => idsCursada.has(materia.id));
+  const resumen = obtenerResumenTareasAlumno(alumno, materiasDelAlumno);
   const seleccionadas = filtro === 'grupales'
     ? materiasDelAlumno.flatMap((materia) => materia.tareas || []).filter((tarea) => tarea.grupal)
     : resumen[filtro];

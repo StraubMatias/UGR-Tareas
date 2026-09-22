@@ -2,7 +2,7 @@
 
 import { useId, useState, type Dispatch, type SetStateAction } from 'react';
 import type { Materia, Tarea } from '../core/cursada';
-import type { InscripcionAlumno } from '../lib/companeros';
+import { alumnosConAlgunaMateriaEnComun, type InscripcionAlumno } from '../lib/companeros';
 import EstadoAlumno from './EstadoAlumno';
 
 const normalizar = (texto: string) => texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -12,6 +12,7 @@ interface Props {
   inscripciones?: InscripcionAlumno[];
   alumnos?: string[];
   usuarioActual: string | null;
+  esAdmin?: boolean;
   situacionPropiaAbierta: boolean;
   setSituacionPropiaAbierta: Dispatch<SetStateAction<boolean>>;
   alumnosDesplegados: Record<string, boolean>;
@@ -24,14 +25,15 @@ interface Props {
 }
 
 export default function VistaAlumnos({
-  materias = [], inscripciones = [], alumnos = [], usuarioActual, situacionPropiaAbierta,
+  materias = [], inscripciones = [], alumnos = [], usuarioActual, esAdmin = false, situacionPropiaAbierta,
   setSituacionPropiaAbierta, alumnosDesplegados, toggleDesplegarAlumno, ...acciones
 }: Props) {
   const [busqueda, setBusqueda] = useState('');
   const busquedaId = useId();
-  const companeros = alumnos.filter((alumno) => alumno !== usuarioActual);
+  const companeros = (esAdmin ? alumnos : alumnosConAlgunaMateriaEnComun(inscripciones, usuarioActual || ''))
+    .filter((alumno) => alumno !== usuarioActual);
   const visibles = companeros.filter((alumno) => normalizar(alumno).includes(normalizar(busqueda)));
-  const propsCompartidas = { materias, inscripciones, alumnos, usuarioActual, ...acciones };
+  const propsCompartidas = { materias, inscripciones, alumnos, usuarioActual, esAdmin, ...acciones };
 
   return (
     <div className="estado-alumnos min-w-0 space-y-6">
@@ -56,7 +58,7 @@ export default function VistaAlumnos({
           <EstadoAlumno key={alumno} alumno={alumno} abierto={!!alumnosDesplegados[alumno]}
             alAlternar={() => toggleDesplegarAlumno(alumno)} {...propsCompartidas} />
         ))}
-        {visibles.length === 0 && <p role="status" className="py-5 text-sm text-slate-400">{companeros.length ? 'No hay compañeros que coincidan con la búsqueda.' : 'No hay otros alumnos en esta comisión.'}</p>}
+        {visibles.length === 0 && <p role="status" className="py-5 text-sm text-slate-400">{companeros.length ? 'No hay compañeros que coincidan con la búsqueda.' : 'No hay compañeros que cursen una materia con vos.'}</p>}
       </section>
     </div>
   );
