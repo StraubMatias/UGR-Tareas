@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { obtenerResumenTareasAlumno, type Materia, type Tarea } from '../core/cursada';
-import { materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
+import { alumnosDeLaMateria, materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
 import EstadoTareaAlumno from './EstadoTareaAlumno';
 
 const ESTADOS = [
@@ -92,7 +92,7 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                       <EstadoTareaAlumno tarea={tarea} alumno={alumno}
                         materia={materia} 
                         unidad={tarea.unidad} 
-                        alumnos={acciones.alumnos}
+                        alumnos={alumnosDeLaMateria(inscripciones, materia.id)}
                         usuarioActual={acciones.usuarioActual}
                         irATareaEnMaterias={acciones.irATareaEnMaterias}
                         toggleTareaDesdeCliente={acciones.toggleTareaDesdeCliente}

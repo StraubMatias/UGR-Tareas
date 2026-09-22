@@ -553,6 +553,30 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     await agregarColumnaSiFalta('notas_parciales', 'cerrada', 'INTEGER NOT NULL DEFAULT 0');
   });
 
+  await ejecutarMigracion(23, 'alta de cuenta y nombre único', async () => {
+    await agregarColumnaSiFalta('alumnos', 'creado_en', 'TEXT');
+    await agregarColumnaSiFalta('alumnos', 'sincronizado_en', 'TEXT');
+    const ahora = new Date().toISOString();
+    await db.execute({
+      sql: `UPDATE alumnos SET creado_en = ? WHERE creado_en IS NULL OR creado_en = ''`,
+      args: [ahora]
+    });
+    await db.execute({
+      sql: `UPDATE alumnos SET sincronizado_en = ?
+            WHERE COALESCE(origen, 'comision') = 'propio'
+              AND (sincronizado_en IS NULL OR sincronizado_en = '')
+              AND EXISTS (SELECT 1 FROM inscripciones i WHERE i.alumno_id = alumnos.id)`,
+      args: [ahora]
+    });
+    const repetidos = await db.execute(
+      'SELECT 1 FROM alumnos GROUP BY LOWER(nombre) HAVING COUNT(*) > 1 LIMIT 1'
+    );
+    if (repetidos.rows.length === 0) {
+      await db.execute('DROP INDEX IF EXISTS idx_alumnos_nombre_lower');
+      await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS alumnos_nombre_unico ON alumnos(LOWER(nombre))');
+    }
+  });
+
   await db.close?.();
 }
 

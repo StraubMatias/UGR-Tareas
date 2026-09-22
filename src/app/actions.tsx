@@ -10,6 +10,7 @@ import { PLAN_DE_ESTUDIO } from './plan-utils';
 import { convertirValidacion } from '../lib/utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
 import { alumnosConLaMismaCursada } from '../lib/companeros';
+import { cuentaPropiaVencida } from '../lib/cuentas';
 // La sincronización con el campus arrastra cheerio. Se importa solo cuando
 // un admin sincroniza, para que el refresco del tablero no cargue ese módulo.
 
@@ -199,6 +200,47 @@ async function leerCuenta(usuario: string) {
     args: [usuario]
   });
   return resultado.rows[0] || null;
+}
+
+function esNombreRepetido(error: unknown): boolean {
+  const mensaje = error instanceof Error ? error.message : '';
+  return /unique/i.test(mensaje);
+}
+
+async function borrarCuentasSinSincronizar(): Promise<void> {
+  try {
+    const candidatas = await db.execute(`
+      SELECT a.id, COALESCE(a.origen, 'comision') AS origen, a.creado_en, a.sincronizado_en,
+             (SELECT COUNT(*) FROM inscripciones i WHERE i.alumno_id = a.id) AS inscripciones
+      FROM alumnos a
+      WHERE COALESCE(a.origen, 'comision') = 'propio'
+        AND (a.sincronizado_en IS NULL OR a.sincronizado_en = '')
+    `);
+    const ids = candidatas.rows
+      .filter((fila) => cuentaPropiaVencida({
+        origen: texto(fila.origen),
+        creadoEn: texto(fila.creado_en),
+        sincronizadoEn: texto(fila.sincronizado_en),
+        inscripciones: Number(fila.inscripciones || 0)
+      }))
+      .map((fila) => texto(fila.id))
+      .filter(Boolean);
+    if (ids.length === 0) return;
+    const marcas = ids.map(() => '?').join(',');
+    await db.batch([
+      { sql: `DELETE FROM integrantes_tareas WHERE alumno_id IN (${marcas})`, args: ids },
+      { sql: 'DELETE FROM grupos_tareas WHERE NOT EXISTS (SELECT 1 FROM integrantes_tareas WHERE grupo_id = grupos_tareas.id)', args: [] },
+      { sql: `DELETE FROM completadas WHERE alumno_id IN (${marcas})`, args: ids },
+      { sql: `DELETE FROM notas_parciales WHERE alumno_id IN (${marcas})`, args: ids },
+      { sql: `DELETE FROM notas_tareas WHERE alumno_id IN (${marcas})`, args: ids },
+      { sql: `DELETE FROM progreso_materias WHERE alumno_id IN (${marcas})`, args: ids },
+      { sql: `DELETE FROM inscripciones WHERE alumno_id IN (${marcas})`, args: ids },
+      { sql: `DELETE FROM horarios WHERE alumno_id IN (${marcas})`, args: ids },
+      { sql: `DELETE FROM alumnos WHERE id IN (${marcas})`, args: ids }
+    ], 'write');
+  } catch (error) {
+    console.error('No se pudieron borrar las cuentas sin sincronizar:', error instanceof Error ? error.message : 'falló');
+  }
 }
 
 async function verificarRateLimitEscritura(usuario: string | null): Promise<RespuestaAction> {
@@ -415,6 +457,7 @@ async function verificarPassword(password: string, almacenada: string | null | u
 // Valida credenciales consultando directamente a la tabla alumnos en Turso
 export async function validarLoginAction(usuarioInput: string, passwordInput: string): Promise<RespuestaAction> {
   try {
+    await borrarCuentasSinSincronizar();
     const userClean = String(usuarioInput || '').trim();
     const passClean = String(passwordInput || '').trim();
 
@@ -496,19 +539,15 @@ function normalizarDni(valor: string): string {
 export async function registrarCuentaAction(
   usuarioInput: string,
   passwordInput: string,
-  confirmacionInput: string,
-  dniInput = '',
-  claveUgrInput = ''
+  confirmacionInput: string
 ): Promise<RespuestaAction> {
   const usuario = String(usuarioInput || '').trim();
   const password = String(passwordInput || '');
   const confirmacion = String(confirmacionInput || '');
-  const dni = normalizarDni(dniInput);
-  const claveUgr = String(claveUgrInput || '');
-  let claves: { clave: string; limite: number }[] = [];
   try {
-    if (!usuario || !password || !confirmacion || !dni || !claveUgr) {
-      return { exito: false, mensaje: 'Completá usuario, contraseña, DNI y clave de UGR Virtual.' };
+    await borrarCuentasSinSincronizar();
+    if (!usuario || !password || !confirmacion) {
+      return { exito: false, mensaje: 'Completá usuario y contraseña.' };
     }
     if (usuario.length < 3 || usuario.length > MAX_USUARIO_LENGTH) {
       return { exito: false, mensaje: 'El usuario tiene que tener entre 3 y 100 caracteres.' };
@@ -519,17 +558,8 @@ export async function registrarCuentaAction(
     if (password !== confirmacion) {
       return { exito: false, mensaje: 'Las contraseñas no coinciden.' };
     }
-    if (dni.length < 6 || dni.length > MAX_USUARIO_LENGTH) {
-      return { exito: false, mensaje: 'El DNI de UGR Virtual no es válido.' };
-    }
-    if (claveUgr.length > MAX_PASSWORD_LENGTH) {
-      return { exito: false, mensaje: 'La clave de UGR Virtual es demasiado larga.' };
-    }
 
-    claves = [
-      { clave: `ugr-alta:${dni.toLowerCase()}`, limite: LIMITE_LOGIN_USUARIO },
-      { clave: `ugr-ip:${await obtenerIPReal()}`, limite: LIMITE_LOGIN_IP }
-    ];
+    const claves = [{ clave: `alta-ip:${await obtenerIPReal()}`, limite: LIMITE_LOGIN_IP }];
     if (await loginEstaBloqueado(claves)) {
       return { exito: false, mensaje: MENSAJE_LOGIN_BLOQUEADO };
     }
@@ -539,44 +569,31 @@ export async function registrarCuentaAction(
       args: [usuario]
     });
     if (existente.rows.length > 0) {
+      await registrarFalloLogin(claves);
       return { exito: false, mensaje: 'Ese usuario ya existe.' };
     }
 
-    const { conectarUGRCon } = await import('../../ugr-sync/lib/sync-core.mjs');
-    let cliente: { autenticar?: () => Promise<unknown> };
-    try {
-      cliente = await conectarUGRCon({ usuario: dni, contrasena: claveUgr, rutaSesion: null }) as { autenticar?: () => Promise<unknown> };
-      if (typeof cliente.autenticar === 'function') await cliente.autenticar();
-    } catch (error) {
-      const mensaje = error instanceof Error ? error.message : '';
-      const rechazo = mensaje.startsWith('Login rechazado') || mensaje.includes('logintoken');
-      if (rechazo) await registrarFalloLogin(claves);
-      if (rechazo) return { exito: false, mensaje: 'UGR Virtual no aceptó ese DNI o contraseña.' };
-      return { exito: false, mensaje: 'No se pudo comprobar la cuenta en UGR Virtual.' };
-    }
-
     const id = crearId('a_');
-    await db.execute({
-      sql: `INSERT INTO alumnos (id, nombre, password, rol, origen) VALUES (?, ?, ?, 'alumno', 'propio')`,
-      args: [id, usuario, await hashearPassword(password)]
-    });
-    await establecerSesion(usuario, 1);
-    await limpiarIntentosLogin(claves);
-    await registrarAuditoria({ accion: 'registrar_cuenta', usuario, detalle: 'Alta de cuenta propia comprobada con UGR Virtual', ip: await obtenerIPReal() });
-
     try {
-      const sync = await sincronizarCursadaDelAlumno({ alumnoId: id, alumnoNombre: usuario, cliente });
-      return { exito: true, usuario, rol: 'alumno', origen: 'propio', ugrUsuario: null, mensaje: sync.mensaje, resumen: sync.resumen };
-    } catch {
-      return {
-        exito: true,
-        usuario,
-        rol: 'alumno',
-        origen: 'propio',
-        ugrUsuario: null,
-        mensaje: 'La cuenta está lista. UGR Virtual no terminó de cargar la cursada: sincronizá de nuevo con el DNI y la clave.'
-      };
+      await db.execute({
+        sql: `INSERT INTO alumnos (id, nombre, password, rol, origen, creado_en) VALUES (?, ?, ?, 'alumno', 'propio', ?)`,
+        args: [id, usuario, await hashearPassword(password), new Date().toISOString()]
+      });
+    } catch (error) {
+      if (esNombreRepetido(error)) return { exito: false, mensaje: 'Ese usuario ya existe.' };
+      throw error;
     }
+    await establecerSesion(usuario, 1);
+    await registrarAuditoria({ accion: 'registrar_cuenta', usuario, detalle: 'Alta de cuenta propia sin cursada cargada', ip: await obtenerIPReal() });
+
+    return {
+      exito: true,
+      usuario,
+      rol: 'alumno',
+      origen: 'propio',
+      ugrUsuario: null,
+      mensaje: 'La cuenta está lista. El tablero queda vacío hasta que sincronices. Si pasan 7 días sin sincronizar, la cuenta se borra.'
+    };
   } catch (error) {
     console.error('Error en registrarCuentaAction:', error);
     return { exito: false, mensaje: 'No se pudo crear la cuenta.' };
@@ -840,6 +857,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return null;
 
+    await borrarCuentasSinSincronizar();
     const cuenta = await leerCuenta(usuarioSesion);
     const yaInscripto = texto(cuenta?.id)
       ? await db.execute({ sql: 'SELECT 1 FROM inscripciones WHERE alumno_id = ? LIMIT 1', args: [texto(cuenta?.id)] })
@@ -1778,6 +1796,10 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
       alumnoNombre: usuarioSesion,
       cliente
     });
+    await db.execute({
+      sql: `UPDATE alumnos SET sincronizado_en = COALESCE(NULLIF(sincronizado_en, ''), ?) WHERE id = ?`,
+      args: [new Date().toISOString(), alumnoId]
+    });
 
     await limpiarIntentosLogin(claves);
     await registrarAuditoria({
@@ -2088,6 +2110,22 @@ export async function gestionarGrupoTareaAction(params: GestionarGrupoParams): P
 
     const alumno = await obtenerAlumno(nombreAlumnoObjetivo);
     if (!alumno) return { exito: false, mensaje: 'El alumno no existe.' };
+
+    if (!salir && !eliminarGrupoId) {
+      const tareaFila = await db.execute({
+        sql: 'SELECT materia_id FROM tareas WHERE id = ?',
+        args: [tareaId]
+      });
+      const materiaId = texto(tareaFila.rows[0]?.materia_id);
+      if (!materiaId) return { exito: false, mensaje: 'La tarea no existe.' };
+      const cursa = await db.execute({
+        sql: 'SELECT 1 FROM inscripciones WHERE materia_id = ? AND alumno_id = ?',
+        args: [materiaId, alumno.id]
+      });
+      if (cursa.rows.length === 0) {
+        return { exito: false, mensaje: 'Ese alumno no está cursando esta materia.' };
+      }
+    }
 
     await asignarGrupo(db, tareaId, alumno.id, {
       nombre,

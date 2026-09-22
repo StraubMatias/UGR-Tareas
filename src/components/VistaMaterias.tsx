@@ -13,6 +13,7 @@ import {
   tareaPuedeGestionarse
 } from '../core/cursada';
 
+import { alumnosDeLaMateria, type InscripcionAlumno } from '../lib/companeros';
 import GrupoTarea from './GrupoTarea';
 
 interface CondicionesEdicion {
@@ -25,6 +26,7 @@ interface CondicionesEdicion {
 
 interface Props {
   materias: Materia[];
+  inscripciones?: InscripcionAlumno[];
   recargar: (mostrarCarga?: boolean) => void | Promise<unknown>;
   alumnos: string[];
   usuarioActual: string | null;
@@ -50,6 +52,7 @@ interface Props {
 // llegó desde "Estado por Alumno".
 export default function VistaMaterias({
   materias,
+  inscripciones = [],
   recargar,
   alumnos,
   usuarioActual,
@@ -77,6 +80,7 @@ export default function VistaMaterias({
         </div>
       ) : (
         materias.map((m) => {
+          const cursan = alumnosDeLaMateria(inscripciones, m.id);
           const mostrarCompletadas = !!materiasDesplegadas[m.id];
           const tareasPendientes = m.tareas.filter(
             (t) => tareaPendienteAlumno(t, usuarioActual)
@@ -236,10 +240,11 @@ export default function VistaMaterias({
                           {t.grupal && (
                             <GrupoTarea
                               tarea={t}
+                              materiaNombre={m.nombre}
                               usuarioActual={usuarioActual}
                               recargar={recargar}
                               esAdmin={esAdmin}
-                              alumnos={alumnos}
+                              alumnos={cursan}
                             />
                           )}
                           <div className="bg-[#161c26] border border-slate-800 rounded-xl p-4">
@@ -330,8 +335,8 @@ export default function VistaMaterias({
                                 Ver notas de los demás
                               </summary>
                               <div className="mt-2 space-y-1.5">
-                                {alumnos.filter((alumno) => alumno !== usuarioActual && t.notas?.[alumno] !== undefined).length > 0 ? (
-                                  alumnos
+                                {((t.grupal ? cursan : alumnos).filter((alumno) => alumno !== usuarioActual && t.notas?.[alumno] !== undefined)).length > 0 ? (
+                                  (t.grupal ? cursan : alumnos)
                                     .filter((alumno) => alumno !== usuarioActual && t.notas?.[alumno] !== undefined)
                                     .map((alumno) => (
                                       <div key={alumno} className="flex justify-between gap-3 text-xs text-slate-300">

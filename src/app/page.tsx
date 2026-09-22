@@ -174,8 +174,6 @@ export default function Home() {
   const [modoAcceso, setModoAcceso] = useState<'login' | 'registro'>('login');
   const [registroPass, setRegistroPass] = useState('');
   const [registroConfirmacion, setRegistroConfirmacion] = useState('');
-  const [registroDni, setRegistroDni] = useState('');
-  const [registroClaveUgr, setRegistroClaveUgr] = useState('');
   const [enviandoAcceso, setEnviandoAcceso] = useState(false);
   const [resumenSync, setResumenSync] = useState<ResumenMateriaSync[]>([]);
   const [pestana, setPestana] = useState<'alumnos' | 'materias' | 'plan' | 'parciales' | 'horarios' | 'ranking' | 'promocion' | 'historial' | 'admin'>('alumnos');
@@ -620,12 +618,8 @@ export default function Home() {
     e.preventDefault();
     setErrorLogin('');
     setEnviandoAcceso(true);
-    const dniIngresado = registroDni;
-    const claveUgrIngresada = registroClaveUgr;
-    setRegistroClaveUgr('');
     try {
-      const res = await registrarCuentaAction(inputUser, registroPass, registroConfirmacion, dniIngresado, claveUgrIngresada);
-      setRegistroDni('');
+      const res = await registrarCuentaAction(inputUser, registroPass, registroConfirmacion);
       if (res.exito && res.usuario) {
         iniciarSesionLocal(res.usuario, res.rol || 'alumno', res.origen || 'propio', null);
         setMensajeSyncCuenta(res.mensaje || '');
@@ -1816,7 +1810,7 @@ export default function Home() {
             <h2 className="text-3xl font-black text-white mb-2 bg-gradient-to-r from-cyan-300 via-white to-amber-300 bg-clip-text text-transparent">{modoAcceso === 'registro' ? 'Crear cuenta' : 'Iniciar sesión'}</h2>
             <p className="text-sm text-slate-400 mt-3 max-w-xs mx-auto leading-relaxed">
               {modoAcceso === 'registro'
-                ? 'Elegí tu usuario y tu clave. El DNI y la clave de UGR Virtual se comprueban ahora y no se guardan: se detectan las materias de la carrera que estás cursando y se carga lo de esas materias.'
+                ? 'Elegí un usuario que no esté usado y tu clave. El tablero queda vacío hasta que sincronices con UGR Virtual. Si pasan 7 días sin sincronizar, la cuenta se borra. El DNI y la clave del campus se piden en ese momento y no se guardan.'
                 : 'Tu tablero para seguir la cursada sin perder el hilo.'}
             </p>
             <div className="portal-login-meta mt-5 flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-wider">
@@ -1859,35 +1853,6 @@ export default function Home() {
                 />
               </div>
             )}
-            {modoAcceso === 'registro' && (
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">DNI de UGR Virtual</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="El mismo DNI con el que entrás al campus"
-                  value={registroDni}
-                  onChange={(e) => setRegistroDni(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-slate-800 rounded-xl p-3.5 text-base text-white focus:outline-none transition-all"
-                />
-              </div>
-            )}
-            {modoAcceso === 'registro' && (
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Contraseña de UGR Virtual</label>
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="No se guarda"
-                  value={registroClaveUgr}
-                  onChange={(e) => setRegistroClaveUgr(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-slate-800 rounded-xl p-3.5 text-base text-white focus:outline-none transition-all"
-                />
-                <p className="mt-1 text-xs text-slate-500">Sirve para comprobar que sos alumno de la UGR y cargar tus materias. Después se descarta.</p>
-              </div>
-            )}
-            
             {errorLogin && (
               <p className="text-sm text-red-400 text-center bg-red-950/30 border border-red-900/30 p-3 rounded-lg">
                 ⚠️ {errorLogin}
@@ -1900,7 +1865,7 @@ export default function Home() {
               className="portal-login-button w-full font-bold py-3.5 rounded-xl text-sm uppercase tracking-wider transition-all duration-200 cursor-pointer disabled:opacity-50"
             >
               {enviandoAcceso
-                ? (modoAcceso === 'registro' ? 'Comprobando UGR…' : 'Entrando…')
+                ? (modoAcceso === 'registro' ? 'Creando cuenta…' : 'Entrando…')
                 : (modoAcceso === 'registro' ? 'Crear cuenta' : 'Entrar')}
             </button>
           </form>
@@ -1926,14 +1891,23 @@ export default function Home() {
           </div>
         </div>
       ) : origenCuenta === 'propio' && materias.length === 0 && !cargando ? (
-        <CuentaPropia
-          usuario={usuarioActual}
-          onSincronizada={(mensaje, resumen) => {
-            setMensajeSyncCuenta(mensaje);
-            setResumenSync(resumen || []);
-            void cargarBD(true);
-          }}
-        />
+        <div className="mx-auto mt-6 max-w-xl space-y-4">
+          <section className="rounded-2xl border border-slate-800 bg-[#121821] p-6">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Tablero vacío</p>
+            <h2 className="mt-2 text-2xl font-black text-white">Todavía no hay cursada</h2>
+            <p className="mt-3 text-sm leading-relaxed text-slate-400">
+              La cuenta ya está creada. Materias, tareas, grupos y cronograma aparecen cuando sincronizás con UGR Virtual. Si pasan 7 días sin esa sincronización, la cuenta se borra.
+            </p>
+          </section>
+          <CuentaPropia
+            usuario={usuarioActual}
+            onSincronizada={(mensaje, resumen) => {
+              setMensajeSyncCuenta(mensaje);
+              setResumenSync(resumen || []);
+              void cargarBD(true);
+            }}
+          />
+        </div>
       ) : (
         <div className="max-w-9xl mx-auto">
           {resumenSync.length > 0 && (
@@ -2137,6 +2111,7 @@ export default function Home() {
                 <VistaMaterias
                   recargar={cargarBD}
                   materias={materias}
+                  inscripciones={inscripciones}
                   alumnos={alumnos}
                   usuarioActual={usuarioActual}
                   esAdmin={esAdmin}
