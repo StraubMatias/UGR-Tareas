@@ -40,7 +40,7 @@ import {
 } from './normalizar.mjs';
 
 export { emparejarCursosConMaterias, filtrarTareasDuplicadas, agruparResumenSync, armarMensajeCursada, limpiarTextoParaBusqueda, separarEvaluaciones };
-import { clasificarEventosCalendario, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
+import { ajustarClasesAlHorario, clasificarEventosCalendario, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
 import { MODULOS_CONSIGNA, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { cabeceraCookies } from './autenticar.mjs';
 import { extraerEnlacesDeCursada, interpretarCondiciones, textoDeArchivoCampus, urlArchivoDeRecurso } from './metodologia.mjs';
@@ -860,7 +860,20 @@ async function completarDesdeCalendario({ cliente, db, mapeos, detectadas, perio
       actividades,
       materiaId: pagina.materiaId
     });
-    eventosCalendario.push(...clasificado.cronograma);
+    const guardados = await db.execute({
+      sql: `SELECT dia, hora_inicio AS horaInicio, hora_fin AS horaFin
+            FROM horarios WHERE materia_id = ? AND alumno_id IS NULL`,
+      args: [pagina.materiaId]
+    });
+    const horariosDeLaMateria = [
+      ...guardados.rows.map((fila) => ({
+        dia: Number(fila.dia),
+        horaInicio: String(fila.horaInicio),
+        horaFin: String(fila.horaFin)
+      })),
+      ...clasificado.horarios
+    ];
+    eventosCalendario.push(...ajustarClasesAlHorario(clasificado.cronograma, horariosDeLaMateria));
     horariosNuevos.push(...clasificado.horarios);
     for (const fecha of clasificado.fechas) {
       if (fecha.tabla === 'nueva') {
@@ -1128,29 +1141,45 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
 async function insertarHorariosDetectados({ db, horarios }) {
   if (!Array.isArray(horarios) || horarios.length === 0) return 0;
   const inserts = [];
+  let cambios = 0;
   for (const horario of horarios) {
     if (!horario?.materiaId || !horario.dia || !horario.horaInicio) continue;
     const existe = await db.execute({
-      sql: `SELECT 1 FROM horarios
+      sql: `SELECT id, hora_fin FROM horarios
             WHERE materia_id = ? AND CAST(dia AS INTEGER) = ? AND hora_inicio = ?
               AND alumno_id IS NULL`,
       args: [horario.materiaId, Number(horario.dia), horario.horaInicio]
     });
-    if (existe.rows.length > 0) continue;
-    await db.execute({
+    if (existe.rows.length > 0) {
+      if (String(existe.rows[0].hora_fin || '') !== String(horario.horaFin || '')) {
+        await db.execute({
+          sql: 'UPDATE horarios SET hora_fin = ? WHERE id = ?',
+          args: [horario.horaFin || horario.horaInicio, existe.rows[0].id]
+        });
+        cambios += 1;
+      }
+    } else {
+      await db.execute({
+        sql: `DELETE FROM horarios
+              WHERE materia_id = ? AND CAST(dia AS INTEGER) = ? AND hora_inicio = ?
+                AND alumno_id IS NOT NULL`,
+        args: [horario.materiaId, Number(horario.dia), horario.horaInicio]
+      });
+      inserts.push({
+        sql: 'INSERT INTO horarios (id, materia_id, dia, hora_inicio, hora_fin, aula, alumno_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        args: [`h_${randomUUID()}`, horario.materiaId, String(horario.dia), horario.horaInicio, horario.horaFin || horario.horaInicio, horario.aula || 'Virtual', null]
+      });
+    }
+    const borrados = await db.execute({
       sql: `DELETE FROM horarios
-            WHERE materia_id = ? AND CAST(dia AS INTEGER) = ? AND hora_inicio = ?
-              AND alumno_id IS NOT NULL`,
+            WHERE materia_id = ? AND CAST(dia AS INTEGER) = ?
+              AND hora_inicio != ? AND alumno_id IS NULL`,
       args: [horario.materiaId, Number(horario.dia), horario.horaInicio]
     });
-    inserts.push({
-      sql: 'INSERT INTO horarios (id, materia_id, dia, hora_inicio, hora_fin, aula, alumno_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      args: [`h_${randomUUID()}`, horario.materiaId, String(horario.dia), horario.horaInicio, horario.horaFin || horario.horaInicio, horario.aula || 'Virtual', null]
-    });
+    cambios += Number(borrados.rowsAffected || 0);
   }
-  if (inserts.length === 0) return 0;
-  await db.batch(inserts, 'write');
-  return inserts.length;
+  if (inserts.length > 0) await db.batch(inserts, 'write');
+  return inserts.length + cambios;
 }
 
 async function actualizarFechasCampus({ db, tareas, parciales }) {
@@ -1428,27 +1457,46 @@ export async function rechazarAvisos({ db, ids }) {
   return updates.length;
 }
 
+function tituloSinRango(titulo) {
+  return String(titulo || '').replace(/\s*\(\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}\)/g, '').replace(/\s+/g, ' ').trim();
+}
+
 // Agrega eventos sugeridos al cronograma (origen 'ugr', con el enlace al hilo
-// para «Ver en UGR»). INSERT OR IGNORE: no duplica por (materia, fecha, titulo).
+// para «Ver en UGR»). Si la misma clase ya estaba con el horario largo del
+// campus, se corrige esa fila en vez de dejar las dos.
 export async function insertarEventosCronograma({ db, eventos }) {
   if (!Array.isArray(eventos) || eventos.length === 0) return 0;
   const validos = eventos.filter((e) => e && e.materiaId && e.fecha && e.titulo);
   const materiaIds = [...new Set(validos.map((e) => e.materiaId))];
-  const existentes = new Set();
+  const exactos = new Set();
+  const porBase = new Map();
   for (const materiaId of materiaIds) {
     const res = await db.execute({
-      sql: 'SELECT fecha, titulo FROM cronograma_eventos WHERE materia_id = ?',
+      sql: 'SELECT id, fecha, titulo FROM cronograma_eventos WHERE materia_id = ?',
       args: [materiaId]
     });
-    for (const fila of res.rows) existentes.add(`${materiaId}|${fila.fecha}|${fila.titulo}`);
+    for (const fila of res.rows) {
+      exactos.add(`${materiaId}|${fila.fecha}|${fila.titulo}`);
+      porBase.set(`${materiaId}|${fila.fecha}|${tituloSinRango(fila.titulo)}`, fila);
+    }
   }
-  const inserts = [];
+  const cambios = [];
   for (const e of validos) {
     const titulo = String(e.titulo).slice(0, 200);
     const clave = `${e.materiaId}|${e.fecha}|${titulo}`;
-    if (existentes.has(clave)) continue;
-    existentes.add(clave);
-    inserts.push({
+    if (exactos.has(clave)) continue;
+    const previa = porBase.get(`${e.materiaId}|${e.fecha}|${tituloSinRango(titulo)}`);
+    if (previa && tituloSinRango(previa.titulo) === tituloSinRango(titulo) && previa.titulo !== titulo) {
+      cambios.push({
+        sql: 'UPDATE cronograma_eventos SET titulo = ?, detalles = ? WHERE id = ?',
+        args: [titulo, e.detalles || '', previa.id]
+      });
+      exactos.add(clave);
+      continue;
+    }
+    exactos.add(clave);
+    porBase.set(`${e.materiaId}|${e.fecha}|${tituloSinRango(titulo)}`, { id: '', fecha: e.fecha, titulo });
+    cambios.push({
       sql: `INSERT OR IGNORE INTO cronograma_eventos
             (id, materia_id, fecha, modalidad, tipo, titulo, detalles, url, origen)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ugr')`,
@@ -1464,7 +1512,7 @@ export async function insertarEventosCronograma({ db, eventos }) {
       ]
     });
   }
-  if (inserts.length === 0) return 0;
-  await db.batch(inserts, 'write');
-  return inserts.length;
+  if (cambios.length === 0) return 0;
+  await db.batch(cambios, 'write');
+  return cambios.length;
 }

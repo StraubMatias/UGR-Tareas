@@ -6,6 +6,7 @@ import {
   type Parcial,
   type Tarea
 } from '../core/cursada';
+import type { ReactNode } from 'react';
 
 interface EventosDia {
   parciales: Parcial[];
@@ -291,80 +292,92 @@ export default function VistaHorarios({
                     }
                     return null;
                   })()}
-                  {eventos.horarios.map((horario) => {
-                    const materia = materias.find((item) => item.id === horario.materia_id);
-                    return (
-                      <div key={`modal-${horario.id}`} className="calendar-modal-event calendar-class">
-                        <p className="text-sm font-extrabold">Cursada · {horario.hora_inicio} - {horario.hora_fin}</p>
-                        <p className="mt-1 text-sm">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
-                        {horario.aula && <p className="mt-1 text-xs opacity-75">Aula {horario.aula}</p>}
-                      </div>
-                    );
-                  })}
-                  {eventos.parciales.map((parcial) => {
-                    const materia = materias.find((item) => item.id === parcial.materia_id);
-                    return (
-                      <div key={`modal-${parcial.id}`} className="calendar-modal-event calendar-exam">
-                        <p className="text-sm font-extrabold">Parcial · {parcial.nombre}</p>
-                        <p className="mt-1 text-sm">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
-                        {parcial.detalles && <p className="mt-2 text-sm opacity-85">{parcial.detalles}</p>}
-                      </div>
-                    );
-                  })}
-{eventos.tareas.map(({ tarea, materia }) => (
-                    <div key={`modal-${tarea.id}`} className="calendar-modal-event calendar-task">
-                      <p className="text-sm font-extrabold">Entrega · {tarea.nombre}</p>
-                      <p className="mt-1 text-sm">{etiquetaMateria(materia.nombre)}</p>
-                      {tarea.detalles && <p className="mt-2 text-sm opacity-85">{tarea.detalles}</p>}
-                    </div>
-                  ))}
-                  {eventos.cronograma.map((evento) => {
-                    const materia = materias.find((item) => item.id === evento.materia_id);
-                    const esAsincronico = evento.modalidad === 'asincrónico';
-                    const esSinClases = esEventoDeSinClases(evento);
-                    const esExamen = evento.tipo === 'examen';
-                    const esEntrega = evento.tipo === 'entrega';
-                    const esExposicion = evento.tipo === 'exposición';
-                    const esConsulta = evento.tipo === 'consulta';
-                    const etiqueta = esSinClases
-                      ? 'No hay clases'
-                      : esAsincronico
-                        ? esEntrega
-                          ? 'Entrega asincrónica'
-                          : esExposicion
-                            ? 'Exposición asincrónica'
-                            : esConsulta
-                              ? 'Consulta asincrónica'
-                              : 'Clase asincrónica'
-                        : esExamen
-                          ? 'Examen'
-                          : esEntrega
-                            ? 'Entrega'
+                  {(() => {
+                    const grupos = new Map<string, { id: string; nombre: string; orden: string; bloques: ReactNode[] }>();
+                    const grupoDe = (materiaId: string, orden: string) => {
+                      const actual = grupos.get(materiaId);
+                      const nombre = etiquetaMateria(materias.find((item) => item.id === materiaId)?.nombre || 'Materia no disponible');
+                      if (!actual) {
+                        const creado = { id: materiaId, nombre, orden, bloques: [] as ReactNode[] };
+                        grupos.set(materiaId, creado);
+                        return creado;
+                      }
+                      if (orden < actual.orden) actual.orden = orden;
+                      return actual;
+                    };
+                    for (const horario of eventos.horarios) {
+                      grupoDe(horario.materia_id, horario.hora_inicio).bloques.push(
+                        <div key={`modal-${horario.id}`} className="calendar-modal-event calendar-class">
+                          <p className="text-sm font-extrabold">Cursada · {horario.hora_inicio} - {horario.hora_fin}</p>
+                          {horario.aula && horario.aula !== 'Virtual' && <p className="mt-1 text-xs opacity-75">Aula {horario.aula}</p>}
+                        </div>
+                      );
+                    }
+                    for (const parcial of eventos.parciales) {
+                      grupoDe(parcial.materia_id, '80').bloques.push(
+                        <div key={`modal-${parcial.id}`} className="calendar-modal-event calendar-exam">
+                          <p className="text-sm font-extrabold">Parcial · {parcial.nombre}</p>
+                          {parcial.detalles && <p className="mt-2 text-sm opacity-85">{parcial.detalles}</p>}
+                        </div>
+                      );
+                    }
+                    for (const { tarea, materia } of eventos.tareas) {
+                      grupoDe(materia.id, '85').bloques.push(
+                        <div key={`modal-${tarea.id}`} className="calendar-modal-event calendar-task">
+                          <p className="text-sm font-extrabold">Entrega · {tarea.nombre}</p>
+                          {tarea.detalles && <p className="mt-2 text-sm opacity-85">{tarea.detalles}</p>}
+                        </div>
+                      );
+                    }
+                    for (const evento of eventos.cronograma) {
+                      const esAsincronico = evento.modalidad === 'asincrónico';
+                      const esSinClases = esEventoDeSinClases(evento);
+                      const esExamen = evento.tipo === 'examen';
+                      const esEntrega = evento.tipo === 'entrega';
+                      const esExposicion = evento.tipo === 'exposición';
+                      const esConsulta = evento.tipo === 'consulta';
+                      const etiqueta = esSinClases
+                        ? 'No hay clases'
+                        : esAsincronico
+                          ? esEntrega
+                            ? 'Entrega asincrónica'
                             : esExposicion
-                              ? 'Exposición'
+                              ? 'Exposición asincrónica'
                               : esConsulta
-                                ? 'Consulta'
-                                : 'Clase';
-                    return (
-                      <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : esExamen ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}>
-                        <p className="text-sm font-extrabold">{etiqueta}</p>
-                        <p className="mt-1 text-sm">{etiquetaMateria(materia?.nombre || 'Materia no disponible')}</p>
-                        {!esSinClases && evento.titulo && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
-                        {esSinClases && evento.titulo && evento.titulo.toLowerCase() !== 'sin clases' && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
-                        {evento.detalles && <p className="mt-2 text-sm opacity-85">{evento.detalles}</p>}
-                        {evento.url && (
-                          <a
-                            href={evento.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-2"
-                          >
-                            Ver en UGR ↗
-                          </a>
-                        )}
-                      </div>
-                    );
-                  })}
+                                ? 'Consulta asincrónica'
+                                : 'Clase asincrónica'
+                          : esExamen
+                            ? 'Examen'
+                            : esEntrega
+                              ? 'Entrega'
+                              : esExposicion
+                                ? 'Exposición'
+                                : esConsulta
+                                  ? 'Consulta'
+                                  : 'Clase';
+                      grupoDe(evento.materia_id, esSinClases ? '00' : '70').bloques.push(
+                        <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : esExamen ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}>
+                          <p className="text-sm font-extrabold">{etiqueta}</p>
+                          {!esSinClases && evento.titulo && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
+                          {esSinClases && evento.titulo && evento.titulo.toLowerCase() !== 'sin clases' && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
+                          {evento.detalles && <p className="mt-2 text-sm opacity-85">{evento.detalles}</p>}
+                          {evento.url && (
+                            <a href={evento.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-2">
+                              Ver en UGR ↗
+                            </a>
+                          )}
+                        </div>
+                      );
+                    }
+                    return [...grupos.values()]
+                      .sort((a, b) => a.orden.localeCompare(b.orden) || a.nombre.localeCompare(b.nombre, 'es'))
+                      .map((grupo) => (
+                        <section key={grupo.id} className="space-y-2">
+                          <h3 className="text-sm font-extrabold text-white">{grupo.nombre}</h3>
+                          <div className="space-y-2">{grupo.bloques}</div>
+                        </section>
+                      ));
+                  })()}
                 </div>
               )}
             </section>

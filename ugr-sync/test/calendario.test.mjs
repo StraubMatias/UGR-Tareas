@@ -4,6 +4,7 @@ import {
   clasificarEventosCalendario,
   esRecordatorioDeActividad,
   extraerEventosCalendario,
+  horarioDeclaradoEnTitulo,
   nombreActividadDeEvento
 } from '../lib/calendario.mjs';
 
@@ -65,7 +66,7 @@ test('el vencimiento completa la tarea y la clase repetida entra al cronograma y
   assert.equal(horarios.length, 1);
   assert.equal(horarios[0].dia, '3');
   assert.equal(horarios[0].horaInicio, '19:00');
-  assert.equal(horarios[0].horaFin, '20:20');
+  assert.equal(horarios[0].horaFin, '20:30');
 });
 
 test('el mes del campus también entra, con la fecha del día', () => {
@@ -79,6 +80,63 @@ test('el mes del campus también entra, con la fecha del día', () => {
   assert.equal(eventos.length, 1);
   assert.equal(eventos[0].titulo, 'Link de Clase Sincrónica');
   assert.ok(eventos[0].fecha);
+});
+
+test('el horario de verdad es el del enlace y la clase dura una hora y media', () => {
+  assert.deepEqual(
+    horarioDeclaradoEnTitulo('Los encuentros sincrónicos para ambas comisiones conjuntamente, serán los días lunes, en el horario de 17 hs. a 18.30 hs.'),
+    { dia: 1, horaInicio: '17:00', horaFin: '18:30' }
+  );
+  assert.deepEqual(
+    horarioDeclaradoEnTitulo('Enlace a la clase sincrónica de los Miércoles a las 19 Hs'),
+    { dia: 3, horaInicio: '19:00', horaFin: '20:30' }
+  );
+  assert.deepEqual(
+    horarioDeclaradoEnTitulo('Encuentro sincrónico de los jueves a las 20:30 Hs'),
+    { dia: 4, horaInicio: '20:30', horaFin: '22:00' }
+  );
+
+  const largo = {
+    titulo: 'Clases sincrónicas - Prof. Rodríguez (16:45–19:45)',
+    fecha: '2026-09-28',
+    horaInicio: '16:45',
+    horaFin: '19:45',
+    dia: 1
+  };
+  const verdadero = {
+    titulo: 'Los encuentros sincrónicos serán los días lunes, en el horario de 17 hs. a 18.30 hs.',
+    fecha: '2026-09-07',
+    horaInicio: '16:45',
+    horaFin: '19:45',
+    dia: 1
+  };
+  const viernes = {
+    titulo: 'Clase Sincrónica Semanal - Viernes 18:00 hs',
+    fecha: '2026-09-25',
+    horaInicio: '18:00',
+    horaFin: '19:00',
+    dia: 5
+  };
+  const { horarios, cronograma } = clasificarEventosCalendario({
+    eventos: [
+      largo, { ...largo, fecha: '2026-10-05' },
+      verdadero, { ...verdadero, fecha: '2026-09-14' },
+      viernes, { ...viernes, fecha: '2026-10-02' }
+    ],
+    actividades: [],
+    materiaId: 'ciber'
+  });
+  assert.equal(horarios.length, 2);
+  assert.deepEqual(horarios.map((horario) => [Number(horario.dia), horario.horaInicio, horario.horaFin]), [
+    [1, '17:00', '18:30'],
+    [5, '18:00', '19:30']
+  ]);
+  const clases = cronograma.filter((evento) => evento.titulo.startsWith('Clases sincrónicas'));
+  assert.equal(clases.length, 2);
+  assert.equal(clases.every((evento) => evento.titulo.includes('17:00–18:30') && !evento.titulo.includes('16:45')), true);
+  assert.equal(clases.every((evento) => evento.detalles === 'Clase de 17:00 a 18:30.'), true);
+  const deViernes = cronograma.filter((evento) => evento.titulo.includes('Viernes'));
+  assert.equal(deViernes.every((evento) => evento.detalles === 'Clase de 18:00 a 19:30.'), true);
 });
 
 test('un vencimiento sin actividad conocida igual se muestra en el cronograma', () => {

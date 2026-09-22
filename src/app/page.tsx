@@ -1372,13 +1372,28 @@ export default function Home() {
         .map((evento) => evento.materia_id)
     );
 
+    const horariosDelDia = horarios
+      .filter((horario) => Number(horario.dia) === diaSemana)
+      .filter((horario) => !materiasSinCursadaDia.has(horario.materia_id));
+    const porMateria = new Map<string, typeof horariosDelDia>();
+    for (const horario of horariosDelDia) {
+      const grupo = porMateria.get(horario.materia_id) || [];
+      grupo.push(horario);
+      porMateria.set(horario.materia_id, grupo);
+    }
+    const horariosReales = [...porMateria.values()].flatMap((grupo) => {
+      const deHoraYMedia = grupo.filter((horario) => {
+        const [ha, ma] = String(horario.hora_inicio).split(':').map(Number);
+        const [hb, mb] = String(horario.hora_fin).split(':').map(Number);
+        return [ha, ma, hb, mb].every(Number.isFinite) && (hb * 60 + mb) - (ha * 60 + ma) === 90;
+      });
+      return deHoraYMedia.length > 0 ? deHoraYMedia : grupo;
+    }).sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio)) || String(a.materia_id).localeCompare(String(b.materia_id)));
+
     return {
       parciales: parciales.filter((parcial) => obtenerClaveDiaCalendario(parcial.fecha) === claveDia),
       tareas: tareasCalendario.filter(({ tarea }) => obtenerClaveDiaCalendario(tarea.fin) === claveDia),
-      horarios: horarios
-        .filter((horario) => Number(horario.dia) === diaSemana)
-        .filter((horario) => !materiasSinCursadaDia.has(horario.materia_id))
-        .sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio))),
+      horarios: horariosReales,
       cronograma: eventosCronogramaDia
     };
   };
