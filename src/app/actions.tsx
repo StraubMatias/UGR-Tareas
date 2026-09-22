@@ -1414,7 +1414,7 @@ export async function syncUgrAction({
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
 
-    const [{ conectarUGR, detectarAvisosMoodle, detectarTareasNuevas }, { sincronizarConPrevia }] = await Promise.all([
+    const [{ conectarUGR, detectarAvisosMoodle, detectarTareasNuevas, listarCursosDelCampus, asegurarMateriasDeLaCursada }, { sincronizarConPrevia }] = await Promise.all([
       import('../../ugr-sync/lib/sync-core.mjs'),
       import('../../ugr-sync/lib/previa.mjs')
     ]);
@@ -1422,8 +1422,32 @@ export async function syncUgrAction({
       db, usuario: usuarioSesion, confirmar, previaId, ids, idsAvisos, idsEventos,
       detectar: async () => {
         const cliente = await conectarUGR();
-        const tareas = await detectarTareasNuevas({ db, cliente });
-        const { avisosDetectados, eventosSugeridos } = await detectarAvisosMoodle({ db, cliente, mapeos: tareas.mapeos });
+        const cursos = await listarCursosDelCampus(cliente);
+        const periodoId = await periodoDeCursada();
+        const materiasPeriodo = await db.execute({
+          sql: 'SELECT id, nombre FROM materias WHERE periodo_id = ? ORDER BY nombre',
+          args: [periodoId]
+        });
+        const cursada = await asegurarMateriasDeLaCursada({
+          db,
+          cursos,
+          materias: materiasPeriodo.rows.map((fila) => ({ id: texto(fila.id), nombre: texto(fila.nombre) })),
+          plan: PLAN_DE_ESTUDIO,
+          periodoId
+        });
+        const alumno = await db.execute({
+          sql: 'SELECT id FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+          args: [usuarioSesion]
+        });
+        const alumnoId = texto(alumno.rows[0]?.id);
+        if (alumnoId && cursada.materiaIds.length > 0) {
+          await db.batch(cursada.materiaIds.map((materiaId: string) => ({
+            sql: 'INSERT OR IGNORE INTO inscripciones (alumno_id, materia_id) VALUES (?, ?)',
+            args: [alumnoId, materiaId]
+          })), 'write');
+        }
+        const tareas = await detectarTareasNuevas({ db, cliente, cursos, periodoId, mapeos: cursada.mapeos });
+        const { avisosDetectados, eventosSugeridos } = await detectarAvisosMoodle({ db, cliente, mapeos: cursada.mapeos });
         return { ...tareas, avisos: avisosDetectados, eventosSugeridos };
       }
     });
@@ -1565,7 +1589,7 @@ async function sincronizarCursadaDelAlumno({
 }): Promise<{ mensaje: string; resumen: ResumenMateriaSync[] }> {
   const {
     listarCursosDelCampus,
-    emparejarCursosConMaterias,
+    asegurarMateriasDeLaCursada,
     detectarTareasNuevas,
     detectarAvisosMoodle,
     separarEvaluaciones,
@@ -1590,60 +1614,20 @@ async function sincronizarCursadaDelAlumno({
     sql: 'SELECT id, nombre FROM materias WHERE periodo_id = ? ORDER BY nombre',
     args: [periodoId]
   });
-  const cursando = emparejarCursosConMaterias(cursos, materiasPeriodo.rows.map((fila) => ({
-    id: texto(fila.id),
-    nombre: texto(fila.nombre)
-  })), PLAN_DE_ESTUDIO);
-  if (cursando.length === 0) {
-    throw new Error('UGR Virtual no mostró materias de la carrera para esta cuenta.');
-  }
-
-  const altas: { sql: string; args: string[] }[] = [];
-  const nombresNuevos = new Set<string>();
-  for (const item of cursando) {
-    if (!item.nueva) continue;
-    const nombre = item.nombre.toUpperCase();
-    const clave = limpiarTextoParaBusqueda(nombre);
-    if (!clave || nombresNuevos.has(clave)) continue;
-    const ya = materiasPeriodo.rows.find((fila) => limpiarTextoParaBusqueda(texto(fila.nombre)) === clave);
-    if (ya) continue;
-    nombresNuevos.add(clave);
-    altas.push({
-      sql: 'INSERT INTO materias (id, nombre, periodo_id) VALUES (?, ?, ?)',
-      args: [crearId('m_'), nombre, periodoId]
-    });
-  }
-  if (altas.length > 0) await db.batch(altas, 'write');
-
-  const vigentes = await db.execute({
-    sql: 'SELECT id, nombre FROM materias WHERE periodo_id = ? ORDER BY nombre',
-    args: [periodoId]
+  const cursada = await asegurarMateriasDeLaCursada({
+    db,
+    cursos,
+    materias: materiasPeriodo.rows.map((fila) => ({
+      id: texto(fila.id),
+      nombre: texto(fila.nombre)
+    })),
+    plan: PLAN_DE_ESTUDIO,
+    periodoId
   });
-  const materiaIds: string[] = [];
-  const nombresPorId = new Map<string, string>();
-  const mapeos: Array<{
-    curso: { id?: string | number; nombre?: string; [clave: string]: unknown };
-    coincidencia: { materia: { id: string; nombre: string }; score: number };
-  }> = [];
-  for (const item of cursando) {
-    const clave = limpiarTextoParaBusqueda(item.nombre);
-    const fila = vigentes.rows.find((materia) => {
-      if (item.materiaId && texto(materia.id) === item.materiaId) return true;
-      return clave !== '' && limpiarTextoParaBusqueda(texto(materia.nombre)) === clave;
-    });
-    const materiaId = texto(fila?.id);
-    if (!materiaId || materiaIds.includes(materiaId)) continue;
-    const nombre = texto(fila?.nombre) || item.nombre;
-    materiaIds.push(materiaId);
-    nombresPorId.set(materiaId, nombre);
-    mapeos.push({
-      curso: item.curso as { id?: string | number; nombre?: string; [clave: string]: unknown },
-      coincidencia: { materia: { id: materiaId, nombre }, score: 100 }
-    });
-  }
-  if (materiaIds.length === 0) {
+  if (cursada.materiaIds.length === 0) {
     throw new Error('UGR Virtual no mostró materias de la carrera para esta cuenta.');
   }
+  const { mapeos, materiaIds, nombresPorId, nombresNuevos } = cursada;
   await inscribirAlumnoEnPeriodo(alumnoId, periodoId, materiaIds);
 
   const tareas = await detectarTareasNuevas({ db, cliente, cursos, periodoId, alumnoId, mapeos });

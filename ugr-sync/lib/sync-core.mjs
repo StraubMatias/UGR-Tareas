@@ -281,14 +281,37 @@ export async function listarCursosDelCampus(cliente) {
     } catch {
       // Si este webservice no está, quedan Mis cursos y el timeline.
     }
+    try {
+      const cuerpo = JSON.stringify([{
+        index: 0,
+        methodname: 'core_course_get_recent_courses',
+        args: { userid: Number(userid), limit: 20 }
+      }]);
+      const pagina = await cliente.pedir(UGR_RUTAS.ajax(sesskey), {
+        method: 'POST',
+        cuerpo,
+        tipoCuerpo: 'application/json'
+      });
+      incorporar(extraerCursosDeAjax(JSON.parse(pagina.html || '[]')));
+    } catch {
+      // Los cursos recientes son un respaldo: el timeline sigue valiendo.
+    }
   }
   if (sesskey) {
-    const ajax = await conPool(['inprogress', 'future', 'past', 'all'], 4, async (classification) => {
+    const ajax = await conPool(['inprogress', 'future', 'past'], 4, async (classification) => {
       try {
         const cuerpo = JSON.stringify([{
           index: 0,
           methodname: 'core_course_get_enrolled_courses_by_timeline_classification',
-          args: { offset: 0, limit: 100, classification, sort: 'fullname' }
+          args: {
+            offset: 0,
+            limit: 0,
+            classification,
+            sort: 'fullname',
+            customfieldname: '',
+            customfieldvalue: '',
+            searchvalue: ''
+          }
         }]);
         const pagina = await cliente.pedir(UGR_RUTAS.ajax(sesskey), {
           method: 'POST',
@@ -301,7 +324,7 @@ export async function listarCursosDelCampus(cliente) {
       }
     });
     for (const { classification, cursos: extra } of ajax) {
-      incorporar(extra, { soloRecientes: classification === 'past' || classification === 'all' });
+      incorporar(extra, { soloRecientes: classification === 'past' });
     }
   }
 
@@ -317,6 +340,52 @@ export async function listarCursosDelCampus(cliente) {
     }
   });
   return cursos.filter((curso) => !esCursoOrganizativo(curso.nombre));
+}
+
+// Crea en el período actual las materias de la carrera que el campus muestra
+// y que todavía no existían (una extra de otro cuatrimestre, por ejemplo) y
+// devuelve el mapeo curso → materia para cargarles las tareas.
+export async function asegurarMateriasDeLaCursada({ db, cursos, materias = [], plan = [], periodoId } = {}) {
+  const cursando = emparejarCursosConMaterias(cursos, materias, plan);
+  const altas = [];
+  const nombresNuevos = new Set();
+  for (const item of cursando) {
+    if (!item.nueva || !periodoId) continue;
+    const nombre = String(item.nombre || '').toUpperCase();
+    const clave = limpiarTextoParaBusqueda(nombre);
+    if (!clave || nombresNuevos.has(clave)) continue;
+    if (materias.some((materia) => limpiarTextoParaBusqueda(materia?.nombre) === clave)) continue;
+    nombresNuevos.add(clave);
+    altas.push({
+      sql: 'INSERT INTO materias (id, nombre, periodo_id) VALUES (?, ?, ?)',
+      args: [`m_${randomUUID()}`, nombre, periodoId]
+    });
+  }
+  if (altas.length > 0) await db.batch(altas, 'write');
+
+  const vigentes = periodoId
+    ? await db.execute({ sql: 'SELECT id, nombre FROM materias WHERE periodo_id = ? ORDER BY nombre', args: [periodoId] })
+    : { rows: materias };
+  const mapeos = [];
+  const materiaIds = [];
+  const nombresPorId = new Map();
+  for (const item of cursando) {
+    const clave = limpiarTextoParaBusqueda(item.nombre);
+    const fila = (vigentes.rows || []).find((materia) => {
+      if (item.materiaId && String(materia.id) === String(item.materiaId)) return true;
+      return clave && limpiarTextoParaBusqueda(materia.nombre) === clave;
+    });
+    const materiaId = fila?.id ? String(fila.id) : '';
+    if (!materiaId || materiaIds.includes(materiaId)) continue;
+    const nombre = String(fila.nombre || item.nombre);
+    materiaIds.push(materiaId);
+    nombresPorId.set(materiaId, nombre);
+    mapeos.push({
+      curso: item.curso,
+      coincidencia: { materia: { id: materiaId, nombre }, score: 100 }
+    });
+  }
+  return { cursando, mapeos, materiaIds, nombresPorId, materiasNuevas: altas.length, nombresNuevos };
 }
 
 // Recorre los cursos del campus, los mapea contra las materias locales y

@@ -4,7 +4,7 @@ import { createClient } from '@libsql/client';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { insertarTareasDetectadas, listarCursosDelCampus } from '../lib/sync-core.mjs';
+import { asegurarMateriasDeLaCursada, insertarTareasDetectadas, listarCursosDelCampus } from '../lib/sync-core.mjs';
 
 function htmlCampus() {
   return 'M.cfg = {"sesskey":"S3SSK3Y","userid":42,"sitename":"UGR"};';
@@ -114,6 +114,51 @@ test('el segundo alumno no vuelve a insertar las tareas que ya cargó el primero
     const evento = { materiaId: 'cri', fecha: '2026-10-06', titulo: 'Clase de criptografía', tipo: 'clase' };
     assert.equal(await insertarEventosCronograma({ db, eventos: [evento] }), 1);
     assert.equal(await insertarEventosCronograma({ db, eventos: [evento] }), 0);
+  } finally {
+    db.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('asegurarMateriasDeLaCursada crea las extras de otro cuatrimestre y las mapea', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ugr-extras-'));
+  const db = createClient({ url: `file:${join(dir, 'test.db')}` });
+  try {
+    await db.execute('CREATE TABLE materias (id TEXT PRIMARY KEY, nombre TEXT, periodo_id TEXT)');
+    await db.execute({
+      sql: 'INSERT INTO materias (id, nombre, periodo_id) VALUES (?, ?, ?)',
+      args: ['inc', 'TRATAMIENTO DE INCIDENTES', 'p']
+    });
+    const plan = [
+      { nombre: 'Tratamiento de Incidentes' },
+      { nombre: 'Introducción a la Criptografía' },
+      { nombre: 'Conceptos de Desarrollo de Software' }
+    ];
+    const cursos = [
+      { id: '2001', nombre: '(V.TUCS.2.17.2) TRATAMIENTO DE INCIDENTES' },
+      { id: '2218', nombre: '(V.TUCS.2.18.2) INTRODUCCIÓN A LA CRIPTOGRAFÍA' },
+      { id: '2216', nombre: '(V.TUCS.2.16.1) CONCEPTOS DE DESARROLLO DE SOFTWARE' },
+      { id: '2572', nombre: 'Mi Carrera - Espacio de Seguridad' }
+    ];
+    const cursada = await asegurarMateriasDeLaCursada({
+      db,
+      cursos,
+      materias: [{ id: 'inc', nombre: 'TRATAMIENTO DE INCIDENTES' }],
+      plan,
+      periodoId: 'p'
+    });
+    assert.equal(cursada.mapeos.length, 3);
+    assert.equal(cursada.materiasNuevas, 2);
+    const guardadas = (await db.execute('SELECT nombre FROM materias')).rows.map((fila) => fila.nombre);
+    assert.equal(guardadas.length, 3);
+    assert.ok(guardadas.some((nombre) => /criptograf/i.test(nombre)));
+    assert.ok(guardadas.some((nombre) => /desarrollo de software/i.test(nombre)));
+
+    const vigentes = (await db.execute('SELECT id, nombre FROM materias')).rows;
+    const repetida = await asegurarMateriasDeLaCursada({ db, cursos, materias: vigentes, plan, periodoId: 'p' });
+    assert.equal(repetida.materiasNuevas, 0);
+    assert.equal(repetida.mapeos.length, 3);
+    assert.equal((await db.execute('SELECT COUNT(*) AS n FROM materias')).rows[0].n, 3);
   } finally {
     db.close();
     await rm(dir, { recursive: true, force: true });

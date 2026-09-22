@@ -39,6 +39,19 @@ declare module '../../ugr-sync/lib/sync-core.mjs' {
     hoy?: string;
     diasAtras?: number;
   }): Promise<ResultadoAvisosMoodle>;
+  export function asegurarMateriasDeLaCursada(opciones: {
+    db: unknown;
+    cursos?: unknown[];
+    materias?: unknown[];
+    plan?: unknown[];
+    periodoId?: string;
+  }): Promise<{
+    mapeos: MapeoCurso[];
+    materiaIds: string[];
+    materiasNuevas: number;
+    nombresPorId: Map<string, string>;
+    nombresNuevos: Set<string>;
+  }>;
   export function detectarTareasNuevas(opciones: { db: unknown; cliente: unknown; cursos?: unknown[]; periodoId?: string; alumnoId?: string; mapeos?: MapeoCurso[] }): Promise<ResultadoTareasNuevas>;
   export function insertarTareasDetectadas(opciones: { db: unknown; detectadas: unknown[] }): Promise<number>;
   export function insertarParcialesSiFaltan(opciones: { db: unknown; detectadas: unknown[] }): Promise<{ insertadas: number; omitidas: unknown[] }>;

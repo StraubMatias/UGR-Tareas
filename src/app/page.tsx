@@ -3012,8 +3012,15 @@ export default function Home() {
               <div className="space-y-4">
                 <div className="flex flex-wrap gap-2 text-[11px] font-bold">
                   <span className="rounded-lg bg-slate-800 border border-slate-700 px-2.5 py-1 text-slate-300">{syncDatos.cursos} curso(s)</span>
-                  <span className="rounded-lg bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-1 text-cyan-300">{(syncDatos.mapeos ?? []).length} materia(s) mapeada(s)</span>
+                  <span className="rounded-lg bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-1 text-cyan-300">{(syncDatos.mapeos ?? []).length} materia(s) de la cursada</span>
                 </div>
+                {(syncDatos.mapeos ?? []).length > 0 && (
+                  <ul className="text-sm text-slate-200 space-y-1">
+                    {(syncDatos.mapeos ?? []).map((mapeo) => (
+                      <li key={`${mapeo.id}-${mapeo.materia}`}>{mapeo.materia}</li>
+                    ))}
+                  </ul>
+                )}
 
                 {syncDatos.detectadas.length === 0 ? (
                   <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
