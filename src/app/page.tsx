@@ -23,6 +23,7 @@ import {
   eliminarTareaAction,
   guardarNotaTareaAction,
   cambiarPasswordAction,
+  actualizarCuentaAction,
   crearParcialAction,
   editarParcialAction,
   eliminarParcialAction,
@@ -251,6 +252,7 @@ export default function Home() {
   const [userPassChange, setUserPassChange] = useState('');
   const [currentPassChange, setCurrentPassChange] = useState('');
   const [newPassChange, setNewPassChange] = useState('');
+  const [nuevoUserChange, setNuevoUserChange] = useState('');
   const [msgPassChange, setMsgPassChange] = useState({ tipo: '', texto: '' });
 
   // Forms Admin (Tareas/Materias/Alumnos)
@@ -661,13 +663,20 @@ export default function Home() {
     e.preventDefault();
     setMsgPassChange({ tipo: '', texto: '' });
 
-    const res = await cambiarPasswordAction(userPassChange, currentPassChange, newPassChange);
+    const res = await actualizarCuentaAction(userPassChange, currentPassChange, nuevoUserChange, newPassChange);
 
-    if (res.exito) {
-      setMsgPassChange({ tipo: 'exito', texto: res.mensaje || 'Contraseña actualizada.' });
+    if (res.exito && res.usuario) {
+      if (!usuarioActual) {
+        iniciarSesionLocal(res.usuario, res.rol || 'alumno', res.origen || 'comision', null);
+      } else if (res.usuario !== usuarioActual) {
+        setUsuarioActual(res.usuario);
+        void cargarBD(false);
+      }
+      setMsgPassChange({ tipo: 'exito', texto: res.mensaje || 'Cuenta actualizada.' });
       setTimeout(() => {
         setModalPasswordOpen(false);
         setUserPassChange('');
+        setNuevoUserChange('');
         setCurrentPassChange('');
         setNewPassChange('');
         setMsgPassChange({ tipo: '', texto: '' });
@@ -1721,11 +1730,12 @@ export default function Home() {
             <button
               onClick={() => {
                 setUserPassChange(usuarioActual);
+                setNuevoUserChange(usuarioActual);
                 setModalPasswordOpen(true);
               }}
               className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
             >
-              🔑 Cambiar Clave
+              🔑 Usuario o clave
             </button>
             {usuarioActual && !esAdmin && (
               <button
@@ -1887,7 +1897,7 @@ export default function Home() {
               onClick={() => setModalPasswordOpen(true)}
               className="text-xs text-cyan-300 hover:text-cyan-200 underline font-medium cursor-pointer"
             >
-              🔐 Modificar o cambiar mi contraseña
+              🔐 Cambiar usuario o contraseña
             </button>
           </div>
         </div>
@@ -2638,19 +2648,31 @@ export default function Home() {
         <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
-              <span>🔐</span> Modificar Contraseña
+              <span>🔐</span> Usuario o contraseña
             </h3>
-            <p className="text-xs text-slate-400 mb-5">Ingresá tu clave actual para autorizar el cambio.</p>
+            <p className="text-xs text-slate-400 mb-5">La contraseña actual confirma el cambio. El usuario nuevo puede ser tu nombre: las notas y entregas se quedan en la misma cuenta.</p>
 
             <form onSubmit={handleCambiarPassword} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Usuario</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Usuario actual</label>
                 <input
                   type="text"
                   required
-                  placeholder="Tu nombre de usuario"
+                  readOnly={Boolean(usuarioActual)}
+                  placeholder="El usuario con el que entrás"
                   value={userPassChange}
                   onChange={(e) => setUserPassChange(e.target.value)}
+                  className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none read-only:text-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Usuario nuevo</label>
+                <input
+                  type="text"
+                  placeholder="Vacío si solo cambiás la clave"
+                  value={nuevoUserChange}
+                  onChange={(e) => setNuevoUserChange(e.target.value)}
                   className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none"
                 />
               </div>
@@ -2668,11 +2690,10 @@ export default function Home() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Nueva Contraseña</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Nueva contraseña</label>
                 <input
                   type="password"
-                  required
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Vacía si solo cambiás el usuario"
                   value={newPassChange}
                   onChange={(e) => setNewPassChange(e.target.value)}
                   className="w-full bg-[#0f141c] border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none"
@@ -2706,7 +2727,7 @@ export default function Home() {
                   type="submit"
                   className="w-1/2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer"
                 >
-                  Guardar Nueva
+                  Guardar
                 </button>
               </div>
             </form>

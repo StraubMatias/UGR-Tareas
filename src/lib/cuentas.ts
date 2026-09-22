@@ -31,6 +31,31 @@ export function sentenciasBorrarAlumno(id: string, nombre: string): Sentencia[] 
   ];
 }
 
+export function nombreDeUsuarioValido(nombre: string): string | null {
+  const limpio = String(nombre || '').trim();
+  if (limpio.length < 3 || limpio.length > 100) {
+    return 'El usuario tiene que tener entre 3 y 100 caracteres.';
+  }
+  return null;
+}
+
+// El id no cambia. Se actualiza el nombre donde quedó copiado como texto.
+export function sentenciasRenombrarAlumno(id: string, nombreAnterior: string, nombreNuevo: string): Sentencia[] {
+  const anterior = nombreAnterior.toLowerCase();
+  const nuevo = nombreNuevo.toLowerCase();
+  return [
+    { sql: 'UPDATE alumnos SET nombre = ?, sesion_version = COALESCE(sesion_version, 1) + 1 WHERE id = ?', args: [nombreNuevo, id] },
+    { sql: 'UPDATE completadas SET alumno = ? WHERE alumno_id = ? OR LOWER(alumno) = LOWER(?)', args: [nombreNuevo, id, nombreAnterior] },
+    { sql: 'UPDATE notas_parciales SET alumno = ? WHERE alumno_id = ? OR LOWER(alumno) = LOWER(?)', args: [nombreNuevo, id, nombreAnterior] },
+    { sql: 'UPDATE notas_tareas SET alumno = ? WHERE alumno_id = ? OR LOWER(alumno) = LOWER(?)', args: [nombreNuevo, id, nombreAnterior] },
+    { sql: 'UPDATE progreso_materias SET alumno = ? WHERE alumno_id = ? OR LOWER(alumno) = LOWER(?)', args: [nombreNuevo, id, nombreAnterior] },
+    { sql: 'UPDATE auditoria SET usuario = ? WHERE LOWER(usuario) = LOWER(?)', args: [nombreNuevo, nombreAnterior] },
+    { sql: 'UPDATE OR IGNORE login_intentos SET clave = ? WHERE clave = ?', args: [`user:${nuevo}`, `user:${anterior}`] },
+    { sql: 'UPDATE OR IGNORE login_intentos SET clave = ? WHERE clave = ?', args: [`accion:user:${nuevo}`, `accion:user:${anterior}`] },
+    { sql: 'UPDATE OR IGNORE login_intentos SET clave = ? WHERE clave = ?', args: [`ugr:${nuevo}`, `ugr:${anterior}`] }
+  ];
+}
+
 export function sentenciaLimpiarGruposVacios(): Sentencia {
   return {
     sql: 'DELETE FROM grupos_tareas WHERE NOT EXISTS (SELECT 1 FROM integrantes_tareas WHERE grupo_id = grupos_tareas.id)',

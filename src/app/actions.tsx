@@ -10,7 +10,7 @@ import { PLAN_DE_ESTUDIO } from './plan-utils';
 import { convertirValidacion } from '../lib/utils';
 import { normalizarUnidad, parcialHabilitado, tareaHabilitada, validarNota } from './validators';
 import { alumnosConLaMismaCursada } from '../lib/companeros';
-import { cuentaPropiaVencida, ipPermiteOtraCuenta, sentenciaLimpiarGruposVacios, sentenciasBorrarAlumno } from '../lib/cuentas';
+import { cuentaPropiaVencida, ipPermiteOtraCuenta, nombreDeUsuarioValido, sentenciaLimpiarGruposVacios, sentenciasBorrarAlumno, sentenciasRenombrarAlumno } from '../lib/cuentas';
 // La sincronización con el campus arrastra cheerio. Se importa solo cuando
 // un admin sincroniza, para que el refresco del tablero no cargue ese módulo.
 
@@ -657,6 +657,103 @@ export async function cambiarPasswordAction(usuarioInput: string, passActualInpu
   }
 }
 
+export async function actualizarCuentaAction(
+  usuarioInput: string,
+  passActualInput: string,
+  usuarioNuevoInput: string,
+  passNuevaInput: string
+): Promise<RespuestaAction> {
+  const usuario = String(usuarioInput || '').trim();
+  const passActual = String(passActualInput || '');
+  const usuarioNuevo = String(usuarioNuevoInput || '').trim();
+  const passNueva = String(passNuevaInput || '');
+  const claves = usuario ? await obtenerClavesLogin(usuario) : [];
+  try {
+    if (!usuario || !passActual) {
+      return { exito: false, mensaje: 'Completá el usuario y la contraseña actual.' };
+    }
+    if (claves.length > 0 && await loginEstaBloqueado(claves)) {
+      return { exito: false, mensaje: MENSAJE_LOGIN_BLOQUEADO };
+    }
+    const sesion = await obtenerUsuarioSesion();
+    if (sesion && sesion.toLowerCase() !== usuario.toLowerCase()) {
+      return { exito: false, mensaje: 'La sesión no es válida. Volvé a iniciar sesión.' };
+    }
+
+    const quiereNombre = Boolean(usuarioNuevo) && usuarioNuevo.toLowerCase() !== usuario.toLowerCase();
+    const quiereClave = Boolean(passNueva);
+    if (!quiereNombre && !quiereClave) {
+      return { exito: false, mensaje: 'Escribí un usuario nuevo o una contraseña nueva.' };
+    }
+    if (quiereNombre) {
+      const errorNombre = nombreDeUsuarioValido(usuarioNuevo);
+      if (errorNombre) return { exito: false, mensaje: errorNombre };
+    }
+    if (quiereClave && (passNueva.length < 6 || passNueva.length > MAX_PASSWORD_LENGTH)) {
+      return { exito: false, mensaje: 'La contraseña tiene que tener entre 6 y 128 caracteres.' };
+    }
+
+    const cuenta = await db.execute({
+      sql: `SELECT id, nombre, password, rol, sesion_version, COALESCE(origen, 'comision') AS origen
+            FROM alumnos WHERE LOWER(nombre) = LOWER(?)`,
+      args: [usuario]
+    });
+    const fila = cuenta.rows[0];
+    if (!fila || !await verificarPassword(passActual, textoONull(fila.password))) {
+      if (claves.length > 0) await registrarFalloLogin(claves);
+      return { exito: false, mensaje: 'La contraseña actual es incorrecta.' };
+    }
+    const id = texto(fila.id);
+    const nombreActual = texto(fila.nombre);
+    if (quiereNombre) {
+      const ocupado = await db.execute({
+        sql: 'SELECT 1 FROM alumnos WHERE LOWER(nombre) = LOWER(?) AND id != ?',
+        args: [usuarioNuevo, id]
+      });
+      if (ocupado.rows.length > 0) return { exito: false, mensaje: 'Ese usuario ya existe.' };
+    }
+
+    const nombreFinal = quiereNombre ? usuarioNuevo : nombreActual;
+    const sentencias = quiereNombre ? sentenciasRenombrarAlumno(id, nombreActual, nombreFinal) : [];
+    if (quiereClave) {
+      sentencias.push({
+        sql: 'UPDATE alumnos SET password = ?, sesion_version = COALESCE(sesion_version, 1) + 1 WHERE id = ?',
+        args: [await hashearPassword(passNueva), id]
+      });
+    }
+    if (sentencias.length > 0) await db.batch(sentencias, 'write');
+
+    const version = await db.execute({
+      sql: 'SELECT sesion_version FROM alumnos WHERE id = ?',
+      args: [id]
+    });
+    const nuevaVersion = Number(version.rows[0]?.sesion_version || 1);
+    await establecerSesion(nombreFinal, nuevaVersion);
+    if (claves.length > 0) await limpiarIntentosLogin(claves);
+    await registrarAuditoria({
+      accion: quiereNombre ? 'cambiar_usuario' : 'cambiar_password',
+      usuario: nombreFinal,
+      detalle: quiereNombre ? `Cambió el usuario ${nombreActual}` : 'Cambio de contraseña',
+      ip: await obtenerIPReal()
+    });
+    return {
+      exito: true,
+      usuario: nombreFinal,
+      rol: texto(fila.rol) || 'alumno',
+      origen: texto(fila.origen) || 'comision',
+      mensaje: quiereNombre && quiereClave
+        ? 'Usuario y contraseña actualizados.'
+        : quiereNombre
+          ? 'Usuario actualizado.'
+          : 'Contraseña actualizada.'
+    };
+  } catch (error) {
+    if (esNombreRepetido(error)) return { exito: false, mensaje: 'Ese usuario ya existe.' };
+    console.error('Error en actualizarCuentaAction:', error instanceof Error ? error.message : 'falló');
+    return { exito: false, mensaje: 'No se pudo actualizar la cuenta.' };
+  }
+}
+
 
 // Crear nuevo alumno en la BD
 export async function crearAlumnoAction(nombre: string): Promise<RespuestaAction> {
@@ -708,13 +805,7 @@ export async function editarAlumnoAction(nombreAntiguo: string, nuevoNombre: str
       if (existente.rows.length > 0) return { exito: false, mensaje: 'Ya existe un alumno con ese nombre.' };
     }
 
-    await db.batch([
-      { sql: 'UPDATE alumnos SET nombre = ? WHERE id = ?', args: [nuevoFormateado, alumnoActual.id] },
-      { sql: 'UPDATE completadas SET alumno = ? WHERE alumno_id = ?', args: [nuevoFormateado, alumnoActual.id] },
-      { sql: 'UPDATE notas_parciales SET alumno = ? WHERE alumno_id = ?', args: [nuevoFormateado, alumnoActual.id] },
-      { sql: 'UPDATE notas_tareas SET alumno = ? WHERE alumno_id = ?', args: [nuevoFormateado, alumnoActual.id] },
-      { sql: 'UPDATE progreso_materias SET alumno = ? WHERE alumno_id = ?', args: [nuevoFormateado, alumnoActual.id] }
-    ], 'write');
+    await db.batch(sentenciasRenombrarAlumno(alumnoActual.id, alumnoActual.nombre, nuevoFormateado), 'write');
     await registrarAuditoria({ accion: 'editar_alumno', usuario: usuarioSesion, detalle: `Renombró ${nombreAntiguo} a ${nuevoFormateado}`, ip: await obtenerIPReal() });
     return { exito: true };
   } catch (error) {
