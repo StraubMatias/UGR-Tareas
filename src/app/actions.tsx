@@ -1249,18 +1249,16 @@ export async function guardarProgresoPlanAction({ alumno, materiaCodigo, estado,
   }
 }
 
-export async function toggleTareaAction(tareaId: string, alumno: string): Promise<RespuestaAction> {
+export async function toggleTareaAction(tareaId: string, alumno?: string): Promise<RespuestaAction> {
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
-    const alumnoObjetivo = await verificarAdmin() ? alumno : usuarioSesion;
+    // Admin puede marcar la entrega de cualquier alumno; el alumno solo de sí mismo
+    const alumnoObjetivo = (await verificarAdmin() && alumno) ? alumno : usuarioSesion;
     const alumnoDB = await obtenerAlumno(alumnoObjetivo);
     if (!alumnoDB) return { exito: false, mensaje: 'El alumno no existe.' };
-    if (!(await verificarAdmin())) {
-      return { exito: false, mensaje: 'La entrega se marca al sincronizar con UGR Virtual.' };
-    }
     const resultado = await actualizarProgresoTarea(db, tareaId, alumnoDB, { alternarEntrega: true });
     await registrarAuditoria({ accion: 'alternar_entrega_tarea', usuario: usuarioSesion, detalle: `Cambió entrega de ${tareaId} para: ${resultado.alumnos.join(', ')}`, ip: await obtenerIPReal() });
     return { exito: true };

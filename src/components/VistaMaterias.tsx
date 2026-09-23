@@ -273,11 +273,11 @@ export default function VistaMaterias({
                                 <input
                                   type="checkbox"
                                   checked={tareaCompletadaPor(t, usuarioActual)}
-                                  disabled={!esAdmin}
+                                  disabled={!usuarioActual || !tareaPuedeGestionarse(t)}
                                   onChange={() => usuarioActual && toggleTareaDesdeCliente(t.id, usuarioActual, t)}
                                   className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
                                 />
-                                {tareaCompletadaPor(t, usuarioActual) ? 'Entregada en UGR Virtual' : 'Todavía no figura entregada en UGR Virtual'}
+                                {tareaCompletadaPor(t, usuarioActual) ? 'Marcar como no entregada' : 'Marcar como entregada'}
                               </label>
                               <label className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">
                                 {t.grupal ? 'Nota del grupo (UGR Virtual)' : 'Nota en UGR Virtual'}
