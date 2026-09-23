@@ -1622,6 +1622,76 @@ export async function syncUgrAction({
   }
 }
 
+// Sincroniza notas de materias aprobadas desde SIU Guaraní.
+// Solo el administrador puede ejecutarla. Carga las materias aprobadas
+// en la tabla `progreso_materias` con su estado correspondiente.
+export async function syncSiuAction() {
+  try {
+    if (!await verificarAdmin()) {
+      return { exito: false, mensaje: 'Solo el administrador puede sincronizar con SIU.' };
+    }
+    const usuarioSesion = await obtenerUsuarioSesion();
+    if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
+    const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
+    if (!rateLimit.exito) return rateLimit;
+
+    // @ts-ignore - módulo ESM sin declarations
+    const { conectarSIU, sincronizarSIU } = await import('../../siu-sync/lib/sync-core.mjs');
+    const cliente = await conectarSIU();
+    const resultado = await sincronizarSIU({ db, cliente });
+
+    if (resultado.error) {
+      console.error('Error al sincronizar SIU:', resultado.error);
+    }
+
+    // Guardar cada materia aprobada en progreso_materias
+    const materiasGuardadas = resultado.historiaAcademica || [];
+    if (materiasGuardadas.length > 0) {
+      const operaciones = materiasGuardadas.map((materia: { codigoMateria: string; estado: string; nota?: number }) => ({
+        sql: `
+          INSERT INTO progreso_materias (id, alumno_id, alumno, materia_codigo, estado, nota, actualizado_en)
+          VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+          ON CONFLICT(alumno, materia_codigo) DO UPDATE SET
+            estado = excluded.estado,
+            nota = excluded.nota,
+            actualizado_en = excluded.actualizado_en
+        `,
+        args: [
+          `progreso_siu_${materia.codigoMateria}`,
+          null, // alumno_id se asigna según el alumno que sincroniza
+          usuarioSesion,
+          materia.codigoMateria,
+          materia.estado === 'aprobada' ? 'aprobada' : 'cursando',
+          materia.nota ?? null
+        ]
+      }));
+      await db.batch(operaciones, 'write');
+    }
+
+    await registrarAuditoria({
+      accion: 'sync_siu',
+      usuario: usuarioSesion,
+      detalle: `Sincronizó SIU Guaraní: ${materiasGuardadas.length} materia(s) encontrada(s) en historia académica`,
+      ip: await obtenerIPReal()
+    });
+
+    return {
+      exito: true,
+      materiasEncontradas: materiasGuardadas.length,
+      error: resultado.error,
+      materias: materiasGuardadas.map((m: { codigoMateria: string; nombreMateria: string; nota?: number; estado: string }) => ({
+        codigo: m.codigoMateria,
+        nombre: m.nombreMateria,
+        nota: m.nota,
+        estado: m.estado
+      }))
+    };
+  } catch (error) {
+    console.error('Error en syncSiuAction:', error);
+    return { exito: false, mensaje: error instanceof Error ? error.message : 'No se pudo sincronizar con SIU Guaraní.' };
+  }
+}
+
 
 async function periodoDeCursada(): Promise<string> {
   const activo = await db.execute('SELECT id FROM periodos WHERE activo = 1 ORDER BY anio DESC, cuatrimestre DESC LIMIT 1');

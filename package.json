@@ -13,7 +13,9 @@
     "admin:reset-password": "node database/reset-admin-password.mjs",
     "ugr:login": "node ugr-sync/scripts/login.mjs",
     "ugr:sync": "node ugr-sync/scripts/sync.mjs",
-    "test": "node --test tests/**/*.test.mjs ugr-sync/test/**/*.test.mjs"
+    "siu:login": "node siu-sync/scripts/test-conexion.mjs",
+    "siu:sync": "node siu-sync/scripts/sync.mjs",
+    "test": "node --test tests/**/*.test.mjs ugr-sync/test/**/*.test.mjs siu-sync/test/**/*.test.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",

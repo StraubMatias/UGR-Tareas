@@ -98,3 +98,12 @@ declare module '../../ugr-sync/lib/previa.mjs' {
     alumnoNombre?: string;
   }): Promise<ResultadoPrevia>;
 }
+
+declare module '../../siu-sync/lib/sync-core.mjs' {
+  export function conectarSIU(): Promise<unknown>;
+  export function sincronizarSIU(opciones?: { db: unknown; cliente: unknown }): Promise<{
+    historiaAcademica: unknown[];
+    inscripcionesExamenes: unknown[];
+    error: string | null;
+  }>;
+}

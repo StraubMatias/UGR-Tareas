@@ -31,6 +31,7 @@ import {
   crearHorarioAction,
   eliminarHorarioAction,
   syncUgrAction,
+  syncSiuAction,
   type ResumenMateriaSync
 } from './actions';
 import {
@@ -1096,6 +1097,39 @@ export default function Home() {
     if (!syncDatos && !syncEnCurso.current) ejecutarSyncUGR(false);
   };
 
+  const abrirSyncSIU = () => {
+    if (syncEnCurso.current) return;
+    syncEnCurso.current = true;
+    setSyncEstado('cargando');
+    setSyncMensaje('Conectando con SIU Guaraní...');
+    syncSiuAction()
+      .then((res: any) => {
+        if (!res || !res.exito) {
+          setSyncEstado('error');
+          setSyncMensaje(res?.mensaje || 'No se pudo sincronizar con SIU.');
+        } else {
+          setSyncEstado('listo');
+          setSyncMensaje(`✅ Sincronización completada: ${res.materiasEncontradas} materias encontradas`);
+          if (res.error) {
+            setSyncMensaje(prev => prev + `\n⚠️ Nota: ${res.error}`);
+          }
+        }
+      })
+      .catch((err: unknown) => {
+        setSyncEstado('error');
+        setSyncMensaje(err instanceof Error ? err.message : 'Error desconocido');
+      })
+      .finally(() => {
+        syncEnCurso.current = false;
+        setTimeout(() => {
+          if (syncEnCurso.current === false) {
+            setSyncEstado('idle');
+            setSyncMensaje('');
+          }
+        }, 5000);
+      });
+  };
+
   const handleNotaTareaChangeLocal = (tareaId: string, alumno: string, valor: string) => {
     setNotasTareasInputs((prev) => ({
       ...prev,
@@ -1781,6 +1815,15 @@ export default function Home() {
                 className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
               >
                 🔄 Sincronizar UGR
+              </button>
+            )}
+            {esAdmin && (
+              <button
+                onClick={abrirSyncSIU}
+                title="Sincroniza notas de materias aprobadas desde SIU Guaraní"
+                className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+              >
+                🎓 Sincronizar SIU
               </button>
             )}
             {esAdmin && (
