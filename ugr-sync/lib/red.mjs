@@ -7,6 +7,7 @@ import {
   cargarSesion,
   combinarJar,
   crearJarCookies,
+  detectarMantenimientoCampus,
   esPaginaDeLogin,
   guardarSesion,
   iniciarSesion
@@ -16,7 +17,7 @@ export function pedidoEsDeLogin(url) {
   return typeof url === 'string' && url.includes('/login/index.php');
 }
 
-const TOPE_PEDIDO_MS = 15000;
+const TOPE_PEDIDO_MS = 8000;
 
 function fetchConTope(url, opciones) {
   const control = new AbortController();
@@ -60,6 +61,10 @@ export async function crearCliente({ usuario, contrasena, baseUrl = UGR_BASE_URL
     }
 
     const html = await respuesta.text();
+    const mantenimiento = detectarMantenimientoCampus(html, respuesta.status);
+    if (mantenimiento) {
+      throw new Error(mantenimiento);
+    }
     const requiereLogin = esPaginaDeLogin(html) && /form[^>]*id="login"/i.test(html);
     await guardarSesion(jar, rutaSesion);
     return { url: actual, html, es_requiere_login: requiereLogin, status: respuesta.status };

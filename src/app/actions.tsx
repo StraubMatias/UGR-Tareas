@@ -1704,15 +1704,10 @@ function armarMensajeSync({
   if (condiciones) extras.push(`Se cargó cómo se cursa y se promociona en ${condiciones} materia(s).`);
   const avisosNota: string[] = [];
   const nuevasNotas = notasCargadas.filter((item) => item?.nombre && !item.yaEstaba);
-  const mismasNotas = notasCargadas.filter((item) => item?.nombre && item.yaEstaba);
   if (nuevasNotas.length === 1) {
     avisosNota.push(`Se cargó la nota ${nuevasNotas[0].nota} en «${nuevasNotas[0].nombre}».`);
   } else if (nuevasNotas.length > 1) {
     avisosNota.push(`Se cargaron ${nuevasNotas.length} notas: ${nuevasNotas.map((item) => `«${item.nombre}» (${item.nota})`).join(', ')}.`);
-  } else if (mismasNotas.length === 1) {
-    avisosNota.push(`La nota de «${mismasNotas[0].nombre}» sigue en ${mismasNotas[0].nota}.`);
-  } else if (mismasNotas.length > 1) {
-    avisosNota.push(`Las notas de ${mismasNotas.length} tareas ya estaban cargadas.`);
   }
   for (const item of pendientesEntrega) {
     if (item?.nombre) avisosNota.push(`Entregá «${item.nombre}» para cargarle la nota.`);
@@ -1906,7 +1901,7 @@ async function sincronizarCursadaDelAlumno({
     if (!lista.includes(textoLinea)) lista.push(textoLinea);
     fila[campo] = lista;
   };
-  for (const item of notasCargadas) anexar(item.materia, 'notasCargadas', `${item.nombre}: ${item.nota}`);
+  for (const item of notasCargadas.filter((n) => !n.yaEstaba)) anexar(item.materia, 'notasCargadas', `${item.nombre}: ${item.nota}`);
   for (const item of pendientesEntrega) anexar(item.materia, 'pendientesEntrega', String(item.nombre));
   for (const item of notasNoLeidas) anexar(item.materia, 'notasNoLeidas', String(item.nombre));
 
@@ -1990,11 +1985,17 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
     };
   } catch (error) {
     const mensaje = error instanceof Error ? error.message : '';
-    const rechazo = mensaje.startsWith('Login rechazado') || mensaje.includes('logintoken');
+    const esMantenimientoOTimeout =
+      mensaje.includes('mantenimiento') ||
+      mensaje.includes('fuera de servicio') ||
+      mensaje.includes('saturado') ||
+      mensaje.includes('tiempo de espera') ||
+      mensaje.includes('tardó demasiado');
+    const rechazo = !esMantenimientoOTimeout && (mensaje.startsWith('Login rechazado') || mensaje.includes('logintoken'));
     if (rechazo && claves.length > 0) await registrarFalloLogin(claves);
-    console.error('Error en sincronizarCuentaUgrAction:', rechazo ? 'UGR Virtual rechazó el acceso' : 'falló');
+    console.error('Error en sincronizarCuentaUgrAction:', rechazo ? 'UGR Virtual rechazó el acceso' : mensaje || 'falló');
     if (rechazo) return { exito: false, mensaje: 'UGR Virtual no aceptó ese DNI o contraseña.' };
-    if (mensaje.includes('no mostró materias')) return { exito: false, mensaje };
+    if (esMantenimientoOTimeout || mensaje.includes('no mostró materias')) return { exito: false, mensaje };
     return { exito: false, mensaje: 'No se pudo sincronizar con UGR Virtual.' };
   }
 }

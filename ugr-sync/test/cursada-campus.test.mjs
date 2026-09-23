@@ -220,3 +220,57 @@ test('un parcial cargado como tarea pasa al apartado de parciales', async () => 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('cargarNotasDesdeEnlaces omite actividades cuya nota fue cargada hace más de 7 días', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ugr-cache-notas-'));
+  const db = createClient({ url: `file:${join(dir, 'test.db')}` });
+  try {
+    await db.batch([
+      'CREATE TABLE materias (id TEXT PRIMARY KEY, nombre TEXT)',
+      'CREATE TABLE tareas (id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, url TEXT, tipo TEXT)',
+      'CREATE TABLE parciales (id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, url TEXT, fecha TEXT)',
+      'CREATE TABLE notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT, cargada_en TEXT, cerrada INTEGER DEFAULT 0)',
+      'CREATE TABLE notas_parciales (id TEXT PRIMARY KEY, parcial_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT, cerrada INTEGER DEFAULT 0)',
+      'CREATE TABLE completadas (tarea_id TEXT, alumno_id TEXT, alumno TEXT, completada_en TEXT)',
+      "INSERT INTO materias VALUES ('cri', 'Criptografía')",
+      "INSERT INTO tareas VALUES ('t_vieja', 'cri', 'TP 1 Antiguo', 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=1', 'actividad')",
+      "INSERT INTO tareas VALUES ('t_nueva', 'cri', 'TP 2 Reciente', 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=2', 'actividad')",
+      "INSERT INTO tareas VALUES ('t_sin_nota', 'cri', 'TP 3 Sin Nota', 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=3', 'actividad')",
+      "INSERT INTO completadas VALUES ('t_vieja', 'alu_1', 'Alumno 1', datetime('now'))",
+      "INSERT INTO completadas VALUES ('t_nueva', 'alu_1', 'Alumno 1', datetime('now'))",
+      "INSERT INTO completadas VALUES ('t_sin_nota', 'alu_1', 'Alumno 1', datetime('now'))",
+      "INSERT INTO notas_tareas VALUES ('nt_1', 't_vieja', 'alu_1', 'Alumno 1', '9', datetime('now', '-10 days'), 1)",
+      "INSERT INTO notas_tareas VALUES ('nt_2', 't_nueva', 'alu_1', 'Alumno 1', '8', datetime('now', '-2 days'), 1)"
+    ], 'write');
+
+    const urlsPedidas = [];
+    const cliente = {
+      pedir: async (url) => {
+        urlsPedidas.push(url);
+        return {
+          html: '<div class="feedback"><div class="grade">10,00</div></div>'
+        };
+      }
+    };
+
+    const { cargarNotasDesdeEnlaces } = await import('../lib/sync-core.mjs');
+    await cargarNotasDesdeEnlaces({
+      cliente,
+      db,
+      materiaIds: ['cri'],
+      alumnoId: 'alu_1',
+      alumnoNombre: 'Alumno 1'
+    });
+
+    // t_vieja (>7 días) no debe haberse pedido.
+    // t_nueva (<7 días) y t_sin_nota (sin nota) sí deben pedirse.
+    assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=1'), false);
+    assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=2'), true);
+    assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=3'), true);
+    assert.equal(urlsPedidas.length, 2);
+  } finally {
+    db.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+

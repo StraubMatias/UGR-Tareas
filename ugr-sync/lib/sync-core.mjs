@@ -257,33 +257,63 @@ function pareceCuestionarioHecho(html) {
   return /quizreviewsummary|\/mod\/quiz\/review\.php|intento\s+\d+/i.test(html || '');
 }
 
+function esNotaEstable(notaGuardada, cargadaEn, diasEstable = 7) {
+  if (notaGuardada == null || String(notaGuardada).trim() === '') return false;
+  if (!cargadaEn) return false;
+  const tiempo = new Date(cargadaEn).getTime();
+  if (!Number.isFinite(tiempo)) return false;
+  return (Date.now() - tiempo) > diasEstable * 24 * 60 * 60 * 1000;
+}
+
 // La nota no está en el índice del curso: está en la página de cada actividad
 // («Ver en UGR»). Se abre con la sesión de quien sincroniza. Los cuestionarios
 // van primero y, si se pide, cada nota se guarda en cuanto se lee.
+// Para no sobrecargar Moodle ni demorar el sync a fin de cuatrimestre, las notas
+// que ya se cargaron hace más de 7 días se consideran estables y se omiten.
 async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNombre, guardar = false }) {
   if (!cliente || !materiaIds?.length) return { notas: [], cargadas: [], noLeidas: [], pendientesEntrega: [] };
   const marcas = materiaIds.map(() => '?').join(', ');
   const tareas = await db.execute({
-    sql: `SELECT t.id, t.materia_id, t.nombre, t.url, m.nombre AS materia
+    sql: `SELECT t.id, t.materia_id, t.nombre, t.url, m.nombre AS materia,
+                 nt.nota AS nota_guardada, nt.cargada_en AS nota_cargada_en, nt.cerrada AS nota_cerrada
           FROM tareas t JOIN materias m ON m.id = t.materia_id
+          LEFT JOIN notas_tareas nt ON nt.tarea_id = t.id AND (nt.alumno_id = ? OR LOWER(nt.alumno) = LOWER(?))
           WHERE t.materia_id IN (${marcas}) AND TRIM(COALESCE(t.url, '')) != '' AND COALESCE(t.tipo, '') != 'foro'`,
-    args: materiaIds
+    args: [alumnoId || '', alumnoNombre || '', ...materiaIds]
   });
   const parciales = await db.execute({
-    sql: `SELECT p.id, p.materia_id, p.nombre, p.url, p.fecha, m.nombre AS materia
+    sql: `SELECT p.id, p.materia_id, p.nombre, p.url, p.fecha, m.nombre AS materia,
+                 np.nota AS nota_guardada, np.cerrada AS nota_cerrada
           FROM parciales p JOIN materias m ON m.id = p.materia_id
+          LEFT JOIN notas_parciales np ON np.parcial_id = p.id AND (np.alumno_id = ? OR LOWER(np.alumno) = LOWER(?))
           WHERE p.materia_id IN (${marcas}) AND TRIM(COALESCE(p.url, '')) != ''`,
-    args: materiaIds
+    args: [alumnoId || '', alumnoNombre || '', ...materiaIds]
   });
   const lista = [
     ...tareas.rows.map((fila) => ({ ...fila, tabla: 'tareas', fecha: null })),
     ...parciales.rows.map((fila) => ({ ...fila, tabla: 'parciales' }))
   ].sort((a, b) => Number(!/\/mod\/quiz\//.test(String(a.url))) - Number(!/\/mod\/quiz\//.test(String(b.url))));
+
+  const aConsultar = lista.filter((fila) => {
+    if (fila.tabla === 'tareas') {
+      if (esNotaEstable(fila.nota_guardada, fila.nota_cargada_en, 7)) return false;
+    }
+    if (fila.tabla === 'parciales') {
+      if (fila.nota_guardada != null && String(fila.nota_guardada).trim() !== '') {
+        if (fila.fecha) {
+          const fechaParcial = new Date(fila.fecha).getTime();
+          if (Number.isFinite(fechaParcial) && (Date.now() - fechaParcial) > 7 * 24 * 60 * 60 * 1000) return false;
+        }
+      }
+    }
+    return true;
+  });
+
   const notas = [];
   const cargadas = [];
   const noLeidas = [];
   const pendientesEntrega = [];
-  await conPool(lista, 4, async (fila) => {
+  await conPool(aConsultar, 4, async (fila) => {
     try {
       const pagina = await cliente.pedir(fila.url);
       const esQuiz = /\/mod\/quiz\//.test(String(fila.url));
