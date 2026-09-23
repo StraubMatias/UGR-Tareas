@@ -44,11 +44,18 @@ export async function crearClienteSIU({ usuario, contrasena, baseUrl = SIU_BASE_
         const cruda = setCookie.length > 0 ? setCookie : [respuesta.headers.get('set-cookie')].filter(Boolean);
         if (cruda.length > 0) combinarJar(jar, crearJarCookies(cruda).entries());
 
+      // Después de un POST con redirect (302), la siguiente petición debe ser GET
+        // (igual que curl -L transforma POST→GET en el redirect)
+        const esRedirectPost = salto === 0 && respuesta.status >= 300 && respuesta.status < 400;
         if (respuesta.status < 300 || respuesta.status >= 400) break;
         const destino = respuesta.headers.get('location');
         if (!destino) break;
         const urlDestino = new URL(destino, actual);
         actual = urlDestino.toString();
+        // Si era POST y hubo redirect, la siguiente iteración usa GET
+        if (esRedirectPost) {
+          method = 'GET';
+        }
       }
 
       const html = await respuesta.text();

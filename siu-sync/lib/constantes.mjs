@@ -2,7 +2,7 @@
 export const SIU_BASE_URL = process.env.SIU_BASE_URL || 'https://guarani.ugr.edu.ar/3w';
 
 export const SIU_RUTAS = {
-  login: '/acceso/login',
+  login: '/acceso?auth=form',
   inicioAlumno: '/inicio_alumno',
   // 历史记录（已修读课程、成绩）
   historiaAcademica: '/consultas/historia_academica',

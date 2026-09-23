@@ -1100,6 +1100,7 @@ export default function Home() {
   const abrirSyncSIU = () => {
     if (syncEnCurso.current) return;
     syncEnCurso.current = true;
+    setSyncAbierto(true);
     setSyncEstado('cargando');
     setSyncMensaje('Conectando con SIU Guaraní...');
     syncSiuAction()
