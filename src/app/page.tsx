@@ -436,6 +436,14 @@ export default function Home() {
     localStorage.setItem(claveNovedades, JSON.stringify(elementosActuales.map((elemento) => elemento.id)));
   }, [usuarioActual, cargando, materias, parciales, inscripciones]);
 
+  // Filtrar solo materias que el usuario actual cursa, para el selector del ranking
+  const idsMisMateriasCursadas = materiasQueCursa(inscripciones, usuarioActual ?? '');
+  const materiasMisCursadas = materias.filter((materia) => idsMisMateriasCursadas.has(materia.id));
+  const materiaRankingVisible =
+    materiaRanking && materiasMisCursadas.some((materia) => materia.id === materiaRanking)
+      ? materiaRanking
+      : materiasMisCursadas[0]?.id ?? '';
+
   // PERSISTENCIA DE SESIÓN
   useEffect(() => {
     let cancelado = false;
@@ -527,11 +535,20 @@ export default function Home() {
       setMateriaSel((valorActual) => valorActual || estado.materias[0].id);
       setMateriaParcialSel((valorActual) => valorActual || estado.materias[0].id);
       setMateriaHorarioSel((valorActual) => valorActual || estado.materias[0].id);
-      setMateriaRanking((valorActual) => (
-        valorActual && estado.materias.some((materia: { id: string }) => materia.id === valorActual)
-          ? valorActual
-          : estado.materias[0].id
-      ));
+      setMateriaRanking((valorActual) => {
+        if (!valorActual) return estado.materias[0].id;
+        const idsCursada = new Set(
+          (estado.inscripciones || [])
+            .filter((i: any) => i.alumno === estado.usuario)
+            .map((i: any) => i.materiaId)
+        );
+        const materiaCursada = estado.materias.find(
+          (m: any) => m.id === valorActual && idsCursada.has(m.id)
+        );
+        if (materiaCursada) return valorActual;
+        const primeraCursada = estado.materias.find((m: any) => idsCursada.has(m.id));
+        return primeraCursada?.id ?? estado.materias[0].id;
+      });
     }
   }, []);
 
@@ -1450,9 +1467,9 @@ export default function Home() {
       cronograma: eventosCronogramaDia
     };
   };
-  const materiasDelRanking = materias.filter((materia) => materia.id === materiaRanking);
-  const alumnosDelRanking = materiaRanking
-    ? alumnosDeLaMateria(inscripciones, materiaRanking)
+  const materiasDelRanking = materiasMisCursadas.filter((materia) => materia.id === materiaRankingVisible);
+  const alumnosDelRanking = materiaRankingVisible
+    ? alumnosDeLaMateria(inscripciones, materiaRankingVisible)
     : [];
   const ranking = (alumnosDelRanking.length > 0 ? alumnosDelRanking : alumnos)
     .map((alumno) => {
@@ -2301,9 +2318,9 @@ export default function Home() {
 
               {pestana === 'ranking' && (
                 <VistaRanking
-                  materias={materias}
+                  materias={materiasMisCursadas}
                   usuarioActual={usuarioActual}
-                  materiaRanking={materiaRanking}
+                  materiaRanking={materiaRankingVisible}
                   setMateriaRanking={setMateriaRanking}
                   ranking={ranking}
                   rankingPodio={rankingPodio}
