@@ -5,13 +5,13 @@ export const SIU_RUTAS = {
   login: '/acceso?auth=form',
   inicioAlumno: '/inicio_alumno',
   // 历史记录（已修读课程、成绩）
-  historiaAcademica: '/consultas/historia_academica',
+  historiaAcademica: '/historia_academica',
   // 成绩报告
-  informeNotas: '/consultas/informe_notas',
+  informeNotas: '/informe_notas',
   // 考试注册
-  inscripcionesExamenes: '/consultas/inscripciones_a_examenes',
+  inscripcionesExamenes: '/inscripciones_a_examenes',
   // 课程表
-  horariosCursadas: '/consultas/horarios_cursadas',
+  horariosCursadas: '/horarios_cursadas',
   // 个人中心
   perfil: '/perfil',
   // AJAX API 端点（常见）

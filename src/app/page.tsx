@@ -196,6 +196,7 @@ export default function Home() {
   // Estado del modal de sincronización con UGR Virtual (solo admin)
   const [syncAbierto, setSyncAbierto] = useState<boolean>(false);
   const [syncEstado, setSyncEstado] = useState<'idle' | 'cargando' | 'listo' | 'error'>('idle');
+  const [syncTipo, setSyncTipo] = useState<'ugr' | 'siu'>('ugr');
   const [syncDatos, setSyncDatos] = useState<SyncResult | null>(null);
   const syncEnCurso = useRef<boolean>(false);
   const [syncMensaje, setSyncMensaje] = useState<string>('');
@@ -991,6 +992,7 @@ export default function Home() {
   const ejecutarSyncUGR = async (confirmar = false, ids: string[] = [], idsAvisos: string[] = [], idsEventos: string[] = []): Promise<void> => {
     if (syncEnCurso.current) return;
     syncEnCurso.current = true;
+    setSyncTipo('ugr');
     setSyncEstado('cargando');
     setSyncMensaje('');
     try {
@@ -1100,6 +1102,7 @@ export default function Home() {
   const abrirSyncSIU = () => {
     if (syncEnCurso.current) return;
     syncEnCurso.current = true;
+    setSyncTipo('siu');
     setSyncAbierto(true);
     setSyncEstado('cargando');
     setSyncMensaje('Conectando con SIU Guaraní...');
@@ -3085,22 +3088,46 @@ export default function Home() {
         </div>
       )}
 
-      {/* Sincronización con UGR Virtual (solo admin) */}
+      {/* Sincronización modal (UGR Virtual o SIU Guaraní) */}
       {syncAbierto && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl max-h-[85vh] overflow-y-auto">
             <div className="float-right flex gap-3">
-              <button type="button" onClick={() => ejecutarSyncUGR(false)} disabled={syncEstado === 'cargando'} className="text-xs text-cyan-300 disabled:opacity-50">Buscar de nuevo</button>
-              <button type="button" onClick={() => setSyncAbierto(false)} className="text-xs text-slate-300">Cerrar</button>
+              {syncTipo === 'ugr' && (
+                <button type="button" onClick={() => ejecutarSyncUGR(false)} disabled={syncEstado === 'cargando'} className="text-xs text-cyan-300 disabled:opacity-50">Buscar de nuevo</button>
+              )}
+              <button type="button" onClick={() => { setSyncAbierto(false); setSyncTipo('ugr'); }} className="text-xs text-slate-300">Cerrar</button>
             </div>
-            <h3 className="text-base font-bold text-white mb-1">🔄 Sincronizar con UGR Virtual</h3>
-            <p className="text-xs text-slate-400 mb-4">Busca las tareas nuevas del campus y te las muestra antes de cargarlas.</p>
+            {syncTipo === 'siu' ? (
+              <>
+                <h3 className="text-base font-bold text-white mb-1">🎓 Sincronizar SIU Guaraní</h3>
+                <p className="text-xs text-slate-400 mb-4">Consulta las materias aprobadas y notas desde el sistema académico de la UGR.</p>
+              </>
+            ) : (
+              <>
+                <h3 className="text-base font-bold text-white mb-1">🔄 Sincronizar con UGR Virtual</h3>
+                <p className="text-xs text-slate-400 mb-4">Busca las tareas nuevas del campus y te las muestra antes de cargarlas.</p>
+              </>
+            )}
 
             {syncEstado === 'cargando' && (
               <div className="text-center py-8">
                 <span className="text-3xl animate-spin inline-block">⏳</span>
-                <p className="mt-3 text-sm text-slate-300">Consultando UGR Virtual...</p>
+                <p className="mt-3 text-sm text-slate-300">{syncTipo === 'siu' ? 'Consultando SIU Guaraní...' : 'Consultando UGR Virtual...'}</p>
               </div>
+            )}
+
+            {syncTipo === 'siu' && syncEstado === 'listo' && (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300 mb-2">Materias encontradas</p>
+                  {syncMensaje && <p className="text-sm">{syncMensaje}</p>}
+                </div>
+              </div>
+            )}
+
+            {syncTipo === 'siu' && syncEstado === 'error' && (
+              <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">{syncMensaje}</div>
             )}
 
             {syncEstado === 'error' && (
