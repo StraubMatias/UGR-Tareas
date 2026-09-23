@@ -16,59 +16,105 @@ export async function conectarSIU() {
 export function parsearHistoriaAcademica(html) {
   const materias = [];
 
-  // SIU Guaraní 3 uses table rows for material data
-  const rows = html.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
+  // If HTML is actually a JSON response from the AJAX endpoint, extract the cont field
+  let parsedHtml = html;
+  if (html.trim().startsWith('{')) {
+    try {
+      const json = JSON.parse(html);
+      parsedHtml = json.cont || '';
+    } catch {
+      return materias;
+    }
+  }
+
+  // Skip if empty or not HTML
+  if (!parsedHtml || !parsedHtml.includes('<tr')) return materias;
+
+  // Extract all rows from the table
+  const rows = parsedHtml.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
 
   for (const row of rows) {
     const cleanText = row.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     // Skip header rows and empty rows
     if (!cleanText || cleanText.length < 3) continue;
-    if (/código|nombre|estado|nota|año|cuatrimestre|asignatura/i.test(cleanText) && cleanText.length < 30) continue;
+    if (/código|nombre|estado|nota|año|cuatrimestre|asignatura|materia/i.test(cleanText) && cleanText.length < 40) continue;
+    if (/filtrar|buscar|todos|ninguno/i.test(cleanText) && cleanText.length < 30) continue;
 
-    // Try to detect material codes (typically alphanumeric like "1001", "INF-100", "MAT-200")
-    const codigoMatch = cleanText.match(/\b([A-Z]{2,4}[-.]?\d{3,4})\b/i);
+    // Try to detect material codes (numeric like "1001" or alphanumeric like "INF-100", "MAT-200")
+    const codigoMatch = cleanText.match(/\b((?:[A-Z]{2,4}[-.]?\d{3,4})|\d{3,5})\b/i);
     const codigo = codigoMatch ? codigoMatch[1].replace(/[-.]/, '') : null;
 
-    // Detect status
+    // Detect status - check for SIU-specific status words (order matters: specific before generic)
     let estado = null;
-    if (/APROBADO|APROBADA|PROMOCIONADO|PROMOCIONADA|NORMALMENTE/i.test(cleanText)) {
+    if (/PROMOCIONADO|PROMOCIONADA|PROMOCION\b/i.test(cleanText)) {
       estado = 'aprobada';
-    } else if (/REGULARIZADO|REGULARIZADA|REGULAR/i.test(cleanText)) {
-      estado = 'regularizada';
-    } else if (/CURSANDO|EN_CURSO|ACTIVA/i.test(cleanText)) {
-      estado = 'cursando';
-    } else if (/DESAPROBADO|DESAPROBADA|NOT_APROBADO/i.test(cleanText)) {
+    } else if (/DESAPROBADO|DESAPROBADA/i.test(cleanText)) {
       estado = 'desaprobada';
-    } else if (/INSSCRIBIDO|INSCRIBIDO|INSCRITA|INSCRIPTO|INSCRIPTA/i.test(cleanText)) {
+    } else if (/APROBADO|APROBADA/i.test(cleanText)) {
+      estado = 'aprobada';
+    } else if (/REGULARIZADO|REGULARIZADA|REGULAR\b/i.test(cleanText)) {
+      estado = 'regularizada';
+    } else if (/CURSANDO|EN CURSO|EN_CURSO|ACTIVA|EN_CURSO/i.test(cleanText)) {
+      estado = 'cursando';
+    } else if (/INSCRIBIDO|INSCRIBIDA|INSCRITA|INSCRIPTO|INSCRIPTA/i.test(cleanText)) {
       estado = 'inscripta';
+    } else if (/LIBRE|AUSENTE/i.test(cleanText)) {
+      estado = 'libre';
     }
 
-    // Detect grade (note) - look for numbers between 1 and 10
-    const notaMatch = cleanText.match(/\b(10|9\.?\d?|8\.?\d?|7\.?\d?|6\.?\d?|5\.?\d?|4\.?\d?|3\.?\d?|2\.?\d?|1\.?\d?|0\.?\d?)\s*(?:\/\s*10)?\b/);
-    const nota = notaMatch ? parseFloat(notaMatch[1]) : null;
-
-    // Extract material name from the HTML
-    let nombre = null;
+    // Extract from individual table cells for better accuracy
     const tdMatches = row.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || [];
-    if (tdMatches.length >= 2) {
-      const nameTd = tdMatches[1]?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      if (nameTd && nameTd.length > 2 && nameTd.length < 100) {
-        nombre = nameTd;
-      }
-    }
+    let nombre = null;
+    let nota = null;
 
-    // If we found meaningful data, include it
-    if (codigo || estado || (nota !== null && cleanText.length > 5)) {
-      if (!nombre) {
-        const betweenMatch = cleanText.match(/([A-Z]{2,4}[-.]?\d{3,4})\s+(.+?)\s+(?:APROBADO|APROBADA|PROMOCIONADO|PROMOCIONADA|REGULARIZADO|REGULARIZADA|CURSANDO|DESAPROBADO|DESAPROBADA|INSCRIBIDO|INSCRITA)/i);
-        if (betweenMatch) {
-          nombre = betweenMatch[2].trim();
+    if (tdMatches.length >= 2) {
+      // First TD often has code, second has name
+      const firstTd = tdMatches[0]?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      const secondTd = tdMatches[1]?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+      // Try to find the name (longer text, not a code)
+      for (const td of tdMatches) {
+        const tdText = td.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (tdText.length > 3 && tdText.length < 100) {
+          // Skip if it looks like a code or number
+          if (!/^\d+$/.test(tdText) && !/^[A-Z]{2,4}[-.]?\d{3,4}$/.test(tdText.toUpperCase()) && !/^\d{3,5}$/.test(tdText)) {
+            nombre = tdText;
+            break;
+          }
         }
       }
 
+      // Try to find a grade (number between 1 and 10)
+      for (const td of tdMatches) {
+        const tdText = td.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        const notaMatch = tdText.match(/\b(10|9\.?\d?|8\.?\d?|7\.?\d?|6\.?\d?|5\.?\d?|4\.?\d?|3\.?\d?|2\.?\d?|1\.?\d?|0\.?\d?)\b/);
+        if (notaMatch) {
+          nota = parseFloat(notaMatch[1]);
+          break;
+        }
+      }
+    }
+
+    // Also try to find name and grade from the full row text
+    if (!nombre) {
+      const betweenMatch = cleanText.match(/((?:[A-Z]{2,4}[-.]?\d{3,4})|\d{3,5})\s+(.+?)\s+(?:PROMOCIONADO|PROMOCIONADA|PROMOCION|DESAPROBADO|DESAPROBADA|APROBADO|APROBADA|REGULARIZADO|REGULARIZADA|REGULAR|CURSANDO|DESAPROBADO|DESAPROBADA|INSCRIBIDO|INSCRITA|LIBRE|AUSENTE)/i);
+      if (betweenMatch) {
+        nombre = betweenMatch[2].trim();
+      }
+    }
+
+    if (!nota) {
+      const notaMatch = cleanText.match(/\b(10|9\.?\d?|8\.?\d?|7\.?\d?|6\.?\d?|5\.?\d?|4\.?\d?|3\.?\d?|2\.?\d?|1\.?\d?|0\.?\d?)\s*(?:\/\s*10)?\b/);
+      if (notaMatch) {
+        nota = parseFloat(notaMatch[1]);
+      }
+    }
+
+    // Only include if we found meaningful data
+    if (codigo || estado || nota !== null) {
       materias.push({
         codigoMateria: codigo || `materia_${materias.length + 1}`,
-        nombreMateria: nombre || cleanText.substring(0, 80),
+        nombreMateria: nombre || cleanText.substring(0, 100),
         estado: estado || 'cursando',
         nota: nota
       });
@@ -110,15 +156,45 @@ export async function sincronizarSIU({ db, cliente } = {}) {
   };
 
   try {
+    // First get the page to establish the session context
     const resHistoria = await cliente.pedir(SIU_RUTAS.historiaAcademica);
-    console.log('📄 Historia académica respondida:', resHistoria.html.length, 'chars, URL:', resHistoria.url);
+    console.log('📄 Historia académica página:', resHistoria.html.length, 'chars, URL:', resHistoria.url);
 
-    if (resHistoria.html.includes('404') || resHistoria.html.includes('Not Found')) {
-      console.warn('⚠️ Historia académica devolvió 404. La ruta puede ser incorrecta.');
+    // Then try the AJAX endpoint to get the actual data
+    // The SIU Guaraní kernel API uses GET with checks parameter
+    const resDatos = await cliente.pedir(
+      `${SIU_RUTAS.historiaAcademica}?checks=t&modo=anio`,
+      { method: 'GET' }
+    );
+    console.log('📄 Datos AJAX:', resDatos.html.length, 'chars');
+
+    // Parse the HTML content from the response (could be JSON with .cont or raw HTML)
+    let htmlParaParsear = resDatos.html;
+    if (resDatos.html.trim().startsWith('{')) {
+      try {
+        const json = JSON.parse(resDatos.html);
+        htmlParaParsear = json.cont || resDatos.html;
+        console.log('📄 JSON response, cont length:', (json.cont || '').length);
+      } catch {
+        // Not valid JSON, use as-is
+      }
     }
 
-    resultados.historiaAcademica = parsearHistoriaAcademica(resHistoria.html);
-    console.log('📊 Materias parseadas:', resultados.historiaAcademica.length);
+    // Also parse the original page HTML as fallback
+    const materiasDelPagina = parsearHistoriaAcademica(resHistoria.html);
+    const materiasDeDatos = parsearHistoriaAcademica(htmlParaParsear);
+
+    console.log('📊 Materias de página:', materiasDelPagina.length);
+    console.log('📊 Materias de AJAX:', materiasDeDatos.length);
+
+    // Use the one with more results (AJAX usually has the table data)
+    if (materiasDeDatos.length > materiasDelPagina.length) {
+      resultados.historiaAcademica = materiasDeDatos;
+    } else {
+      resultados.historiaAcademica = materiasDelPagina;
+    }
+
+    console.log('📊 Materias finales:', resultados.historiaAcademica.length);
     for (const m of resultados.historiaAcademica) {
       console.log(`   - ${m.codigoMateria}: ${m.nombreMateria} [${m.estado}] nota=${m.nota}`);
     }

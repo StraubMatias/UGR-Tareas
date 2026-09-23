@@ -2388,9 +2388,9 @@ export async function gestionarGrupoTareaAction(params: GestionarGrupoParams): P
     return { exito: true };
   } catch (error) {
     console.error('Error al gestionar grupo:', error);
-    return { 
-      exito: false, 
-      mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo actualizar el grupo.' 
+    return {
+      exito: false,
+      mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo actualizar el grupo.'
     };
   }
 }

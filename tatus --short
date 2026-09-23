@@ -1,0 +1,237 @@
+[1mdiff --git a/siu-sync/lib/constantes.mjs b/siu-sync/lib/constantes.mjs[m
+[1mindex 6d25c91..6b06c89 100644[m
+[1m--- a/siu-sync/lib/constantes.mjs[m
+[1m+++ b/siu-sync/lib/constantes.mjs[m
+[36m@@ -2,20 +2,20 @@[m
+ export const SIU_BASE_URL = process.env.SIU_BASE_URL || 'https://guarani.ugr.edu.ar/3w';[m
+ [m
+ export const SIU_RUTAS = {[m
+[31m-  login: '/acceso?auth=form',[m
+[31m-  inicioAlumno: '/inicio_alumno',[m
+[32m+[m[32m  login: 'acceso?auth=form',[m
+[32m+[m[32m  inicioAlumno: 'inicio_alumno',[m
+   // 历史记录（已修读课程、成绩）[m
+[31m-  historiaAcademica: '/historia_academica',[m
+[32m+[m[32m  historiaAcademica: 'historia_academica',[m
+   // 成绩报告[m
+[31m-  informeNotas: '/informe_notas',[m
+[32m+[m[32m  informeNotas: 'informe_notas',[m
+   // 考试注册[m
+[31m-  inscripcionesExamenes: '/inscripciones_a_examenes',[m
+[32m+[m[32m  inscripcionesExamenes: 'inscripciones_a_examenes',[m
+   // 课程表[m
+[31m-  horariosCursadas: '/horarios_cursadas',[m
+[32m+[m[32m  horariosCursadas: 'horarios_cursadas',[m
+   // 个人中心[m
+[31m-  perfil: '/perfil',[m
+[32m+[m[32m  perfil: 'perfil',[m
+   // AJAX API 端点（常见）[m
+[31m-  ajaxBase: '/ajax',[m
+[32m+[m[32m  ajaxBase: 'ajax',[m
+ };[m
+ [m
+ // SIU Guaraní 3W 常用的课程状态值[m
+[1mdiff --git a/siu-sync/lib/sync-core.mjs b/siu-sync/lib/sync-core.mjs[m
+[1mindex 34a001f..4a81f0d 100644[m
+[1m--- a/siu-sync/lib/sync-core.mjs[m
+[1m+++ b/siu-sync/lib/sync-core.mjs[m
+[36m@@ -16,59 +16,105 @@[m [mexport async function conectarSIU() {[m
+ export function parsearHistoriaAcademica(html) {[m
+   const materias = [];[m
+ [m
+[31m-  // SIU Guaraní 3 uses table rows for material data[m
+[31m-  const rows = html.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];[m
+[32m+[m[32m  // If HTML is actually a JSON response from the AJAX endpoint, extract the cont field[m
+[32m+[m[32m  let parsedHtml = html;[m
+[32m+[m[32m  if (html.trim().startsWith('{')) {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      const json = JSON.parse(html);[m
+[32m+[m[32m      parsedHtml = json.cont || '';[m
+[32m+[m[32m    } catch {[m
+[32m+[m[32m      return materias;[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Skip if empty or not HTML[m
+[32m+[m[32m  if (!parsedHtml || !parsedHtml.includes('<tr')) return materias;[m
+[32m+[m
+[32m+[m[32m  // Extract all rows from the table[m
+[32m+[m[32m  const rows = parsedHtml.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];[m
+ [m
+   for (const row of rows) {[m
+     const cleanText = row.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();[m
+     // Skip header rows and empty rows[m
+     if (!cleanText || cleanText.length < 3) continue;[m
+[31m-    if (/código|nombre|estado|nota|año|cuatrimestre|asignatura/i.test(cleanText) && cleanText.length < 30) continue;[m
+[32m+[m[32m    if (/código|nombre|estado|nota|año|cuatrimestre|asignatura|materia/i.test(cleanText) && cleanText.length < 40) continue;[m
+[32m+[m[32m    if (/filtrar|buscar|todos|ninguno/i.test(cleanText) && cleanText.length < 30) continue;[m
+ [m
+     // Try to detect material codes (typically alphanumeric like "1001", "INF-100", "MAT-200")[m
+     const codigoMatch = cleanText.match(/\b([A-Z]{2,4}[-.]?\d{3,4})\b/i);[m
+     const codigo = codigoMatch ? codigoMatch[1].replace(/[-.]/, '') : null;[m
+ [m
+[31m-    // Detect status[m
+[32m+[m[32m    // Detect status - check for SIU-specific status words[m
+     let estado = null;[m
+[31m-    if (/APROBADO|APROBADA|PROMOCIONADO|PROMOCIONADA|NORMALMENTE/i.test(cleanText)) {[m
+[32m+[m[32m    if (/PROMOCIONADO|PROMOCIONADA|PROMOCION/i.test(cleanText)) {[m
+[32m+[m[32m      estado = 'aprobada';[m
+[32m+[m[32m    } else if (/APROBADO|APROBADA/i.test(cleanText)) {[m
+       estado = 'aprobada';[m
+[31m-    } else if (/REGULARIZADO|REGULARIZADA|REGULAR/i.test(cleanText)) {[m
+[32m+[m[32m    } else if (/REGULARIZADO|REGULARIZADA|REGULAR\b/i.test(cleanText)) {[m
+       estado = 'regularizada';[m
+[31m-    } else if (/CURSANDO|EN_CURSO|ACTIVA/i.test(cleanText)) {[m
+[32m+[m[32m    } else if (/CURSANDO|EN CURSO|EN_CURSO|ACTIVA|EN_CURSO/i.test(cleanText)) {[m
+       estado = 'cursando';[m
+[31m-    } else if (/DESAPROBADO|DESAPROBADA|NOT_APROBADO/i.test(cleanText)) {[m
+[32m+[m[32m    } else if (/DESAPROBADO|DESAPROBADA/i.test(cleanText)) {[m
+       estado = 'desaprobada';[m
+[31m-    } else if (/INSSCRIBIDO|INSCRIBIDO|INSCRITA|INSCRIPTO|INSCRIPTA/i.test(cleanText)) {[m
+[32m+[m[32m    } else if (/INSCRIBIDO|INSCRIBIDA|INSCRITA|INSCRIPTO|INSCRIPTA/i.test(cleanText)) {[m
+       estado = 'inscripta';[m
+[32m+[m[32m    } else if (/LIBRE|AUSENTE/i.test(cleanText)) {[m
+[32m+[m[32m      estado = 'libre';[m
+     }[m
+ [m
+[31m-    // Detect grade (note) - look for numbers between 1 and 10[m
+[31m-    const notaMatch = cleanText.match(/\b(10|9\.?\d?|8\.?\d?|7\.?\d?|6\.?\d?|5\.?\d?|4\.?\d?|3\.?\d?|2\.?\d?|1\.?\d?|0\.?\d?)\s*(?:\/\s*10)?\b/);[m
+[31m-    const nota = notaMatch ? parseFloat(notaMatch[1]) : null;[m
+[31m-[m
+[31m-    // Extract material name from the HTML[m
+[31m-    let nombre = null;[m
+[32m+[m[32m    // Extract from individual table cells for better accuracy[m
+     const tdMatches = row.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || [];[m
+[32m+[m[32m    let nombre = null;[m
+[32m+[m[32m    let nota = null;[m
+[32m+[m
+     if (tdMatches.length >= 2) {[m
+[31m-      const nameTd = tdMatches[1]?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();[m
+[31m-      if (nameTd && nameTd.length > 2 && nameTd.length < 100) {[m
+[31m-        nombre = nameTd;[m
+[32m+[m[32m      // First TD often has code, second has name[m
+[32m+[m[32m      const firstTd = tdMatches[0]?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();[m
+[32m+[m[32m      const secondTd = tdMatches[1]?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();[m
+[32m+[m
+[32m+[m[32m      // Try to find the name (longer text, not a code)[m
+[32m+[m[32m      for (const td of tdMatches) {[m
+[32m+[m[32m        const tdText = td.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();[m
+[32m+[m[32m        if (tdText.length > 3 && tdText.length < 100) {[m
+[32m+[m[32m          // Skip if it looks like a code or number[m
+[32m+[m[32m          if (!/^\d+$/.test(tdText) && !/^[A-Z]{2,4}[-.]?\d{3,4}$/.test(tdText.toUpperCase())) {[m
+[32m+[m[32m            nombre = tdText;[m
+[32m+[m[32m            break;[m
+[32m+[m[32m          }[m
+[32m+[m[32m        }[m
+       }[m
+[31m-    }[m
+ [m
+[31m-    // If we found meaningful data, include it[m
+[31m-    if (codigo || estado || (nota !== null && cleanText.length > 5)) {[m
+[31m-      if (!nombre) {[m
+[31m-        const betweenMatch = cleanText.match(/([A-Z]{2,4}[-.]?\d{3,4})\s+(.+?)\s+(?:APROBADO|APROBADA|PROMOCIONADO|PROMOCIONADA|REGULARIZADO|REGULARIZADA|CURSANDO|DESAPROBADO|DESAPROBADA|INSCRIBIDO|INSCRITA)/i);[m
+[31m-        if (betweenMatch) {[m
+[31m-          nombre = betweenMatch[2].trim();[m
+[32m+[m[32m      // Try to find a grade (number between 1 and 10)[m
+[32m+[m[32m      for (const td of tdMatches) {[m
+[32m+[m[32m        const tdText = td.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();[m
+[32m+[m[32m        const notaMatch = tdText.match(/\b(10|9\.?\d?|8\.?\d?|7\.?\d?|6\.?\d?|5\.?\d?|4\.?\d?|3\.?\d?|2\.?\d?|1\.?\d?|0\.?\d?)\b/);[m
+[32m+[m[32m        if (notaMatch) {[m
+[32m+[m[32m          nota = parseFloat(notaMatch[1]);[m
+[32m+[m[32m          break;[m
+         }[m
+       }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // Also try to find name and grade from the full row text[m
+[32m+[m[32m    if (!nombre) {[m
+[32m+[m[32m      const betweenMatch = cleanText.match(/([A-Z]{2,4}[-.]?\d{3,4})\s+(.+?)\s+(?:PROMOCIONADO|PROMOCIONADA|APROBADO|APROBADA|REGULARIZADO|REGULARIZADA|CURSANDO|DESAPROBADO|DESAPROBADA|INSCRIBIDO|INSCRITA)/i);[m
+[32m+[m[32m      if (betweenMatch) {[m
+[32m+[m[32m        nombre = betweenMatch[2].trim();[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+ [m
+[32m+[m[32m    if (!nota) {[m
+[32m+[m[32m      const notaMatch = cleanText.match(/\b(10|9\.?\d?|8\.?\d?|7\.?\d?|6\.?\d?|5\.?\d?|4\.?\d?|3\.?\d?|2\.?\d?|1\.?\d?|0\.?\d?)\s*(?:\/\s*10)?\b/);[m
+[32m+[m[32m      if (notaMatch) {[m
+[32m+[m[32m        nota = parseFloat(notaMatch[1]);[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // Only include if we found meaningful data[m
+[32m+[m[32m    if (codigo || estado || nota !== null) {[m
+       materias.push({[m
+         codigoMateria: codigo || `materia_${materias.length + 1}`,[m
+[31m-        nombreMateria: nombre || cleanText.substring(0, 80),[m
+[32m+[m[32m        nombreMateria: nombre || cleanText.substring(0, 100),[m
+         estado: estado || 'cursando',[m
+         nota: nota[m
+       });[m
+[36m@@ -110,15 +156,45 @@[m [mexport async function sincronizarSIU({ db, cliente } = {}) {[m
+   };[m
+ [m
+   try {[m
+[32m+[m[32m    // First get the page to establish the session context[m
+     const resHistoria = await cliente.pedir(SIU_RUTAS.historiaAcademica);[m
+[31m-    console.log('📄 Historia académica respondida:', resHistoria.html.length, 'chars, URL:', resHistoria.url);[m
+[32m+[m[32m    console.log('📄 Historia académica página:', resHistoria.html.length, 'chars, URL:', resHistoria.url);[m
+[32m+[m
+[32m+[m[32m    // Then try the AJAX endpoint to get the actual data[m
+[32m+[m[32m    // The SIU Guaraní kernel API uses GET with checks parameter[m
+[32m+[m[32m    const resDatos = await cliente.pedir([m
+[32m+[m[32m      `${SIU_RUTAS.historiaAcademica}?checks=t&modo=anio`,[m
+[32m+[m[32m      { method: 'GET' }[m
+[32m+[m[32m    );[m
+[32m+[m[32m    console.log('📄 Datos AJAX:', resDatos.html.length, 'chars');[m
+[32m+[m
+[32m+[m[32m    // Parse the HTML content from the response (could be JSON with .cont or raw HTML)[m
+[32m+[m[32m    let htmlParaParsear = resDatos.html;[m
+[32m+[m[32m    if (resDatos.html.trim().startsWith('{')) {[m
+[32m+[m[32m      try {[m
+[32m+[m[32m        const json = JSON.parse(resDatos.html);[m
+[32m+[m[32m        htmlParaParsear = json.cont || resDatos.html;[m
+[32m+[m[32m        console.log('📄 JSON response, cont length:', (json.cont || '').length);[m
+[32m+[m[32m      } catch {[m
+[32m+[m[32m        // Not valid JSON, use as-is[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // Also parse the original page HTML as fallback[m
+[32m+[m[32m    const materiasDelPagina = parsearHistoriaAcademica(resHistoria.html);[m
+[32m+[m[32m    const materiasDeDatos = parsearHistoriaAcademica(htmlParaParsear);[m
+[32m+[m
+[32m+[m[32m    console.log('📊 Materias de página:', materiasDelPagina.length);[m
+[32m+[m[32m    console.log('📊 Materias de AJAX:', materiasDeDatos.length);[m
+ [m
+[31m-    if (resHistoria.html.includes('404') || resHistoria.html.includes('Not Found')) {[m
+[31m-      console.warn('⚠️ Historia académica devolvió 404. La ruta puede ser incorrecta.');[m
+[32m+[m[32m    // Use the one with more results (AJAX usually has the table data)[m
+[32m+[m[32m    if (materiasDeDatos.length > materiasDelPagina.length) {[m
+[32m+[m[32m      resultados.historiaAcademica = materiasDeDatos;[m
+[32m+[m[32m    } else {[m
+[32m+[m[32m      resultados.historiaAcademica = materiasDelPagina;[m
+     }[m
+ [m
+[31m-    resultados.historiaAcademica = parsearHistoriaAcademica(resHistoria.html);[m
+[31m-    console.log('📊 Materias parseadas:', resultados.historiaAcademica.length);[m
+[32m+[m[32m    console.log('📊 Materias finales:', resultados.historiaAcademica.length);[m
+     for (const m of resultados.historiaAcademica) {[m
+       console.log(`   - ${m.codigoMateria}: ${m.nombreMateria} [${m.estado}] nota=${m.nota}`);[m
+     }[m
+[1mdiff --git a/src/app/actions.tsx b/src/app/actions.tsx[m
+[1mindex 23173d0..eb1d5c8 100644[m
+[1m--- a/src/app/actions.tsx[m
+[1m+++ b/src/app/actions.tsx[m
+[36m@@ -2388,9 +2388,9 @@[m [mexport async function gestionarGrupoTareaAction(params: GestionarGrupoParams): P[m
+     return { exito: true };[m
+   } catch (error) {[m
+     console.error('Error al gestionar grupo:', error);[m
+[31m-    return { [m
+[31m-      exito: false, [m
+[31m-      mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo actualizar el grupo.' [m
+[32m+[m[32m    return {[m
+[32m+[m[32m      exito: false,[m
+[32m+[m[32m      mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo actualizar el grupo.'[m
+     };[m
+   }[m
+ }[m
