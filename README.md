@@ -15,11 +15,11 @@ La presentación para la comisión está en [`UGRTareas.md`](UGRTareas.md). Este
 | Datos | Turso (libSQL) vía `@libsql/client/http`. No se usa el cliente nativo: los binarios glibc/musl se excluyen del trace de Vercel en `next.config.mjs` |
 | Campus | `ugr-sync/` en ESM puro (`.mjs`) + Cheerio 1.2. No se migra a TypeScript |
 | Tests | `node:test` (`node --test`). No hay Jest ni runner de componentes |
-| Lint | ESLint 9 + `eslint-config-next` 16.3.2 |
+| Lint | ESLint 9 + `eslint-config-next` 16.3.5 |
 
 `tsconfig.json` tiene `strict: false`, `noImplicitAny: true`, `strictNullChecks: true`, `noEmit: true`, `moduleResolution: bundler`.
 
-Instalación: `npm install --legacy-peer-deps`. Sin ese flag el árbol no resuelve: `@eslint/js@10` pide ESLint 10 y el proyecto usa ESLint 9; typescript-eslint declara peer de TypeScript `< 6.1` y el compilador de chequeo es 7.
+Instalación: `npm install --legacy-peer-deps`. Hace falta el flag porque typescript-eslint (vía `eslint-config-next`) declara peer de TypeScript `< 6.1` y el compilador de chequeo es 7.
 
 ## Topología
 

@@ -3,8 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "node scripts/test-conexion.mjs",
-    "sync": "node scripts/sync.mjs"
+    "test": "node scripts/test-conexion.mjs"
   },
   "dependencies": {},
   "devDependencies": {}

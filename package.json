@@ -14,7 +14,6 @@
     "ugr:login": "node ugr-sync/scripts/login.mjs",
     "ugr:sync": "node ugr-sync/scripts/sync.mjs",
     "siu:login": "node siu-sync/scripts/test-conexion.mjs",
-    "siu:sync": "node siu-sync/scripts/sync.mjs",
     "test": "node --test tests/**/*.test.mjs ugr-sync/test/**/*.test.mjs siu-sync/test/**/*.test.mjs"
   },
   "dependencies": {
@@ -25,18 +24,15 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.7",
-    "@eslint/js": "^10.0.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "eslint": "^9",
-    "eslint-config-next": "16.3.2",
+    "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "typescript-eslint": "^8.70.0"
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
   },
   "allowScripts": {
     "unrs-resolver@1.12.2": true

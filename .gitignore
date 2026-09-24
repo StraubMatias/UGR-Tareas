@@ -29,6 +29,13 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
+siu_log.txt*
+
+# restos de comandos mal pegados en la raíz
+/DONE
+/re
+/tatus --short
 
 # env files (can opt-in for committing if needed)
 .env*
