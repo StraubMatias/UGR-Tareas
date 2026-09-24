@@ -84,7 +84,8 @@ test('aislamiento de tareas, grupos e individuales y validaciones', async (t) =>
   await assert.rejects(asignarGrupo(db, 't', 'b', { nombre: 'equipo' }), /Ya existe/);
   await assert.rejects(asignarGrupo(db, 't', 'a', { nombre: 'Otro' }), /Primero salí/);
   await assert.rejects(asignarGrupo(db, 'individual', 'b', { nombre: 'Otro' }), /individual/);
-  await assert.rejects(actualizarProgresoTarea(db, 't', beto, { nota: '8' }), /unite/);
+  await actualizarProgresoTarea(db, 't', beto, { alternarEntrega: true });
+  assert.deepEqual((await db.execute('SELECT alumno FROM completadas ORDER BY alumno')).rows.map((r) => r.alumno), ['Beto']);
   await assert.rejects(actualizarProgresoTarea(db, 't', ana, { nota: '11' }), /entre 1 y 10/);
   await asignarGrupo(db, 't', 'b', { nombre: 'Segundo' });
   await actualizarProgresoTarea(db, 't', ana, { nota: '8' });

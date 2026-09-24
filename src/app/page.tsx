@@ -13,11 +13,10 @@ import PortalHeader from '../components/portal/PortalHeader';
 import PortalNav from '../components/portal/PortalNav';
 import PortalVistasCursada from '../components/portal/PortalVistasCursada';
 import PortalModales from '../components/portal/PortalModales';
-import { type ResumenMateriaSync } from './actions';
 import type { AvisoCampusMoodle, NovedadTablero, Periodo, PortalPestana } from '../components/portal/types';
 import { type Materia, type Tarea, type Parcial, type Nota, type Horario, type EventoCronograma, etiquetaMateria } from '../core/cursada';
 import VistaAlumnos from '../components/VistaAlumnos';
-import CuentaPropia, { ResumenCursada } from '../components/CuentaPropia';
+import CuentaPropia from '../components/CuentaPropia';
 import BarraSesionPortal from '../components/portal/BarraSesionPortal';
 import PantallaAcceso from '../components/portal/PantallaAcceso';
 import ModalCuentaSync from '../components/portal/ModalCuentaSync';
@@ -38,7 +37,6 @@ export default function Home() {
   const [registroPass, setRegistroPass] = useState('');
   const [registroConfirmacion, setRegistroConfirmacion] = useState('');
   const [enviandoAcceso, setEnviandoAcceso] = useState(false);
-  const [resumenSync, setResumenSync] = useState<ResumenMateriaSync[]>([]);
   const [pestana, setPestana] = useState<PortalPestana>('alumnos');
   const [cargando, setCargando] = useState<boolean>(true);
   const [iniciado, setIniciado] = useState<boolean>(false);
@@ -51,8 +49,7 @@ export default function Home() {
   const [mostrarAvisoInicio, setMostrarAvisoInicio] = useState<boolean>(false);
   const [novedades, setNovedades] = useState<NovedadTablero[]>([]);
 
-  const [syncCuentaAbierta, setSyncCuentaAbierta] = useState(false);
-  const [mensajeSyncCuenta, setMensajeSyncCuenta] = useState('');
+  const [syncCuentaFuente, setSyncCuentaFuente] = useState<'ugr' | 'siu' | null>(null);
 
   // Estado para Parciales y Notas
   const [parciales, setParciales] = useState<Parcial[]>([]);
@@ -239,7 +236,7 @@ export default function Home() {
     modalPasswordOpen || syncAbierto || materiaCondicionesEnEdicion || parcialEnEdicion
     || tareaEnEdicion || materiaEnEdicion || alumnoEnEdicion
     || Object.keys(progresoPlanEnEdicion).length > 0
-    || syncCuentaAbierta
+    || syncCuentaFuente !== null
   );
 
   const { cerrarSesionLocal, handleRegistro, handleLogin, handleCambiarPassword } = usePortalAcceso({
@@ -249,8 +246,6 @@ export default function Home() {
     setOrigenCuenta,
     setUgrUsuarioCuenta,
     setMostrarAvisoInicio,
-    setMensajeSyncCuenta,
-    setResumenSync,
     inputUser,
     inputPass,
     registroPass,
@@ -429,8 +424,8 @@ export default function Home() {
           <>
             <BarraSesionPortal
               esAdmin={esAdmin}
-              mensajeSyncCuenta={mensajeSyncCuenta}
-              onAbrirCuenta={() => setSyncCuentaAbierta(true)}
+              onAbrirSyncCuentaUgr={() => setSyncCuentaFuente('ugr')}
+              onAbrirSyncCuentaSiu={() => setSyncCuentaFuente('siu')}
               onAbrirPassword={() => {
                 setUserPassChange(usuarioActual);
                 setNuevoUserChange(usuarioActual);
@@ -441,19 +436,12 @@ export default function Home() {
               onAbrirAdmin={() => navegarA('admin')}
               onSalir={cerrarSesionLocal}
             />
-            {syncCuentaAbierta && (
+            {syncCuentaFuente && (
               <ModalCuentaSync
                 usuario={usuarioActual}
-                onCerrar={() => setSyncCuentaAbierta(false)}
-                onSincronizada={(mensaje, resumen) => {
-                  setMensajeSyncCuenta(mensaje);
-                  setResumenSync(resumen || []);
-                  void cargarBD(false);
-                }}
-                onSincronizadaSiu={(mensaje) => {
-                  setMensajeSyncCuenta(mensaje);
-                  void cargarBD(false);
-                }}
+                fuente={syncCuentaFuente}
+                onCerrar={() => setSyncCuentaFuente(null)}
+                onCompletado={() => { void cargarBD(false); }}
                 onInterrumpida={() => { void cargarBD(false); }}
               />
             )}
@@ -512,11 +500,7 @@ export default function Home() {
           </section>
           <CuentaPropia
             usuario={usuarioActual}
-            onSincronizada={(mensaje, resumen) => {
-              setMensajeSyncCuenta(mensaje);
-              setResumenSync(resumen || []);
-              void cargarBD(true);
-            }}
+            onCompletado={() => { void cargarBD(true); }}
             onInterrumpida={() => { void cargarBD(true); }}
           />
           <VistaAlumnos
@@ -539,25 +523,6 @@ export default function Home() {
         </div>
       ) : (
         <div className="max-w-9xl mx-auto">
-          {resumenSync.length > 0 && (
-            <section className="mb-6 rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-bold text-cyan-200">Resultado de la sincronización</p>
-                  {mensajeSyncCuenta && <p className="mt-1 text-sm text-slate-300">{mensajeSyncCuenta}</p>}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setResumenSync([])}
-                  className="text-slate-400 hover:text-white text-lg leading-none cursor-pointer"
-                  aria-label="Cerrar resumen de sincronización"
-                >
-                  ×
-                </button>
-              </div>
-              <ResumenCursada resumen={resumenSync} />
-            </section>
-          )}
           <PortalNav pestana={pestana} onNavegar={navegarA} />
 
           <PortalVistasCursada

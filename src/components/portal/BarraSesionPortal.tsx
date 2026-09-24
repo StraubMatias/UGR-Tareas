@@ -2,8 +2,8 @@
 
 interface BarraSesionPortalProps {
   esAdmin: boolean;
-  mensajeSyncCuenta: string;
-  onAbrirCuenta: () => void;
+  onAbrirSyncCuentaUgr: () => void;
+  onAbrirSyncCuentaSiu: () => void;
   onAbrirPassword: () => void;
   onAbrirSyncUgrAdmin: () => void;
   onAbrirSyncSiuAdmin: () => void;
@@ -13,8 +13,8 @@ interface BarraSesionPortalProps {
 
 export default function BarraSesionPortal({
   esAdmin,
-  mensajeSyncCuenta,
-  onAbrirCuenta,
+  onAbrirSyncCuentaUgr,
+  onAbrirSyncCuentaSiu,
   onAbrirPassword,
   onAbrirSyncUgrAdmin,
   onAbrirSyncSiuAdmin,
@@ -30,17 +30,25 @@ export default function BarraSesionPortal({
       >
         🔑 Usuario o clave
       </button>
-      <button
-        type="button"
-        onClick={onAbrirCuenta}
-        className="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
-      >
-        Sincronizar cuenta
-      </button>
-      {mensajeSyncCuenta && (
-        <span className="self-center text-xs text-emerald-200 max-w-xl leading-snug" title={mensajeSyncCuenta}>
-          {mensajeSyncCuenta}
-        </span>
+      {!esAdmin && (
+        <>
+          <button
+            type="button"
+            onClick={onAbrirSyncCuentaUgr}
+            title="Traé tu cursada y tareas desde UGR Virtual con tu DNI y clave del campus"
+            className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+          >
+            🔄 Sincronizar UGR
+          </button>
+          <button
+            type="button"
+            onClick={onAbrirSyncCuentaSiu}
+            title="Importá notas del plan de estudio desde SIU Guaraní"
+            className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+          >
+            🎓 Sincronizar SIU Guaraní
+          </button>
+        </>
       )}
       {esAdmin && (
         <button

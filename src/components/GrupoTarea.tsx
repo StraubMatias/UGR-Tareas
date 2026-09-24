@@ -96,9 +96,10 @@ export default function GrupoTarea({ tarea, materiaNombre = 'esta materia', usua
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Trabajo grupal</p>
-          <h4 className="mt-1 text-base font-bold text-white">El grupo comparte la entrega y la nota</h4>
+          <h4 className="mt-1 text-base font-bold text-white">Grupal: podés entregar solo o en grupo</h4>
           <p className="mt-1 text-xs leading-relaxed text-slate-400">
-            Solo aparecen alumnos que están cursando {materiaNombre}.
+            Sin grupo podés marcar la entrega igual (solo para vos). En grupo, entrega y nota se comparten.
+            Solo aparecen alumnos que cursan {materiaNombre}.
             {cupo > 0 ? ` Cada grupo puede tener hasta ${cupo} personas.` : ' No hay límite de integrantes.'}
           </p>
         </div>

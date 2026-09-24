@@ -4,8 +4,7 @@ import {
   obtenerSesionAction,
   registrarCuentaAction,
   validarLoginAction,
-  actualizarCuentaAction,
-  type ResumenMateriaSync
+  actualizarCuentaAction
 } from '../app/actions';
 
 interface UsePortalAccesoOptions {
@@ -15,8 +14,6 @@ interface UsePortalAccesoOptions {
   setOrigenCuenta: Dispatch<SetStateAction<string | null>>;
   setUgrUsuarioCuenta: Dispatch<SetStateAction<string | null>>;
   setMostrarAvisoInicio: Dispatch<SetStateAction<boolean>>;
-  setMensajeSyncCuenta: Dispatch<SetStateAction<string>>;
-  setResumenSync: Dispatch<SetStateAction<ResumenMateriaSync[]>>;
   inputUser: string;
   inputPass: string;
   registroPass: string;
@@ -98,8 +95,6 @@ export function usePortalAcceso(opts: UsePortalAccesoOptions) {
       const res = await registrarCuentaAction(o.inputUser, o.registroPass, o.registroConfirmacion);
       if (res.exito && res.usuario) {
         iniciarSesionLocal(res.usuario, res.rol || 'alumno', res.origen || 'propio', null);
-        o.setMensajeSyncCuenta(res.mensaje || '');
-        o.setResumenSync(res.resumen || []);
         o.setInputUser('');
         o.setRegistroPass('');
         o.setRegistroConfirmacion('');

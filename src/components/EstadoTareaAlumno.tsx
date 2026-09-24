@@ -1,6 +1,6 @@
 import {
-  calcularEstadoSemaforo, formatearFechaDDMMAAAA, formatearUnidad, obtenerIconoMateria, tareaCompletadaPor,
-  tareaFaltaNota, tareaPuedeGestionarse, type Materia, type Tarea
+  calcularEstadoSemaforo, formatearFechaDDMMAAAA, formatearUnidad, obtenerGrupoDeAlumno, obtenerIconoMateria,
+  tareaCompletadaPor, tareaFaltaNota, tareaPuedeGestionarse, type Materia, type Tarea
 } from '../core/cursada';
 import EstadoGrupoAlumno from './EstadoGrupoAlumno';
 
@@ -28,6 +28,7 @@ export default function EstadoTareaAlumno({
   const faltaNota = tareaFaltaNota(tarea, alumno);
   const semaforo = calcularEstadoSemaforo(tarea.fin, tarea.inicio);
   const puedeGestionar = tareaPuedeGestionarse(tarea);
+  const entregaIndividual = tarea.grupal && !obtenerGrupoDeAlumno(tarea, alumno);
   const notasOtros = alumnos.filter((nombre) => nombre !== alumno
     && tarea.notas?.[nombre] !== undefined && tarea.notas?.[nombre] !== null && tarea.notas?.[nombre] !== '');
 
@@ -54,7 +55,10 @@ export default function EstadoTareaAlumno({
             </button>
           </h4>
           <p className="estado-tarea-meta">
-            <span>{tarea.grupal ? 'Trabajo grupal' : 'Individual'}{tarea.conNota ? ' · Con nota' : ''}</span>
+            <span>
+              {tarea.grupal ? (entregaIndividual ? 'Grupal · entrega individual' : 'Trabajo grupal') : 'Individual'}
+              {tarea.conNota ? ' · Con nota' : ''}
+            </span>
             <span className="estado-tarea-fecha">Entrega: {formatearFechaDDMMAAAA(tarea.fin)}</span>
           </p>
         </div>

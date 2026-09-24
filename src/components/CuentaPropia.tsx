@@ -12,7 +12,7 @@ export function ResumenCursada({ resumen }: { resumen: ResumenMateriaSync[] }) {
   const pendientesEntrega = resumen.flatMap((fila) => fila.pendientesEntrega || []);
   const notasNoLeidas = resumen.flatMap((fila) => fila.notasNoLeidas || []);
   return (
-    <div className="mt-4 space-y-3 max-h-[50vh] overflow-y-auto">
+    <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
       {notasCargadas.length > 0 && (
         <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3">
           <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Notas cargadas</p>
@@ -116,21 +116,39 @@ export function ResumenCursada({ resumen }: { resumen: ResumenMateriaSync[] }) {
 }
 
 type FuenteSync = 'ugr' | 'siu';
+type FaseSync = 'credenciales' | 'cargando' | 'listo' | 'error';
+
+function SyncCargando({ fuente }: { fuente: FuenteSync }) {
+  return (
+    <div className="text-center py-10">
+      <span className="text-3xl animate-spin inline-block" aria-hidden="true">⏳</span>
+      <p className="mt-3 text-sm font-semibold text-slate-200">
+        {fuente === 'siu' ? 'Estamos sincronizando con SIU Guaraní…' : 'Estamos sincronizando con UGR Virtual…'}
+      </p>
+      <p className="mt-2 text-xs text-slate-400">No cierres esta ventana hasta que termine.</p>
+    </div>
+  );
+}
 
 export default function CuentaPropia({
   usuario,
-  onSincronizada,
-  onSincronizadaSiu,
+  fuenteInicial = 'ugr',
+  variante = 'pagina',
+  permitirCambiarFuente = true,
+  onCompletado,
   onCerrar,
   onInterrumpida
 }: {
   usuario: string;
-  onSincronizada?: (mensaje: string, resumen?: ResumenMateriaSync[]) => void;
-  onSincronizadaSiu?: (mensaje: string) => void;
+  fuenteInicial?: FuenteSync;
+  variante?: 'modal' | 'pagina';
+  permitirCambiarFuente?: boolean;
+  onCompletado?: () => void;
   onCerrar?: () => void;
   onInterrumpida?: () => void;
 }) {
-  const [fuente, setFuente] = useState<FuenteSync>('ugr');
+  const [fuente, setFuente] = useState<FuenteSync>(fuenteInicial);
+  const [fase, setFase] = useState<FaseSync>('credenciales');
   const [dni, setDni] = useState('');
   const [clave, setClave] = useState('');
   const [mensaje, setMensaje] = useState('');
@@ -142,35 +160,56 @@ export default function CuentaPropia({
     notasCargadas: NotaPlanSiu[];
     notasYaCargadas: NotaPlanSiu[];
   } | null>(null);
-  const [enviando, setEnviando] = useState(false);
+
+  const reiniciarCredenciales = () => {
+    setFase('credenciales');
+    setError('');
+    setMensaje('');
+    setResumen([]);
+    setDetalleSiu(null);
+    setDni('');
+    setClave('');
+  };
+
+  const cambiarFuente = (nueva: FuenteSync) => {
+    if (fase === 'cargando') return;
+    setFuente(nueva);
+    reiniciarCredenciales();
+  };
 
   const sincronizar = async (evento: FormEvent<HTMLFormElement>) => {
     evento.preventDefault();
+    const usuarioIngresado = dni.trim();
+    const claveIngresada = clave;
+    if (!usuarioIngresado || !claveIngresada) {
+      setError(fuente === 'ugr' ? 'Completá el DNI y la contraseña de UGR Virtual.' : 'Completá usuario y contraseña de SIU Guaraní.');
+      return;
+    }
     setMensaje('');
     setError('');
     setResumen([]);
     setDetalleSiu(null);
-    setEnviando(true);
-    const usuarioIngresado = dni;
-    const claveIngresada = clave;
+    setDni('');
     setClave('');
+    setFase('cargando');
     try {
       if (fuente === 'ugr') {
         const resultado = await sincronizarCuentaUgrAction(usuarioIngresado, claveIngresada);
-        setDni('');
         if (!resultado.exito) {
           setError(resultado.mensaje || 'No se pudo sincronizar.');
+          setFase('error');
           return;
         }
         const aviso = resultado.mensaje || 'Cursada actualizada.';
         setMensaje(aviso);
         setResumen(resultado.resumen || []);
-        onSincronizada?.(aviso, resultado.resumen);
+        setFase('listo');
+        onCompletado?.();
       } else {
         const resultado = await sincronizarCuentaSiuAction(usuarioIngresado, claveIngresada);
-        setDni('');
         if (!resultado.exito) {
           setError(resultado.mensaje || 'No se pudo sincronizar.');
+          setFase('error');
           return;
         }
         const aviso = resultado.mensaje || 'Plan de estudio actualizado.';
@@ -181,111 +220,183 @@ export default function CuentaPropia({
           notasCargadas: resultado.notasCargadas || [],
           notasYaCargadas: resultado.notasYaCargadas || []
         });
-        onSincronizadaSiu?.(aviso);
+        setFase('listo');
+        onCompletado?.();
       }
     } catch (err) {
       const crudo = err instanceof Error ? err.message : '';
       if (/unexpected response/i.test(crudo)) {
-        setError('Se cortó la respuesta, pero lo que alcanzó a guardarse ya quedó. Sincronizá de nuevo para completar.');
+        setError('Se cortó la respuesta, pero lo que alcanzó a guardarse ya quedó. Podés sincronizar de nuevo para completar.');
         onInterrumpida?.();
       } else {
         setError('No se pudo sincronizar.');
       }
-    } finally {
-      setEnviando(false);
+      setFase('error');
     }
   };
 
-  const listo = resumen.length > 0 || detalleSiu !== null;
+  const contenedor =
+    variante === 'pagina'
+      ? 'w-full max-w-xl mx-auto rounded-2xl border border-slate-800 bg-[#121821] p-6 sm:p-8'
+      : 'w-full';
+
+  const titulo =
+    fuente === 'siu' ? '🎓 Sincronizar SIU Guaraní' : '🔄 Sincronizar con UGR Virtual';
 
   return (
-    <section className="w-full max-w-xl mx-auto rounded-2xl border border-slate-800 bg-[#121821] p-6 sm:p-8">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Sincronizar cuenta</p>
-      <h2 className="mt-2 text-2xl font-black text-white">{usuario}</h2>
-
-      <div className="mt-4 flex gap-2">
-        <button
-          type="button"
-          onClick={() => { setFuente('ugr'); setError(''); setMensaje(''); }}
-          className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold cursor-pointer ${
-            fuente === 'ugr'
-              ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-100'
-              : 'border-slate-800 bg-[#0d1117] text-slate-400'
-          }`}
-        >
-          UGR Virtual
-        </button>
-        <button
-          type="button"
-          onClick={() => { setFuente('siu'); setError(''); setMensaje(''); }}
-          className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold cursor-pointer ${
-            fuente === 'siu'
-              ? 'border-blue-500/50 bg-blue-500/15 text-blue-100'
-              : 'border-slate-800 bg-[#0d1117] text-slate-400'
-          }`}
-        >
-          SIU Guaraní
-        </button>
-      </div>
-
-      <p className="mt-3 text-sm leading-relaxed text-slate-400">
-        {fuente === 'ugr'
-          ? 'DNI y clave de UGR Virtual solo para esta sincronización. Carga tu cursada y las tareas que falten en el tablero.'
-          : 'Usuario y clave de SIU Guaraní solo para esta sincronización. Importa las notas finales del plan de estudio a la pestaña Plan.'}
-      </p>
-
-      <form onSubmit={sincronizar} className="mt-6 space-y-4" autoComplete="off">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-300" htmlFor="sync-usuario">
-            {fuente === 'ugr' ? 'DNI de UGR Virtual' : 'Usuario de SIU Guaraní'}
-          </label>
-          <input
-            id="sync-usuario"
-            value={dni}
-            onChange={(evento) => setDni(evento.target.value)}
-            inputMode={fuente === 'ugr' ? 'numeric' : 'text'}
-            autoComplete="off"
-            className="w-full rounded-xl border border-slate-800 bg-[#0d1117] p-3.5 text-base text-white"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-300" htmlFor="sync-clave">Contraseña</label>
-          <input
-            id="sync-clave"
-            type="password"
-            value={clave}
-            onChange={(evento) => setClave(evento.target.value)}
-            autoComplete="new-password"
-            className="w-full rounded-xl border border-slate-800 bg-[#0d1117] p-3.5 text-base text-white"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={enviando}
-          className={`w-full rounded-xl px-4 py-3 text-sm font-bold text-slate-950 cursor-pointer disabled:opacity-50 ${
-            fuente === 'siu' ? 'bg-blue-400 hover:bg-blue-300' : 'bg-cyan-500 hover:bg-cyan-400'
-          }`}
-        >
-          {enviando ? 'Sincronizando…' : fuente === 'siu' ? 'Importar plan SIU' : 'Sincronizar mi cursada'}
-        </button>
-        {onCerrar && (
-          <button
-            type="button"
-            onClick={onCerrar}
-            disabled={enviando}
-            className="w-full text-xs font-semibold text-slate-400 cursor-pointer disabled:opacity-50"
-          >
-            {listo ? 'Cerrar' : 'Cancelar'}
+    <section className={contenedor}>
+      {variante === 'modal' && onCerrar && (
+        <div className="flex justify-end mb-2">
+          <button type="button" onClick={onCerrar} className="text-xs text-slate-300 hover:text-white cursor-pointer">
+            Cerrar
           </button>
-        )}
-      </form>
+        </div>
+      )}
 
-      {mensaje && !detalleSiu && <p className="mt-4 text-sm text-emerald-300">{mensaje}</p>}
-      {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
-      <ResumenCursada resumen={resumen} />
-      {detalleSiu && (
-        <div className="mt-4">
-          <DetalleSyncSiu {...detalleSiu} />
+      {fase === 'credenciales' && (
+        <>
+          <h3 className="text-base font-bold text-white mb-1">{titulo}</h3>
+          <p className="text-xs text-slate-400 mb-1">{usuario}</p>
+          <p className="text-xs text-slate-400 mb-4">
+            {fuente === 'ugr'
+              ? 'DNI y clave de UGR Virtual solo para esta sincronización. Carga tu cursada y las tareas que falten en el tablero.'
+              : 'Usuario y clave de SIU Guaraní solo para esta sincronización. Importa las notas finales del plan a la pestaña Plan.'}
+          </p>
+
+          {permitirCambiarFuente && (
+            <div className="flex gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => cambiarFuente('ugr')}
+                className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold cursor-pointer ${
+                  fuente === 'ugr'
+                    ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-100'
+                    : 'border-slate-800 bg-[#0d1117] text-slate-400'
+                }`}
+              >
+                UGR Virtual
+              </button>
+              <button
+                type="button"
+                onClick={() => cambiarFuente('siu')}
+                className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold cursor-pointer ${
+                  fuente === 'siu'
+                    ? 'border-blue-500/50 bg-blue-500/15 text-blue-100'
+                    : 'border-slate-800 bg-[#0d1117] text-slate-400'
+                }`}
+              >
+                SIU Guaraní
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={sincronizar} className="space-y-4" autoComplete="off">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-300" htmlFor="sync-usuario">
+                {fuente === 'ugr' ? 'DNI de UGR Virtual' : 'Usuario de SIU Guaraní'}
+              </label>
+              <input
+                id="sync-usuario"
+                value={dni}
+                onChange={(evento) => setDni(evento.target.value)}
+                inputMode={fuente === 'ugr' ? 'numeric' : 'text'}
+                autoComplete="off"
+                className="w-full rounded-xl border border-slate-800 bg-[#0d1117] p-3.5 text-base text-white"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-300" htmlFor="sync-clave">Contraseña</label>
+              <input
+                id="sync-clave"
+                type="password"
+                value={clave}
+                onChange={(evento) => setClave(evento.target.value)}
+                autoComplete="new-password"
+                className="w-full rounded-xl border border-slate-800 bg-[#0d1117] p-3.5 text-base text-white"
+              />
+            </div>
+            <button
+              type="submit"
+              className={`w-full rounded-xl px-4 py-3 text-sm font-bold text-slate-950 cursor-pointer ${
+                fuente === 'siu' ? 'bg-blue-400 hover:bg-blue-300' : 'bg-cyan-500 hover:bg-cyan-400'
+              }`}
+            >
+              {fuente === 'siu' ? 'Importar plan SIU' : 'Sincronizar mi cursada'}
+            </button>
+            {onCerrar && (
+              <button
+                type="button"
+                onClick={onCerrar}
+                className="w-full text-xs font-semibold text-slate-400 cursor-pointer"
+              >
+                Cancelar
+              </button>
+            )}
+          </form>
+        </>
+      )}
+
+      {fase === 'cargando' && <SyncCargando fuente={fuente} />}
+
+      {fase === 'error' && (
+        <div className="space-y-4">
+          <h3 className="text-base font-bold text-white">{titulo}</h3>
+          <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">{error}</div>
+          <div className="flex flex-wrap gap-2 justify-end">
+            <button
+              type="button"
+              onClick={reiniciarCredenciales}
+              className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs cursor-pointer"
+            >
+              Volver a intentar
+            </button>
+            {onCerrar && (
+              <button
+                type="button"
+                onClick={onCerrar}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 px-4 rounded-xl text-xs cursor-pointer"
+              >
+                Cerrar
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {fase === 'listo' && (
+        <div className="space-y-4">
+          <h3 className="text-base font-bold text-white">{titulo}</h3>
+          {fuente === 'ugr' ? (
+            <>
+              {mensaje && (
+                <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300 mb-1">Resultado</p>
+                  <p>{mensaje}</p>
+                </div>
+              )}
+              <ResumenCursada resumen={resumen} />
+            </>
+          ) : (
+            detalleSiu && <DetalleSyncSiu {...detalleSiu} />
+          )}
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={reiniciarCredenciales}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 px-4 rounded-xl text-xs cursor-pointer"
+            >
+              Sincronizar de nuevo
+            </button>
+            {onCerrar && (
+              <button
+                type="button"
+                onClick={onCerrar}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs cursor-pointer"
+              >
+                Listo
+              </button>
+            )}
+          </div>
         </div>
       )}
     </section>

@@ -199,7 +199,7 @@ export default function ModalesEdicion({
                   })
                 }
               />
-              Trabajo grupal (comparte entrega y nota)
+              Trabajo grupal (en grupo comparten entrega; sin grupo, entrega individual)
             </label>
             {Boolean(tareaEnEdicion.tarea.grupal) && (
               <div className="flex flex-col gap-1 mt-2">

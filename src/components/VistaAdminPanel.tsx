@@ -262,7 +262,7 @@ export default function VistaAdminPanel(props: VistaAdminPanelProps) {
                       </label>
                       <label className="flex items-center gap-3 text-sm font-semibold text-cyan-200">
                         <input type="checkbox" checked={tareaGrupal} onChange={(e) => onTareaGrupal(e.target.checked)} />
-                        Trabajo grupal (comparte entrega y nota)
+                        Trabajo grupal (opcional en grupo; si no, entrega individual)
                       </label>
                       {tareaGrupal && (
                         <div className="flex flex-col gap-1">
