@@ -101,9 +101,16 @@ declare module '../../ugr-sync/lib/previa.mjs' {
 
 declare module '../../siu-sync/lib/sync-core.mjs' {
   export function conectarSIU(): Promise<unknown>;
-  export function sincronizarSIU(opciones?: { db: unknown; cliente: unknown }): Promise<{
-    historiaAcademica: unknown[];
+  export function sincronizarSIU(opciones?: { cliente?: unknown }): Promise<{
+    planEstudio: unknown[];
+    materiasAprobadas: unknown[];
+    enCurso: number;
     inscripcionesExamenes: unknown[];
     error: string | null;
   }>;
+  export function parsearPlanEstudio(html: string): unknown[];
+  export function clasificarImportacionPlanSiu(
+    materiasPlan: unknown[],
+    progresoExistente?: Map<string, { estado: string; nota: string | null }>
+  ): { cargadas: unknown[]; yaTenias: unknown[]; enCurso: number };
 }

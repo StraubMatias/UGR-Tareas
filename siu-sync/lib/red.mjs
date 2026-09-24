@@ -20,11 +20,12 @@ function fetchConTope(url, opciones) {
 }
 
 export async function crearClienteSIU({ usuario, contrasena, baseUrl = SIU_BASE_URL, rutaSesion = RUTA_SESION_SIU } = {}) {
+  const baseNormalizada = String(baseUrl || SIU_BASE_URL).replace(/\/?$/, '/');
   const jar = await cargarSesion(rutaSesion);
   let sesionIntentada = false;
 
   async function pedirSinAutenticar(ruta, { method = 'GET', cuerpo, tipoCuerpo } = {}) {
-    const url = new URL(ruta, baseUrl).toString();
+    const url = new URL(ruta, baseNormalizada).toString();
     let actual = url;
     let respuesta = null;
     try {
@@ -74,7 +75,7 @@ export async function crearClienteSIU({ usuario, contrasena, baseUrl = SIU_BASE_
   }
 
   async function autenticar() {
-    const resultado = await iniciarSesion({ usuario, contrasena, baseUrl, jar });
+    const resultado = await iniciarSesion({ usuario, contrasena, baseUrl: baseNormalizada, jar });
     await guardarSesion(resultado.jar, rutaSesion);
     sesionIntentada = true;
     return resultado;

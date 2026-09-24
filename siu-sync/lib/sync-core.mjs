@@ -1,5 +1,6 @@
 // SIU Guaraní 同步核心逻辑
-import { SIU_BASE_URL, SIU_RUTAS } from './constantes.mjs';
+import { load } from 'cheerio';
+import { SIU_RUTAS } from './constantes.mjs';
 import { crearClienteSIU } from './red.mjs';
 
 export async function conectarSIU() {
@@ -130,6 +131,105 @@ export function parsearHistoriaAcademica(html) {
   });
 }
 
+export function codigoPlanDesdeActividadSiu(textoActividad) {
+  const match = String(textoActividad || '').match(/V\.TUCS\.(\d+)\.(\d+)\.(\d+)/i);
+  if (!match) return null;
+  return `${match[1]}.${parseInt(match[2], 10)}.${match[3]}`;
+}
+
+export function interpretarNotaPlanSiu(notaTexto, origenTexto) {
+  const notaLimpia = String(notaTexto || '').trim();
+  const origen = String(origenTexto || '').trim();
+  if (!notaLimpia && /en\s*curso/i.test(origen)) {
+    return { omitir: true, estado: 'cursando' };
+  }
+  const match = notaLimpia.match(/(\d+(?:[.,]\d+)?)/);
+  if (!match) return { omitir: true, estado: 'pendiente' };
+  const nota = parseFloat(match[1].replace(',', '.'));
+  if (Number.isNaN(nota) || nota < 1 || nota > 10) return { omitir: true, estado: 'pendiente' };
+  let estado = 'aprobada';
+  if (/promocion/i.test(notaLimpia) || /promocion/i.test(origen)) estado = 'promocionada';
+  return { omitir: false, estado, nota };
+}
+
+export function extraerHtmlPlanEstudio(respuesta) {
+  let texto = String(respuesta || '');
+  if (texto.trim().startsWith('{')) {
+    try {
+      const json = JSON.parse(texto);
+      texto = json.cont || texto;
+    } catch {
+      // seguir con el texto original
+    }
+  }
+  const scriptMatch = texto.match(/kernel\.renderer\.on_arrival\((\{[\s\S]*\})\);\s*<\/script>/);
+  if (scriptMatch) {
+    try {
+      const payload = JSON.parse(scriptMatch[1]);
+      if (payload.content) return payload.content;
+    } catch {
+      // seguir con el texto original
+    }
+  }
+  return texto;
+}
+
+export function parsearPlanEstudio(html) {
+  const tabla = extraerHtmlPlanEstudio(html);
+  const $ = load(tabla);
+  const materias = [];
+
+  $('tr.materia').each((_, fila) => {
+    const celdas = $(fila).find('td').toArray().map((celda) => $(celda).text().replace(/\s+/g, ' ').trim());
+    if (celdas.length < 5) return;
+    const actividad = celdas[0] || '';
+    const codigoMateria = codigoPlanDesdeActividadSiu(actividad);
+    const nombreMateria = actividad.replace(/\s*\(V\.TUCS\.[^)]+\)\s*$/i, '').trim() || actividad;
+    const interpretacion = interpretarNotaPlanSiu(celdas[4], celdas[5]);
+    materias.push({
+      codigoMateria,
+      codigoSiu: actividad.match(/V\.TUCS\.[\d.]+/i)?.[0] || null,
+      nombreMateria,
+      estado: interpretacion.estado || 'pendiente',
+      nota: interpretacion.nota ?? null,
+      omitir: interpretacion.omitir,
+      enCurso: !interpretacion.omitir ? false : interpretacion.estado === 'cursando'
+    });
+  });
+
+  return materias;
+}
+
+export function clasificarImportacionPlanSiu(materiasPlan, progresoExistente = new Map()) {
+  const cargadas = [];
+  const yaTenias = [];
+  const enCurso = materiasPlan.filter((materia) => materia.enCurso).length;
+
+  for (const materia of materiasPlan) {
+    if (materia.omitir || !materia.codigoMateria || materia.nota == null) continue;
+    const existente = progresoExistente.get(materia.codigoMateria);
+    const notaTexto = String(materia.nota).replace(',', '.');
+    const item = {
+      codigo: materia.codigoMateria,
+      nombre: materia.nombreMateria,
+      nota: notaTexto,
+      estado: materia.estado
+    };
+    if (
+      existente
+      && ['aprobada', 'promocionada'].includes(existente.estado)
+      && String(existente.nota ?? '').replace(',', '.') === notaTexto
+      && existente.estado === materia.estado
+    ) {
+      yaTenias.push(item);
+      continue;
+    }
+    cargadas.push(item);
+  }
+
+  return { cargadas, yaTenias, enCurso };
+}
+
 export function parsearInformeNotas(html) {
   const notas = [];
   // TODO: 根据实际页面结构调整
@@ -144,64 +244,35 @@ export function parsearInscripcionesExamenes(html) {
 
 // --- 主同步函数 ---
 
-export async function sincronizarSIU({ db, cliente } = {}) {
+export async function sincronizarSIU({ cliente } = {}) {
   if (!cliente) {
     cliente = await conectarSIU();
   }
 
   const resultados = {
-    historiaAcademica: [],
+    planEstudio: [],
+    materiasAprobadas: [],
+    enCurso: 0,
     inscripcionesExamenes: [],
     error: null,
   };
 
   try {
-    // First get the page to establish the session context
-    const resHistoria = await cliente.pedir(SIU_RUTAS.historiaAcademica);
-    console.log('📄 Historia académica página:', resHistoria.html.length, 'chars, URL:', resHistoria.url);
+    await cliente.autenticar();
 
-    // Then try the AJAX endpoint to get the actual data
-    // The SIU Guaraní kernel API uses GET with checks parameter
-    const resDatos = await cliente.pedir(
-      `${SIU_RUTAS.historiaAcademica}?checks=t&modo=anio`,
-      { method: 'GET' }
+    const resPlan = await cliente.pedir(`${SIU_RUTAS.planEstudio}?checks=t`);
+    if (resPlan.html.includes('"cod":"-2"')) {
+      throw new Error('La sesión de SIU Guaraní expiró. Volvé a intentar.');
+    }
+
+    resultados.planEstudio = parsearPlanEstudio(resPlan.html);
+    resultados.materiasAprobadas = resultados.planEstudio.filter(
+      (materia) => !materia.omitir && materia.codigoMateria && materia.nota != null
     );
-    console.log('📄 Datos AJAX:', resDatos.html.length, 'chars');
-
-    // Parse the HTML content from the response (could be JSON with .cont or raw HTML)
-    let htmlParaParsear = resDatos.html;
-    if (resDatos.html.trim().startsWith('{')) {
-      try {
-        const json = JSON.parse(resDatos.html);
-        htmlParaParsear = json.cont || resDatos.html;
-        console.log('📄 JSON response, cont length:', (json.cont || '').length);
-      } catch {
-        // Not valid JSON, use as-is
-      }
-    }
-
-    // Also parse the original page HTML as fallback
-    const materiasDelPagina = parsearHistoriaAcademica(resHistoria.html);
-    const materiasDeDatos = parsearHistoriaAcademica(htmlParaParsear);
-
-    console.log('📊 Materias de página:', materiasDelPagina.length);
-    console.log('📊 Materias de AJAX:', materiasDeDatos.length);
-
-    // Use the one with more results (AJAX usually has the table data)
-    if (materiasDeDatos.length > materiasDelPagina.length) {
-      resultados.historiaAcademica = materiasDeDatos;
-    } else {
-      resultados.historiaAcademica = materiasDelPagina;
-    }
-
-    console.log('📊 Materias finales:', resultados.historiaAcademica.length);
-    for (const m of resultados.historiaAcademica) {
-      console.log(`   - ${m.codigoMateria}: ${m.nombreMateria} [${m.estado}] nota=${m.nota}`);
-    }
+    resultados.enCurso = resultados.planEstudio.filter((materia) => materia.enCurso).length;
 
     const resExamenes = await cliente.pedir(SIU_RUTAS.inscripcionesExamenes);
     resultados.inscripcionesExamenes = parsearInscripcionesExamenes(resExamenes.html);
-
   } catch (error) {
     resultados.error = error.message;
     console.error('❌ Error sincronizando SIU:', error.message);

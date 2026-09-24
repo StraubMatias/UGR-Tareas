@@ -1,9 +1,11 @@
-// SIU Guaraní 配置
-export const SIU_BASE_URL = process.env.SIU_BASE_URL || 'https://guarani.ugr.edu.ar/3w';
+// SIU Guaraní — la base debe terminar en / para que URL() no pierda el prefijo /3w/
+export const SIU_BASE_URL = (process.env.SIU_BASE_URL || 'https://guarani.ugr.edu.ar/3w').replace(/\/?$/, '/');
 
 export const SIU_RUTAS = {
   login: 'acceso?auth=form',
   inicioAlumno: 'inicio_alumno',
+  // Reportes → Plan de estudio (notas finales y materias en curso)
+  planEstudio: 'plan_estudio',
   // 历史记录（已修读课程、成绩）
   historiaAcademica: 'historia_academica',
   // 成绩报告

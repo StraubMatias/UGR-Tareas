@@ -1620,9 +1620,8 @@ export async function syncUgrAction({
   }
 }
 
-// Sincroniza notas de materias aprobadas desde SIU Guaraní.
-// Solo el administrador puede ejecutarla. Carga las materias aprobadas
-// en la tabla `progreso_materias` con su estado correspondiente.
+// Sincroniza notas finales del plan de estudio (SIU Guaraní → Reportes / Plan).
+// Solo el administrador. Importa materias ya aprobadas/promocionadas con nota.
 export async function syncSiuAction() {
   try {
     if (!await verificarAdmin()) {
@@ -1633,34 +1632,52 @@ export async function syncSiuAction() {
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
 
+    const alumnoDB = await obtenerAlumno(usuarioSesion);
+    if (!alumnoDB) return { exito: false, mensaje: 'No encontramos tu usuario en el tablero.' };
+
     // @ts-ignore - módulo ESM sin declarations
-    const { conectarSIU, sincronizarSIU } = await import('../../siu-sync/lib/sync-core.mjs');
+    const { conectarSIU, sincronizarSIU, clasificarImportacionPlanSiu } = await import('../../siu-sync/lib/sync-core.mjs');
     const cliente = await conectarSIU();
-    const resultado = await sincronizarSIU({ db, cliente });
+    const resultado = await sincronizarSIU({ cliente });
 
     if (resultado.error) {
-      console.error('Error al sincronizar SIU:', resultado.error);
+      return { exito: false, mensaje: resultado.error };
     }
 
-    // Guardar cada materia aprobada en progreso_materias
-    const materiasGuardadas = resultado.historiaAcademica || [];
-    if (materiasGuardadas.length > 0) {
-      const operaciones = materiasGuardadas.map((materia: { codigoMateria: string; estado: string; nota?: number }) => ({
+    const progresoActual = await db.execute({
+      sql: 'SELECT materia_codigo, estado, nota FROM progreso_materias WHERE alumno_id = ? OR LOWER(alumno) = LOWER(?)',
+      args: [alumnoDB.id, alumnoDB.nombre]
+    });
+    const existentes = new Map(
+      progresoActual.rows.map((fila) => [
+        String(fila.materia_codigo),
+        { estado: String(fila.estado || ''), nota: fila.nota == null ? null : String(fila.nota) }
+      ])
+    );
+
+    const materiasPlan = (resultado.planEstudio || []).filter((materia: { codigoMateria?: string | null }) => (
+      materia.codigoMateria && CODIGOS_PLAN.has(materia.codigoMateria)
+    ));
+    const { cargadas, yaTenias, enCurso } = clasificarImportacionPlanSiu(materiasPlan, existentes);
+
+    if (cargadas.length > 0) {
+      const operaciones = cargadas.map((materia: { codigo: string; estado: string; nota: string }) => ({
         sql: `
           INSERT INTO progreso_materias (id, alumno_id, alumno, materia_codigo, estado, nota, actualizado_en)
           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
           ON CONFLICT(alumno, materia_codigo) DO UPDATE SET
+            alumno_id = excluded.alumno_id,
             estado = excluded.estado,
             nota = excluded.nota,
             actualizado_en = excluded.actualizado_en
         `,
         args: [
-          `progreso_siu_${materia.codigoMateria}`,
-          null, // alumno_id se asigna según el alumno que sincroniza
-          usuarioSesion,
-          materia.codigoMateria,
-          materia.estado === 'aprobada' ? 'aprobada' : 'cursando',
-          materia.nota ?? null
+          `progreso_${alumnoDB.id}_${materia.codigo}`,
+          alumnoDB.id,
+          alumnoDB.nombre,
+          materia.codigo,
+          materia.estado,
+          materia.nota
         ]
       }));
       await db.batch(operaciones, 'write');
@@ -1669,20 +1686,23 @@ export async function syncSiuAction() {
     await registrarAuditoria({
       accion: 'sync_siu',
       usuario: usuarioSesion,
-      detalle: `Sincronizó SIU Guaraní: ${materiasGuardadas.length} materia(s) encontrada(s) en historia académica`,
+      detalle: `Sincronizó SIU Guaraní: ${cargadas.length} nota(s) nueva(s), ${yaTenias.length} ya cargada(s)`,
       ip: await obtenerIPReal()
     });
 
+    const partesMensaje = [];
+    if (cargadas.length > 0) partesMensaje.push(`Se importaron ${cargadas.length} nota(s) del plan de estudio.`);
+    if (yaTenias.length > 0) partesMensaje.push(`${yaTenias.length} materia(s) ya tenían la misma nota cargada.`);
+    if (cargadas.length === 0 && yaTenias.length === 0) {
+      partesMensaje.push('No hay notas nuevas para importar (solo materias en curso o sin nota final).');
+    }
+
     return {
       exito: true,
-      materiasEncontradas: materiasGuardadas.length,
-      error: resultado.error,
-      materias: materiasGuardadas.map((m: { codigoMateria: string; nombreMateria: string; nota?: number; estado: string }) => ({
-        codigo: m.codigoMateria,
-        nombre: m.nombreMateria,
-        nota: m.nota,
-        estado: m.estado
-      }))
+      enCurso: enCurso ?? resultado.enCurso ?? 0,
+      notasCargadas: cargadas,
+      notasYaCargadas: yaTenias,
+      mensaje: partesMensaje.join(' ')
     };
   } catch (error) {
     console.error('Error en syncSiuAction:', error);

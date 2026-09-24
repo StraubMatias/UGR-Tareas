@@ -197,6 +197,12 @@ export default function Home() {
   const [syncAbierto, setSyncAbierto] = useState<boolean>(false);
   const [syncEstado, setSyncEstado] = useState<'idle' | 'cargando' | 'listo' | 'error'>('idle');
   const [syncTipo, setSyncTipo] = useState<'ugr' | 'siu'>('ugr');
+  const [syncSiuDetalle, setSyncSiuDetalle] = useState<{
+    notasCargadas: Array<{ codigo: string; nombre: string; nota: string; estado: string }>;
+    notasYaCargadas: Array<{ codigo: string; nombre: string; nota: string; estado: string }>;
+    enCurso: number;
+    mensaje: string;
+  } | null>(null);
   const [syncDatos, setSyncDatos] = useState<SyncResult | null>(null);
   const syncEnCurso = useRef<boolean>(false);
   const [syncMensaje, setSyncMensaje] = useState<string>('');
@@ -1123,18 +1129,23 @@ export default function Home() {
     setSyncAbierto(true);
     setSyncEstado('cargando');
     setSyncMensaje('Conectando con SIU Guaraní...');
+    setSyncSiuDetalle(null);
     syncSiuAction()
-      .then((res: any) => {
+      .then(async (res: any) => {
         if (!res || !res.exito) {
           setSyncEstado('error');
           setSyncMensaje(res?.mensaje || 'No se pudo sincronizar con SIU.');
-        } else {
-          setSyncEstado('listo');
-          setSyncMensaje(`✅ Sincronización completada: ${res.materiasEncontradas} materias encontradas`);
-          if (res.error) {
-            setSyncMensaje(prev => prev + `\n⚠️ Nota: ${res.error}`);
-          }
+          return;
         }
+        setSyncEstado('listo');
+        setSyncMensaje(res.mensaje || 'Sincronización completada.');
+        setSyncSiuDetalle({
+          notasCargadas: res.notasCargadas || [],
+          notasYaCargadas: res.notasYaCargadas || [],
+          enCurso: res.enCurso || 0,
+          mensaje: res.mensaje || ''
+        });
+        await cargarBD();
       })
       .catch((err: unknown) => {
         setSyncEstado('error');
@@ -1142,12 +1153,6 @@ export default function Home() {
       })
       .finally(() => {
         syncEnCurso.current = false;
-        setTimeout(() => {
-          if (syncEnCurso.current === false) {
-            setSyncEstado('idle');
-            setSyncMensaje('');
-          }
-        }, 5000);
       });
   };
 
@@ -1841,7 +1846,7 @@ export default function Home() {
             {esAdmin && (
               <button
                 onClick={abrirSyncSIU}
-                title="Sincroniza notas de materias aprobadas desde SIU Guaraní"
+                title="Importa notas finales del plan de estudio en SIU Guaraní"
                 className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
               >
                 🎓 Sincronizar SIU
@@ -3113,12 +3118,12 @@ export default function Home() {
               {syncTipo === 'ugr' && (
                 <button type="button" onClick={() => ejecutarSyncUGR(false)} disabled={syncEstado === 'cargando'} className="text-xs text-cyan-300 disabled:opacity-50">Buscar de nuevo</button>
               )}
-              <button type="button" onClick={() => { setSyncAbierto(false); setSyncTipo('ugr'); }} className="text-xs text-slate-300">Cerrar</button>
+              <button type="button" onClick={() => { setSyncAbierto(false); setSyncTipo('ugr'); setSyncSiuDetalle(null); setSyncEstado('idle'); setSyncMensaje(''); }} className="text-xs text-slate-300">Cerrar</button>
             </div>
             {syncTipo === 'siu' ? (
               <>
                 <h3 className="text-base font-bold text-white mb-1">🎓 Sincronizar SIU Guaraní</h3>
-                <p className="text-xs text-slate-400 mb-4">Consulta las materias aprobadas y notas desde el sistema académico de la UGR.</p>
+                <p className="text-xs text-slate-400 mb-4">Lee el plan de estudio en SIU Guaraní e importa las notas finales de materias ya aprobadas o promocionadas.</p>
               </>
             ) : (
               <>
@@ -3134,12 +3139,41 @@ export default function Home() {
               </div>
             )}
 
-            {syncTipo === 'siu' && syncEstado === 'listo' && (
+            {syncTipo === 'siu' && syncEstado === 'listo' && syncSiuDetalle && (
               <div className="space-y-3">
                 <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300 mb-2">Materias encontradas</p>
-                  {syncMensaje && <p className="text-sm">{syncMensaje}</p>}
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300 mb-2">Resultado</p>
+                  <p>{syncSiuDetalle.mensaje}</p>
+                  {syncSiuDetalle.enCurso > 0 && (
+                    <p className="mt-2 text-xs text-emerald-200/80">
+                      {syncSiuDetalle.enCurso} materia(s) figuran en curso en SIU y no se importaron.
+                    </p>
+                  )}
                 </div>
+                {syncSiuDetalle.notasCargadas.length > 0 && (
+                  <div className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-4 text-sm text-cyan-100">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300 mb-2">Notas importadas</p>
+                    <ul className="space-y-1">
+                      {syncSiuDetalle.notasCargadas.map((item) => (
+                        <li key={item.codigo}>
+                          {item.codigo} · {item.nombre}: nota {item.nota} ({item.estado})
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {syncSiuDetalle.notasYaCargadas.length > 0 && (
+                  <div className="rounded-xl border border-slate-600 bg-slate-800/40 p-4 text-sm text-slate-200">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Ya las tenías cargadas</p>
+                    <ul className="space-y-1">
+                      {syncSiuDetalle.notasYaCargadas.map((item) => (
+                        <li key={item.codigo}>
+                          {item.codigo} · {item.nombre}: nota {item.nota} ({item.estado})
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 

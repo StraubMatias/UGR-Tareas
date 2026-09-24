@@ -1,7 +1,13 @@
 // Tests para parsearHistoriaAcademica y sincronizarSIU
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parsearHistoriaAcademica, sincronizarSIU, conectarSIU } from '../lib/sync-core.mjs';
+import {
+  parsearHistoriaAcademica,
+  sincronizarSIU,
+  parsearPlanEstudio,
+  codigoPlanDesdeActividadSiu,
+  clasificarImportacionPlanSiu
+} from '../lib/sync-core.mjs';
 
 const HTML_BASE = '<!DOCTYPE html><html><head><meta charset="iso-8859-1"></head><body>';
 const HTML_FOOT = '</body></html>';
@@ -119,6 +125,46 @@ test('sincronizarSIU lanza error cuando no hay credenciales', async () => {
     if (originalUser) process.env.SIU_USER = originalUser;
     if (originalPass) process.env.SIU_PASSWORD = originalPass;
   }
+});
+
+test('codigoPlanDesdeActividadSiu mapea el código V.TUCS al plan de la tecnicatura', () => {
+  assert.equal(
+    codigoPlanDesdeActividadSiu('INTRODUCCIÓN (V.TUCS.1.01.1)'),
+    '1.1.1'
+  );
+  assert.equal(
+    codigoPlanDesdeActividadSiu('MARCOS NORMATIVOS (V.TUCS.1.06.2)'),
+    '1.6.2'
+  );
+  assert.equal(
+    codigoPlanDesdeActividadSiu('GESTIÓN DE ACTIVOS (V.TUCS.1.10.2)'),
+    '1.10.2'
+  );
+});
+
+test('parsearPlanEstudio lee notas aprobadas y omite las que están en curso', () => {
+  const filaAprobada = '<tr class="materia"><td> SEGURIDAD FÍSICA (V.TUCS.1.04.1)</td><td>Materia</td><td>1</td><td>1° cuatrimestre</td><td>10 (Aprobado)</td><td>Examen</td><td></td><td></td><td></td></tr>';
+  const filaCurso = '<tr class="materia"><td> CIBERDELITOS (V.TUCS.1.08.2)</td><td>Materia</td><td>1</td><td>2° cuatrimestre</td><td></td><td>En Curso</td><td></td><td></td><td></td></tr>';
+  const html = `<table><tbody>${filaAprobada}${filaCurso}</tbody></table>`;
+  const res = parsearPlanEstudio(html);
+  assert.equal(res.length, 2);
+  assert.equal(res[0].codigoMateria, '1.4.1');
+  assert.equal(res[0].nota, 10);
+  assert.equal(res[0].estado, 'aprobada');
+  assert.equal(res[1].enCurso, true);
+  assert.equal(res[1].omitir, true);
+});
+
+test('clasificarImportacionPlanSiu separa notas nuevas de las que ya estaban', () => {
+  const materias = [
+    { codigoMateria: '1.1.1', nombreMateria: 'Intro', estado: 'aprobada', nota: 8, omitir: false, enCurso: false },
+    { codigoMateria: '1.2.1', nombreMateria: 'TIC', estado: 'aprobada', nota: 9, omitir: false, enCurso: false }
+  ];
+  const existentes = new Map([['1.1.1', { estado: 'aprobada', nota: '8' }]]);
+  const { cargadas, yaTenias } = clasificarImportacionPlanSiu(materias, existentes);
+  assert.equal(yaTenias.length, 1);
+  assert.equal(cargadas.length, 1);
+  assert.equal(cargadas[0].codigo, '1.2.1');
 });
 
 test('sincronizarSIU prefiere AJAX cuando tiene más filas que la página', () => {
