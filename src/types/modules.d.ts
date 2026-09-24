@@ -99,6 +99,19 @@ declare module '../../ugr-sync/lib/previa.mjs' {
   }): Promise<ResultadoPrevia>;
 }
 
+declare module '../../siu-sync/lib/red.mjs' {
+  export function crearClienteSIU(opciones?: {
+    usuario?: string;
+    contrasena?: string;
+    baseUrl?: string;
+    rutaSesion?: string | null;
+  }): Promise<{
+    pedir: (ruta: string, opciones?: unknown) => Promise<{ url: string; html: string; status: number }>;
+    autenticar: () => Promise<unknown>;
+    jar: Map<string, string>;
+  }>;
+}
+
 declare module '../../siu-sync/lib/sync-core.mjs' {
   export function conectarSIU(): Promise<unknown>;
   export function sincronizarSIU(opciones?: { cliente?: unknown }): Promise<{
