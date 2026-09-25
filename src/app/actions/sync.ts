@@ -20,6 +20,7 @@ import {
   MAX_PASSWORD_LENGTH,
   MAX_USUARIO_LENGTH
 } from '../../server/action-internals';
+import { asegurarEsquemaCuentasEnServidor } from '../../server/asegurar-esquema-cuentas';
 import { sincronizarCursadaDelAlumno } from '../../server/sync-ugr-cursada';
 
 // Admin: usa SIU_USER / SIU_PASSWORD del servidor (atajo sin tipear clave).
@@ -149,6 +150,8 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
     const alumnoId = texto(resultado.rows[0]?.id);
     if (!alumnoId) return { exito: false, mensaje: 'No se encontró la cuenta.' };
 
+    await asegurarEsquemaCuentasEnServidor();
+
     const { conectarUGR, conectarUGRCon } = await import('../../../ugr-sync/lib/sync-core.mjs');
     const cliente = usarCredencialesServidor
       ? await conectarUGR()
@@ -185,7 +188,7 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
       materiasInscriptas: sync.materiasInscriptas
     };
   } catch (error) {
-    const mensaje = error instanceof Error ? error.message : '';
+    const mensaje = error instanceof Error ? error.message : String(error || '');
     const esMantenimientoOTimeout =
       mensaje.includes('mantenimiento') ||
       mensaje.includes('fuera de servicio') ||
@@ -197,6 +200,12 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
     console.error('Error en sincronizarCuentaUgrAction:', rechazo ? 'UGR Virtual rechazó el acceso' : mensaje || 'falló');
     if (rechazo) return { exito: false, mensaje: 'UGR Virtual no aceptó ese DNI o contraseña.' };
     if (esMantenimientoOTimeout || mensaje.includes('no mostró materias')) return { exito: false, mensaje };
+    if (/fetch failed|ECONNREFUSED|ENOTFOUND|network/i.test(mensaje)) {
+      return { exito: false, mensaje: 'No pudimos conectar con UGR Virtual. Probá de nuevo en unos minutos.' };
+    }
+    if (mensaje && mensaje.length <= 200 && !/^\s*at\s/m.test(mensaje)) {
+      return { exito: false, mensaje };
+    }
     return { exito: false, mensaje: 'No se pudo sincronizar con UGR Virtual.' };
   }
 }
