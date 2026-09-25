@@ -251,6 +251,21 @@ async function notaDePagina(cliente, html) {
   };
 }
 
+// Evita pedir el HTML de cada actividad en cada sync: el índice alcanza si las
+// fechas coinciden y el cierre no está en la ventana reciente.
+function actividadNecesitaDetalleFechas(existente, tarea) {
+  const parcheIndice = fechasACorregir(existente, tarea);
+  if (parcheIndice.inicio || parcheIndice.fin) return true;
+  const fin = existente?.fin;
+  if (!fin || fin === 'Sin fecha') return true;
+  const cierre = new Date(String(fin).includes('T') ? fin : `${fin}T23:59:59`).getTime();
+  if (!Number.isFinite(cierre)) return true;
+  const ahora = Date.now();
+  const hace7 = 7 * 24 * 60 * 60 * 1000;
+  const dentro30 = 30 * 24 * 60 * 60 * 1000;
+  return cierre >= ahora - hace7 && cierre <= ahora + dentro30;
+}
+
 async function fechasDeDetalle({ cliente, tarea }) {
   try {
     if (!tarea?.url) return { inicio: null, fin: null, notaIntento: null, entregada: false };
@@ -484,6 +499,23 @@ export async function listarCursosDelCampus(cliente) {
   return cursos.filter((curso) => !esCursoOrganizativo(curso.nombre));
 }
 
+/** Cursos del campus mapeados a las materias en las que el alumno está inscripto en el período. */
+export async function mapeosInscripcionesCampus({ cliente, db, alumnoId, periodoId }) {
+  const cursos = await listarCursosDelCampus(cliente);
+  const res = await db.execute({
+    sql: `SELECT m.id, m.nombre FROM inscripciones i
+          JOIN materias m ON m.id = i.materia_id
+          WHERE i.alumno_id = ? AND m.periodo_id = ?`,
+    args: [alumnoId, periodoId]
+  });
+  const materias = res.rows.map((fila) => ({ id: String(fila.id), nombre: String(fila.nombre) }));
+  const mapeos = cursos.flatMap((curso) => {
+    const coincidencia = coincidirMateria(curso.nombre, materias);
+    return coincidencia ? [{ curso, coincidencia }] : [];
+  });
+  return { cursos, mapeos, materiaIds: materias.map((m) => m.id) };
+}
+
 // Crea en el período actual las materias de la carrera que el campus muestra
 // y que todavía no existían (una extra de otro cuatrimestre, por ejemplo) y
 // devuelve el mapeo curso → materia para cargarles las tareas.
@@ -656,7 +688,19 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
         // a veces no trae la apertura, así que no alcanza para dar por buena
         // la que ya teníamos guardada.
         if (tarea.url && tarea.tipo !== 'foro') {
-          aRevisar.push({ tarea, nombreFinal, existente });
+          const parcheIndice = fechasACorregir(existente, tarea);
+          if (parcheIndice.inicio || parcheIndice.fin) {
+            fechasTareasRevisar.push({
+              id: existente.id,
+              nombre: nombreFinal,
+              materiaId: coincidencia.materia.id,
+              materiaNombre: coincidencia.materia.nombre,
+              ...parcheIndice
+            });
+          }
+          if (actividadNecesitaDetalleFechas(existente, tarea)) {
+            aRevisar.push({ tarea, nombreFinal, existente });
+          }
         } else {
           const parche = fechasACorregir(existente, tarea);
           if (parche.inicio || parche.fin) {

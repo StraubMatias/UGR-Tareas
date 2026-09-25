@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useProgresoSyncEstimado } from '../hooks/useProgresoSyncEstimado';
 import { sincronizarCuentaUgrAction, sincronizarCuentaSiuAction, type MateriaInscriptaSync, type ResumenMateriaSync } from '../app/actions';
+import { fusionarLineasInforme, fusionarResumenSync, mensajeDesdeInforme } from '../lib/informe-sync-ugr';
+import { etiquetaSyncAvisos, etiquetaSyncMaterias, planPasadasSyncUgr } from '../lib/sync-ugr-orquestacion';
+import type { OpcionesSincronizarUgr } from '../app/actions';
 import dynamic from 'next/dynamic';
 
 const DetalleSyncSiu = dynamic(() => import('./portal/DetalleSyncSiu'));
@@ -248,8 +251,11 @@ export default function CuentaPropia({
     notasCargadas: NotaPlanSiu[];
     notasYaCargadas: NotaPlanSiu[];
   } | null>(null);
+  const [avisoParcial, setAvisoParcial] = useState('');
+  const [etapaManual, setEtapaManual] = useState('');
 
   const { progreso, etapa, marcarCompletado } = useProgresoSyncEstimado(fase === 'cargando', fuente);
+  const etapaVisible = etapaManual || etapa;
 
   const reiniciarCredenciales = () => {
     setError('');
@@ -258,6 +264,8 @@ export default function CuentaPropia({
     setInformeLineas([]);
     setMateriasInscriptas([]);
     setDetalleSiu(null);
+    setAvisoParcial('');
+    setEtapaManual('');
     setDni('');
     setClave('');
     if (usarCredencialesServidor) {
@@ -280,21 +288,115 @@ export default function CuentaPropia({
     setInformeLineas([]);
     setMateriasInscriptas([]);
     setDetalleSiu(null);
+    setAvisoParcial('');
+    setEtapaManual('');
     setDni('');
     setClave('');
     setFase('cargando');
     try {
       if (fuente === 'ugr') {
-        const resultado = await sincronizarCuentaUgrAction(usuarioIngresado, claveIngresada);
-        if (!resultado.exito) {
-          setError(resultado.mensaje || 'No se pudo sincronizar.');
+        let lineasAcumuladas: string[] = [];
+        let resumenAcumulado: ResumenMateriaSync[] = [];
+        let materiasAcumuladas: MateriaInscriptaSync[] = [];
+
+        const aplicarResultadoUgr = (resultado: {
+          informeLineas?: string[];
+          resumen?: ResumenMateriaSync[];
+          materiasInscriptas?: MateriaInscriptaSync[];
+        }) => {
+          lineasAcumuladas = fusionarLineasInforme(lineasAcumuladas, resultado.informeLineas || []);
+          resumenAcumulado = fusionarResumenSync(resumenAcumulado, resultado.resumen || []);
+          if (resultado.materiasInscriptas?.length) materiasAcumuladas = resultado.materiasInscriptas;
+          setInformeLineas(lineasAcumuladas);
+          setResumen(resumenAcumulado.filter(filaTieneCambios));
+          setMateriasInscriptas(materiasAcumuladas);
+        };
+
+        const llamarUgr = (opciones: OpcionesSincronizarUgr) => (
+          sincronizarCuentaUgrAction(usuarioIngresado, claveIngresada, opciones)
+        );
+
+        const mensajeSiSeCorta = (err: unknown) => {
+          const crudo = err instanceof Error ? err.message : '';
+          return /unexpected response/i.test(crudo)
+            ? 'Se cortó la conexión con el servidor (tiempo límite). '
+            : '';
+        };
+
+        let huboTrabajo = false;
+        setEtapaManual('Conectando con UGR Virtual y leyendo tu cursada…');
+        let preparacion;
+        try {
+          preparacion = await llamarUgr({ fase: 'preparar' });
+        } catch (err) {
+          setError(`${mensajeSiSeCorta(err)}No se pudo iniciar la sincronización. Probá de nuevo.`.trim());
           setFase('error');
           return;
         }
-        setMensaje(resultado.mensaje || 'Cursada actualizada.');
-        setInformeLineas(resultado.informeLineas || []);
-        setResumen(resultado.resumen || []);
-        setMateriasInscriptas(resultado.materiasInscriptas || []);
+        if (!preparacion.exito) {
+          setError(preparacion.mensaje || 'No se pudo sincronizar.');
+          setFase('error');
+          return;
+        }
+        aplicarResultadoUgr(preparacion);
+
+        const plan = planPasadasSyncUgr(preparacion.materiaIdsSync || []);
+        const lotesMaterias = plan.lotesMaterias;
+        const totalMaterias = plan.materiaIds.length;
+
+        for (let indice = 0; indice < lotesMaterias.length; indice += 1) {
+          const lote = lotesMaterias[indice];
+          setEtapaManual(etiquetaSyncMaterias(indice, lotesMaterias, totalMaterias));
+          try {
+            const resultadoLote = await llamarUgr({ fase: 'materias', materiaIds: lote });
+            if (!resultadoLote.exito) {
+              if (huboTrabajo) {
+                setAvisoParcial('No se completaron todas las materias; lo ya procesado quedó guardado en el tablero.');
+                onInterrumpida?.();
+                break;
+              }
+              setError(resultadoLote.mensaje || 'No se pudo sincronizar.');
+              setFase('error');
+              return;
+            }
+            aplicarResultadoUgr(resultadoLote);
+            huboTrabajo = true;
+          } catch (err) {
+            if (huboTrabajo) {
+              setAvisoParcial(`${mensajeSiSeCorta(err)}Lo procesado hasta acá quedó guardado. Podés sincronizar de nuevo para el resto.`.trim());
+              onInterrumpida?.();
+              break;
+            }
+            setError(`${mensajeSiSeCorta(err)}No se pudo sincronizar.`.trim());
+            setFase('error');
+            return;
+          }
+        }
+
+        const lotesAvisos = plan.lotesAvisos;
+        for (let indice = 0; indice < lotesAvisos.length; indice += 1) {
+          setEtapaManual(etiquetaSyncAvisos(indice, lotesAvisos, totalMaterias));
+          try {
+            const resultadoAvisos = await llamarUgr({ fase: 'avisos', materiaIds: lotesAvisos[indice] });
+            if (resultadoAvisos.exito) {
+              aplicarResultadoUgr(resultadoAvisos);
+            } else {
+              setAvisoParcial('No pudimos terminar todos los foros de avisos; tareas, fechas y notas ya quedaron guardadas.');
+              onInterrumpida?.();
+              break;
+            }
+          } catch (err) {
+            setAvisoParcial(
+              `${mensajeSiSeCorta(err)}Se interrumpió la lectura de avisos; lo principal del tablero ya quedó actualizado.`.trim()
+            );
+            onInterrumpida?.();
+            break;
+          }
+        }
+
+        setEtapaManual('');
+        const materiasSync = Math.max(materiasAcumuladas.length, 1);
+        setMensaje(mensajeDesdeInforme(lineasAcumuladas, materiasSync));
         await marcarCompletado();
         setFase('listo');
         onCompletado?.();
@@ -317,14 +419,8 @@ export default function CuentaPropia({
         setFase('listo');
         onCompletado?.();
       }
-    } catch (err) {
-      const crudo = err instanceof Error ? err.message : '';
-      if (/unexpected response/i.test(crudo)) {
-        setError('Se cortó la respuesta, pero lo que alcanzó a guardarse ya quedó. Podés sincronizar de nuevo para completar.');
-        onInterrumpida?.();
-      } else {
-        setError('No se pudo sincronizar.');
-      }
+    } catch {
+      setError('No se pudo sincronizar.');
       setFase('error');
     }
   };
@@ -448,7 +544,7 @@ export default function CuentaPropia({
         </>
       )}
 
-      {fase === 'cargando' && <SyncCargando fuente={fuente} progreso={progreso} etapa={etapa} />}
+      {fase === 'cargando' && <SyncCargando fuente={fuente} progreso={progreso} etapa={etapaVisible} />}
 
       {fase === 'error' && (
         <div className="space-y-4">
@@ -480,6 +576,11 @@ export default function CuentaPropia({
           <h3 className="text-base font-bold text-white">{titulo}</h3>
           {fuente === 'ugr' ? (
             <>
+              {avisoParcial && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
+                  {avisoParcial}
+                </div>
+              )}
               <ResumenCursada resumen={resumen} informeLineas={informeLineas} materiasInscriptas={materiasInscriptas} />
             </>
           ) : (

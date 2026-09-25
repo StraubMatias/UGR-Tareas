@@ -17,9 +17,21 @@ export interface MateriaInscriptaSync {
   materiaNueva?: boolean;
 }
 
+export type FaseSincronizarUgr = 'preparar' | 'materias' | 'avisos' | 'nucleo';
+// nucleo: atajo servidor (preparar + todas las materias en una pasada)
+
+export interface OpcionesSincronizarUgr {
+  /** Pasadas cortas: preparar → materias (por lote) → avisos (por lote). */
+  fase?: FaseSincronizarUgr;
+  /** IDs de materias para `materias` o `avisos` en esa pasada. */
+  materiaIds?: string[];
+}
+
 export interface RespuestaAction {
   exito: boolean;
   mensaje?: string;
+  /** Hubo aviso o paso opcional sin terminar, pero el núcleo sí se guardó. */
+  syncParcial?: boolean;
   usuario?: string;
   rol?: string;
   origen?: string;
@@ -28,6 +40,8 @@ export interface RespuestaAction {
   materiasInscriptas?: MateriaInscriptaSync[];
   /** Lista detallada de lo que hizo la última sync UGR (para mostrar en pantalla). */
   informeLineas?: string[];
+  /** Tras `preparar`, las materias que se van a sincronizar en lotes. */
+  materiaIdsSync?: string[];
 }
 
 export interface RespuestaSiuSync {

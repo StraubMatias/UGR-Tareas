@@ -53,9 +53,7 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
         : materiasDelAlumno.length === 0
           ? 'No cursan materias en común'
           : '';
-  const seleccionadas = filtro === 'grupales'
-    ? materiasDelAlumno.flatMap((materia) => materia.tareas || []).filter((tarea) => tarea.grupal)
-    : resumen[filtro];
+  const seleccionadas = filtro === 'grupales' ? resumen.grupales : resumen[filtro];
   const ids = new Set(seleccionadas.map((tarea) => tarea.id));
   const filtros = ([...ESTADOS, ['grupales', 'Grupales']] as [ClaveFiltro, string][]);
 
@@ -90,7 +88,7 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
             </div>
             {seleccionadas.length === 0 ? (
               <p role="status" className="rounded-xl border border-slate-800 p-6 text-center text-sm text-slate-300">
-                {resumen.total === 0 ? 'Todavía no hay tareas cargadas.' : filtro === 'pendientes' ? 'No hay entregas abiertas pendientes. Podés consultar las notas, tareas futuras y grupos en los otros filtros.' : 'No hay tareas en esta categoría.'}
+                {resumen.total === 0 ? 'Todavía no hay tareas cargadas.' : filtro === 'pendientes' ? 'No hay entregas abiertas pendientes. Podés consultar las notas, tareas futuras y grupos en los otros filtros.' : filtro === 'grupales' ? 'No hay trabajos grupales pendientes. Los que ya tienen entrega o nota están en Completadas.' : 'No hay tareas en esta categoría.'}
               </p>
                                                 ) : (
               <div className="estado-tareas-contenedor flex flex-wrap gap-2">

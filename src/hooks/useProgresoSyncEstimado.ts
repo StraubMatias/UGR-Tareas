@@ -36,7 +36,7 @@ export function useProgresoSyncEstimado(activo: boolean, fuente: FuenteSync) {
     }
 
     const inicio = Date.now();
-    const escalaMs = fuente === 'ugr' ? 72_000 : 38_000;
+    const escalaMs = fuente === 'ugr' ? 95_000 : 38_000;
 
     const intervalo = window.setInterval(() => {
       const segundos = (Date.now() - inicio) / 1000;

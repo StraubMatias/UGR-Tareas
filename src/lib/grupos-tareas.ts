@@ -144,33 +144,66 @@ async function sincronizarProgresoGrupo(
 
   // 2. Sincronizar nota si la tarea lleva nota y al menos un integrante ya tenía nota cargada
   if (Number(tarea.con_nota)) {
-    const notas = await consultar<{ nota: string | number | null; cargada_en: string | null }>(tx,
-      `SELECT * FROM notas_tareas WHERE tarea_id = ? AND alumno_id IN (${placeholders}) ORDER BY cargada_en DESC`,
+    const notas = await consultar<{ nota: string | number | null; cargada_en: string | null; alumno_id: string }>(tx,
+      `SELECT nota, cargada_en, alumno_id FROM notas_tareas WHERE tarea_id = ? AND alumno_id IN (${placeholders}) ORDER BY cargada_en ASC`,
       [tarea.id, ...ids]
     );
 
     if (notas.length > 0) {
-      const notaSincronizar = notas[0].nota;
-      const fechaNota = notas[0].cargada_en || new Date().toISOString();
-      const conNotaAntes = new Set(
-        (await consultar<{ alumno_id: string }>(tx,
-          `SELECT alumno_id FROM notas_tareas WHERE tarea_id = ? AND alumno_id IN (${placeholders})`,
-          [tarea.id, ...ids]
-        )).map((fila) => fila.alumno_id)
+      const fuente = notas[0];
+      const notaSincronizar = fuente.nota;
+      const ahoraIso = new Date().toISOString();
+      const fechaFuente = fuente.cargada_en || ahoraIso;
+      const notasPrevias = await consultar<{ alumno_id: string; cargada_en: string | null }>(tx,
+        `SELECT alumno_id, cargada_en FROM notas_tareas WHERE tarea_id = ? AND alumno_id IN (${placeholders})`,
+        [tarea.id, ...ids]
       );
+      const conNotaAntes = new Set(notasPrevias.map((fila) => fila.alumno_id));
+      const cargadaEnPorAlumno = new Map(notasPrevias.map((fila) => [fila.alumno_id, fila.cargada_en]));
       const actualizados: string[] = [];
       for (const m of miembros) {
-        await tx.execute({
-          sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en) VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, nota = excluded.nota, cargada_en = excluded.cargada_en`,
-          args: [`nota_tarea_${randomUUID()}`, tarea.id, m.id, m.nombre, notaSincronizar, fechaNota]
-        });
+        const esFuente = m.id === fuente.alumno_id;
+        const yaTenia = conNotaAntes.has(m.id);
+        let fechaNota = esFuente
+          ? fechaFuente
+          : (yaTenia ? (cargadaEnPorAlumno.get(m.id) || ahoraIso) : ahoraIso);
+        const fechaCopiadaDelFuente = Boolean(
+          yaTenia && !esFuente && fechaNota === fechaFuente
+        );
+        if (fechaCopiadaDelFuente) fechaNota = ahoraIso;
+
+        if (yaTenia && !esFuente) {
+          if (fechaCopiadaDelFuente) {
+            await tx.execute({
+              sql: `UPDATE notas_tareas SET nota = ?, alumno_id = ?, cargada_en = ? WHERE tarea_id = ? AND alumno_id = ?`,
+              args: [notaSincronizar, m.id, fechaNota, tarea.id, m.id]
+            });
+          } else {
+            await tx.execute({
+              sql: `UPDATE notas_tareas SET nota = ?, alumno_id = ? WHERE tarea_id = ? AND alumno_id = ?`,
+              args: [notaSincronizar, m.id, tarea.id, m.id]
+            });
+          }
+        } else {
+          await tx.execute({
+            sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en) VALUES (?, ?, ?, ?, ?, ?)
+                  ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, nota = excluded.nota, cargada_en = excluded.cargada_en`,
+            args: [`nota_tarea_${randomUUID()}`, tarea.id, m.id, m.nombre, notaSincronizar, fechaNota]
+          });
+        }
         await tx.execute({
           sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, ?)
-                ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, completada_en = excluded.completada_en`,
-          args: [tarea.id, m.id, m.nombre, fechaNota]
+                ON CONFLICT(tarea_id, alumno) DO UPDATE SET
+                  alumno_id = excluded.alumno_id,
+                  completada_en = CASE
+                    WHEN completadas.completada_en IS NOT NULL AND completadas.completada_en != ''
+                         AND completadas.completada_en != ?
+                    THEN completadas.completada_en
+                    ELSE excluded.completada_en
+                  END`,
+          args: [tarea.id, m.id, m.nombre, fechaNota, fechaFuente]
         });
-        if (!conNotaAntes.has(m.id)) actualizados.push(m.nombre);
+        if (!yaTenia) actualizados.push(m.nombre);
       }
       return { integrantes: actualizados, nota: String(notaSincronizar ?? '') };
     }

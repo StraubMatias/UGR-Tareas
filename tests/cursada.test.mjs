@@ -80,4 +80,40 @@ test('obtenerResumenTareasAlumno: calcula pendientes, completadas, futuras y tot
   assert.equal(resumen.futuras.length, 1);
   assert.equal(resumen.total, 3);
   assert.equal(resumen.totalGrupales, 1);
+  assert.equal(resumen.grupales.length, 1);
+});
+
+test('obtenerResumenTareasAlumno: tarea grupal con nota no cuenta en Grupales', () => {
+  const materias = [
+    {
+      id: 'm1',
+      nombre: 'Materia 1',
+      tareas: [
+        {
+          id: 't1',
+          nombre: 'TP grupal',
+          inicio: 'Sin fecha',
+          fin: '2026-10-01',
+          completadoPor: ['Ana'],
+          conNota: true,
+          grupal: true,
+          notas: { Ana: '8' }
+        },
+        {
+          id: 't2',
+          nombre: 'Otro grupal',
+          inicio: 'Sin fecha',
+          fin: '2026-10-02',
+          completadoPor: [],
+          conNota: true,
+          grupal: true
+        }
+      ]
+    }
+  ];
+  const resumen = obtenerResumenTareasAlumno('Ana', materias);
+  assert.equal(resumen.completadas.length, 1);
+  assert.equal(resumen.grupales.length, 1);
+  assert.equal(resumen.grupales[0].id, 't2');
+  assert.equal(resumen.totalGrupales, 1);
 });

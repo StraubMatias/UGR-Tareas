@@ -28,6 +28,12 @@ export function rechazarAvisos(opciones: { db: unknown; ids: string[] }): Promis
 export function conectarUGR(): Promise<unknown>;
 export function conectarUGRCon(opciones: { usuario?: string; contrasena?: string; rutaSesion?: string | null }): Promise<unknown>;
 export function listarCursosDelCampus(cliente: unknown): Promise<Array<{ id?: string | number; nombre?: string }>>;
+export function mapeosInscripcionesCampus(opciones: {
+  cliente: unknown;
+  db: unknown;
+  alumnoId: string;
+  periodoId: string;
+}): Promise<{ cursos: unknown[]; mapeos: MapeoCurso[]; materiaIds: string[] }>;
 export function emparejarCursosConMaterias(cursos: unknown[], materias: unknown[], plan?: unknown[]): Array<{ curso: unknown; materiaId: string | null; nombre: string; nueva: boolean }>;
 export function separarEvaluaciones(detectadas: unknown[]): { tareas: unknown[]; parciales: unknown[] };
 export function filtrarTareasDuplicadas(candidatas?: unknown[], existentes?: unknown[]): { nuevas: unknown[]; duplicadas: unknown[] };
