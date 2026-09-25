@@ -5,6 +5,8 @@ import { useEffect, type ReactNode } from 'react';
 interface ModalOverlayProps {
   children: ReactNode;
   maxWidth?: 'md' | 'xl' | '2xl' | 'full';
+  /** `sheet`: casi pantalla completa (ediciones). `compact`: cuadro centrado (sync, etc.). */
+  variant?: 'sheet' | 'compact';
 }
 
 const ancho: Record<NonNullable<ModalOverlayProps['maxWidth']>, string> = {
@@ -14,8 +16,7 @@ const ancho: Record<NonNullable<ModalOverlayProps['maxWidth']>, string> = {
   full: 'max-w-6xl'
 };
 
-/** Modal a pantalla casi completa: cuerpo con scroll y altura acotada al viewport. */
-export default function ModalOverlay({ children, maxWidth = 'md' }: ModalOverlayProps) {
+export default function ModalOverlay({ children, maxWidth = 'md', variant = 'sheet' }: ModalOverlayProps) {
   useEffect(() => {
     const anterior = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -23,6 +24,21 @@ export default function ModalOverlay({ children, maxWidth = 'md' }: ModalOverlay
       document.body.style.overflow = anterior;
     };
   }, []);
+
+  if (variant === 'compact') {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
+        role="presentation"
+      >
+        <div
+          className={`w-full max-h-[min(90dvh,720px)] overflow-y-auto rounded-2xl border border-slate-800 bg-[#161c26] p-6 shadow-2xl sm:p-8 ${ancho[maxWidth]}`}
+        >
+          {children}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
