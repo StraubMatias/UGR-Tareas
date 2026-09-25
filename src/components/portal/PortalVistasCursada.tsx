@@ -67,6 +67,7 @@ export interface PortalVistasCursadaProps {
   setHistorialPropioAbierto: Dispatch<SetStateAction<boolean>>;
   alumnosDesplegados: Record<string, boolean>;
   setAlumnosDesplegados: Dispatch<SetStateAction<Record<string, boolean>>>;
+  materiasExpandidas: Record<string, boolean>;
   materiasDesplegadas: Record<string, boolean>;
   alumnoComparar: string;
   setAlumnoComparar: Dispatch<SetStateAction<string>>;
@@ -133,6 +134,7 @@ export default function PortalVistasCursada({
   setHistorialPropioAbierto,
   alumnosDesplegados,
   setAlumnosDesplegados,
+  materiasExpandidas,
   materiasDesplegadas,
   alumnoComparar,
   setAlumnoComparar,
@@ -207,7 +209,9 @@ export default function PortalVistasCursada({
           alumnos={alumnos}
           usuarioActual={usuarioActual}
           esAdmin={esAdmin}
+          materiasExpandidas={materiasExpandidas}
           materiasDesplegadas={materiasDesplegadas}
+          toggleExpandirMateria={acciones.toggleExpandirMateria}
           toggleDesplegarMateria={acciones.toggleDesplegarMateria}
           setMateriaCondicionesEnEdicion={setMateriaCondicionesEnEdicion}
           setMateriaEnEdicion={setMateriaEnEdicion}

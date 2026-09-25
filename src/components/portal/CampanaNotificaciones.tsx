@@ -30,7 +30,7 @@ export default function CampanaNotificaciones({
         aria-label={`Notificaciones${noVistas.length ? ` (${noVistas.length} sin ver)` : ''}`}
         aria-expanded={abiertas}
         onClick={onToggleAbiertas}
-        className="relative bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 p-2.5 rounded-xl text-lg transition-all cursor-pointer"
+        className="relative shrink-0 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 p-1.5 sm:p-2 rounded-lg text-base leading-none transition-all cursor-pointer"
       >
         🔔
         {noVistas.length > 0 && (
@@ -40,7 +40,7 @@ export default function CampanaNotificaciones({
         )}
       </button>
       {abiertas && (
-        <div className="absolute right-0 top-14 z-50 w-[calc(100vw-2rem)] max-w-80 bg-[#161c26] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+        <div className="absolute left-0 sm:left-auto sm:right-0 top-11 z-50 w-[calc(100vw-2rem)] max-w-80 bg-[#161c26] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
             <p className="text-sm font-bold text-white">Recordatorios</p>
             <button

@@ -31,7 +31,9 @@ interface Props {
   alumnos: string[];
   usuarioActual: string | null;
   esAdmin: boolean;
+  materiasExpandidas: Record<string, boolean>;
   materiasDesplegadas: Record<string, boolean>;
+  toggleExpandirMateria: (materiaId: string) => void;
   toggleDesplegarMateria: (materiaId: string) => void;
   setMateriaCondicionesEnEdicion: (condiciones: CondicionesEdicion) => void;
   setMateriaEnEdicion: (materia: { id: string; nombre: string }) => void;
@@ -57,7 +59,9 @@ export default function VistaMaterias({
   alumnos,
   usuarioActual,
   esAdmin,
+  materiasExpandidas,
   materiasDesplegadas,
+  toggleExpandirMateria,
   toggleDesplegarMateria,
   setMateriaCondicionesEnEdicion,
   setMateriaEnEdicion,
@@ -81,6 +85,7 @@ export default function VistaMaterias({
       ) : (
         materias.map((m) => {
           const cursan = alumnosDeLaMateria(inscripciones, m.id);
+          const expandida = !!materiasExpandidas[m.id];
           const mostrarCompletadas = !!materiasDesplegadas[m.id];
           const tareasPendientes = m.tareas.filter(
             (t) => tareaPendienteAlumno(t, usuarioActual)
@@ -91,27 +96,34 @@ export default function VistaMaterias({
           const gruposTareas = agruparTareasPorUnidad(
             mostrarCompletadas ? m.tareas : tareasPendientes
           );
-    
+          const resumenPlegada = tareasPendientes.length > 0
+            ? `${tareasPendientes.length} pendiente${tareasPendientes.length === 1 ? '' : 's'}`
+            : m.tareas.length === 0
+              ? 'Sin tareas'
+              : 'Al día';
+
           return (
-            <div key={m.id} className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-5 border-b border-slate-800 pb-3 gap-3">
-                <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-                  <span>{obtenerIconoMateria(m.nombre)}</span> {m.nombre}
-                </h2>
-                <div className="flex flex-wrap gap-2 sm:justify-end">
-                  {tareasCompletadas.length > 0 && (
-                    <button
-                      onClick={() => toggleDesplegarMateria(m.id)}
-                      className="text-xs text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
-                    >
-                      {mostrarCompletadas
-                        ? 'Ocultar completadas'
-                        : `Mostrar ${tareasCompletadas.length} completada${tareasCompletadas.length === 1 ? '' : 's'}`}
-                    </button>
+            <div key={m.id} className="bg-[#161c26] border border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+              <div className="flex items-stretch gap-2 p-3 sm:p-4 border-b border-slate-800/80">
+                <button
+                  type="button"
+                  onClick={() => toggleExpandirMateria(m.id)}
+                  aria-expanded={expandida}
+                  className="flex-1 min-w-0 flex items-center gap-2 sm:gap-3 text-left rounded-lg hover:bg-slate-800/40 px-2 py-1 -mx-2 cursor-pointer transition-colors"
+                >
+                  <span className="text-slate-500 text-sm shrink-0" aria-hidden="true">{expandida ? '▼' : '▶'}</span>
+                  <span className="text-lg shrink-0" aria-hidden="true">{obtenerIconoMateria(m.nombre)}</span>
+                  <span className="text-base sm:text-lg font-bold text-white truncate">{m.nombre}</span>
+                  {!expandida && (
+                    <span className="ml-auto shrink-0 text-xs font-semibold text-slate-400 bg-slate-800/80 border border-slate-700 px-2 py-0.5 rounded-md">
+                      {resumenPlegada}
+                    </span>
                   )}
-                  {esAdmin && (
-                    <div className="flex gap-2">
+                </button>
+                {esAdmin && (
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5 self-center">
                     <button
+                      type="button"
                       onClick={() => setMateriaCondicionesEnEdicion({
                         id: m.id,
                         condiciones: m.condiciones || '',
@@ -119,27 +131,43 @@ export default function VistaMaterias({
                         notaMinimaPromocionar: m.notaMinimaPromocionar,
                         reglaPromocion: m.reglaPromocion
                       })}
-                      className="text-xs text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
+                      className="text-xs text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-1 rounded-lg font-semibold cursor-pointer"
                     >
-                      Condiciones
+                      Cond.
                     </button>
                     <button
+                      type="button"
                       onClick={() => setMateriaEnEdicion({ id: m.id, nombre: m.nombre })}
-                      className="text-xs text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
+                      className="text-xs text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 py-1 rounded-lg font-semibold cursor-pointer"
                     >
                       Editar
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleEliminarMateria(m.id, m.nombre)}
-                      className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
+                      className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-2 py-1 rounded-lg font-semibold cursor-pointer"
                     >
-                      Eliminar
+                      Borrar
                     </button>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-    
+
+              {expandida && (
+              <div className="p-4 sm:p-6 pt-3 sm:pt-4 space-y-4">
+                {tareasCompletadas.length > 0 && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => toggleDesplegarMateria(m.id)}
+                      className="text-xs text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
+                    >
+                      {mostrarCompletadas
+                        ? 'Ocultar completadas'
+                        : `Mostrar ${tareasCompletadas.length} completada${tareasCompletadas.length === 1 ? '' : 's'}`}
+                    </button>
+                  </div>
+                )}
               <div className="grid grid-cols-1 gap-5">
                 {gruposTareas.length === 0 ? (
                   <p className="text-sm text-slate-500 italic">
@@ -367,6 +395,8 @@ export default function VistaMaterias({
                   ))
                 )}
               </div>
+              </div>
+              )}
             </div>
           );
         })

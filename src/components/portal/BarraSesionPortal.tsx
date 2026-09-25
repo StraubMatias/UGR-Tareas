@@ -2,6 +2,9 @@
 
 import { precargarAlInteractuarNav, precargarSyncPortal } from './portal-vista-prefetch';
 
+const btnBase =
+  'shrink-0 rounded-lg border text-xs font-semibold transition-all cursor-pointer px-2.5 py-1.5 sm:px-3 sm:py-2';
+
 interface BarraSesionPortalProps {
   esAdmin: boolean;
   onAbrirSync: () => void;
@@ -18,11 +21,11 @@ export default function BarraSesionPortal({
   onSalir
 }: BarraSesionPortalProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+    <>
       <button
         type="button"
         onClick={onAbrirPassword}
-        className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+        className={`${btnBase} bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700`}
       >
         🔑 Usuario o clave
       </button>
@@ -33,7 +36,7 @@ export default function BarraSesionPortal({
         onFocus={precargarSyncPortal}
         onTouchStart={precargarSyncPortal}
         title="Sincronizar con UGR Virtual o SIU Guaraní"
-        className="bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border border-cyan-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+        className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
       >
         🔄 Sincronizar
       </button>
@@ -44,18 +47,19 @@ export default function BarraSesionPortal({
           onPointerEnter={() => precargarAlInteractuarNav('admin', false)}
           onFocus={() => precargarAlInteractuarNav('admin', false)}
           onTouchStart={() => precargarAlInteractuarNav('admin', false)}
-          className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+          className={`${btnBase} bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40`}
         >
           ⚙️ Panel de Carga
         </button>
       )}
+      <span className="flex-1 min-w-2 basis-8 sm:basis-auto" aria-hidden="true" />
       <button
         type="button"
         onClick={onSalir}
-        className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer"
+        className={`${btnBase} bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 flex items-center gap-1.5`}
       >
-        <span>🚪</span> Salir
+        <span aria-hidden="true">🚪</span> Salir
       </button>
-    </div>
+    </>
   );
 }
