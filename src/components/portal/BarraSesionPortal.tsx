@@ -6,7 +6,6 @@ interface BarraSesionPortalProps {
   onAbrirSyncCuentaSiu: () => void;
   onAbrirPassword: () => void;
   onAbrirSyncUgrAdmin: () => void;
-  onAbrirSyncSiuAdmin: () => void;
   onAbrirAdmin: () => void;
   onSalir: () => void;
 }
@@ -17,7 +16,6 @@ export default function BarraSesionPortal({
   onAbrirSyncCuentaSiu,
   onAbrirPassword,
   onAbrirSyncUgrAdmin,
-  onAbrirSyncSiuAdmin,
   onAbrirAdmin,
   onSalir
 }: BarraSesionPortalProps) {
@@ -30,44 +28,30 @@ export default function BarraSesionPortal({
       >
         🔑 Usuario o clave
       </button>
-      {!esAdmin && (
-        <>
-          <button
-            type="button"
-            onClick={onAbrirSyncCuentaUgr}
-            title="Traé tu cursada y tareas desde UGR Virtual con tu DNI y clave del campus"
-            className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
-          >
-            🔄 Sincronizar UGR
-          </button>
-          <button
-            type="button"
-            onClick={onAbrirSyncCuentaSiu}
-            title="Importá notas del plan de estudio desde SIU Guaraní"
-            className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
-          >
-            🎓 Sincronizar SIU Guaraní
-          </button>
-        </>
-      )}
+      <button
+        type="button"
+        onClick={onAbrirSyncCuentaUgr}
+        title="UGR Virtual con tu DNI y clave: cursada, tareas y notas de tu usuario"
+        className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+      >
+        🔄 Sincronizar UGR
+      </button>
+      <button
+        type="button"
+        onClick={onAbrirSyncCuentaSiu}
+        title="SIU Guaraní con tu usuario y clave: importa tu plan de estudio a la pestaña Plan"
+        className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+      >
+        🎓 Sincronizar SIU Guaraní
+      </button>
       {esAdmin && (
         <button
           type="button"
           onClick={onAbrirSyncUgrAdmin}
-          title="Busca tareas nuevas en UGR Virtual y las carga en la página"
-          className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+          title="Importa tareas y avisos del campus para toda la comisión (sin pedir tu clave; usa la sesión del servidor)"
+          className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-200/90 border border-emerald-500/25 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
         >
-          🔄 Sincronizar UGR
-        </button>
-      )}
-      {esAdmin && (
-        <button
-          type="button"
-          onClick={onAbrirSyncSiuAdmin}
-          title="Importa notas del plan con las credenciales SIU del servidor (admin)"
-          className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
-        >
-          🎓 Sincronizar SIU (admin)
+          📋 UGR · tablero comisión
         </button>
       )}
       {esAdmin && (

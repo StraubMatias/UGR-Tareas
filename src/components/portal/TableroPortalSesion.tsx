@@ -17,7 +17,6 @@ export default function TableroPortalSesion({ vm }: { vm: TableroPortalViewModel
         onAbrirSyncCuentaSiu={() => ui.setSyncCuentaFuente('siu')}
         onAbrirPassword={abrirModalPassword}
         onAbrirSyncUgrAdmin={sync.abrirSyncUGR}
-        onAbrirSyncSiuAdmin={sync.abrirSyncSIU}
         onAbrirAdmin={() => navegarA('admin')}
         onSalir={portalAcceso.cerrarSesionLocal}
       />
