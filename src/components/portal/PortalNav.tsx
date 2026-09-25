@@ -1,4 +1,7 @@
+'use client';
+
 import type { PortalPestana } from './types';
+import { precargarAlInteractuarNav } from './portal-vista-prefetch';
 
 interface PortalNavProps {
   pestana: PortalPestana;
@@ -26,6 +29,9 @@ export default function PortalNav({ pestana, onNavegar }: PortalNavProps) {
             key={item.id}
             type="button"
             onClick={() => onNavegar(item.id)}
+            onPointerEnter={() => precargarAlInteractuarNav(item.id, activa)}
+            onFocus={() => precargarAlInteractuarNav(item.id, activa)}
+            onTouchStart={() => precargarAlInteractuarNav(item.id, activa)}
             className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
               activa
                 ? `${item.activeClass} shadow-sm`

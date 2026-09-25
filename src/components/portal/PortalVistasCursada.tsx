@@ -2,15 +2,17 @@ import type { PortalPestana } from './types';
 import type { calcularDerivadosPlanEstudio } from '../../lib/plan-estudio-derivados';
 import type { useTableroAcciones } from '../../hooks/useTableroAcciones';
 import ProximoParcialAside from './ProximoParcialAside';
-import VistaAlumnos from '../VistaAlumnos';
-import VistaMaterias from '../VistaMaterias';
-import VistaPromocion from '../VistaPromocion';
-import VistaHistorial from '../VistaHistorial';
-import VistaPlan from '../VistaPlan';
-import VistaParciales from '../VistaParciales';
-import VistaRanking from '../VistaRanking';
-import VistaHorarios from '../VistaHorarios';
-import VistaAdminPanel from '../VistaAdminPanel';
+import {
+  VistaAlumnos,
+  VistaMaterias,
+  VistaPromocion,
+  VistaHistorial,
+  VistaPlan,
+  VistaParciales,
+  VistaRanking,
+  VistaHorarios,
+  VistaAdminPanel
+} from './portal-vistas-dynamic';
 import { NOMBRES_MESES as nombresMeses } from '../../lib/calendario-tablero';
 import { obtenerDiaSemanaHorario } from '../../lib/calendario-tablero';
 import type { EntradaRankingTablero } from '../../lib/ranking-tablero';

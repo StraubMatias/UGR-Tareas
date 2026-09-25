@@ -1,7 +1,6 @@
 'use server';
 
 import { db } from '../turso';
-import { PLAN_DE_ESTUDIO } from '../plan-utils';
 import type { RespuestaAction, RespuestaSiuSync } from './types';
 import {
   texto,
@@ -21,119 +20,7 @@ import {
   MAX_PASSWORD_LENGTH,
   MAX_USUARIO_LENGTH
 } from '../../server/action-internals';
-import { sincronizarCursadaDelAlumno, periodoDeCursada } from '../../server/sync-ugr-cursada';
-
-
-export async function syncUgrAction({
-  confirmar = false,
-  previaId = null,
-  ids = [],
-  idsAvisos = [],
-  idsEventos = []
-}: {
-  confirmar?: boolean;
-  previaId?: string | null;
-  ids?: string[];
-  idsAvisos?: string[];
-  idsEventos?: string[];
-} = {}) {
-  try {
-    if (!await verificarAdmin()) {
-      return { exito: false, mensaje: 'Solo el administrador puede sincronizar con UGR.' };
-    }
-    const usuarioSesion = await obtenerUsuarioSesion();
-    if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
-    const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
-    if (!rateLimit.exito) return rateLimit;
-
-    const [{ conectarUGR, detectarAvisosMoodle, detectarTareasNuevas, listarCursosDelCampus, asegurarMateriasDeLaCursada }, { sincronizarConPrevia }] = await Promise.all([
-      import('../../../ugr-sync/lib/sync-core.mjs'),
-      import('../../../ugr-sync/lib/previa.mjs')
-    ]);
-    const alumno = await db.execute({
-      sql: 'SELECT id FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
-      args: [usuarioSesion]
-    });
-    const alumnoId = texto(alumno.rows[0]?.id);
-    const resultado = await sincronizarConPrevia({
-      db, usuario: usuarioSesion, confirmar, previaId, ids, idsAvisos, idsEventos,
-      alumnoId, alumnoNombre: usuarioSesion,
-      detectar: async () => {
-        const cliente = await conectarUGR();
-        const cursos = await listarCursosDelCampus(cliente);
-        const periodoId = await periodoDeCursada();
-        const materiasPeriodo = await db.execute({
-          sql: 'SELECT id, nombre FROM materias WHERE periodo_id = ? ORDER BY nombre',
-          args: [periodoId]
-        });
-        const cursada = await asegurarMateriasDeLaCursada({
-          db,
-          cursos,
-          materias: materiasPeriodo.rows.map((fila) => ({ id: texto(fila.id), nombre: texto(fila.nombre) })),
-          plan: PLAN_DE_ESTUDIO,
-          periodoId
-        });
-        if (alumnoId && cursada.materiaIds.length > 0) {
-          await db.batch(cursada.materiaIds.map((materiaId: string) => ({
-            sql: 'INSERT OR IGNORE INTO inscripciones (alumno_id, materia_id) VALUES (?, ?)',
-            args: [alumnoId, materiaId]
-          })), 'write');
-        }
-        const tareas = await detectarTareasNuevas({ db, cliente, cursos, periodoId, alumnoId, mapeos: cursada.mapeos });
-        const { avisosDetectados, eventosSugeridos } = await detectarAvisosMoodle({ db, cliente, mapeos: cursada.mapeos });
-        return { ...tareas, avisos: avisosDetectados, eventosSugeridos };
-      }
-    });
-    const { materiasLocales, cursos, mapeos = [], detectadas, avisos: avisosDetectados, eventosSugeridos,
-      insertadas = 0, avisosAceptados = 0, avisosRechazados = 0, eventosInsertados = 0,
-      urlsActualizadas = 0, urlsParcialesActualizadas = 0, parcialesInsertados = 0,
-      eventosCalendarioInsertados = 0, horariosInsertados = 0, fechasActualizadas = 0 } = resultado;
-
-    if (confirmar) {
-
-      await registrarAuditoria({
-        accion: 'sync_ugr',
-        usuario: usuarioSesion,
-        detalle: `Sincronizó UGR: insertó ${insertadas} tarea(s) en ${mapeos.length} materia(s); actualizó ${urlsActualizadas} enlace(s) de tareas y ${urlsParcialesActualizadas} de parciales; aprobó ${avisosAceptados} aviso(s) (${avisosRechazados} descartado(s)) y agregó ${eventosInsertados} evento(s) al cronograma`,
-        ip: await obtenerIPReal()
-      });
-    }
-
-    return {
-      exito: true,
-      confirmar,
-      previaId: resultado.previaId,
-      materiasLocales: materiasLocales?.length || 0,
-      cursos: cursos?.length || 0,
-      mapeos: (mapeos || []).map(({ curso, coincidencia }) => ({
-        id: curso?.id,
-        curso: curso?.nombre,
-        materia: coincidencia?.materia?.nombre
-      })),
-      detectadas,
-      insertadas,
-      urlsActualizadas,
-      urlsParcialesActualizadas,
-      parcialesInsertados,
-      eventosCalendarioInsertados,
-      horariosInsertados,
-      fechasActualizadas,
-      avisos: (avisosDetectados || []).map((item) => {
-        const { contenidoHtml: _html, ...aviso } = item as { contenidoHtml?: string } & Record<string, unknown>;
-        return aviso;
-      }),
-      eventosSugeridos,
-      avisosAceptados,
-      avisosRechazados,
-      eventosInsertados,
-      notasCargadas: resultado.notasCargadas || [],
-      pendientesEntrega: resultado.pendientesEntrega || []
-    };
-  } catch (error) {
-    console.error('Error en syncUgrAction:', error);
-    return { exito: false, mensaje: error instanceof Error ? error.message : 'No se pudo sincronizar con UGR Virtual.' };
-  }
-}
+import { sincronizarCursadaDelAlumno } from '../../server/sync-ugr-cursada';
 
 // Admin: usa SIU_USER / SIU_PASSWORD del servidor (atajo sin tipear clave).
 export async function syncSiuAction(): Promise<RespuestaSiuSync> {
@@ -173,6 +60,9 @@ export async function syncSiuAction(): Promise<RespuestaSiuSync> {
 export async function sincronizarCuentaSiuAction(usuarioInput: string, passwordInput: string): Promise<RespuestaSiuSync> {
   const usuarioSiu = normalizarDni(usuarioInput);
   const contrasena = String(passwordInput || '');
+  if (!usuarioSiu.trim() && !contrasena.trim() && await verificarAdmin()) {
+    return syncSiuAction();
+  }
   let claves: { clave: string; limite: number }[] = [];
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
@@ -232,19 +122,22 @@ export async function sincronizarCuentaSiuAction(usuarioInput: string, passwordI
 export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrInput: string): Promise<RespuestaAction> {
   const dni = normalizarDni(dniInput);
   const contrasena = String(passwordUgrInput || '');
+  const usarCredencialesServidor = !dni && !contrasena && await verificarAdmin();
   let claves: { clave: string; limite: number }[] = [];
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
-    if (!dni || !contrasena || dni.length > MAX_USUARIO_LENGTH || contrasena.length > MAX_PASSWORD_LENGTH) {
-      return { exito: false, mensaje: 'Completá el DNI y la contraseña de UGR Virtual.' };
-    }
-    if (dni.length < 6) {
-      return { exito: false, mensaje: 'El DNI de UGR Virtual no es válido.' };
-    }
-    claves = [{ clave: `ugr:${usuarioSesion.toLowerCase()}`, limite: LIMITE_LOGIN_USUARIO }, { clave: `ugr-ip:${await obtenerIPReal()}`, limite: LIMITE_LOGIN_IP }];
-    if (await loginEstaBloqueado(claves)) {
-      return { exito: false, mensaje: MENSAJE_LOGIN_BLOQUEADO };
+    if (!usarCredencialesServidor) {
+      if (!dni || !contrasena || dni.length > MAX_USUARIO_LENGTH || contrasena.length > MAX_PASSWORD_LENGTH) {
+        return { exito: false, mensaje: 'Completá el DNI y la contraseña de UGR Virtual.' };
+      }
+      if (dni.length < 6) {
+        return { exito: false, mensaje: 'El DNI de UGR Virtual no es válido.' };
+      }
+      claves = [{ clave: `ugr:${usuarioSesion.toLowerCase()}`, limite: LIMITE_LOGIN_USUARIO }, { clave: `ugr-ip:${await obtenerIPReal()}`, limite: LIMITE_LOGIN_IP }];
+      if (await loginEstaBloqueado(claves)) {
+        return { exito: false, mensaje: MENSAJE_LOGIN_BLOQUEADO };
+      }
     }
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
@@ -256,13 +149,16 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
     const alumnoId = texto(resultado.rows[0]?.id);
     if (!alumnoId) return { exito: false, mensaje: 'No se encontró la cuenta.' };
 
-    const { conectarUGRCon } = await import('../../../ugr-sync/lib/sync-core.mjs');
-    const cliente = await conectarUGRCon({
-      usuario: dni,
-      contrasena,
-      rutaSesion: null
-    }) as { autenticar?: () => Promise<unknown> };
-    if (typeof cliente.autenticar === 'function') await cliente.autenticar();
+    const { conectarUGR, conectarUGRCon } = await import('../../../ugr-sync/lib/sync-core.mjs');
+    const cliente = usarCredencialesServidor
+      ? await conectarUGR()
+      : await conectarUGRCon({
+        usuario: dni,
+        contrasena,
+        rutaSesion: null
+      });
+    const clienteUgr = cliente as { autenticar?: () => Promise<unknown> };
+    if (typeof clienteUgr.autenticar === 'function') await clienteUgr.autenticar();
     const sync = await sincronizarCursadaDelAlumno({
       alumnoId,
       alumnoNombre: usuarioSesion,
@@ -273,9 +169,9 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
       args: [new Date().toISOString(), alumnoId]
     });
 
-    await limpiarIntentosLogin(claves);
+    if (claves.length > 0) await limpiarIntentosLogin(claves);
     await registrarAuditoria({
-      accion: 'sincronizar_cuenta',
+      accion: usarCredencialesServidor ? 'sincronizar_cuenta_servidor' : 'sincronizar_cuenta',
       usuario: usuarioSesion,
       detalle: sync.mensaje,
       ip: await obtenerIPReal()

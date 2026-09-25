@@ -93,6 +93,7 @@ export default function VistaAdminPanel(props: VistaAdminPanelProps) {
   } = props;
 
   return (
+    <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {/* ALUMNOS */}
                   <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm h-fit">
@@ -443,5 +444,6 @@ export default function VistaAdminPanel(props: VistaAdminPanelProps) {
                     </form>
                   </div>
                 </div>
+    </div>
   );
 }

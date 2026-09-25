@@ -1,9 +1,20 @@
-import CuentaPropia from '../CuentaPropia';
+'use client';
+
+import dynamic from 'next/dynamic';
 import ModalOverlay from './ModalOverlay';
+
+const CuentaPropia = dynamic(() => import('../CuentaPropia'), {
+  loading: () => (
+    <div className="text-center py-10">
+      <span className="text-3xl animate-spin inline-block" aria-hidden="true">⏳</span>
+    </div>
+  )
+});
 
 interface ModalCuentaSyncProps {
   usuario: string;
   fuente: 'ugr' | 'siu';
+  usarCredencialesServidor?: boolean;
   onCerrar: () => void;
   onCompletado: () => void;
   onInterrumpida: () => void;
@@ -12,6 +23,7 @@ interface ModalCuentaSyncProps {
 export default function ModalCuentaSync({
   usuario,
   fuente,
+  usarCredencialesServidor = false,
   onCerrar,
   onCompletado,
   onInterrumpida
@@ -24,6 +36,7 @@ export default function ModalCuentaSync({
           fuenteInicial={fuente}
           variante="modal"
           permitirCambiarFuente={false}
+          usarCredencialesServidor={usarCredencialesServidor}
           onCerrar={onCerrar}
           onCompletado={onCompletado}
           onInterrumpida={onInterrumpida}

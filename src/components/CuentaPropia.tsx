@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { sincronizarCuentaUgrAction, sincronizarCuentaSiuAction, type ResumenMateriaSync } from '../app/actions';
-import DetalleSyncSiu from './portal/DetalleSyncSiu';
+import dynamic from 'next/dynamic';
+
+const DetalleSyncSiu = dynamic(() => import('./portal/DetalleSyncSiu'));
 import type { NotaPlanSiu } from '../lib/importar-plan-siu';
 
 export function ResumenCursada({ resumen }: { resumen: ResumenMateriaSync[] }) {
@@ -135,6 +137,7 @@ export default function CuentaPropia({
   fuenteInicial = 'ugr',
   variante = 'pagina',
   permitirCambiarFuente = true,
+  usarCredencialesServidor = false,
   onCompletado,
   onCerrar,
   onInterrumpida
@@ -143,12 +146,13 @@ export default function CuentaPropia({
   fuenteInicial?: FuenteSync;
   variante?: 'modal' | 'pagina';
   permitirCambiarFuente?: boolean;
+  usarCredencialesServidor?: boolean;
   onCompletado?: () => void;
   onCerrar?: () => void;
   onInterrumpida?: () => void;
 }) {
   const [fuente, setFuente] = useState<FuenteSync>(fuenteInicial);
-  const [fase, setFase] = useState<FaseSync>('credenciales');
+  const [fase, setFase] = useState<FaseSync>(usarCredencialesServidor ? 'cargando' : 'credenciales');
   const [dni, setDni] = useState('');
   const [clave, setClave] = useState('');
   const [mensaje, setMensaje] = useState('');
@@ -162,13 +166,17 @@ export default function CuentaPropia({
   } | null>(null);
 
   const reiniciarCredenciales = () => {
-    setFase('credenciales');
     setError('');
     setMensaje('');
     setResumen([]);
     setDetalleSiu(null);
     setDni('');
     setClave('');
+    if (usarCredencialesServidor) {
+      void ejecutarSync('', '');
+      return;
+    }
+    setFase('credenciales');
   };
 
   const cambiarFuente = (nueva: FuenteSync) => {
@@ -177,14 +185,7 @@ export default function CuentaPropia({
     reiniciarCredenciales();
   };
 
-  const sincronizar = async (evento: FormEvent<HTMLFormElement>) => {
-    evento.preventDefault();
-    const usuarioIngresado = dni.trim();
-    const claveIngresada = clave;
-    if (!usuarioIngresado || !claveIngresada) {
-      setError(fuente === 'ugr' ? 'Completá el DNI y la contraseña de UGR Virtual.' : 'Completá usuario y contraseña de SIU Guaraní.');
-      return;
-    }
+  const ejecutarSync = async (usuarioIngresado: string, claveIngresada: string) => {
     setMensaje('');
     setError('');
     setResumen([]);
@@ -233,6 +234,24 @@ export default function CuentaPropia({
       }
       setFase('error');
     }
+  };
+
+  const syncServidorIniciado = useRef(false);
+  useEffect(() => {
+    if (!usarCredencialesServidor || syncServidorIniciado.current) return;
+    syncServidorIniciado.current = true;
+    void ejecutarSync('', '');
+  }, [usarCredencialesServidor]);
+
+  const sincronizar = async (evento: FormEvent<HTMLFormElement>) => {
+    evento.preventDefault();
+    const usuarioIngresado = dni.trim();
+    const claveIngresada = clave;
+    if (!usuarioIngresado || !claveIngresada) {
+      setError(fuente === 'ugr' ? 'Completá el DNI y la contraseña de UGR Virtual.' : 'Completá usuario y contraseña de SIU Guaraní.');
+      return;
+    }
+    await ejecutarSync(usuarioIngresado, claveIngresada);
   };
 
   const contenedor =

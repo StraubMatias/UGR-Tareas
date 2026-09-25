@@ -1,21 +1,19 @@
 'use client';
 
+import { precargarAlInteractuarNav, precargarSyncPortal } from './portal-vista-prefetch';
+
 interface BarraSesionPortalProps {
   esAdmin: boolean;
-  onAbrirSyncCuentaUgr: () => void;
-  onAbrirSyncCuentaSiu: () => void;
+  onAbrirSync: () => void;
   onAbrirPassword: () => void;
-  onAbrirSyncUgrAdmin: () => void;
   onAbrirAdmin: () => void;
   onSalir: () => void;
 }
 
 export default function BarraSesionPortal({
   esAdmin,
-  onAbrirSyncCuentaUgr,
-  onAbrirSyncCuentaSiu,
+  onAbrirSync,
   onAbrirPassword,
-  onAbrirSyncUgrAdmin,
   onAbrirAdmin,
   onSalir
 }: BarraSesionPortalProps) {
@@ -30,34 +28,22 @@ export default function BarraSesionPortal({
       </button>
       <button
         type="button"
-        onClick={onAbrirSyncCuentaUgr}
-        title="UGR Virtual con tu DNI y clave: cursada, tareas y notas de tu usuario"
-        className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+        onClick={onAbrirSync}
+        onPointerEnter={precargarSyncPortal}
+        onFocus={precargarSyncPortal}
+        onTouchStart={precargarSyncPortal}
+        title="Sincronizar con UGR Virtual o SIU Guaraní"
+        className="bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border border-cyan-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
       >
-        🔄 Sincronizar UGR
+        🔄 Sincronizar
       </button>
-      <button
-        type="button"
-        onClick={onAbrirSyncCuentaSiu}
-        title="SIU Guaraní con tu usuario y clave: importa tu plan de estudio a la pestaña Plan"
-        className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
-      >
-        🎓 Sincronizar SIU Guaraní
-      </button>
-      {esAdmin && (
-        <button
-          type="button"
-          onClick={onAbrirSyncUgrAdmin}
-          title="Importa tareas y avisos del campus para toda la comisión (sin pedir tu clave; usa la sesión del servidor)"
-          className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-200/90 border border-emerald-500/25 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
-        >
-          📋 UGR · tablero comisión
-        </button>
-      )}
       {esAdmin && (
         <button
           type="button"
           onClick={onAbrirAdmin}
+          onPointerEnter={() => precargarAlInteractuarNav('admin', false)}
+          onFocus={() => precargarAlInteractuarNav('admin', false)}
+          onTouchStart={() => precargarAlInteractuarNav('admin', false)}
           className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer"
         >
           ⚙️ Panel de Carga

@@ -2,9 +2,6 @@ import type { FormEvent } from 'react';
 import ModalParcialEdicion from './ModalParcialEdicion';
 import ModalCambioPassword from './ModalCambioPassword';
 import ModalesEdicion from './ModalesEdicion';
-import ModalSincronizacion from './ModalSincronizacion';
-import type { SyncResult, SyncTipo, SyncEstado } from './types';
-import type { DetalleSyncSiuProps } from './DetalleSyncSiu';
 import type { Materia, Parcial, Tarea } from '../../core/cursada';
 import type { MateriaCondicionesEdicion } from '../../hooks/tablero-estado/types';
 
@@ -47,23 +44,6 @@ interface PortalModalesProps {
   materiaCondicionesEnEdicion: MateriaCondicionesEdicion | null;
   setMateriaCondicionesEnEdicion: (v: MateriaCondicionesEdicion | null) => void;
   onGuardarCondiciones: (e: FormEvent<HTMLFormElement>) => void;
-  syncAbierto: boolean;
-  syncTipo: SyncTipo;
-  syncEstado: SyncEstado;
-  syncMensaje: string;
-  syncDatos: SyncResult | null;
-  syncSiuDetalle: DetalleSyncSiuProps | null;
-  syncSeleccionados: Set<string>;
-  syncAvisosSeleccionados: Set<string>;
-  syncEventosSeleccionados: Set<string>;
-  onCerrarSync: () => void;
-  onBuscarDeNuevoSync: () => void;
-  onMarcarTodasSync: (valor: boolean) => void;
-  onToggleSyncTarea: (id: string) => void;
-  onMarcarTodasAvisosSync: (valor: boolean) => void;
-  onToggleSyncAviso: (id: string) => void;
-  onToggleSyncEvento: (id: string) => void;
-  onAplicarCambiosSync: () => void;
 }
 
 export default function PortalModales(props: PortalModalesProps) {
@@ -105,24 +85,7 @@ export default function PortalModales(props: PortalModalesProps) {
     onGuardarTarea,
     materiaCondicionesEnEdicion,
     setMateriaCondicionesEnEdicion,
-    onGuardarCondiciones,
-    syncAbierto,
-    syncTipo,
-    syncEstado,
-    syncMensaje,
-    syncDatos,
-    syncSiuDetalle,
-    syncSeleccionados,
-    syncAvisosSeleccionados,
-    syncEventosSeleccionados,
-    onCerrarSync,
-    onBuscarDeNuevoSync,
-    onMarcarTodasSync,
-    onToggleSyncTarea,
-    onMarcarTodasAvisosSync,
-    onToggleSyncAviso,
-    onToggleSyncEvento,
-    onAplicarCambiosSync
+    onGuardarCondiciones
   } = props;
 
   return (
@@ -179,28 +142,6 @@ export default function PortalModales(props: PortalModalesProps) {
         onCambiarCondiciones={setMateriaCondicionesEnEdicion}
         onGuardarCondiciones={onGuardarCondiciones}
       />
-
-      {syncAbierto && (
-        <ModalSincronizacion
-          syncTipo={syncTipo}
-          syncEstado={syncEstado}
-          syncMensaje={syncMensaje}
-          syncDatos={syncDatos}
-          syncSiuDetalle={syncSiuDetalle}
-          syncSeleccionados={syncSeleccionados}
-          syncAvisosSeleccionados={syncAvisosSeleccionados}
-          syncEventosSeleccionados={syncEventosSeleccionados}
-          etiquetaMateria={etiquetaMateria}
-          onCerrar={onCerrarSync}
-          onBuscarDeNuevo={onBuscarDeNuevoSync}
-          onMarcarTodasTareas={onMarcarTodasSync}
-          onToggleTarea={onToggleSyncTarea}
-          onMarcarTodasAvisos={onMarcarTodasAvisosSync}
-          onToggleAviso={onToggleSyncAviso}
-          onToggleEvento={onToggleSyncEvento}
-          onAplicarCambios={onAplicarCambiosSync}
-        />
-      )}
     </>
   );
 }

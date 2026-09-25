@@ -13,6 +13,7 @@ export function useTableroEstadoUi() {
   const pausarRefrescoRef = useRef(false);
   const [mostrarAvisoInicio, setMostrarAvisoInicio] = useState(false);
   const [novedades, setNovedades] = useState<NovedadTablero[]>([]);
+  const [syncPickerAbierto, setSyncPickerAbierto] = useState(false);
   const [syncCuentaFuente, setSyncCuentaFuente] = useState<'ugr' | 'siu' | null>(null);
   const [notasDesplegadas, setNotasDesplegadas] = useState<Record<string, boolean>>({});
   const [mesCalendario, setMesCalendario] = useState(() => {
@@ -51,6 +52,8 @@ export function useTableroEstadoUi() {
     setMostrarAvisoInicio,
     novedades,
     setNovedades,
+    syncPickerAbierto,
+    setSyncPickerAbierto,
     syncCuentaFuente,
     setSyncCuentaFuente,
     notasDesplegadas,

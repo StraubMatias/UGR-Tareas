@@ -36,7 +36,6 @@ export {
 } from './actions/materias';
 
 export {
-  syncUgrAction,
   syncSiuAction,
   sincronizarCuentaSiuAction,
   sincronizarCuentaUgrAction

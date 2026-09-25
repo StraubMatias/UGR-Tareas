@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { materiasQueCursa } from '../lib/companeros';
 import { armarDerivadosTablero, diasDesdeCreacionPortal, resolverMateriaRankingVisible } from '../lib/tablero-cursada';
 import { useNovedadesConocidas } from './useNovedadesConocidas';
@@ -7,7 +7,6 @@ import { usePlanEstudioDerivados } from './usePlanEstudioDerivados';
 import { usePortalAcceso } from './usePortalAcceso';
 import { useTableroAcciones } from './useTableroAcciones';
 import { marcarNotificacionesVistasEnStorage, useNotificacionesPortal } from './useNotificacionesPortal';
-import { useSyncAdmin } from './useSyncAdmin';
 import { useTableroEstadoDatos } from './useTableroEstadoDatos';
 import { useTableroEstadoUi } from './useTableroEstadoUi';
 import { useTableroEstadoAcceso } from './useTableroEstadoAcceso';
@@ -69,9 +68,18 @@ export function useTableroPortal() {
     ui.setNovedades
   );
 
-  const idsMisMateriasCursadas = materiasQueCursa(datos.inscripciones, acceso.usuarioActual ?? '');
-  const materiasMisCursadas = datos.materias.filter((materia) => idsMisMateriasCursadas.has(materia.id));
-  const materiaRankingVisible = resolverMateriaRankingVisible(ui.materiaRanking, materiasMisCursadas);
+  const idsMisMateriasCursadas = useMemo(
+    () => materiasQueCursa(datos.inscripciones, acceso.usuarioActual ?? ''),
+    [datos.inscripciones, acceso.usuarioActual]
+  );
+  const materiasMisCursadas = useMemo(
+    () => datos.materias.filter((materia) => idsMisMateriasCursadas.has(materia.id)),
+    [datos.materias, idsMisMateriasCursadas]
+  );
+  const materiaRankingVisible = useMemo(
+    () => resolverMateriaRankingVisible(ui.materiaRanking, materiasMisCursadas),
+    [ui.materiaRanking, materiasMisCursadas]
+  );
 
   const { cargarBD } = useTableroCarga({
     periodoSeleccionado: datos.periodoSeleccionado,
@@ -104,14 +112,10 @@ export function useTableroPortal() {
     setMateriaRanking: ui.setMateriaRanking
   });
 
-  const sync = useSyncAdmin(async (mostrarCarga) => {
-    await cargarBD(mostrarCarga ?? true);
-  });
-
   ui.pausarRefrescoRef.current = Boolean(
     acceso.modalPasswordOpen
-    || sync.syncAbierto
     || admin.hayModalAbierto
+    || ui.syncPickerAbierto
     || ui.syncCuentaFuente !== null
   );
 
@@ -227,24 +231,42 @@ export function useTableroPortal() {
     [ui.setPestana, ui.setTareaFoco]
   );
 
-  const derivados = armarDerivadosTablero({
-    usuarioActual: acceso.usuarioActual,
-    materias: datos.materias,
-    parciales: datos.parciales,
-    horarios: datos.horarios,
-    cronograma: datos.cronograma,
-    inscripciones: datos.inscripciones,
-    notas: datos.notas,
-    alumnos: datos.alumnos,
-    novedades: ui.novedades,
-    avisos: datos.avisos,
-    mesCalendario: ui.mesCalendario,
-    materiasMisCursadas,
-    materiaRankingVisible,
-    alumnoComparar: ui.alumnoComparar
-  });
+  const derivados = useMemo(
+    () => armarDerivadosTablero({
+      usuarioActual: acceso.usuarioActual,
+      materias: datos.materias,
+      parciales: datos.parciales,
+      horarios: datos.horarios,
+      cronograma: datos.cronograma,
+      inscripciones: datos.inscripciones,
+      notas: datos.notas,
+      alumnos: datos.alumnos,
+      novedades: ui.novedades,
+      avisos: datos.avisos,
+      mesCalendario: ui.mesCalendario,
+      materiasMisCursadas,
+      materiaRankingVisible,
+      alumnoComparar: ui.alumnoComparar
+    }),
+    [
+      acceso.usuarioActual,
+      datos.materias,
+      datos.parciales,
+      datos.horarios,
+      datos.cronograma,
+      datos.inscripciones,
+      datos.notas,
+      datos.alumnos,
+      datos.avisos,
+      ui.novedades,
+      ui.mesCalendario,
+      materiasMisCursadas,
+      materiaRankingVisible,
+      ui.alumnoComparar
+    ]
+  );
 
-  const diasPagina = diasDesdeCreacionPortal();
+  const diasPagina = useMemo(() => diasDesdeCreacionPortal(), []);
 
   const marcarNotificacionesVistas = useCallback(
     (ids: string[]) => {
@@ -282,7 +304,6 @@ export function useTableroPortal() {
     esAdmin,
     plan,
     cargarBD,
-    sync,
     portalAcceso,
     acciones,
     navegarA,

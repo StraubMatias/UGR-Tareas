@@ -145,11 +145,11 @@ Un alumno no escribe entregas ni notas propias. Esas filas las escribe el sync (
 
 ## Sincronización con el campus
 
-Dos entradas. Ninguna persiste DNI ni contraseña de UGR.
+Un botón **Sincronizar** (UGR o SIU). Ninguna ruta persiste DNI ni contraseña de UGR en la base.
 
-**Admin** — `syncUgrAction` → `conectarUGR()`. Credenciales `UGRVIRTUAL_USER` / `UGRVIRTUAL_PASSWORD`. La cookie de Moodle se guarda en `data/ugr-sesion.json` (local, gitignored) o en `/tmp/ugr-sesion.json` si `VERCEL=1` (el filesystem del deploy es de solo lectura; `/tmp` muere entre invocaciones y el cliente re-autentica). El admin solo hace `INSERT OR IGNORE` de su propia inscripción. Confirmar es en dos pasos (`sincronizarConPrevia`): primero detecta, después inserta los ids que el admin tildó.
+**Alumno** — `sincronizarCuentaUgrAction(dni, password)` o `sincronizarCuentaSiuAction(usuario, password)`. UGR usa `conectarUGRCon({ usuario, contrasena, rutaSesion: null })`: jar aislado, no pisa la cookie de la comisión. Si Moodle rechaza el login, la action responde “UGR Virtual no aceptó ese DNI o contraseña” y no loguea las credenciales. Una sync buena reemplaza las inscripciones del período actual (`inscribirAlumnoEnPeriodo`): la cursada queda en lo que el campus dice ahora.
 
-**Alumno** — `sincronizarCuentaUgrAction(dni, password)`. `conectarUGRCon({ usuario, contrasena, rutaSesion: null })`: jar aislado, no pisa la cookie de la comisión. Si Moodle rechaza el login, la action responde “UGR Virtual no aceptó ese DNI o contraseña” y no loguea las credenciales. Una sync buena reemplaza las inscripciones del período actual (`inscribirAlumnoEnPeriodo`), no hace `INSERT OR IGNORE` eterno: la cursada de esa persona queda en lo que el campus dice ahora.
+**Admin** — mismo flujo en la UI; si no ingresa credenciales, el servidor usa `UGRVIRTUAL_*` (UGR, `conectarUGR()`) o `SIU_USER` / `SIU_PASSWORD` (SIU). La cookie de Moodle de la comisión se guarda en `data/ugr-sesion.json` (local, gitignored) o en `/tmp/ugr-sesion.json` si `VERCEL=1`.
 
 Qué se lee, con concurrencia máxima **4** (`conPool`, default 4; no subirla):
 

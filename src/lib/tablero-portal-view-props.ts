@@ -81,7 +81,7 @@ export function buildPortalVistasCursadaProps(vm: TableroPortalViewModel): Porta
 }
 
 export function buildPortalModalesProps(vm: TableroPortalViewModel): PortalModalesProps {
-  const { datos, acceso, admin, sync, portalAcceso, acciones, cerrarModalPassword } = vm;
+  const { datos, acceso, admin, portalAcceso, acciones, cerrarModalPassword } = vm;
 
   return {
     materias: datos.materias,
@@ -121,23 +121,6 @@ export function buildPortalModalesProps(vm: TableroPortalViewModel): PortalModal
     onGuardarTarea: acciones.handleGuardarEdicionTarea,
     materiaCondicionesEnEdicion: admin.materiaCondicionesEnEdicion,
     setMateriaCondicionesEnEdicion: admin.setMateriaCondicionesEnEdicion,
-    onGuardarCondiciones: acciones.handleGuardarCondicionesMateria,
-    syncAbierto: sync.syncAbierto,
-    syncTipo: sync.syncTipo,
-    syncEstado: sync.syncEstado,
-    syncMensaje: sync.syncMensaje,
-    syncDatos: sync.syncDatos,
-    syncSiuDetalle: sync.syncSiuDetalle,
-    syncSeleccionados: sync.syncSeleccionados,
-    syncAvisosSeleccionados: sync.syncAvisosSeleccionados,
-    syncEventosSeleccionados: sync.syncEventosSeleccionados,
-    onCerrarSync: sync.cerrarSync,
-    onBuscarDeNuevoSync: () => sync.ejecutarSyncUGR(false),
-    onMarcarTodasSync: sync.marcarTodasSync,
-    onToggleSyncTarea: sync.toggleSyncTarea,
-    onMarcarTodasAvisosSync: sync.marcarTodasAvisosSync,
-    onToggleSyncAviso: sync.toggleSyncAviso,
-    onToggleSyncEvento: sync.toggleSyncEvento,
-    onAplicarCambiosSync: sync.aplicarCambiosSync
+    onGuardarCondiciones: acciones.handleGuardarCondicionesMateria
   };
 }
