@@ -9,6 +9,7 @@
 //      id en data-mdl-overview-cmid y fechas como <span data-timestamp="...">.
 import { load } from 'cheerio';
 import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
+import { extraerSesskey } from './materias.mjs';
 import { esNombreConsignaValido, inferirTipoTarea, limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
 
 function indiceColumna(encabezados, rotulos) {
@@ -391,41 +392,121 @@ async function pedirHtmlCurso(cliente, ruta) {
   return '';
 }
 
-// Enlaces a consignas en la página principal del curso (course/view.php).
-// Respaldo cuando el overview unificado viene incompleto (p. ej. un TP nuevo
-// que todavía no aparece en assign_overview pero sí en el índice del curso).
+function nombreDeEnlaceActividad($, enlace) {
+  const nodo = $(enlace);
+  const instancia = nodo.find('.instancename').first().clone();
+  instancia.find('.accesshide').remove();
+  return limpiarTexto(
+    instancia.text()
+      || nodo.find('.activityname').first().text()
+      || nodo.attr('title')
+      || nodo.text()
+  );
+}
+
+function actividadDesdeEnlaceModulo({ href, nombre, baseUrl, unidadSeccion = null }) {
+  const modulo = (href.match(/\/mod\/([a-z0-9_]+)\/view\.php/i) || [])[1];
+  if (!modulo || !MODULOS_CONSIGNA.includes(modulo)) return null;
+  const id = (href.match(/[?&]id=(\d+)/) || [])[1];
+  if (!id || !esNombreConsignaValido(nombre)) return null;
+  const esForo = modulo === 'forum';
+  if (esForo ? esForoInformativo(nombre) : esActividadInformativa(nombre)) return null;
+  return {
+    id,
+    nombre,
+    url: completarUrl(href, baseUrl),
+    inicio: 'Sin fecha',
+    fin: 'Sin fecha',
+    unidad: unidadSeccion || parsearUnidadMoodle(nombre),
+    tipo: esForo ? 'foro' : inferirTipoTarea(nombre),
+    conNota: esForo || modulo === 'feedback' ? false : true
+  };
+}
+
+// Índice oficial del curso (mismo contenido que el menú lateral de Moodle).
+export function consignasDesdeCourseContents(secciones, baseUrl = '') {
+  const actividades = [];
+  for (const seccion of Array.isArray(secciones) ? secciones : []) {
+    const unidadSeccion = parsearUnidadMoodle(seccion?.name);
+    for (const mod of seccion?.modules || []) {
+      const modname = mod?.modname;
+      if (!modname || !MODULOS_CONSIGNA.includes(modname)) continue;
+      const nombre = limpiarTexto(mod?.name);
+      const instance = String(mod?.instance || '');
+      const href = mod?.url || (instance ? `/mod/${modname}/view.php?id=${instance}` : '');
+      if (!href) continue;
+      const actividad = actividadDesdeEnlaceModulo({
+        href,
+        nombre,
+        baseUrl,
+        unidadSeccion
+      });
+      if (actividad) actividades.push(actividad);
+    }
+  }
+  return actividades;
+}
+
+async function extraerConsignasDeWebservice(cliente, cursoId, sesskey, baseUrl) {
+  if (!sesskey || !cliente?.pedir) return [];
+  try {
+    const cuerpo = JSON.stringify([{
+      index: 0,
+      methodname: 'core_course_get_contents',
+      args: { courseid: Number(cursoId) }
+    }]);
+    const pagina = await cliente.pedir(UGR_RUTAS.ajax(sesskey), {
+      method: 'POST',
+      cuerpo,
+      tipoCuerpo: 'application/json'
+    });
+    const respuesta = JSON.parse(pagina.html || '[]');
+    const bloque = Array.isArray(respuesta) ? respuesta[0] : respuesta;
+    if (bloque?.error || !Array.isArray(bloque?.data)) return [];
+    return consignasDesdeCourseContents(bloque.data, baseUrl);
+  } catch {
+    return [];
+  }
+}
+
+export function idsSeccionesDeCurso(html) {
+  if (!html) return [];
+  const $ = load(html);
+  const ids = new Set();
+  $('[data-section]').each((_, el) => {
+    const valor = $(el).attr('data-section');
+    if (valor && /^\d+$/.test(valor)) ids.add(valor);
+  });
+  $('a[href*="section="]').each((_, enlace) => {
+    const match = ($(enlace).attr('href') || '').match(/[?&]section=(\d+)/);
+    if (match?.[1]) ids.add(match[1]);
+  });
+  return [...ids].filter((id) => id !== '0');
+}
+
+// Enlaces a consignas en la página del curso (course/view.php) y sus secciones.
+// En Moodle 4 el título suele ir en span.instancename dentro de a.aalink.
 export function extraerConsignasDePaginaCurso(html, baseUrl = '') {
   if (!html) return [];
   const $ = load(html);
   const actividades = [];
   const vistos = new Set();
-  const selectores = [
-    '#region-main a.activityname[href*="/mod/"]',
-    '.course-content a.activityname[href*="/mod/"]',
-    '.activity-item a.instancename[href*="/mod/"]'
-  ].join(', ');
-  $(selectores).each((_, enlace) => {
-    const href = $(enlace).attr('href') || '';
-    const modulo = (href.match(/\/mod\/([a-z0-9_]+)\/view\.php/i) || [])[1];
-    if (!modulo || !MODULOS_CONSIGNA.includes(modulo)) return;
-    const id = (href.match(/[?&]id=(\d+)/) || [])[1];
-    if (!id || vistos.has(id)) return;
-    const nombre = limpiarTexto($(enlace).text()) || limpiarTexto($(enlace).attr('title'));
-    if (!esNombreConsignaValido(nombre)) return;
-    const esForo = modulo === 'forum';
-    if (esForo ? esForoInformativo(nombre) : esActividadInformativa(nombre)) return;
-    vistos.add(id);
-    actividades.push({
-      id,
-      nombre,
-      url: completarUrl(href, baseUrl),
-      inicio: 'Sin fecha',
-      fin: 'Sin fecha',
-      unidad: parsearUnidadMoodle(nombre),
-      tipo: esForo ? 'foro' : inferirTipoTarea(nombre),
-      conNota: esForo || modulo === 'feedback' ? false : true
-    });
+  const agregar = (href, nombre, unidadSeccion = null) => {
+    const actividad = actividadDesdeEnlaceModulo({ href, nombre, baseUrl, unidadSeccion });
+    if (!actividad || vistos.has(actividad.id)) return;
+    vistos.add(actividad.id);
+    actividades.push(actividad);
+  };
+
+  const unidadDeSeccion = parsearUnidadMoodle(
+    limpiarTexto($('.course-content .sectionname, [data-region="section-title"]').first().text())
+  );
+
+  $('a.activityname[href*="/mod/"][href*="/view.php"], a.aalink[href*="/mod/"][href*="/view.php"]').each((_, enlace) => {
+    if ($(enlace).closest('nav, .footer, [role="navigation"]').length) return;
+    agregar($(enlace).attr('href') || '', nombreDeEnlaceActividad($, enlace), unidadDeSeccion);
   });
+
   return actividades;
 }
 
@@ -455,8 +536,23 @@ export async function extraerConsignasDeCurso(cliente, cursoId, { baseUrl = UGR_
   for (const html of fusionarHtmlsUnicos(htmlOverview, htmlAssign, htmlForos)) {
     actividades = fusionarActividadesConsigna([actividades, extraerConsignasDeHtml(html, baseUrl)]);
   }
+  const sesskey = extraerSesskey(htmlCurso) || extraerSesskey(htmlOverview);
+  if (sesskey) {
+    const desdeWebservice = await extraerConsignasDeWebservice(cliente, cursoId, sesskey, baseUrl);
+    actividades = fusionarActividadesConsigna([actividades, desdeWebservice]);
+  }
+
   if (htmlCurso) {
     actividades = fusionarActividadesConsigna([actividades, extraerConsignasDePaginaCurso(htmlCurso, baseUrl)]);
+    const secciones = idsSeccionesDeCurso(htmlCurso).slice(0, 12);
+    if (secciones.length > 0) {
+      const htmlsSeccion = await Promise.all(
+        secciones.map((seccion) => pedirHtmlCurso(cliente, `${rutas.curso(cursoId)}&section=${seccion}`))
+      );
+      for (const html of htmlsSeccion) {
+        actividades = fusionarActividadesConsigna([actividades, extraerConsignasDePaginaCurso(html, baseUrl)]);
+      }
+    }
   }
   return actividades;
 }

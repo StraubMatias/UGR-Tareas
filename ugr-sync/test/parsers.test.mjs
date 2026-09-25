@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from '../lib/materias.mjs';
-import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeHtml, extraerConsignasDePaginaCurso, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
+import { consignasDesdeCourseContents, esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeHtml, extraerConsignasDePaginaCurso, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -290,6 +290,43 @@ test('extraerConsignasDeHtml detecta asignaciones del índice sin contenedor *_o
   assert.equal(consignas.length, 2);
   assert.equal(consignas[0].id, '199391');
   assert.equal(consignas[1].id, '201629');
+});
+
+test('extraerConsignasDePaginaCurso lee a.aalink con span.instancename (Moodle 4)', () => {
+  const html = `
+    <div class="course-content">
+      <h3 class="sectionname">Unidad 2</h3>
+      <div class="activity-item">
+        <a class="aalink" href="/mod/lesson/view.php?id=888">
+          <span class="instancename">TP 2<span class="accesshide"> Lección</span></span>
+        </a>
+      </div>
+    </div>`;
+  const consignas = extraerConsignasDePaginaCurso(html, 'https://virtual.ugr.edu.ar');
+  assert.equal(consignas.length, 1);
+  assert.equal(consignas[0].id, '888');
+  assert.equal(consignas[0].nombre, 'TP 2');
+  assert.equal(consignas[0].unidad, 2);
+});
+
+test('consignasDesdeCourseContents trae módulos sin fecha del índice del curso', () => {
+  const consignas = consignasDesdeCourseContents([
+    {
+      name: 'Unidad 2',
+      modules: [
+        {
+          modname: 'assign',
+          name: 'TP 2',
+          instance: 999,
+          url: 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=999'
+        },
+        { modname: 'resource', name: 'PDF', instance: 1 }
+      ]
+    }
+  ], 'https://virtual.ugr.edu.ar');
+  assert.equal(consignas.length, 1);
+  assert.equal(consignas[0].nombre, 'TP 2');
+  assert.equal(consignas[0].fin, 'Sin fecha');
 });
 
 test('extraerConsignasDePaginaCurso lista asignaciones del índice del curso', () => {
