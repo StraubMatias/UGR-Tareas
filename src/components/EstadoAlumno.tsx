@@ -3,6 +3,7 @@
 import { useId, useState } from 'react';
 import { obtenerIconoMateria, obtenerResumenTareasAlumno, type Materia, type Tarea } from '../core/cursada';
 import { alumnosDeLaMateria, materiasEnComun, materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
+import type { InvitacionGrupoEnviadaTablero } from './portal/types';
 import EstadoTareaAlumno from './EstadoTareaAlumno';
 
 const ESTADOS = [
@@ -28,6 +29,8 @@ interface Props {
   notasTareasInputs: Record<string, string>;
   handleNotaTareaChangeLocal: (tareaId: string, alumno: string, valor: string) => void;
   handleGuardarNotaTareaOnBlur: (tareaId: string, alumno: string) => void;
+  recargarTablero?: (mostrarCarga?: boolean) => void | Promise<unknown>;
+  invitacionesGrupoEnviadas?: InvitacionGrupoEnviadaTablero[];
 }
 
 export default function EstadoAlumno({ alumno, materias, inscripciones = [], abierto, alAlternar, esAdmin = false, ...acciones }: Props) {
@@ -114,6 +117,9 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                         notasTareasInputs={acciones.notasTareasInputs}
                         handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
                         handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
+                        recargarTablero={acciones.recargarTablero}
+                        invitacionesGrupoEnviadas={acciones.invitacionesGrupoEnviadas}
+                        esAdmin={esAdmin}
           />
                     </div>
                   ))}

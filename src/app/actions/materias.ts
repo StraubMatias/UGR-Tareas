@@ -158,7 +158,7 @@ export async function eliminarMateriaAction(id: string): Promise<RespuestaAction
 }
 
 export async function crearTareaAction(params: TareaActionParams): Promise<RespuestaAction> {
-  const { materiaId, nombre, inicio, fin, detalles, unidad, conNota, tipo, grupal = false, cupoMaximo = 0 } = params;
+  const { materiaId, nombre, inicio, fin, detalles, unidad, conNota, tipo, grupal = false, permiteIndividual = true, cupoMaximo = 0 } = params;
   try {
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede crear tareas.' };
     const usuarioSesion = await obtenerUsuarioSesion();
@@ -185,10 +185,12 @@ export async function crearTareaAction(params: TareaActionParams): Promise<Respu
       return { exito: false, mensaje: 'El cupo del grupo tiene que ser un entero entre 0 y 30.' };
     }
 
+    const grupalNumerico = grupal === true ? 1 : 0;
+    const permiteIndividualNumerico = grupalNumerico && permiteIndividual === false ? 0 : 1;
     const id = crearId('t_');
     await db.execute({
-      sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, grupal, cupo_maximo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      args: [id, materiaId, validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupal === true ? 1 : 0, cupo]
+      sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, grupal, permite_individual, cupo_maximo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      args: [id, materiaId, validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupalNumerico, permiteIndividualNumerico, cupo]
     });
     await registrarAuditoria({ accion: 'crear_tarea', usuario: usuarioSesion, detalle: `Creó la tarea ${validacionNombre.valor}`, ip: await obtenerIPReal() });
     return { exito: true };
@@ -199,7 +201,7 @@ export async function crearTareaAction(params: TareaActionParams): Promise<Respu
 }
 
 export async function editarTareaAction(params: TareaActionParams): Promise<RespuestaAction> {
-  const { id, nombre, inicio, fin, detalles, unidad, conNota, tipo, grupal = false, cupoMaximo = 0 } = params;
+  const { id, nombre, inicio, fin, detalles, unidad, conNota, tipo, grupal = false, permiteIndividual = true, cupoMaximo = 0 } = params;
   try {
     if (!id) return { exito: false, mensaje: 'ID de tarea requerido.' };
     if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede editar tareas.' };
@@ -223,13 +225,14 @@ export async function editarTareaAction(params: TareaActionParams): Promise<Resp
     const tipoNormalizado = ['actividad', 'foro', 'trabajo_practico'].includes(tipo) ? tipo : 'actividad';
 
     const grupalNumerico = grupal === true ? 1 : 0;
+    const permiteIndividualNumerico = grupalNumerico && permiteIndividual === false ? 0 : 1;
     const cupo = Number(cupoMaximo);
     if (!Number.isInteger(cupo) || cupo < 0 || cupo > 30) {
       return { exito: false, mensaje: 'El cupo del grupo tiene que ser un entero entre 0 y 30.' };
     }
     const actualizacion = await db.execute({
-      sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ?, con_nota = ?, tipo = ?, grupal = ?, cupo_maximo = ? WHERE id = ?',
-      args: [validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupalNumerico, cupo, id]
+      sql: 'UPDATE tareas SET nombre = ?, inicio = ?, fin = ?, detalles = ?, unidad = ?, con_nota = ?, tipo = ?, grupal = ?, permite_individual = ?, cupo_maximo = ? WHERE id = ?',
+      args: [validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupalNumerico, permiteIndividualNumerico, cupo, id]
     });
     if (!actualizacion.rowsAffected) return { exito: false, mensaje: 'La tarea seleccionada no existe o no se pudo editar.' };
     await registrarAuditoria({ accion: 'editar_tarea', usuario: usuarioSesion, detalle: `Editó la tarea ${id}`, ip: await obtenerIPReal() });

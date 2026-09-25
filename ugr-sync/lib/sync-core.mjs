@@ -29,8 +29,10 @@ import {
   emparejarCursosConMaterias,
   filtrarTareasDuplicadas,
   formatearNotaParaMostrar,
+  formatearFechaTablero,
   fechasACorregir,
   agruparResumenSync,
+  anexarLineasResumenSync,
   armarMensajeCursada,
   inferirTipoTarea,
   limpiarTextoParaBusqueda,
@@ -42,7 +44,16 @@ import {
   separarEvaluaciones
 } from './normalizar.mjs';
 
-export { emparejarCursosConMaterias, filtrarTareasDuplicadas, agruparResumenSync, armarMensajeCursada, limpiarTextoParaBusqueda, separarEvaluaciones };
+export {
+  emparejarCursosConMaterias,
+  filtrarTareasDuplicadas,
+  agruparResumenSync,
+  anexarLineasResumenSync,
+  armarMensajeCursada,
+  limpiarTextoParaBusqueda,
+  separarEvaluaciones,
+  describirActualizacionFechas
+};
 import { ajustarClasesAlHorario, clasificarEventosCalendario, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { cabeceraCookies } from './autenticar.mjs';
@@ -648,7 +659,15 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
           aRevisar.push({ tarea, nombreFinal, existente });
         } else {
           const parche = fechasACorregir(existente, tarea);
-          if (parche.inicio || parche.fin) fechasTareasRevisar.push({ id: existente.id, ...parche });
+          if (parche.inicio || parche.fin) {
+            fechasTareasRevisar.push({
+              id: existente.id,
+              nombre: nombreFinal,
+              materiaId: coincidencia.materia.id,
+              materiaNombre: coincidencia.materia.nombre,
+              ...parche
+            });
+          }
         }
         continue;
       }
@@ -678,7 +697,15 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
       }
       if (existente) {
         const parche = fechasACorregir(existente, { inicio, fin });
-        if (parche.inicio || parche.fin) fechasTareasRevisar.push({ id: existente.id, ...parche });
+        if (parche.inicio || parche.fin) {
+          fechasTareasRevisar.push({
+            id: existente.id,
+            nombre: nombreFinal,
+            materiaId: coincidencia.materia.id,
+            materiaNombre: coincidencia.materia.nombre,
+            ...parche
+          });
+        }
         continue;
       }
       // Ya está resuelto como parcial en VistaParciales: no se ofrece como tarea
@@ -1138,6 +1165,7 @@ export async function insertarParcialesSiFaltan({ db, detectadas }) {
   const escrituras = [];
   const omitidas = [];
   const vistas = [];
+  const insertadasItems = [];
   for (const item of lista) {
     if (!item?.materiaId || !item?.nombre || !item?.fin) continue;
     const res = await db.execute({
@@ -1155,9 +1183,14 @@ export async function insertarParcialesSiFaltan({ db, detectadas }) {
       args: [id, item.materiaId, String(item.nombre).slice(0, 100), item.fin, item.detalles || 'Importada desde UGR Virtual', item.url || '']
     });
     vistas.push({ materia_id: item.materiaId, nombre: item.nombre, fecha: item.fin });
+    insertadasItems.push({
+      materiaId: item.materiaId,
+      materiaNombre: item.materiaNombre || '',
+      nombre: item.nombre
+    });
   }
   if (escrituras.length > 0) await db.batch(escrituras, 'write');
-  return { insertadas: escrituras.length, omitidas };
+  return { insertadas: escrituras.length, omitidas, insertadasItems };
 }
 
 // Completa la columna `url` de tareas que ya existían en la base (por ejemplo,
@@ -1374,6 +1407,63 @@ async function insertarHorariosDetectados({ db, horarios }) {
   }
   if (inserts.length > 0) await db.batch(inserts, 'write');
   return inserts.length + cambios;
+}
+
+function celdaTexto(valor) {
+  return valor == null ? '' : String(valor);
+}
+
+// Antes de escribir en la base, arma líneas legibles para el resumen de sync.
+async function describirActualizacionFechas({ db, tareas, parciales, nombresPorId } = {}) {
+  const mapaMaterias = nombresPorId instanceof Map ? nombresPorId : new Map();
+  const lineas = [];
+  const etiquetaCampo = (campo) => (campo === 'fin' ? 'entrega' : 'inicio');
+
+  for (const fila of tareas || []) {
+    if (!fila?.id || (!fila.inicio && !fila.fin)) continue;
+    let nombre = fila.nombre;
+    let materiaNombre = fila.materiaNombre;
+    const res = await db.execute({
+      sql: 'SELECT nombre, materia_id, inicio, fin FROM tareas WHERE id = ?',
+      args: [fila.id]
+    });
+    const guardada = res.rows[0];
+    if (!guardada) continue;
+    if (!nombre) nombre = celdaTexto(guardada.nombre);
+    if (!materiaNombre) materiaNombre = mapaMaterias.get(celdaTexto(guardada.materia_id)) || '';
+    const partes = [];
+    for (const campo of ['inicio', 'fin']) {
+      if (!fila[campo]) continue;
+      const antes = celdaTexto(guardada[campo]);
+      partes.push(`${etiquetaCampo(campo)} ${formatearFechaTablero(antes)} → ${formatearFechaTablero(fila[campo])}`);
+    }
+    if (partes.length === 0) continue;
+    lineas.push({
+      materiaNombre,
+      texto: `«${nombre}»: ${partes.join('; ')}`
+    });
+  }
+
+  for (const fila of parciales || []) {
+    if (!fila?.id || !fila.fin) continue;
+    let nombre = fila.nombre;
+    let materiaNombre = fila.materiaNombre;
+    const res = await db.execute({
+      sql: 'SELECT nombre, materia_id, fecha FROM parciales WHERE id = ?',
+      args: [fila.id]
+    });
+    const guardada = res.rows[0];
+    if (!guardada) continue;
+    if (!nombre) nombre = celdaTexto(guardada.nombre);
+    if (!materiaNombre) materiaNombre = mapaMaterias.get(celdaTexto(guardada.materia_id)) || '';
+    const antes = celdaTexto(guardada.fecha);
+    lineas.push({
+      materiaNombre,
+      texto: `«${nombre}»: fecha ${formatearFechaTablero(antes)} → ${formatearFechaTablero(fila.fin)}`
+    });
+  }
+
+  return lineas;
 }
 
 async function actualizarFechasCampus({ db, tareas, parciales }) {

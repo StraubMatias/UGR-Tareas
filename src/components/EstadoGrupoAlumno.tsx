@@ -1,69 +1,65 @@
 import {
+  etiquetaModoEntregaTarea,
+  modoEntregaDeTarea,
   obtenerGrupoDeAlumno,
-  obtenerCompanerosDeGrupo,
-  obtenerResumenGruposTarea,
   type Tarea
 } from '../core/cursada';
 
 interface Props {
   tarea: Tarea;
   alumno: string;
-  alumnos: string[];
-  irATareaEnMaterias: (tareaId: string) => void;
+  esPropia: boolean;
+  esAdmin?: boolean;
+  onAbrirGrupos: () => void;
 }
 
-export default function EstadoGrupoAlumno({ tarea, alumno, alumnos, irATareaEnMaterias }: Props) {
-  const resumen = obtenerResumenGruposTarea(tarea, alumnos);
-  if (!resumen) return null;
+export default function EstadoGrupoAlumno({ tarea, alumno, esPropia, esAdmin = false, onAbrirGrupos }: Props) {
+  if (!tarea.grupal) return null;
+  const modo = modoEntregaDeTarea(tarea);
   const grupo = obtenerGrupoDeAlumno(tarea, alumno);
-  const companeros = obtenerCompanerosDeGrupo(tarea, alumno);
-  const otrosGrupos = resumen.grupos.filter((otro) => otro !== grupo);
+  const etiqueta = etiquetaModoEntregaTarea(tarea, alumno);
+  const sinGrupo = !grupo;
+  const urgente = modo === 'grupal_obligatorio' && sinGrupo;
 
   return (
-    <div className="estado-tarea-grupo rounded-xl border p-4 space-y-3">
-      <div>
-        <p className={grupo ? 'font-semibold text-cyan-200' : 'font-semibold text-amber-300'}>
-          {grupo ? `Grupo de ${alumno}: ${grupo.nombre}` : `${alumno} todavía no tiene grupo`}
-        </p>
-        {grupo && (
-          <p className="mt-1 text-slate-300">
-            Compañeros: {companeros.length ? companeros.join(', ') : 'Sin otros integrantes por ahora.'}
-          </p>
-        )}
-        <p className="mt-1 text-xs text-slate-400">
-          {resumen.totalGrupos} grupos · {resumen.totalIntegrantes} integrantes asignados
-          {resumen.cupo > 0 && ` · Máximo ${resumen.cupo} por grupo`}
-        </p>
-      </div>
-      <details>
-        <summary className="cursor-pointer text-cyan-300 font-medium">
-          {grupo ? 'Otros grupos' : 'Ver grupos'} ({otrosGrupos.length}) · Sin grupo ({resumen.totalSinGrupo})
-        </summary>
-        <div className="mt-3 space-y-3">
-          {otrosGrupos.length ? (
-            <ul className="space-y-2">
-              {otrosGrupos.map((otro) => (
-                <li key={otro.id} className="rounded-lg bg-slate-950/40 p-3">
-                  <p className="font-semibold text-slate-200">
-                    {otro.nombre}
-                    <span className="ml-2 text-xs font-normal text-slate-400">
-                      {otro.integrantes?.length || 0}{resumen.cupo > 0 ? `/${resumen.cupo}` : ''} integrantes
-                    </span>
-                  </p>
-                  <p className="mt-1 text-slate-300">{otro.integrantes?.join(', ') || 'Sin integrantes'}</p>
-                </li>
-              ))}
-            </ul>
-          ) : <p className="text-slate-400">{grupo ? 'No hay otros grupos.' : 'Todavía no se formaron grupos.'}</p>}
-          <div className="border-t border-slate-700/60 pt-3">
-            <p className="font-medium text-slate-200">Alumnos sin grupo</p>
-            <p className="mt-1 text-slate-300">{resumen.sinGrupo.join(', ') || 'Todos tienen grupo asignado.'}</p>
-          </div>
+    <div className={`rounded-xl border px-3 py-2.5 flex flex-wrap items-center gap-2 ${urgente ? 'border-amber-500/40 bg-amber-500/5' : 'border-slate-800 bg-[#0c121a]/80'}`}>
+      <span className={`text-xs font-medium ${urgente ? 'text-amber-200' : 'text-slate-300'}`}>
+        {etiqueta}
+      </span>
+      {(esPropia || esAdmin) && (
+        <div className="flex flex-wrap gap-2 ml-auto">
+          {esPropia && sinGrupo && (
+            <button
+              type="button"
+              onClick={onAbrirGrupos}
+              className="rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-2.5 py-1 text-[11px] font-bold text-cyan-100 cursor-pointer hover:bg-cyan-500/25"
+            >
+              Crear o unirme a un grupo
+            </button>
+          )}
+          {esPropia && grupo && (
+            <button
+              type="button"
+              onClick={onAbrirGrupos}
+              className="rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] font-semibold text-slate-200 cursor-pointer hover:bg-slate-800"
+            >
+              Ver grupos
+            </button>
+          )}
+          {esAdmin && !esPropia && (
+            <button
+              type="button"
+              onClick={onAbrirGrupos}
+              className="rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] font-semibold text-slate-300 cursor-pointer hover:bg-slate-800"
+            >
+              Grupos de la tarea
+            </button>
+          )}
         </div>
-      </details>
-      <button type="button" onClick={() => irATareaEnMaterias(tarea.id)} className="text-xs font-semibold text-cyan-300 hover:underline cursor-pointer">
-        Gestionar grupos en Materias ↗
-      </button>
+      )}
+      {esPropia && sinGrupo && modo === 'grupal_obligatorio' && (
+        <p className="w-full text-[11px] text-amber-200/90">Para marcar la entrega necesitás estar en un grupo.</p>
+      )}
     </div>
   );
 }

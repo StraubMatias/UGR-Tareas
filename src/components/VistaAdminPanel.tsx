@@ -2,6 +2,7 @@
 
 import type { FormEvent } from 'react';
 import type { Materia } from '../core/cursada';
+import CamposModoEntregaTarea from './CamposModoEntregaTarea';
 
 export interface VistaAdminPanelProps {
   alumnos: string[];
@@ -25,8 +26,8 @@ export interface VistaAdminPanelProps {
   onTipoTarea: (v: string) => void;
   tareaConNota: boolean;
   onTareaConNota: (v: boolean) => void;
-  tareaGrupal: boolean;
-  onTareaGrupal: (v: boolean) => void;
+  modoEntregaTarea: import('../core/cursada').ModoEntregaTarea;
+  onModoEntregaTarea: (v: import('../core/cursada').ModoEntregaTarea) => void;
   cupoMaximo: number;
   onCupoMaximo: (v: number) => void;
   fechaInicio: string;
@@ -74,7 +75,7 @@ export default function VistaAdminPanel(props: VistaAdminPanelProps) {
     unidadTarea, onUnidadTarea,
     tipoTarea, onTipoTarea,
     tareaConNota, onTareaConNota,
-    tareaGrupal, onTareaGrupal,
+    modoEntregaTarea, onModoEntregaTarea,
     cupoMaximo, onCupoMaximo,
     fechaInicio, onFechaInicio,
     fechaFin, onFechaFin,
@@ -261,22 +262,12 @@ export default function VistaAdminPanel(props: VistaAdminPanelProps) {
                         />
                         Esta tarea se califica con nota
                       </label>
-                      <label className="flex items-center gap-3 text-sm font-semibold text-cyan-200">
-                        <input type="checkbox" checked={tareaGrupal} onChange={(e) => onTareaGrupal(e.target.checked)} />
-                        Trabajo grupal (opcional en grupo; si no, entrega individual)
-                      </label>
-                      {tareaGrupal && (
-                        <div className="flex flex-col gap-1">
-                          <label className="block text-xs font-semibold text-slate-300">Cupo máximo por grupo (0 = sin límite)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={cupoMaximo}
-                            onChange={(e) => onCupoMaximo(parseInt(e.target.value, 10) || 0)}
-                            className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-2.5 text-xs text-white focus:outline-none"
-                          />
-                        </div>
-                      )}
+                      <CamposModoEntregaTarea
+                        modo={modoEntregaTarea}
+                        onModo={onModoEntregaTarea}
+                        cupoMaximo={cupoMaximo}
+                        onCupoMaximo={onCupoMaximo}
+                      />
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>

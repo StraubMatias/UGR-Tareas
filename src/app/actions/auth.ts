@@ -166,8 +166,8 @@ export async function registrarCuentaAction(
     const id = crearId('a_');
     try {
       await db.execute({
-        sql: `INSERT INTO alumnos (id, nombre, password, rol, origen, creado_en, creado_ip) VALUES (?, ?, ?, 'alumno', 'propio', ?, ?)`,
-        args: [id, usuario, await hashearPassword(password), new Date().toISOString(), ip]
+        sql: `INSERT INTO alumnos (id, nombre, password, rol, origen, creado_en, creado_ip, ultimo_acceso) VALUES (?, ?, ?, 'alumno', 'propio', ?, ?, ?)`,
+        args: [id, usuario, await hashearPassword(password), new Date().toISOString(), ip, new Date().toISOString()]
       });
     } catch (error) {
       if (esNombreRepetido(error)) return { exito: false, mensaje: 'Ese usuario ya existe.' };
@@ -182,7 +182,7 @@ export async function registrarCuentaAction(
       rol: 'alumno',
       origen: 'propio',
       ugrUsuario: null,
-      mensaje: 'La cuenta está lista. El tablero queda vacío hasta que sincronices. Si pasan 7 días sin sincronizar, la cuenta se borra.'
+      mensaje: 'La cuenta está lista. El tablero queda vacío hasta que sincronices. Si pasan 7 días sin sincronizar o sin entrar, la cuenta se borra.'
     };
   } catch (error) {
     console.error('Error en registrarCuentaAction:', error);

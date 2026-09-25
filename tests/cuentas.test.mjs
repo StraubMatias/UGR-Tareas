@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cuentaPropiaVencida, ipPermiteOtraCuenta, nombreDeUsuarioValido, sentenciasBorrarAlumno, sentenciasRenombrarAlumno } from '../src/lib/cuentas.ts';
+import {
+  cuentaPropiaInactiva,
+  cuentaPropiaVencida,
+  ipPermiteOtraCuenta,
+  nombreDeUsuarioValido,
+  sentenciasBorrarAlumno,
+  sentenciasRenombrarAlumno
+} from '../src/lib/cuentas.ts';
 
 const ahora = Date.parse('2026-09-22T15:00:00.000Z');
 const haceOchoDias = '2026-09-14T15:00:00.000Z';
@@ -65,6 +72,45 @@ test('borrar un alumno saca sus datos y deja las materias compartidas', () => {
 test('una cuenta de la comisión no entra en esa limpieza', () => {
   assert.equal(cuentaPropiaVencida({
     origen: 'comision',
+    creadoEn: haceOchoDias,
+    inscripciones: 0
+  }, ahora), false);
+});
+
+test('cuenta propia inactiva tras sincronizar y 7 días sin entrar', () => {
+  assert.equal(cuentaPropiaInactiva({
+    origen: 'propio',
+    rol: 'alumno',
+    creadoEn: haceOchoDias,
+    sincronizadoEn: haceOchoDias,
+    ultimoAcceso: haceOchoDias,
+    inscripciones: 2
+  }, ahora), true);
+});
+
+test('cuenta propia activa no se borra por inactividad', () => {
+  assert.equal(cuentaPropiaInactiva({
+    origen: 'propio',
+    rol: 'alumno',
+    sincronizadoEn: haceOchoDias,
+    ultimoAcceso: haceDosDias,
+    inscripciones: 1
+  }, ahora), false);
+});
+
+test('admin propio no se borra por inactividad', () => {
+  assert.equal(cuentaPropiaInactiva({
+    origen: 'propio',
+    rol: 'admin',
+    sincronizadoEn: haceOchoDias,
+    ultimoAcceso: haceOchoDias,
+    inscripciones: 1
+  }, ahora), false);
+});
+
+test('sin sincronizar la inactividad la resuelve cuentaPropiaVencida', () => {
+  assert.equal(cuentaPropiaInactiva({
+    origen: 'propio',
     creadoEn: haceOchoDias,
     inscripciones: 0
   }, ahora), false);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useState, type Dispatch, type SetStateAction } from 'react';
+import type { InvitacionGrupoEnviadaTablero } from './portal/types';
 import type { Materia, Tarea } from '../core/cursada';
 import { alumnosEnEstado, type InscripcionAlumno } from '../lib/companeros';
 import EstadoAlumno from './EstadoAlumno';
@@ -23,18 +24,30 @@ interface Props {
   notasTareasInputs: Record<string, string>;
   handleNotaTareaChangeLocal: (tareaId: string, alumno: string, valor: string) => void;
   handleGuardarNotaTareaOnBlur: (tareaId: string, alumno: string) => void;
+  recargarTablero?: (mostrarCarga?: boolean) => void | Promise<unknown>;
+  invitacionesGrupoEnviadas?: InvitacionGrupoEnviadaTablero[];
 }
 
 export default function VistaAlumnos({
   materias = [], inscripciones = [], alumnos = [], registrados, usuarioActual, esAdmin = false, situacionPropiaAbierta,
-  setSituacionPropiaAbierta, alumnosDesplegados, toggleDesplegarAlumno, ...acciones
+  setSituacionPropiaAbierta, alumnosDesplegados, toggleDesplegarAlumno, recargarTablero,
+  invitacionesGrupoEnviadas = [], ...acciones
 }: Props) {
   const [busqueda, setBusqueda] = useState('');
   const busquedaId = useId();
   const companeros = alumnosEnEstado(inscripciones, usuarioActual || '', registrados?.length ? registrados : alumnos, esAdmin)
     .filter((alumno) => alumno !== usuarioActual);
   const visibles = companeros.filter((alumno) => normalizar(alumno).includes(normalizar(busqueda)));
-  const propsCompartidas = { materias, inscripciones, alumnos, usuarioActual, esAdmin, ...acciones };
+  const propsCompartidas = {
+    materias,
+    inscripciones,
+    alumnos,
+    usuarioActual,
+    esAdmin,
+    recargarTablero,
+    invitacionesGrupoEnviadas,
+    ...acciones
+  };
 
   return (
     <div className="estado-alumnos min-w-0 space-y-6">

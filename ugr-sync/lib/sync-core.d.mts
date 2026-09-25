@@ -13,6 +13,8 @@ export interface ResultadoTareasNuevas {
   eventosCalendario?: unknown[];
   urlsActualizar?: unknown[];
   urlsParcialesActualizar?: unknown[];
+  fechasActualizar?: unknown[];
+  fechasParcialesActualizar?: unknown[];
   condicionesActualizadas?: number;
 }
 
@@ -30,6 +32,16 @@ export function emparejarCursosConMaterias(cursos: unknown[], materias: unknown[
 export function separarEvaluaciones(detectadas: unknown[]): { tareas: unknown[]; parciales: unknown[] };
 export function filtrarTareasDuplicadas(candidatas?: unknown[], existentes?: unknown[]): { nuevas: unknown[]; duplicadas: unknown[] };
 export function agruparResumenSync(opciones?: { nuevas?: unknown[]; yaEstaban?: unknown[]; cronogramaNuevo?: unknown[]; cronogramaYa?: unknown[] }): Array<{ materia: string; nuevas: string[]; yaEstaban: string[]; cronogramaNuevo: string[]; cronogramaYa: string[] }>;
+export function anexarLineasResumenSync(
+  resumen: unknown[],
+  opciones: { campo: string; items: Array<{ materiaNombre?: string; materia?: string; texto?: string; linea?: string; nombre?: string }> }
+): unknown[];
+export function describirActualizacionFechas(opciones: {
+  db: unknown;
+  tareas?: unknown[];
+  parciales?: unknown[];
+  nombresPorId?: Map<string, string>;
+}): Promise<Array<{ materiaNombre?: string; texto: string }>>;
 export function armarMensajeCursada(opciones?: { materias?: Array<{ nombre?: string } | string>; tareasNuevas?: number; tareasYa?: number; extras?: string[] }): string;
 export function limpiarTextoParaBusqueda(texto: string): string;
 export function detectarAvisosMoodle(opciones: {
@@ -54,7 +66,7 @@ export function asegurarMateriasDeLaCursada(opciones: {
 }>;
 export function detectarTareasNuevas(opciones: { db: unknown; cliente: unknown; cursos?: unknown[]; periodoId?: string; alumnoId?: string; mapeos?: MapeoCurso[] }): Promise<ResultadoTareasNuevas>;
 export function insertarTareasDetectadas(opciones: { db: unknown; detectadas: unknown[] }): Promise<number>;
-export function insertarParcialesSiFaltan(opciones: { db: unknown; detectadas: unknown[] }): Promise<{ insertadas: number; omitidas: unknown[] }>;
+export function insertarParcialesSiFaltan(opciones: { db: unknown; detectadas: unknown[] }): Promise<{ insertadas: number; omitidas: unknown[]; insertadasItems?: Array<{ materiaId?: string; materiaNombre?: string; nombre?: string }> }>;
 export function actualizarUrlsTareas(opciones: { db: unknown; urlsActualizar: unknown }): Promise<number>;
 export function actualizarUrlsParciales(opciones: { db: unknown; urlsParcialesActualizar: unknown }): Promise<number>;
 export function insertarEventosCronograma(opciones: { db: unknown; eventos: unknown[] }): Promise<number>;

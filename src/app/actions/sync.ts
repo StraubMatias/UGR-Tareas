@@ -164,9 +164,10 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
       alumnoNombre: usuarioSesion,
       cliente
     });
+    const ahoraIso = new Date().toISOString();
     await db.execute({
-      sql: `UPDATE alumnos SET sincronizado_en = COALESCE(NULLIF(sincronizado_en, ''), ?) WHERE id = ?`,
-      args: [new Date().toISOString(), alumnoId]
+      sql: `UPDATE alumnos SET sincronizado_en = COALESCE(NULLIF(sincronizado_en, ''), ?), ultimo_acceso = ? WHERE id = ?`,
+      args: [ahoraIso, ahoraIso, alumnoId]
     });
 
     if (claves.length > 0) await limpiarIntentosLogin(claves);
@@ -180,7 +181,8 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
     return {
       exito: true,
       mensaje: sync.mensaje,
-      resumen: sync.resumen
+      resumen: sync.resumen,
+      materiasInscriptas: sync.materiasInscriptas
     };
   } catch (error) {
     const mensaje = error instanceof Error ? error.message : '';

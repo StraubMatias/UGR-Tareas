@@ -4,7 +4,14 @@ import { cookies, headers } from 'next/headers';
 import type { Value } from '@libsql/client';
 import { db } from '../app/turso';
 import { PLAN_DE_ESTUDIO } from '../app/plan-utils';
-import { cuentaPropiaVencida, ipPermiteOtraCuenta, nombreDeUsuarioValido, sentenciaLimpiarGruposVacios, sentenciasBorrarAlumno } from '../lib/cuentas';
+import {
+  cuentaPropiaDebeBorrarse,
+  instanteActividad,
+  ipPermiteOtraCuenta,
+  nombreDeUsuarioValido,
+  sentenciaLimpiarGruposVacios,
+  sentenciasBorrarAlumno
+} from '../lib/cuentas';
 import type { RespuestaAction } from '../app/actions/types';
 
 const scryptAsync = promisify(scrypt);
@@ -169,20 +176,47 @@ export function esNombreRepetido(error: unknown): boolean {
   return /unique/i.test(mensaje);
 }
 
+/** Registra entrada al tablero (login o uso con sesión). */
+export async function registrarUltimoAcceso(usuario: string, intervaloMinimoMs = 6 * 60 * 60 * 1000): Promise<void> {
+  try {
+    const res = await db.execute({
+      sql: 'SELECT id, ultimo_acceso FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
+      args: [usuario]
+    });
+    const fila = res.rows[0];
+    if (!fila) return;
+    const id = texto(fila.id);
+    if (!id) return;
+    const ahora = Date.now();
+    const ultimo = instanteActividad(texto(fila.ultimo_acceso));
+    if (intervaloMinimoMs > 0 && Number.isFinite(ultimo) && ahora - ultimo < intervaloMinimoMs) return;
+    await db.execute({
+      sql: 'UPDATE alumnos SET ultimo_acceso = ? WHERE id = ?',
+      args: [new Date(ahora).toISOString(), id]
+    });
+  } catch (error) {
+    console.error('No se pudo registrar último acceso:', error instanceof Error ? error.message : 'falló');
+  }
+}
+
 export async function borrarCuentasSinSincronizar(): Promise<void> {
   try {
     const candidatas = await db.execute(`
-      SELECT a.id, a.nombre, COALESCE(a.origen, 'comision') AS origen, a.creado_en, a.sincronizado_en,
+      SELECT a.id, a.nombre, COALESCE(a.origen, 'comision') AS origen,
+             COALESCE(a.rol, 'alumno') AS rol,
+             a.creado_en, a.sincronizado_en, a.ultimo_acceso,
              (SELECT COUNT(*) FROM inscripciones i WHERE i.alumno_id = a.id) AS inscripciones
       FROM alumnos a
       WHERE COALESCE(a.origen, 'comision') = 'propio'
-        AND (a.sincronizado_en IS NULL OR a.sincronizado_en = '')
+        AND COALESCE(a.rol, 'alumno') != 'admin'
     `);
     const cuentas = candidatas.rows
-      .filter((fila) => cuentaPropiaVencida({
+      .filter((fila) => cuentaPropiaDebeBorrarse({
         origen: texto(fila.origen),
+        rol: texto(fila.rol),
         creadoEn: texto(fila.creado_en),
         sincronizadoEn: texto(fila.sincronizado_en),
+        ultimoAcceso: texto(fila.ultimo_acceso),
         inscripciones: Number(fila.inscripciones || 0)
       }))
       .map((fila) => ({ id: texto(fila.id), nombre: texto(fila.nombre) }))
@@ -193,7 +227,7 @@ export async function borrarCuentasSinSincronizar(): Promise<void> {
       sentenciaLimpiarGruposVacios()
     ], 'write');
   } catch (error) {
-    console.error('No se pudieron borrar las cuentas sin sincronizar:', error instanceof Error ? error.message : 'falló');
+    console.error('No se pudieron borrar las cuentas propias vencidas:', error instanceof Error ? error.message : 'falló');
   }
 }
 
@@ -328,6 +362,7 @@ export async function establecerSesion(usuario: string, versionSesion: number): 
     maxAge: DURACION_SESION_SEGUNDOS,
     path: '/'
   });
+  await registrarUltimoAcceso(usuario, 0);
 }
 
 export async function obtenerUsuarioSesion(): Promise<string | null> {

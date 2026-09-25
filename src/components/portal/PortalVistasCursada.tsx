@@ -1,4 +1,4 @@
-import type { PortalPestana } from './types';
+import type { InvitacionGrupoEnviadaTablero, PortalPestana } from './types';
 import type { calcularDerivadosPlanEstudio } from '../../lib/plan-estudio-derivados';
 import type { useTableroAcciones } from '../../hooks/useTableroAcciones';
 import ProximoParcialAside from './ProximoParcialAside';
@@ -36,6 +36,7 @@ export interface PortalVistasCursadaProps {
   alumnos: string[];
   registrados: string[];
   inscripciones: { alumno: string; materiaId: string }[];
+  invitacionesGrupoEnviadas: InvitacionGrupoEnviadaTablero[];
   materiasMisCursadas: Materia[];
   materiaRankingVisible: string;
   setMateriaRanking: Dispatch<SetStateAction<string>>;
@@ -89,6 +90,7 @@ export interface PortalVistasCursadaProps {
   setTareaEnEdicion: Dispatch<SetStateAction<{ materiaId: string; tarea: Materia['tareas'][number] } | null>>;
   acciones: Acciones;
   adminForms: TableroAdminForms;
+  navegarA: (pestana: PortalPestana) => void;
 }
 
 export default function PortalVistasCursada({
@@ -103,6 +105,7 @@ export default function PortalVistasCursada({
   alumnos,
   registrados,
   inscripciones,
+  invitacionesGrupoEnviadas,
   materiasMisCursadas,
   materiaRankingVisible,
   setMateriaRanking,
@@ -155,7 +158,8 @@ export default function PortalVistasCursada({
   setMateriaEnEdicion,
   setTareaEnEdicion,
   acciones,
-  adminForms
+  adminForms,
+  navegarA
 }: PortalVistasCursadaProps) {
   if (cargando) {
     return (
@@ -183,6 +187,8 @@ export default function PortalVistasCursada({
       notasTareasInputs={notasTareasInputs}
       handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
       handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
+      recargarTablero={cargarBD}
+      invitacionesGrupoEnviadas={invitacionesGrupoEnviadas}
     />
   );
 
@@ -203,6 +209,7 @@ export default function PortalVistasCursada({
 
       {pestana === 'materias' && (
         <VistaMaterias
+          onIrAEstadoAlumno={() => navegarA('alumnos')}
           recargar={cargarBD}
           materias={materias}
           inscripciones={inscripciones}
@@ -358,8 +365,8 @@ export default function PortalVistasCursada({
           onTipoTarea={adminForms.setTipoTarea}
           tareaConNota={adminForms.tareaConNota}
           onTareaConNota={adminForms.setTareaConNota}
-          tareaGrupal={adminForms.tareaGrupal}
-          onTareaGrupal={adminForms.setTareaGrupal}
+          modoEntregaTarea={adminForms.modoEntregaTarea}
+          onModoEntregaTarea={adminForms.setModoEntregaTarea}
           cupoMaximo={adminForms.cupoMaximo}
           onCupoMaximo={adminForms.setCupoMaximo}
           fechaInicio={adminForms.fechaInicio}

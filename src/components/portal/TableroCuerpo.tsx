@@ -44,7 +44,7 @@ export default function TableroCuerpo({ vm }: { vm: TableroPortalViewModel }) {
           <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Tablero vacío</p>
           <h2 className="mt-2 text-2xl font-black text-white">Todavía no hay cursada</h2>
           <p className="mt-3 text-sm leading-relaxed text-slate-400">
-            La cuenta ya está creada. Materias, tareas, grupos y cronograma aparecen cuando sincronizás con UGR Virtual. Si pasan 7 días sin esa sincronización, la cuenta se borra.
+            La cuenta ya está creada. Materias, tareas, grupos y cronograma aparecen cuando sincronizás con UGR Virtual. Si pasan 7 días sin sincronizar o sin entrar al tablero, la cuenta se borra.
           </p>
         </section>
         <CuentaPropia
@@ -68,6 +68,7 @@ export default function TableroCuerpo({ vm }: { vm: TableroPortalViewModel }) {
           notasTareasInputs={datos.notasTareasInputs}
           handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
           handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
+          recargarTablero={cargarBD}
         />
       </div>
     );

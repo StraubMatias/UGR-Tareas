@@ -582,6 +582,21 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     await db.execute('CREATE INDEX IF NOT EXISTS idx_alumnos_creado_ip ON alumnos(creado_ip)');
   });
 
+  await ejecutarMigracion(25, 'grupos: entrega individual e invitaciones', async () => {
+    await crearEsquemaGrupos(db);
+  });
+
+  await ejecutarMigracion(26, 'último acceso para cuentas propias inactivas', async () => {
+    await agregarColumnaSiFalta('alumnos', 'ultimo_acceso', 'TEXT');
+    const ahora = new Date().toISOString();
+    await db.execute({
+      sql: `UPDATE alumnos SET ultimo_acceso = COALESCE(NULLIF(ultimo_acceso, ''), NULLIF(sincronizado_en, ''), NULLIF(creado_en, ''), ?)
+            WHERE COALESCE(origen, 'comision') = 'propio'
+              AND (ultimo_acceso IS NULL OR ultimo_acceso = '')`,
+      args: [ahora]
+    });
+  });
+
   await db.close?.();
 }
 

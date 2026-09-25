@@ -1,5 +1,6 @@
 export type {
   ResumenMateriaSync,
+  MateriaInscriptaSync,
   RespuestaAction,
   RespuestaSiuSync,
   TareaActionParams
@@ -49,5 +50,7 @@ export {
   eliminarParcialAction,
   guardarNotaParcialAction,
   guardarNotaTareaAction,
-  gestionarGrupoTareaAction
+  gestionarGrupoTareaAction,
+  invitarAGrupoTareaAction,
+  responderInvitacionGrupoAction
 } from './actions/evaluaciones';

@@ -2,118 +2,153 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useProgresoSyncEstimado } from '../hooks/useProgresoSyncEstimado';
-import { sincronizarCuentaUgrAction, sincronizarCuentaSiuAction, type ResumenMateriaSync } from '../app/actions';
+import { sincronizarCuentaUgrAction, sincronizarCuentaSiuAction, type MateriaInscriptaSync, type ResumenMateriaSync } from '../app/actions';
 import dynamic from 'next/dynamic';
 
 const DetalleSyncSiu = dynamic(() => import('./portal/DetalleSyncSiu'));
 import type { NotaPlanSiu } from '../lib/importar-plan-siu';
 
-export function ResumenCursada({ resumen }: { resumen: ResumenMateriaSync[] }) {
-  if (resumen.length === 0) return null;
-  const totalNuevas = resumen.reduce((total, fila) => total + fila.nuevas.length, 0);
-  const notasCargadas = resumen.flatMap((fila) => (fila.notasCargadas || []).map((linea) => ({ materia: fila.materia, linea })));
-  const pendientesEntrega = resumen.flatMap((fila) => fila.pendientesEntrega || []);
-  const notasNoLeidas = resumen.flatMap((fila) => fila.notasNoLeidas || []);
+function filaTieneCambios(fila: ResumenMateriaSync): boolean {
+  return (
+    fila.nuevas.length > 0
+    || (fila.fechasActualizadas?.length ?? 0) > 0
+    || (fila.cronogramaNuevo?.length ?? 0) > 0
+    || (fila.parcialesNuevos?.length ?? 0) > 0
+    || (fila.notasCargadas?.length ?? 0) > 0
+    || (fila.pendientesEntrega?.length ?? 0) > 0
+    || (fila.notasNoLeidas?.length ?? 0) > 0
+  );
+}
+
+export function ResumenCursada({
+  resumen,
+  materiasInscriptas = []
+}: {
+  resumen: ResumenMateriaSync[];
+  materiasInscriptas?: MateriaInscriptaSync[];
+}) {
+  const filas = resumen.filter(filaTieneCambios);
+  const hayCambios = filas.length > 0;
+
   return (
     <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-      {notasCargadas.length > 0 && (
-        <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Notas cargadas</p>
-          <ul className="mt-2 space-y-1 text-sm text-white">
-            {notasCargadas.map((item) => (
-              <li key={`${item.materia}-${item.linea}`}>Se cargó {item.linea}</li>
-            ))}
-          </ul>
+      {!hayCambios && (
+        <div className="rounded-xl border border-slate-700/80 bg-slate-900/50 px-4 py-5 text-center">
+          <p className="text-sm font-medium text-slate-200">Nada nuevo que cargar</p>
+          <p className="mt-1 text-xs text-slate-500">Las tareas que ya tenías siguen igual en el tablero.</p>
         </div>
       )}
-      {pendientesEntrega.length > 0 && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Falta entregar en la página</p>
-          <ul className="mt-2 space-y-1 text-sm text-amber-100">
-            {pendientesEntrega.map((nombre) => (
-              <li key={nombre}>Entregá «{nombre}» para cargarle la nota.</li>
-            ))}
-          </ul>
-        </div>
+
+      {hayCambios && (
+        <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300/90">Qué cambió</p>
       )}
-      {notasNoLeidas.length > 0 && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Sin nota en la actividad</p>
-          <ul className="mt-2 space-y-1 text-sm text-amber-100">
-            {notasNoLeidas.map((nombre) => (
-              <li key={nombre}>{nombre}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Estás inscripto a</p>
-        <p className="mt-1 text-sm font-bold text-white">
-          {resumen.length} {resumen.length === 1 ? 'materia' : 'materias'}
-        </p>
-        <ul className="mt-2 space-y-1 text-sm text-slate-200">
-          {resumen.map((materia) => (
-            <li key={`insc-${materia.materia}`}>
-              {materia.materia}
-              {materia.materiaNueva ? (
-                <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-cyan-300">nueva en la página</span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-xs text-slate-400">
-          {totalNuevas > 0
-            ? `Se cargaron ${totalNuevas} tarea(s) que no estaban.`
-            : 'No había tareas nuevas: ya estaban cargadas.'}
-        </p>
-      </div>
-      {resumen.map((materia) => (
-        <div key={materia.materia} className="rounded-xl border border-slate-800 bg-[#0d1117] p-3">
+
+      {filas.map((materia) => (
+        <div key={materia.materia} className="rounded-xl border border-slate-800 bg-[#0d1117] p-3.5 space-y-3">
           <p className="text-sm font-bold text-white">{materia.materia}</p>
-          {materia.nuevas.length > 0 ? (
-            <div className="mt-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">No estaban cargadas</p>
-              <ul className="mt-1 space-y-0.5 text-sm text-slate-200">
+
+          {(materia.fechasActualizadas?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-violet-300">Fechas actualizadas</p>
+              <ul className="mt-1.5 space-y-1 text-sm text-violet-100/95">
+                {materia.fechasActualizadas?.map((linea) => (
+                  <li key={linea} className="flex gap-2">
+                    <span className="text-violet-400 shrink-0">↻</span>
+                    <span>{linea}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {materia.nuevas.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Tareas nuevas</p>
+              <ul className="mt-1.5 space-y-0.5 text-sm text-slate-200">
                 {materia.nuevas.map((nombre) => (
+                  <li key={nombre} className="flex gap-2">
+                    <span className="text-cyan-400 shrink-0">+</span>
+                    <span>{nombre}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(materia.parcialesNuevos?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Parciales nuevos</p>
+              <ul className="mt-1.5 space-y-0.5 text-sm text-slate-200">
+                {materia.parcialesNuevos?.map((nombre) => (
                   <li key={nombre}>+ {nombre}</li>
                 ))}
               </ul>
             </div>
-          ) : (
-            <p className="mt-2 text-sm text-slate-500">No había tareas nuevas en esta materia.</p>
           )}
-          {materia.yaEstaban.length > 0 && (
-            <div className="mt-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Ya estaban, no se duplicaron</p>
-              <ul className="mt-1 space-y-0.5 text-sm text-slate-400">
-                {materia.yaEstaban.map((nombre) => (
-                  <li key={nombre}>· {nombre}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {(materia.cronogramaNuevo?.length || 0) > 0 && (
-            <div className="mt-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Cronograma que no estaba</p>
-              <ul className="mt-1 space-y-0.5 text-sm text-slate-200">
+
+          {(materia.cronogramaNuevo?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300/90">Cronograma</p>
+              <ul className="mt-1.5 space-y-0.5 text-sm text-slate-200">
                 {materia.cronogramaNuevo?.map((nombre) => (
                   <li key={nombre}>+ {nombre}</li>
                 ))}
               </ul>
             </div>
           )}
-          {(materia.cronogramaYa?.length || 0) > 0 && (
-            <div className="mt-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Cronograma ya cargado</p>
-              <ul className="mt-1 space-y-0.5 text-sm text-slate-400">
-                {materia.cronogramaYa?.map((nombre) => (
-                  <li key={nombre}>· {nombre}</li>
+
+          {(materia.notasCargadas?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Notas</p>
+              <ul className="mt-1.5 space-y-0.5 text-sm text-emerald-100">
+                {materia.notasCargadas?.map((linea) => (
+                  <li key={linea}>{linea}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(materia.pendientesEntrega?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Falta entregar en UGR</p>
+              <ul className="mt-1.5 space-y-0.5 text-sm text-amber-100">
+                {materia.pendientesEntrega?.map((nombre) => (
+                  <li key={nombre}>«{nombre}»</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(materia.notasNoLeidas?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Sin nota legible</p>
+              <ul className="mt-1.5 space-y-0.5 text-sm text-amber-100">
+                {materia.notasNoLeidas?.map((nombre) => (
+                  <li key={nombre}>{nombre}</li>
                 ))}
               </ul>
             </div>
           )}
         </div>
       ))}
+
+      {materiasInscriptas.length > 0 && (
+        <details className="rounded-xl border border-slate-800/80 bg-[#0a0e14] px-3 py-2 text-xs text-slate-500">
+          <summary className="cursor-pointer font-semibold text-slate-400 hover:text-slate-300">
+            Materias consultadas ({materiasInscriptas.length})
+          </summary>
+          <ul className="mt-2 space-y-0.5 text-slate-400">
+            {materiasInscriptas.map((item) => (
+              <li key={item.materia}>
+                {item.materia}
+                {item.materiaNueva ? (
+                  <span className="ml-1.5 text-[10px] font-bold uppercase text-cyan-500/80">nueva</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }
@@ -184,6 +219,7 @@ export default function CuentaPropia({
   const [mensaje, setMensaje] = useState('');
   const [error, setError] = useState('');
   const [resumen, setResumen] = useState<ResumenMateriaSync[]>([]);
+  const [materiasInscriptas, setMateriasInscriptas] = useState<MateriaInscriptaSync[]>([]);
   const [detalleSiu, setDetalleSiu] = useState<{
     mensaje: string;
     enCurso: number;
@@ -197,6 +233,7 @@ export default function CuentaPropia({
     setError('');
     setMensaje('');
     setResumen([]);
+    setMateriasInscriptas([]);
     setDetalleSiu(null);
     setDni('');
     setClave('');
@@ -217,6 +254,7 @@ export default function CuentaPropia({
     setMensaje('');
     setError('');
     setResumen([]);
+    setMateriasInscriptas([]);
     setDetalleSiu(null);
     setDni('');
     setClave('');
@@ -232,6 +270,7 @@ export default function CuentaPropia({
         const aviso = resultado.mensaje || 'Cursada actualizada.';
         setMensaje(aviso);
         setResumen(resultado.resumen || []);
+        setMateriasInscriptas(resultado.materiasInscriptas || []);
         await marcarCompletado();
         setFase('listo');
         onCompletado?.();
@@ -423,7 +462,7 @@ export default function CuentaPropia({
                   <p>{mensaje}</p>
                 </div>
               )}
-              <ResumenCursada resumen={resumen} />
+              <ResumenCursada resumen={resumen} materiasInscriptas={materiasInscriptas} />
             </>
           ) : (
             detalleSiu && <DetalleSyncSiu {...detalleSiu} />

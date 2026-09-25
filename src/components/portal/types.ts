@@ -24,6 +24,27 @@ export interface NotificacionTablero {
   materia: string;
   dias?: number | null;
   url?: string;
+  invitacionId?: string;
+  grupoNombre?: string;
+  deAlumno?: string;
+  tareaId?: string;
+}
+
+export interface InvitacionGrupoTablero {
+  id: string;
+  grupoId: string;
+  tareaId: string;
+  grupoNombre: string;
+  tareaNombre: string;
+  materiaNombre: string;
+  deAlumno: string;
+}
+
+/** Invitaciones que vos enviaste y siguen pendientes (para deshabilitar reenvío). */
+export interface InvitacionGrupoEnviadaTablero {
+  tareaId: string;
+  grupoId: string;
+  paraAlumno: string;
 }
 
 /** Recordatorio o novedad en campana / aviso de inicio. */

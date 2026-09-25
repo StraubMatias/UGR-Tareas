@@ -30,8 +30,8 @@ export type TableroAdminForms = {
   setTipoTarea: Dispatch<SetStateAction<string>>;
   tareaConNota: boolean;
   setTareaConNota: Dispatch<SetStateAction<boolean>>;
-  tareaGrupal: boolean;
-  setTareaGrupal: Dispatch<SetStateAction<boolean>>;
+  modoEntregaTarea: import('../../core/cursada').ModoEntregaTarea;
+  setModoEntregaTarea: Dispatch<SetStateAction<import('../../core/cursada').ModoEntregaTarea>>;
   cupoMaximo: number;
   setCupoMaximo: Dispatch<SetStateAction<number>>;
   fechaInicio: string;

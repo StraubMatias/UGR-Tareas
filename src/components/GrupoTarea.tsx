@@ -1,7 +1,13 @@
-import { useState, type FormEvent } from 'react';
-import { gestionarGrupoTareaAction } from '../app/actions';
-import type { Grupo, Tarea } from '../core/cursada';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { gestionarGrupoTareaAction, invitarAGrupoTareaAction } from '../app/actions';
+import {
+  alumnoEligioEntregaIndividual,
+  modoEntregaDeTarea,
+  type Grupo,
+  type Tarea
+} from '../core/cursada';
 import type { GestionarGrupoParams } from '../app/actions';
+import type { InvitacionGrupoEnviadaTablero } from './portal/types';
 
 interface Props {
   tarea: Tarea;
@@ -10,6 +16,9 @@ interface Props {
   recargar: (mostrarCarga?: boolean) => void | Promise<unknown>;
   esAdmin?: boolean;
   alumnos?: string[];
+  alumnoContexto?: string | null;
+  embebido?: boolean;
+  invitacionesPendientesEnviadas?: InvitacionGrupoEnviadaTablero[];
 }
 
 function iniciales(nombre: string) {
@@ -33,10 +42,22 @@ function FichaPersona({ nombre, propio = false }: { nombre: string; propio?: boo
   );
 }
 
-export default function GrupoTarea({ tarea, materiaNombre = 'esta materia', usuarioActual, recargar, esAdmin = false, alumnos = [] }: Props) {
+export default function GrupoTarea({
+  tarea,
+  materiaNombre = 'esta materia',
+  usuarioActual,
+  recargar,
+  esAdmin = false,
+  alumnos = [],
+  alumnoContexto = null,
+  embebido = false,
+  invitacionesPendientesEnviadas = []
+}: Props) {
   const [nombre, setNombre] = useState('');
   const [ocupado, setOcupado] = useState(false);
   const [mensaje, setMensaje] = useState('');
+  const [busquedaInvitar, setBusquedaInvitar] = useState('');
+  const [invitadosPendientes, setInvitadosPendientes] = useState<Set<string>>(() => new Set());
   const [verOtros, setVerOtros] = useState(false);
   const [mostrarAdmin, setMostrarAdmin] = useState(false);
   const [adminAlumno, setAdminAlumno] = useState('');
@@ -46,14 +67,62 @@ export default function GrupoTarea({ tarea, materiaNombre = 'esta materia', usua
 
   const grupos = tarea.grupos || [];
   const cupo = Number(tarea.cupo_maximo) || 0;
-  const propio = grupos.find((grupo) => usuarioActual != null && grupo.integrantes?.some((integrante) => integrante.toLowerCase() === usuarioActual.toLowerCase()));
+  const modo = modoEntregaDeTarea(tarea);
+  const sujeto = alumnoContexto || usuarioActual;
+  const propio = sujeto
+    ? grupos.find((grupo) => grupo.integrantes?.some((integrante) => integrante.toLowerCase() === sujeto.toLowerCase()))
+    : undefined;
+  const puedeGestionar = Boolean(usuarioActual && (!alumnoContexto || alumnoContexto.toLowerCase() === usuarioActual.toLowerCase()));
+  const entregaIndividualActiva = sujeto ? alumnoEligioEntregaIndividual(tarea, sujeto) : false;
   const ocupados = new Set(grupos.flatMap((grupo) => grupo.integrantes || []).map((nombreIntegrante) => nombreIntegrante.toLowerCase()));
   const libres = alumnos.filter((alumno) => !ocupados.has(alumno.toLowerCase()));
   const libresParaVer = libres.filter((alumno) => alumno.toLowerCase() !== usuarioActual?.toLowerCase());
 
+  useEffect(() => {
+    const grupoId = propio?.id;
+    const nombres = invitacionesPendientesEnviadas
+      .filter((inv) => inv.tareaId === tarea.id && (!grupoId || inv.grupoId === grupoId))
+      .map((inv) => inv.paraAlumno.toLowerCase());
+    setInvitadosPendientes(new Set(nombres));
+  }, [invitacionesPendientesEnviadas, propio?.id, tarea.id]);
+
+  const terminoInvitar = busquedaInvitar.trim().toLowerCase();
+  const alumnosParaInvitar = useMemo(() => {
+    const lista = terminoInvitar
+      ? libresParaVer.filter((alumno) => alumno.toLowerCase().includes(terminoInvitar))
+      : libresParaVer;
+    return [...lista].sort((a, b) => a.localeCompare(b, 'es'));
+  }, [libresParaVer, terminoInvitar]);
+
+  const tieneInvitacionPendiente = (alumnoNombre: string) =>
+    invitadosPendientes.has(alumnoNombre.toLowerCase());
+
   const plazas = (grupo: Grupo) => {
     const actuales = grupo.integrantes?.length || 0;
     return cupo === 0 ? `${actuales} ${actuales === 1 ? 'integrante' : 'integrantes'}` : `${actuales} de ${cupo}`;
+  };
+
+  const invitar = async (alumnoNombre: string) => {
+    if (ocupado || !propio?.id || tieneInvitacionPendiente(alumnoNombre)) return;
+    setOcupado(true);
+    setMensaje('');
+    try {
+      const resultado = await invitarAGrupoTareaAction({
+        tareaId: tarea.id,
+        grupoId: propio.id,
+        alumnoNombre
+      });
+      if (!resultado?.exito) {
+        setMensaje(resultado?.mensaje || 'No se pudo enviar la invitación.');
+        return;
+      }
+      setInvitadosPendientes((prev) => new Set(prev).add(alumnoNombre.toLowerCase()));
+      await recargar(false);
+    } catch {
+      setMensaje('No se pudo enviar la invitación.');
+    } finally {
+      setOcupado(false);
+    }
   };
 
   const gestionar = async (datos: Omit<GestionarGrupoParams, 'tareaId'>) => {
@@ -91,15 +160,23 @@ export default function GrupoTarea({ tarea, materiaNombre = 'esta materia', usua
     else await gestionar({ nombre: adminNuevoNombre.trim(), alumnoNombre: adminAlumno });
   };
 
+  const claseContenedor = embebido
+    ? 'space-y-5 text-sm'
+    : 'rounded-2xl border border-slate-800 bg-[#101720] p-4 sm:p-5 space-y-4 text-sm';
+
   return (
-    <section className="rounded-2xl border border-slate-800 bg-[#101720] p-4 sm:p-5 space-y-4 text-sm">
+    <section className={claseContenedor}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Trabajo grupal</p>
-          <h4 className="mt-1 text-base font-bold text-white">Grupal: podés entregar solo o en grupo</h4>
+          <h4 className="mt-1 text-base font-bold text-white">
+            {modo === 'grupal_obligatorio' ? 'Solo se entrega en grupo' : 'Grupal o individual'}
+          </h4>
           <p className="mt-1 text-xs leading-relaxed text-slate-400">
-            Sin grupo podés marcar la entrega igual (solo para vos). En grupo, entrega y nota se comparten.
-            Solo aparecen alumnos que cursan {materiaNombre}.
+            {modo === 'grupal_obligatorio'
+              ? 'Tenés que crear un grupo o unirte a uno para marcar la entrega. Entrega y nota se comparten entre integrantes.'
+              : 'Podés entregar solo o en grupo. En grupo, entrega y nota se comparten.'}
+            {' '}Solo aparecen alumnos que cursan {materiaNombre}.
             {cupo > 0 ? ` Cada grupo puede tener hasta ${cupo} personas.` : ' No hay límite de integrantes.'}
           </p>
         </div>
@@ -113,6 +190,24 @@ export default function GrupoTarea({ tarea, materiaNombre = 'esta materia', usua
           </button>
         )}
       </div>
+
+      {puedeGestionar && !propio && modo === 'grupal_opcional' && (
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-800 bg-[#0c121a] p-4">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={entregaIndividualActiva}
+            disabled={ocupado}
+            onChange={(evento) => void gestionar({ entregaIndividual: evento.target.checked })}
+          />
+          <span>
+            <span className="block text-sm font-bold text-white">La hago individual</span>
+            <span className="mt-1 block text-xs text-slate-400">
+              Marcá esto si vas a entregar por tu cuenta, sin armar grupo. Podés desmarcarlo y unirte a uno después.
+            </span>
+          </span>
+        </label>
+      )}
 
       {propio ? (
         <div className="space-y-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4">
@@ -149,13 +244,61 @@ export default function GrupoTarea({ tarea, materiaNombre = 'esta materia', usua
               </span>
             ))}
           </div>
-          {libresParaVer.length > 0 && (
-            <p className="text-xs text-slate-400">
-              Todavía pueden unirse: {libresParaVer.join(', ')}.
-            </p>
+          {libresParaVer.length > 0 && puedeGestionar && (
+            <div className="space-y-3 rounded-xl border border-slate-800/80 bg-[#0c121a]/80 p-3 sm:p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Invitar a tu grupo</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {libresParaVer.length} sin grupo en {materiaNombre}
+                  </p>
+                </div>
+                <label className="block w-full sm:max-w-xs">
+                  <span className="sr-only">Buscar alumno</span>
+                  <input
+                    type="search"
+                    value={busquedaInvitar}
+                    onChange={(evento) => setBusquedaInvitar(evento.target.value)}
+                    placeholder="Buscar por nombre…"
+                    className="w-full rounded-xl border border-slate-700 bg-[#0f141c] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
+                  />
+                </label>
+              </div>
+              {alumnosParaInvitar.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-slate-700 px-3 py-6 text-center text-xs text-slate-500">
+                  {terminoInvitar ? 'Ningún nombre coincide con la búsqueda.' : 'No hay más compañeros para invitar.'}
+                </p>
+              ) : (
+                <ul
+                  className="max-h-[min(16rem,42vh)] overflow-y-auto overscroll-contain rounded-xl border border-slate-800/80 divide-y divide-slate-800/80"
+                  aria-label="Compañeros disponibles para invitar"
+                >
+                  {alumnosParaInvitar.map((alumno) => {
+                    const yaInvitado = tieneInvitacionPendiente(alumno);
+                    return (
+                      <li key={alumno} className="flex items-center justify-between gap-3 bg-[#101720]/60 px-3 py-2.5">
+                        <FichaPersona nombre={alumno} />
+                        <button
+                          type="button"
+                          disabled={ocupado || yaInvitado}
+                          onClick={() => void invitar(alumno)}
+                          className={`shrink-0 rounded-lg px-3 py-1.5 text-[11px] font-bold cursor-pointer disabled:cursor-default ${
+                            yaInvitado
+                              ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                              : 'border border-cyan-500/40 bg-cyan-500/10 text-cyan-100 disabled:opacity-40'
+                          }`}
+                        >
+                          {yaInvitado ? 'Invitación enviada' : ocupado ? '…' : 'Invitar'}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           )}
         </div>
-      ) : (
+      ) : puedeGestionar ? (
         <div className="grid gap-3 lg:grid-cols-2">
           <form onSubmit={crearGrupo} className="rounded-xl border border-slate-800 bg-[#0c121a] p-4 space-y-3">
             <div>
@@ -243,6 +386,10 @@ export default function GrupoTarea({ tarea, materiaNombre = 'esta materia', usua
             )}
           </div>
         </div>
+      ) : (
+        <p className="text-xs text-slate-400 rounded-lg border border-dashed border-slate-700 px-3 py-3">
+          {sujeto ? `${sujeto} todavía no tiene grupo en esta tarea.` : 'Seleccioná un alumno para gestionar grupos.'}
+        </p>
       )}
 
       {!propio && libres.length > 0 && (

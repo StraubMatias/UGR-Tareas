@@ -8,7 +8,7 @@ import ModalCuentaSync from './ModalCuentaSync';
 import ModalElegirSyncFuente from './ModalElegirSyncFuente';
 
 export default function TableroPortalSesion({ vm }: { vm: TableroPortalViewModel }) {
-  const { ui, acceso, esAdmin, derivados, cargarBD, portalAcceso, navegarA, abrirModalPassword, marcarNotificacionesVistas } = vm;
+  const { ui, acceso, esAdmin, derivados, cargarBD, portalAcceso, navegarA, abrirModalPassword, marcarNotificacionesVistas, responderInvitacionGrupo } = vm;
   const usuario = acceso.usuarioActual;
   if (!usuario) return null;
 
@@ -27,6 +27,7 @@ export default function TableroPortalSesion({ vm }: { vm: TableroPortalViewModel
               navegarA(pestanaDestino);
               ui.setNotificacionesAbiertas(false);
             }}
+            onResponderInvitacion={responderInvitacionGrupo}
             etiquetaMateria={etiquetaMateria}
           />
         }

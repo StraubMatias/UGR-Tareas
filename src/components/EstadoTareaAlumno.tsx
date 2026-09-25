@@ -1,15 +1,21 @@
+import { useState } from 'react';
 import {
-  calcularEstadoSemaforo, formatearFechaDDMMAAAA, formatearUnidad, obtenerGrupoDeAlumno, obtenerIconoMateria,
+  calcularEstadoSemaforo, formatearFechaDDMMAAAA, formatearUnidad, etiquetaModoEntregaTarea, obtenerIconoMateria,
   tareaCompletadaPor, tareaFaltaNota, tareaPuedeGestionarse, type Materia, type Tarea
 } from '../core/cursada';
 import EstadoGrupoAlumno from './EstadoGrupoAlumno';
+import type { InvitacionGrupoEnviadaTablero } from './portal/types';
+import ModalGruposTarea from './ModalGruposTarea';
 
 interface Props {
   tarea: Tarea;
   alumno: string;
   alumnos: string[];
   usuarioActual: string | null;
+  esAdmin?: boolean;
   irATareaEnMaterias: (tareaId: string) => void;
+  recargarTablero?: (mostrarCarga?: boolean) => void | Promise<unknown>;
+  invitacionesGrupoEnviadas?: InvitacionGrupoEnviadaTablero[];
   materia: Materia;
   unidad: string | number | null | undefined;
   ocultarContextoMateria?: boolean;
@@ -20,19 +26,21 @@ interface Props {
 }
 
 export default function EstadoTareaAlumno({
-  tarea, alumno, alumnos, usuarioActual, irATareaEnMaterias, materia, unidad,
+  tarea, alumno, alumnos, usuarioActual, esAdmin = false, irATareaEnMaterias, recargarTablero,
+  invitacionesGrupoEnviadas = [], materia, unidad,
   ocultarContextoMateria = false,
   toggleTareaDesdeCliente, notasTareasInputs, handleNotaTareaChangeLocal,
   handleGuardarNotaTareaOnBlur
 }: Props) {
+  const [modalGruposAbierto, setModalGruposAbierto] = useState(false);
   const propia = alumno === usuarioActual;
   const entregada = tareaCompletadaPor(tarea, alumno);
   const faltaNota = tareaFaltaNota(tarea, alumno);
   const semaforo = calcularEstadoSemaforo(tarea.fin, tarea.inicio);
   const puedeGestionar = tareaPuedeGestionarse(tarea);
-  const entregaIndividual = tarea.grupal && !obtenerGrupoDeAlumno(tarea, alumno);
   const notasOtros = alumnos.filter((nombre) => nombre !== alumno
     && tarea.notas?.[nombre] !== undefined && tarea.notas?.[nombre] !== null && tarea.notas?.[nombre] !== '');
+  const recargar = recargarTablero || (() => undefined);
 
   return (
     <div className="estado-tarea min-w-0 rounded-xl border border-slate-800 bg-[#111a24] p-4 space-y-3">
@@ -63,7 +71,7 @@ export default function EstadoTareaAlumno({
           </h4>
           <p className="estado-tarea-meta">
             <span>
-              {tarea.grupal ? (entregaIndividual ? 'Grupal · entrega individual' : 'Trabajo grupal') : 'Individual'}
+              {etiquetaModoEntregaTarea(tarea, alumno)}
               {tarea.conNota ? ' · Con nota' : ''}
             </span>
             <span className="estado-tarea-fecha">Entrega: {formatearFechaDDMMAAAA(tarea.fin)}</span>
@@ -76,7 +84,24 @@ export default function EstadoTareaAlumno({
         </span>
         {tarea.url && <a href={tarea.url} target="_blank" rel="noopener noreferrer" className="estado-tarea-campus hover:underline">Ver en UGR ↗</a>}
       </div>
-      <EstadoGrupoAlumno tarea={tarea} alumno={alumno} alumnos={alumnos} irATareaEnMaterias={irATareaEnMaterias} />
+      <EstadoGrupoAlumno
+        tarea={tarea}
+        alumno={alumno}
+        esPropia={propia}
+        esAdmin={esAdmin}
+        onAbrirGrupos={() => setModalGruposAbierto(true)}
+      />
+      <ModalGruposTarea
+        abierto={modalGruposAbierto}
+        cerrar={() => setModalGruposAbierto(false)}
+        tarea={tarea}
+        materiaNombre={materia.nombre}
+        usuarioActual={usuarioActual}
+        alumnos={alumnos}
+        recargar={recargar}
+        esAdmin={esAdmin}
+        invitacionesGrupoEnviadas={invitacionesGrupoEnviadas}
+      />
       {tarea.conNota && (
         <div className="estado-tarea-notas space-y-3">
           {propia ? (

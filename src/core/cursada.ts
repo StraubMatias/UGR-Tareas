@@ -22,8 +22,28 @@ export interface Tarea {
   completadoEn?: Record<string, string | null>;
   notaCargadaEn?: Record<string, string | null>;
   grupal?: boolean;
+  permite_individual?: boolean;
+  entregaIndividualPor?: Record<string, boolean>;
   grupos?: Grupo[];
   cupo_maximo?: number | string;
+}
+
+export type ModoEntregaTarea = 'individual' | 'grupal_opcional' | 'grupal_obligatorio';
+
+export function modoEntregaDeTarea(tarea: Pick<Tarea, 'grupal' | 'permite_individual'>): ModoEntregaTarea {
+  if (!tarea.grupal) return 'individual';
+  if (tarea.permite_individual === false) return 'grupal_obligatorio';
+  return 'grupal_opcional';
+}
+
+export function flagsDeModoEntrega(modo: ModoEntregaTarea): { grupal: boolean; permiteIndividual: boolean } {
+  if (modo === 'individual') return { grupal: false, permiteIndividual: true };
+  if (modo === 'grupal_obligatorio') return { grupal: true, permiteIndividual: false };
+  return { grupal: true, permiteIndividual: true };
+}
+
+export function alumnoEligioEntregaIndividual(tarea: Tarea, alumno: string): boolean {
+  return Boolean(tarea.entregaIndividualPor?.[alumno]);
 }
 
 export interface Materia {
@@ -372,6 +392,16 @@ export const obtenerGrupoDeAlumno = (tarea: Tarea, alumno: string): Grupo | null
     g.integrantes?.some((i: string) => i.toLowerCase() === alumno.toLowerCase())
   ) || null;
 };
+
+export function etiquetaModoEntregaTarea(tarea: Tarea, alumno: string): string {
+  const modo = modoEntregaDeTarea(tarea);
+  if (modo === 'individual') return 'Individual';
+  const grupo = obtenerGrupoDeAlumno(tarea, alumno);
+  if (grupo?.nombre) return `Grupal · ${grupo.nombre}`;
+  if (alumnoEligioEntregaIndividual(tarea, alumno)) return 'Grupal · entrega individual';
+  if (modo === 'grupal_obligatorio') return 'Grupal · sin grupo';
+  return 'Grupal · podés ir solo o en grupo';
+}
 
 export const obtenerCompanerosDeGrupo = (tarea: Tarea, alumno: string): string[] => {
   const grupo = obtenerGrupoDeAlumno(tarea, alumno);

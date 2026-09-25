@@ -7,6 +7,7 @@ import {
   formatearUnidad,
   obtenerDiasHastaApertura,
   obtenerIconoMateria,
+  etiquetaModoEntregaTarea,
   tareaCompletadaPor,
   tareaFaltaNota,
   tareaPendienteAlumno,
@@ -15,8 +16,6 @@ import {
 
 import { useMemo } from 'react';
 import { alumnosDeLaMateria, materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
-import GrupoTarea from './GrupoTarea';
-
 interface CondicionesEdicion {
   id: string;
   condiciones: string;
@@ -48,6 +47,7 @@ interface Props {
   handleGuardarNotaTareaOnBlur: (tareaId: string, alumno: string) => void;
   tareaFoco: { materiaId: string; tareaId: string } | null;
   tareaFocoVisible: boolean;
+  onIrAEstadoAlumno?: () => void;
 }
 
 // Vista "Materias": consignas por materia/unidad con marcado de entrega,
@@ -76,6 +76,7 @@ export default function VistaMaterias({
   handleGuardarNotaTareaOnBlur,
   tareaFoco,
   tareaFocoVisible,
+  onIrAEstadoAlumno
 }: Props) {
   const { materiasCursando, otrasMaterias } = useMemo(() => {
     const ids = materiasQueCursa(inscripciones, usuarioActual || '');
@@ -229,7 +230,7 @@ export default function VistaMaterias({
                               </span>
                             )}
 
-                            {t.grupal && (
+                            {t.grupal && usuarioActual && (
                               <span
                                 className={`text-xs px-3 py-1 rounded-md border inline-flex items-center gap-1.5 font-semibold ${
                                   grupoPropio
@@ -238,9 +239,7 @@ export default function VistaMaterias({
                                 }`}
                               >
                                 <span>👥</span>
-                                <span>
-                                  {grupoPropio ? `Grupo: ${grupoPropio.nombre}` : 'Grupal · entrega individual'}
-                                </span>
+                                <span>{etiquetaModoEntregaTarea(t, usuarioActual)}</span>
                                 {Number(t.cupo_maximo) > 0 && (
                                   <span className="text-[10px] opacity-75 font-normal">
                                     (máx. {t.cupo_maximo})
@@ -267,15 +266,22 @@ export default function VistaMaterias({
                             )}
                           </div>
     
-                          {t.grupal && (
-                            <GrupoTarea
-                              tarea={t}
-                              materiaNombre={m.nombre}
-                              usuarioActual={usuarioActual}
-                              recargar={recargar}
-                              esAdmin={esAdmin}
-                              alumnos={cursan}
-                            />
+                          {t.grupal && usuarioActual && !esAdmin && (
+                            <p className="text-xs text-slate-500 rounded-lg border border-dashed border-slate-700/80 px-3 py-2">
+                              Los grupos se arman en{' '}
+                              {onIrAEstadoAlumno ? (
+                                <button
+                                  type="button"
+                                  onClick={onIrAEstadoAlumno}
+                                  className="font-semibold text-cyan-400 hover:text-cyan-300 cursor-pointer"
+                                >
+                                  Estado por alumno
+                                </button>
+                              ) : (
+                                <span className="text-slate-400">Estado por alumno</span>
+                              )}
+                              , en cada tarea.
+                            </p>
                           )}
                           <div className="bg-[#161c26] border border-slate-800 rounded-xl p-4">
                             <span className="text-xs font-semibold text-slate-400 block mb-1">

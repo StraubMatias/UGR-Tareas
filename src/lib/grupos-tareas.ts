@@ -7,6 +7,7 @@ export class ErrorGrupo extends Error {}
 interface TareaFila {
   id: string;
   grupal?: number | bigint | string | null;
+  permite_individual?: number | bigint | string | null;
   inicio?: string | null;
   con_nota?: number | bigint | string | null;
   cupo_maximo?: number | bigint | string | null;
@@ -53,6 +54,51 @@ async function obtenerTarea(tx: Transaction, tareaId: string): Promise<TareaFila
   const filas = await consultar<TareaFila>(tx, 'SELECT * FROM tareas WHERE id = ?', [tareaId]);
   if (!filas[0]) throw new ErrorGrupo('La tarea no existe.');
   return filas[0];
+}
+
+function permiteEntregaIndividual(tarea: TareaFila): boolean {
+  return !Number(tarea.grupal) || Number(tarea.permite_individual ?? 1) === 1;
+}
+
+async function marcarEntregaIndividualTx(
+  tx: Transaction,
+  tareaId: string,
+  alumnoId: string,
+  activo: boolean
+): Promise<void> {
+  const tarea = await obtenerTarea(tx, tareaId);
+  if (!Number(tarea.grupal)) throw new ErrorGrupo('Esta tarea es individual.');
+  if (!permiteEntregaIndividual(tarea)) {
+    throw new ErrorGrupo('Esta tarea solo se entrega en grupo. Unite o creá uno.');
+  }
+  const enGrupo = await consultar<{ grupo_id: string }>(tx,
+    'SELECT grupo_id FROM integrantes_tareas WHERE tarea_id = ? AND alumno_id = ?',
+    [tareaId, alumnoId]
+  );
+  if (enGrupo.length) throw new ErrorGrupo('Salí del grupo antes de marcar entrega individual.');
+  if (activo) {
+    await tx.execute({
+      sql: `INSERT INTO preferencias_tarea_alumno (tarea_id, alumno_id, entrega_individual)
+            VALUES (?, ?, 1)
+            ON CONFLICT(tarea_id, alumno_id) DO UPDATE SET entrega_individual = 1`,
+      args: [tareaId, alumnoId]
+    });
+  } else {
+    await tx.execute({
+      sql: 'DELETE FROM preferencias_tarea_alumno WHERE tarea_id = ? AND alumno_id = ?',
+      args: [tareaId, alumnoId]
+    });
+  }
+}
+
+export async function marcarEntregaIndividual(
+  db: Client,
+  tareaId: string,
+  alumnoId: string,
+  activo: boolean
+): Promise<void> {
+  if (!alumnoId) throw new ErrorGrupo('No se pudo identificar al alumno.');
+  return transaccion(db, async (tx) => marcarEntregaIndividualTx(tx, tareaId, alumnoId, activo));
 }
 
 async function tieneProgreso(tx: Transaction, tareaId: string, alumnos: string[]): Promise<boolean> {
@@ -194,6 +240,10 @@ export async function asignarGrupo(
         await tx.execute({ sql: 'DELETE FROM integrantes_tareas WHERE tarea_id = ? AND alumno_id = ?', args: [tareaId, alumnoId] });
         await tx.execute({ sql: 'DELETE FROM grupos_tareas WHERE id = ? AND NOT EXISTS (SELECT 1 FROM integrantes_tareas WHERE grupo_id = ?)', args: [actual, actual] });
       }
+      await tx.execute({
+        sql: 'DELETE FROM preferencias_tarea_alumno WHERE tarea_id = ? AND alumno_id = ?',
+        args: [tareaId, alumnoId]
+      });
       await tx.execute({ sql: 'INSERT INTO integrantes_tareas (tarea_id, alumno_id, grupo_id) VALUES (?, ?, ?)', args: [tareaId, alumnoId, destino] });
       // Sincronizar automáticamente entregas y notas previas entre los integrantes
       await sincronizarProgresoGrupo(tx, tarea, destino);
@@ -222,6 +272,15 @@ export async function actualizarProgresoTarea(
   return transaccion(db, async (tx) => {
     const tarea = await obtenerTarea(tx, tareaId);
     if (!tareaHabilitada(tarea.inicio)) throw new ErrorGrupo('La tarea todavía no está habilitada.');
+    if (Number(tarea.grupal) && !permiteEntregaIndividual(tarea)) {
+      const enGrupo = await consultar<{ grupo_id: string }>(tx,
+        'SELECT grupo_id FROM integrantes_tareas WHERE tarea_id = ? AND alumno_id = ?',
+        [tareaId, alumno.id]
+      );
+      if (!enGrupo.length) {
+        throw new ErrorGrupo('Esta tarea se entrega en grupo. Creá uno o unite a uno existente.');
+      }
+    }
     const integrantes = await destinatarios(tx, tarea, alumno);
     const fecha = new Date().toISOString();
     if (alternarEntrega) {
@@ -262,4 +321,101 @@ export async function actualizarProgresoTarea(
     }
     return { alumnos: integrantes.map((i) => i.nombre) };
   });
+}
+
+export async function enviarInvitacionGrupo(
+  db: Client,
+  tareaId: string,
+  deAlumnoId: string,
+  paraAlumnoId: string,
+  grupoId: string
+): Promise<{ id: string }> {
+  if (deAlumnoId === paraAlumnoId) throw new ErrorGrupo('No podés invitarte a vos mismo.');
+  return transaccion(db, async (tx) => {
+    const tarea = await obtenerTarea(tx, tareaId);
+    if (!Number(tarea.grupal)) throw new ErrorGrupo('Esta tarea no es grupal.');
+
+    const pertenece = await consultar<{ grupo_id: string }>(tx,
+      'SELECT grupo_id FROM integrantes_tareas WHERE tarea_id = ? AND alumno_id = ? AND grupo_id = ?',
+      [tareaId, deAlumnoId, grupoId]
+    );
+    if (!pertenece.length) throw new ErrorGrupo('Solo podés invitar desde un grupo en el que estés.');
+
+    const destinoEnGrupo = await consultar<{ grupo_id: string }>(tx,
+      'SELECT grupo_id FROM integrantes_tareas WHERE tarea_id = ? AND alumno_id = ?',
+      [tareaId, paraAlumnoId]
+    );
+    if (destinoEnGrupo.length) throw new ErrorGrupo('Esa persona ya tiene grupo en esta tarea.');
+
+    const pendiente = await consultar<{ id: string }>(tx,
+      `SELECT id FROM invitaciones_grupo
+       WHERE tarea_id = ? AND para_alumno_id = ? AND grupo_id = ? AND estado = 'pendiente'`,
+      [tareaId, paraAlumnoId, grupoId]
+    );
+    if (pendiente.length) throw new ErrorGrupo('Ya hay una invitación pendiente para esa persona.');
+
+    const cupo = Number(tarea.cupo_maximo) || 0;
+    if (cupo > 0) {
+      const integrantesCount = await consultar<{ total: number | bigint | string }>(tx,
+        'SELECT COUNT(*) as total FROM integrantes_tareas WHERE grupo_id = ?', [grupoId]
+      );
+      if (Number(integrantesCount[0].total) >= cupo) {
+        throw new ErrorGrupo('El grupo ya está completo.');
+      }
+    }
+
+    const id = `inv_grupo_${randomUUID()}`;
+    await tx.execute({
+      sql: `INSERT INTO invitaciones_grupo (id, grupo_id, tarea_id, de_alumno_id, para_alumno_id, creada_en, estado)
+            VALUES (?, ?, ?, ?, ?, ?, 'pendiente')`,
+      args: [id, grupoId, tareaId, deAlumnoId, paraAlumnoId, new Date().toISOString()]
+    });
+    return { id };
+  });
+}
+
+export async function responderInvitacionGrupo(
+  db: Client,
+  invitacionId: string,
+  paraAlumnoId: string,
+  aceptar: boolean
+): Promise<void> {
+  const res = await db.execute({
+    sql: 'SELECT id, grupo_id, tarea_id, para_alumno_id, estado FROM invitaciones_grupo WHERE id = ?',
+    args: [invitacionId]
+  });
+  const fila = res.rows[0];
+  const invitacion = fila
+    ? {
+      id: String(fila.id),
+      grupo_id: String(fila.grupo_id),
+      tarea_id: String(fila.tarea_id),
+      para_alumno_id: String(fila.para_alumno_id),
+      estado: String(fila.estado)
+    }
+    : undefined;
+  if (!invitacion) throw new ErrorGrupo('La invitación no existe.');
+  if (String(invitacion.para_alumno_id) !== paraAlumnoId) throw new ErrorGrupo('Esta invitación no es para vos.');
+  if (String(invitacion.estado) !== 'pendiente') throw new ErrorGrupo('Esta invitación ya fue respondida.');
+
+  if (!aceptar) {
+    await db.execute({
+      sql: "UPDATE invitaciones_grupo SET estado = 'rechazada' WHERE id = ?",
+      args: [invitacionId]
+    });
+    return;
+  }
+
+  await asignarGrupo(db, String(invitacion.tarea_id), paraAlumnoId, { grupoId: String(invitacion.grupo_id) });
+  await db.batch([
+    {
+      sql: "UPDATE invitaciones_grupo SET estado = 'aceptada' WHERE id = ?",
+      args: [invitacionId]
+    },
+    {
+      sql: `UPDATE invitaciones_grupo SET estado = 'cancelada'
+            WHERE tarea_id = ? AND para_alumno_id = ? AND estado = 'pendiente' AND id != ?`,
+      args: [invitacion.tarea_id, paraAlumnoId, invitacionId]
+    }
+  ], 'write');
 }
