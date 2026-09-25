@@ -98,6 +98,11 @@ textarea {
   color: rgba(244, 184, 96, 0.45);
 }
 
+.portal-shell {
+  /* Altura aprox. de .portal-nav sticky + margen para aside “Próximo examen”. */
+  --portal-nav-sticky-offset: 5.25rem;
+}
+
 .portal-nav {
   border-color: var(--line);
   background: rgba(11, 17, 23, 0.86);
@@ -591,6 +596,10 @@ textarea {
   .portal-header-actions > button,
   .portal-nav > button {
     min-height: 2.75rem;
+  }
+
+  .portal-shell {
+    --portal-nav-sticky-offset: 6.25rem;
   }
 
   .portal-nav {

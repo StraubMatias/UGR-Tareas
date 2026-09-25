@@ -13,7 +13,8 @@ import {
   tareaPuedeGestionarse
 } from '../core/cursada';
 
-import { alumnosDeLaMateria, type InscripcionAlumno } from '../lib/companeros';
+import { useMemo } from 'react';
+import { alumnosDeLaMateria, materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
 import GrupoTarea from './GrupoTarea';
 
 interface CondicionesEdicion {
@@ -76,14 +77,15 @@ export default function VistaMaterias({
   tareaFoco,
   tareaFocoVisible,
 }: Props) {
-  return (
-    <div className="space-y-6">
-      {materias.length === 0 ? (
-        <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
-          Todavía no hay materias cargadas.
-        </div>
-      ) : (
-        materias.map((m) => {
+  const { materiasCursando, otrasMaterias } = useMemo(() => {
+    const ids = materiasQueCursa(inscripciones, usuarioActual || '');
+    return {
+      materiasCursando: materias.filter((m) => ids.has(m.id)),
+      otrasMaterias: materias.filter((m) => !ids.has(m.id))
+    };
+  }, [materias, inscripciones, usuarioActual]);
+
+  const renderTarjetaMateria = (m: Materia) => {
           const cursan = alumnosDeLaMateria(inscripciones, m.id);
           const expandida = !!materiasExpandidas[m.id];
           const mostrarCompletadas = !!materiasDesplegadas[m.id];
@@ -399,7 +401,28 @@ export default function VistaMaterias({
               )}
             </div>
           );
-        })
+  };
+
+  return (
+    <div className="space-y-6">
+      {materias.length === 0 ? (
+        <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
+          Todavía no hay materias cargadas.
+        </div>
+      ) : (
+        <>
+          {materiasCursando.map((m) => renderTarjetaMateria(m))}
+          {otrasMaterias.length > 0 && (
+            <>
+              {materiasCursando.length > 0 && (
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 border-t border-slate-800 pt-4">
+                  {esAdmin ? 'Otras materias del período' : 'Más materias'}
+                </p>
+              )}
+              {otrasMaterias.map((m) => renderTarjetaMateria(m))}
+            </>
+          )}
+        </>
       )}
     </div>
   );

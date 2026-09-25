@@ -16,7 +16,7 @@ export default function ProximoParcialAside({
   const diasHastaParcial = obtenerDiasHastaParcial(proximoParcial.fecha);
 
   return (
-    <aside className="xl:sticky xl:top-6 bg-purple-950/20 border border-purple-500/30 rounded-2xl p-5 shadow-sm">
+    <aside className="xl:sticky xl:top-[var(--portal-nav-sticky-offset)] xl:z-30 xl:max-h-[calc(100dvh-var(--portal-nav-sticky-offset)-1rem)] xl:overflow-y-auto bg-purple-950/20 border border-purple-500/30 rounded-2xl p-5 shadow-sm self-start">
       <p className="text-xs font-bold text-purple-300 uppercase tracking-wider mb-4">Próximo examen</p>
       <div className="space-y-2">
         <h2 className="text-lg font-bold text-white leading-snug">{proximoParcial.nombre}</h2>
