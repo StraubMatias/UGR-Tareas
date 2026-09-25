@@ -117,3 +117,27 @@ test('obtenerResumenTareasAlumno: tarea grupal con nota no cuenta en Grupales', 
   assert.equal(resumen.grupales[0].id, 't2');
   assert.equal(resumen.totalGrupales, 1);
 });
+
+test('obtenerResumenTareasAlumno: grupal entregada sin nota sigue en Grupales', () => {
+  const materias = [
+    {
+      id: 'm1',
+      nombre: 'Materia 1',
+      tareas: [
+        {
+          id: 't1',
+          nombre: 'TP grupal',
+          inicio: 'Sin fecha',
+          fin: '2026-10-01',
+          completadoPor: ['Ana'],
+          conNota: true,
+          grupal: true,
+          notas: {}
+        }
+      ]
+    }
+  ];
+  const resumen = obtenerResumenTareasAlumno('Ana', materias);
+  assert.equal(resumen.grupales.length, 1);
+  assert.equal(resumen.completadas.length, 0);
+});

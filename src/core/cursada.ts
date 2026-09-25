@@ -432,10 +432,17 @@ export const obtenerResumenGruposTarea = (tarea: Tarea, listaAlumnos: string[] =
   };
 };
 
-/** Tareas grupal que siguen en el filtro «Grupales» (armar grupo / entregar); las ya entregadas o con nota van a «Completadas». */
-export const tareaGrupalPendienteEnTablero = (tarea: Tarea, alumno: string | null | undefined): boolean => (
-  Boolean(tarea.grupal && alumno && !tareaCompletadaPor(tarea, alumno))
-);
+const alumnoTieneNotaEnTarea = (tarea: Tarea, alumno: string): boolean => {
+  const nota = tarea.notas?.[alumno];
+  return nota !== undefined && nota !== null && String(nota).trim() !== '';
+};
+
+/** Grupales: con nota en el tablero → Completadas; sin nota → acá (aunque ya esté entregada). */
+export const tareaGrupalPendienteEnTablero = (tarea: Tarea, alumno: string | null | undefined): boolean => {
+  if (!tarea.grupal || !alumno) return false;
+  if (tarea.conNota) return !alumnoTieneNotaEnTarea(tarea, alumno);
+  return !tareaCompletadaPor(tarea, alumno);
+};
 
 export interface ResumenTareas {
   pendientes: Tarea[];
