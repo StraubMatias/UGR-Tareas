@@ -40,6 +40,13 @@ export interface InvitacionGrupoTablero {
   deAlumno: string;
 }
 
+/** Invitaciones que vos enviaste y siguen pendientes (para deshabilitar reenvío). */
+export interface InvitacionGrupoEnviadaTablero {
+  tareaId: string;
+  grupoId: string;
+  paraAlumno: string;
+}
+
 /** Recordatorio o novedad en campana / aviso de inicio. */
 export type NovedadTablero = NotificacionTablero;
 

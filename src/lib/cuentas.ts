@@ -1,4 +1,6 @@
+/** Plazo para borrar cuentas propias sin sincronizar o sin entrar al tablero. */
 export const DIAS_PARA_SINCRONIZAR = 7;
+export const DIAS_INACTIVIDAD_CUENTA = DIAS_PARA_SINCRONIZAR;
 export const MAX_CUENTAS_POR_IP = 2;
 
 export function ipPermiteOtraCuenta(cuentasExistentes: number, maximo = MAX_CUENTAS_POR_IP): boolean {
@@ -64,7 +66,7 @@ export function sentenciaLimpiarGruposVacios(): Sentencia {
 }
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
-function instante(valor: string | null | undefined): number {
+export function instanteActividad(valor: string | null | undefined): number {
   const texto = String(valor || '').trim();
   if (!texto) return Number.NaN;
   const normalizado = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(texto)
@@ -73,8 +75,8 @@ function instante(valor: string | null | undefined): number {
   return Date.parse(normalizado);
 }
 
-// Una cuenta propia se borra si pasaron 7 días y nunca sincronizó.
-// Quien ya sincronizó, o quien cursa alguna materia, se queda.
+// Cuenta propia sin sincronizar: se borra a los 7 días desde el alta.
+// Si ya sincronizó o tiene cursada: se borra tras 7 días sin entrar (ver cuentaPropiaInactiva).
 export function cuentaPropiaVencida(
   cuenta: {
     origen?: string | null;
@@ -87,7 +89,54 @@ export function cuentaPropiaVencida(
   if (String(cuenta.origen || '') !== 'propio') return false;
   if (String(cuenta.sincronizadoEn || '').trim()) return false;
   if (Number(cuenta.inscripciones || 0) > 0) return false;
-  const creado = instante(cuenta.creadoEn);
+  const creado = instanteActividad(cuenta.creadoEn);
   if (!Number.isFinite(creado)) return false;
   return ahora - creado >= DIAS_PARA_SINCRONIZAR * MS_POR_DIA;
+}
+
+function ultimaActividadCuenta(cuenta: {
+  ultimoAcceso?: string | null;
+  sincronizadoEn?: string | null;
+  creadoEn?: string | null;
+}): number {
+  const candidatos = [cuenta.ultimoAcceso, cuenta.sincronizadoEn, cuenta.creadoEn]
+    .map(instanteActividad)
+    .filter(Number.isFinite);
+  return candidatos.length ? Math.max(...candidatos) : Number.NaN;
+}
+
+// Cuenta propia que ya sincronizó o tiene cursada, pero no entra hace 7+ días.
+export function cuentaPropiaInactiva(
+  cuenta: {
+    origen?: string | null;
+    rol?: string | null;
+    creadoEn?: string | null;
+    sincronizadoEn?: string | null;
+    ultimoAcceso?: string | null;
+    inscripciones?: number;
+  },
+  ahora = Date.now()
+): boolean {
+  if (String(cuenta.origen || '') !== 'propio') return false;
+  if (String(cuenta.rol || 'alumno') === 'admin') return false;
+  const sincronizo = Boolean(String(cuenta.sincronizadoEn || '').trim());
+  const inscripto = Number(cuenta.inscripciones || 0) > 0;
+  if (!sincronizo && !inscripto) return false;
+  const ultima = ultimaActividadCuenta(cuenta);
+  if (!Number.isFinite(ultima)) return false;
+  return ahora - ultima >= DIAS_INACTIVIDAD_CUENTA * MS_POR_DIA;
+}
+
+export function cuentaPropiaDebeBorrarse(
+  cuenta: {
+    origen?: string | null;
+    rol?: string | null;
+    creadoEn?: string | null;
+    sincronizadoEn?: string | null;
+    ultimoAcceso?: string | null;
+    inscripciones?: number;
+  },
+  ahora = Date.now()
+): boolean {
+  return cuentaPropiaVencida(cuenta, ahora) || cuentaPropiaInactiva(cuenta, ahora);
 }

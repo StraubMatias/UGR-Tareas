@@ -106,6 +106,7 @@ export function useTableroPortal() {
     setProgresoPlan: datos.setProgresoPlan,
     setAvisos: datos.setAvisos,
     setInvitacionesGrupo: datos.setInvitacionesGrupo,
+    setInvitacionesGrupoEnviadas: datos.setInvitacionesGrupoEnviadas,
     setNotasInputs: datos.setNotasInputs,
     setNotasTareasInputs: datos.setNotasTareasInputs,
     setMateriaSel: admin.setMateriaSel,

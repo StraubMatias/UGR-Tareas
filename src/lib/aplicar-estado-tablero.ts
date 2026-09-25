@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
-import type { AvisoCampusMoodle, InvitacionGrupoTablero, Periodo } from '../components/portal/types';
+import type { AvisoCampusMoodle, InvitacionGrupoEnviadaTablero, InvitacionGrupoTablero, Periodo } from '../components/portal/types';
 import type { EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
 
 export interface EstadoCompletoTablero {
@@ -26,6 +26,7 @@ export interface EstadoCompletoTablero {
   }[];
   avisos?: AvisoCampusMoodle[];
   invitacionesGrupo?: InvitacionGrupoTablero[];
+  invitacionesGrupoEnviadas?: InvitacionGrupoEnviadaTablero[];
 }
 
 export interface AplicarEstadoTableroCallbacks {
@@ -41,6 +42,7 @@ export interface AplicarEstadoTableroCallbacks {
   setProgresoPlan: Dispatch<SetStateAction<NonNullable<EstadoCompletoTablero['progresoPlan']>>>;
   setAvisos: Dispatch<SetStateAction<AvisoCampusMoodle[]>>;
   setInvitacionesGrupo: Dispatch<SetStateAction<InvitacionGrupoTablero[]>>;
+  setInvitacionesGrupoEnviadas: Dispatch<SetStateAction<InvitacionGrupoEnviadaTablero[]>>;
   setRolUsuario: Dispatch<SetStateAction<string | null>>;
   setOrigenCuenta: Dispatch<SetStateAction<string | null>>;
   setUgrUsuarioCuenta: Dispatch<SetStateAction<string | null>>;
@@ -71,6 +73,7 @@ export function aplicarEstadoTablero(
   cb.setProgresoPlan(estado.progresoPlan || []);
   cb.setAvisos(estado.avisos || []);
   cb.setInvitacionesGrupo(estado.invitacionesGrupo || []);
+  cb.setInvitacionesGrupoEnviadas(estado.invitacionesGrupoEnviadas || []);
   if (estado.rol) cb.setRolUsuario(estado.rol);
   if (estado.origen) cb.setOrigenCuenta(estado.origen);
   if ('ugrUsuario' in estado) cb.setUgrUsuarioCuenta(estado.ugrUsuario || null);

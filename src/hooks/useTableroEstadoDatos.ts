@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { AvisoCampusMoodle, InvitacionGrupoTablero, Periodo } from '../components/portal/types';
+import type { AvisoCampusMoodle, InvitacionGrupoEnviadaTablero, InvitacionGrupoTablero, Periodo } from '../components/portal/types';
 import type { EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
 
 export function useTableroEstadoDatos() {
@@ -20,6 +20,7 @@ export function useTableroEstadoDatos() {
   >([]);
   const [avisos, setAvisos] = useState<AvisoCampusMoodle[]>([]);
   const [invitacionesGrupo, setInvitacionesGrupo] = useState<InvitacionGrupoTablero[]>([]);
+  const [invitacionesGrupoEnviadas, setInvitacionesGrupoEnviadas] = useState<InvitacionGrupoEnviadaTablero[]>([]);
 
   return {
     materias,
@@ -51,6 +52,8 @@ export function useTableroEstadoDatos() {
     avisos,
     setAvisos,
     invitacionesGrupo,
-    setInvitacionesGrupo
+    setInvitacionesGrupo,
+    invitacionesGrupoEnviadas,
+    setInvitacionesGrupoEnviadas
   };
 }

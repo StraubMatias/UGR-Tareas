@@ -4,6 +4,7 @@ import {
   tareaCompletadaPor, tareaFaltaNota, tareaPuedeGestionarse, type Materia, type Tarea
 } from '../core/cursada';
 import EstadoGrupoAlumno from './EstadoGrupoAlumno';
+import type { InvitacionGrupoEnviadaTablero } from './portal/types';
 import ModalGruposTarea from './ModalGruposTarea';
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
   esAdmin?: boolean;
   irATareaEnMaterias: (tareaId: string) => void;
   recargarTablero?: (mostrarCarga?: boolean) => void | Promise<unknown>;
+  invitacionesGrupoEnviadas?: InvitacionGrupoEnviadaTablero[];
   materia: Materia;
   unidad: string | number | null | undefined;
   ocultarContextoMateria?: boolean;
@@ -24,7 +26,8 @@ interface Props {
 }
 
 export default function EstadoTareaAlumno({
-  tarea, alumno, alumnos, usuarioActual, esAdmin = false, irATareaEnMaterias, recargarTablero, materia, unidad,
+  tarea, alumno, alumnos, usuarioActual, esAdmin = false, irATareaEnMaterias, recargarTablero,
+  invitacionesGrupoEnviadas = [], materia, unidad,
   ocultarContextoMateria = false,
   toggleTareaDesdeCliente, notasTareasInputs, handleNotaTareaChangeLocal,
   handleGuardarNotaTareaOnBlur
@@ -97,6 +100,7 @@ export default function EstadoTareaAlumno({
         alumnos={alumnos}
         recargar={recargar}
         esAdmin={esAdmin}
+        invitacionesGrupoEnviadas={invitacionesGrupoEnviadas}
       />
       {tarea.conNota && (
         <div className="estado-tarea-notas space-y-3">

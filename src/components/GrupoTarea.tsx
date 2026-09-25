@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { gestionarGrupoTareaAction, invitarAGrupoTareaAction } from '../app/actions';
 import {
   alumnoEligioEntregaIndividual,
@@ -7,6 +7,7 @@ import {
   type Tarea
 } from '../core/cursada';
 import type { GestionarGrupoParams } from '../app/actions';
+import type { InvitacionGrupoEnviadaTablero } from './portal/types';
 
 interface Props {
   tarea: Tarea;
@@ -16,6 +17,8 @@ interface Props {
   esAdmin?: boolean;
   alumnos?: string[];
   alumnoContexto?: string | null;
+  embebido?: boolean;
+  invitacionesPendientesEnviadas?: InvitacionGrupoEnviadaTablero[];
 }
 
 function iniciales(nombre: string) {
@@ -46,11 +49,15 @@ export default function GrupoTarea({
   recargar,
   esAdmin = false,
   alumnos = [],
-  alumnoContexto = null
+  alumnoContexto = null,
+  embebido = false,
+  invitacionesPendientesEnviadas = []
 }: Props) {
   const [nombre, setNombre] = useState('');
   const [ocupado, setOcupado] = useState(false);
   const [mensaje, setMensaje] = useState('');
+  const [busquedaInvitar, setBusquedaInvitar] = useState('');
+  const [invitadosPendientes, setInvitadosPendientes] = useState<Set<string>>(() => new Set());
   const [verOtros, setVerOtros] = useState(false);
   const [mostrarAdmin, setMostrarAdmin] = useState(false);
   const [adminAlumno, setAdminAlumno] = useState('');
@@ -71,13 +78,32 @@ export default function GrupoTarea({
   const libres = alumnos.filter((alumno) => !ocupados.has(alumno.toLowerCase()));
   const libresParaVer = libres.filter((alumno) => alumno.toLowerCase() !== usuarioActual?.toLowerCase());
 
+  useEffect(() => {
+    const grupoId = propio?.id;
+    const nombres = invitacionesPendientesEnviadas
+      .filter((inv) => inv.tareaId === tarea.id && (!grupoId || inv.grupoId === grupoId))
+      .map((inv) => inv.paraAlumno.toLowerCase());
+    setInvitadosPendientes(new Set(nombres));
+  }, [invitacionesPendientesEnviadas, propio?.id, tarea.id]);
+
+  const terminoInvitar = busquedaInvitar.trim().toLowerCase();
+  const alumnosParaInvitar = useMemo(() => {
+    const lista = terminoInvitar
+      ? libresParaVer.filter((alumno) => alumno.toLowerCase().includes(terminoInvitar))
+      : libresParaVer;
+    return [...lista].sort((a, b) => a.localeCompare(b, 'es'));
+  }, [libresParaVer, terminoInvitar]);
+
+  const tieneInvitacionPendiente = (alumnoNombre: string) =>
+    invitadosPendientes.has(alumnoNombre.toLowerCase());
+
   const plazas = (grupo: Grupo) => {
     const actuales = grupo.integrantes?.length || 0;
     return cupo === 0 ? `${actuales} ${actuales === 1 ? 'integrante' : 'integrantes'}` : `${actuales} de ${cupo}`;
   };
 
   const invitar = async (alumnoNombre: string) => {
-    if (ocupado || !propio?.id) return;
+    if (ocupado || !propio?.id || tieneInvitacionPendiente(alumnoNombre)) return;
     setOcupado(true);
     setMensaje('');
     try {
@@ -90,7 +116,7 @@ export default function GrupoTarea({
         setMensaje(resultado?.mensaje || 'No se pudo enviar la invitación.');
         return;
       }
-      setMensaje(resultado.mensaje || `Invitación enviada a ${alumnoNombre}.`);
+      setInvitadosPendientes((prev) => new Set(prev).add(alumnoNombre.toLowerCase()));
       await recargar(false);
     } catch {
       setMensaje('No se pudo enviar la invitación.');
@@ -134,8 +160,12 @@ export default function GrupoTarea({
     else await gestionar({ nombre: adminNuevoNombre.trim(), alumnoNombre: adminAlumno });
   };
 
+  const claseContenedor = embebido
+    ? 'space-y-5 text-sm'
+    : 'rounded-2xl border border-slate-800 bg-[#101720] p-4 sm:p-5 space-y-4 text-sm';
+
   return (
-    <section className="rounded-2xl border border-slate-800 bg-[#101720] p-4 sm:p-5 space-y-4 text-sm">
+    <section className={claseContenedor}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Trabajo grupal</p>
@@ -215,23 +245,56 @@ export default function GrupoTarea({
             ))}
           </div>
           {libresParaVer.length > 0 && puedeGestionar && (
-            <div className="space-y-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Invitar a tu grupo</p>
-              <ul className="space-y-1.5">
-                {libresParaVer.map((alumno) => (
-                  <li key={alumno} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5">
-                    <FichaPersona nombre={alumno} />
-                    <button
-                      type="button"
-                      disabled={ocupado}
-                      onClick={() => void invitar(alumno)}
-                      className="shrink-0 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-bold text-cyan-100 cursor-pointer disabled:opacity-40"
-                    >
-                      Invitar
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            <div className="space-y-3 rounded-xl border border-slate-800/80 bg-[#0c121a]/80 p-3 sm:p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Invitar a tu grupo</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {libresParaVer.length} sin grupo en {materiaNombre}
+                  </p>
+                </div>
+                <label className="block w-full sm:max-w-xs">
+                  <span className="sr-only">Buscar alumno</span>
+                  <input
+                    type="search"
+                    value={busquedaInvitar}
+                    onChange={(evento) => setBusquedaInvitar(evento.target.value)}
+                    placeholder="Buscar por nombre…"
+                    className="w-full rounded-xl border border-slate-700 bg-[#0f141c] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
+                  />
+                </label>
+              </div>
+              {alumnosParaInvitar.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-slate-700 px-3 py-6 text-center text-xs text-slate-500">
+                  {terminoInvitar ? 'Ningún nombre coincide con la búsqueda.' : 'No hay más compañeros para invitar.'}
+                </p>
+              ) : (
+                <ul
+                  className="max-h-[min(16rem,42vh)] overflow-y-auto overscroll-contain rounded-xl border border-slate-800/80 divide-y divide-slate-800/80"
+                  aria-label="Compañeros disponibles para invitar"
+                >
+                  {alumnosParaInvitar.map((alumno) => {
+                    const yaInvitado = tieneInvitacionPendiente(alumno);
+                    return (
+                      <li key={alumno} className="flex items-center justify-between gap-3 bg-[#101720]/60 px-3 py-2.5">
+                        <FichaPersona nombre={alumno} />
+                        <button
+                          type="button"
+                          disabled={ocupado || yaInvitado}
+                          onClick={() => void invitar(alumno)}
+                          className={`shrink-0 rounded-lg px-3 py-1.5 text-[11px] font-bold cursor-pointer disabled:cursor-default ${
+                            yaInvitado
+                              ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                              : 'border border-cyan-500/40 bg-cyan-500/10 text-cyan-100 disabled:opacity-40'
+                          }`}
+                        >
+                          {yaInvitado ? 'Invitación enviada' : ocupado ? '…' : 'Invitar'}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           )}
         </div>
@@ -430,14 +493,7 @@ export default function GrupoTarea({
       )}
 
       {mensaje && (
-        <p
-          role="alert"
-          className={`rounded-lg border px-3 py-2 text-xs ${
-            /invitación/i.test(mensaje)
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-              : 'border-red-500/30 bg-red-500/10 text-red-200'
-          }`}
-        >
+        <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
           {mensaje}
         </p>
       )}

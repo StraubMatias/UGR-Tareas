@@ -1,4 +1,4 @@
-import type { PortalPestana } from './types';
+import type { InvitacionGrupoEnviadaTablero, PortalPestana } from './types';
 import type { calcularDerivadosPlanEstudio } from '../../lib/plan-estudio-derivados';
 import type { useTableroAcciones } from '../../hooks/useTableroAcciones';
 import ProximoParcialAside from './ProximoParcialAside';
@@ -36,6 +36,7 @@ export interface PortalVistasCursadaProps {
   alumnos: string[];
   registrados: string[];
   inscripciones: { alumno: string; materiaId: string }[];
+  invitacionesGrupoEnviadas: InvitacionGrupoEnviadaTablero[];
   materiasMisCursadas: Materia[];
   materiaRankingVisible: string;
   setMateriaRanking: Dispatch<SetStateAction<string>>;
@@ -104,6 +105,7 @@ export default function PortalVistasCursada({
   alumnos,
   registrados,
   inscripciones,
+  invitacionesGrupoEnviadas,
   materiasMisCursadas,
   materiaRankingVisible,
   setMateriaRanking,
@@ -186,6 +188,7 @@ export default function PortalVistasCursada({
       handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
       handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
       recargarTablero={cargarBD}
+      invitacionesGrupoEnviadas={invitacionesGrupoEnviadas}
     />
   );
 

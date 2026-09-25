@@ -25,6 +25,7 @@ export function buildPortalVistasCursadaProps(vm: TableroPortalViewModel): Porta
     alumnos: datos.alumnos,
     registrados: datos.registrados,
     inscripciones: datos.inscripciones,
+    invitacionesGrupoEnviadas: datos.invitacionesGrupoEnviadas,
     materiasMisCursadas,
     materiaRankingVisible,
     setMateriaRanking: ui.setMateriaRanking,

@@ -15,6 +15,7 @@ import {
   obtenerAlumno,
   leerCuenta,
   borrarCuentasSinSincronizar,
+  registrarUltimoAcceso,
   CODIGOS_PLAN
 } from '../../server/action-internals';
 import { armarMaterias, consultaPeriodo } from '../../server/estado-helpers';
@@ -63,6 +64,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
     }
 
     await asegurarEsquemaGruposEnServidor(db);
+    await registrarUltimoAcceso(usuarioSesion);
 
     let periodoParaCargar = periodoIdSolicitado || null;
     if (!periodoParaCargar) {
@@ -89,7 +91,8 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       resAvisos,
       resRol,
       resInscripciones,
-      resInvitacionesGrupo
+      resInvitacionesGrupo,
+      resInvitacionesGrupoEnviadas
     ] = await db.batch([
       { sql: 'SELECT id, anio, cuatrimestre, nombre, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC', args: [] },
       consultaPeriodo(
@@ -204,6 +207,13 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
               JOIN alumnos a ON a.id = i.de_alumno_id
               WHERE i.para_alumno_id = ? AND i.estado = 'pendiente'
               ORDER BY i.creada_en DESC`,
+        args: [texto(cuenta?.id)]
+      },
+      {
+        sql: `SELECT i.tarea_id, i.grupo_id, a.nombre AS para_alumno
+              FROM invitaciones_grupo i
+              JOIN alumnos a ON a.id = i.para_alumno_id
+              WHERE i.de_alumno_id = ? AND i.estado = 'pendiente'`,
         args: [texto(cuenta?.id)]
       }
     ], 'read');
@@ -324,6 +334,11 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         tareaNombre: texto(fila.tarea_nombre),
         materiaNombre: texto(fila.materia_nombre),
         deAlumno: texto(fila.de_alumno)
+      })),
+      invitacionesGrupoEnviadas: resInvitacionesGrupoEnviadas.rows.map((fila) => ({
+        tareaId: texto(fila.tarea_id),
+        grupoId: texto(fila.grupo_id),
+        paraAlumno: texto(fila.para_alumno)
       }))
     };
   } catch (error) {
