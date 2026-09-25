@@ -171,9 +171,9 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
     });
     const lineasInforme = [...sync.lineasInforme];
     for (const nota of sync.notasCampus) {
-      if (!nota.tareaId || nota.yaEstaba) continue;
+      if (!nota.tareaId) continue;
       const grupo = await propagarNotaGrupalTrasCargaCampus(db, nota.tareaId, alumnoId);
-      if (!grupo || grupo.integrantesActualizados.length === 0) continue;
+      if (nota.yaEstaba || !grupo || grupo.integrantesActualizados.length === 0) continue;
       const nombres = grupo.integrantesGrupo.join(', ');
       lineasInforme.push(
         `Tarea grupal «${grupo.tareaNombre}»: al ser trabajo en grupo, la nota ${grupo.nota} quedó para todo el grupo (${nombres}).`

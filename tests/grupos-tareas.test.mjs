@@ -106,14 +106,40 @@ test('propagarNotasGrupalesEnMaterias replica nota tras sync de un integrante', 
   await asignarGrupo(db, 't', 'b', { grupoId });
   await db.execute({
     sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en)
-          VALUES ('n1', 't', 'a', 'Ana', '8', datetime('now'))`,
-    args: []
+          VALUES ('n1', 't', 'a', 'Ana', '8', ?)`,
+    args: ['2026-09-20T10:00:00.000Z']
   });
   const propagado = await propagarNotasGrupalesEnMaterias(db, 'a', ['m1']);
   assert.equal(propagado.length, 1);
   assert.deepEqual(propagado[0].integrantes, ['Beto']);
-  const notas = (await db.execute('SELECT alumno, nota FROM notas_tareas ORDER BY alumno')).rows;
-  assert.deepEqual(notas, [{ alumno: 'Ana', nota: '8' }, { alumno: 'Beto', nota: '8' }]);
+  const notas = (await db.execute('SELECT alumno, nota, cargada_en FROM notas_tareas ORDER BY alumno')).rows;
+  assert.deepEqual(notas.map((r) => ({ alumno: r.alumno, nota: r.nota })), [{ alumno: 'Ana', nota: '8' }, { alumno: 'Beto', nota: '8' }]);
+  assert.equal(notas[0].cargada_en, '2026-09-20T10:00:00.000Z');
+  assert.ok(String(notas[1].cargada_en) > String(notas[0].cargada_en), 'quien recibe la nota propagada queda con fecha posterior');
+});
+
+test('propagarNotasGrupalesEnMaterias corrige fechas copiadas del integrante que sincronizó primero', async (t) => {
+  const db = await preparar(t);
+  await db.batch([
+    'CREATE TABLE materias (id TEXT PRIMARY KEY)',
+    "INSERT INTO materias VALUES ('m1')",
+    'ALTER TABLE tareas ADD COLUMN materia_id TEXT',
+    'ALTER TABLE tareas ADD COLUMN nombre TEXT',
+    "UPDATE tareas SET materia_id = 'm1', nombre = 'TP grupal' WHERE id = 't'"
+  ], 'write');
+  const { grupoId } = await asignarGrupo(db, 't', 'a', { nombre: 'G' });
+  await asignarGrupo(db, 't', 'b', { grupoId });
+  const fechaFuente = '2026-09-20T10:00:00.000Z';
+  await db.batch([
+    `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en)
+     VALUES ('n1', 't', 'a', 'Ana', '8', '${fechaFuente}')`,
+    `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en)
+     VALUES ('n2', 't', 'b', 'Beto', '8', '${fechaFuente}')`
+  ], 'write');
+  await propagarNotasGrupalesEnMaterias(db, 'a', ['m1']);
+  const notas = (await db.execute('SELECT alumno, cargada_en FROM notas_tareas ORDER BY alumno')).rows;
+  assert.equal(notas[0].cargada_en, fechaFuente);
+  assert.ok(String(notas[1].cargada_en) > fechaFuente);
 });
 
 test('cupo máximo de integrantes por grupo', async (t) => {
