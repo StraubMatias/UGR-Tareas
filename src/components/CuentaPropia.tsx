@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useProgresoSyncEstimado } from '../hooks/useProgresoSyncEstimado';
 import { sincronizarCuentaUgrAction, sincronizarCuentaSiuAction, type MateriaInscriptaSync, type ResumenMateriaSync } from '../app/actions';
 import { fusionarLineasInforme, fusionarResumenSync, mensajeDesdeInforme } from '../lib/informe-sync-ugr';
-import { planPasadasSyncUgr } from '../lib/sync-ugr-orquestacion';
+import { etiquetaSyncAvisos, etiquetaSyncMaterias, planPasadasSyncUgr } from '../lib/sync-ugr-orquestacion';
 import type { OpcionesSincronizarUgr } from '../app/actions';
 import dynamic from 'next/dynamic';
 
@@ -342,14 +342,11 @@ export default function CuentaPropia({
 
         const plan = planPasadasSyncUgr(preparacion.materiaIdsSync || []);
         const lotesMaterias = plan.lotesMaterias;
+        const totalMaterias = plan.materiaIds.length;
 
         for (let indice = 0; indice < lotesMaterias.length; indice += 1) {
           const lote = lotesMaterias[indice];
-          setEtapaManual(
-            lotesMaterias.length === 1
-              ? 'Sincronizando tareas, fechas y notas…'
-              : `Sincronizando materias (${indice + 1}/${lotesMaterias.length})…`
-          );
+          setEtapaManual(etiquetaSyncMaterias(indice, lotesMaterias, totalMaterias));
           try {
             const resultadoLote = await llamarUgr({ fase: 'materias', materiaIds: lote });
             if (!resultadoLote.exito) {
@@ -378,11 +375,7 @@ export default function CuentaPropia({
 
         const lotesAvisos = plan.lotesAvisos;
         for (let indice = 0; indice < lotesAvisos.length; indice += 1) {
-          setEtapaManual(
-            lotesAvisos.length === 1
-              ? 'Revisando avisos del campus…'
-              : `Avisos del campus (${indice + 1}/${lotesAvisos.length})…`
-          );
+          setEtapaManual(etiquetaSyncAvisos(indice, lotesAvisos, totalMaterias));
           try {
             const resultadoAvisos = await llamarUgr({ fase: 'avisos', materiaIds: lotesAvisos[indice] });
             if (resultadoAvisos.exito) {
