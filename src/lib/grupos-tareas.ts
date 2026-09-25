@@ -111,12 +111,16 @@ async function tieneProgreso(tx: Transaction, tareaId: string, alumnos: string[]
 }
 
 // Sincroniza entregas y notas existentes entre todos los integrantes actuales del grupo.
-async function sincronizarProgresoGrupo(tx: Transaction, tarea: TareaFila, grupoId: string): Promise<void> {
+async function sincronizarProgresoGrupo(
+  tx: Transaction,
+  tarea: TareaFila,
+  grupoId: string
+): Promise<{ integrantes: string[]; nota: string | null }> {
   const miembros = await consultar<Persona>(tx,
     'SELECT a.id, a.nombre FROM integrantes_tareas i JOIN alumnos a ON a.id = i.alumno_id WHERE i.grupo_id = ?',
     [grupoId]
   );
-  if (!miembros.length) return;
+  if (!miembros.length) return { integrantes: [], nota: null };
 
   const placeholders = miembros.map(() => '?').join(',');
   const ids = miembros.map((m) => m.id);
@@ -148,6 +152,13 @@ async function sincronizarProgresoGrupo(tx: Transaction, tarea: TareaFila, grupo
     if (notas.length > 0) {
       const notaSincronizar = notas[0].nota;
       const fechaNota = notas[0].cargada_en || new Date().toISOString();
+      const conNotaAntes = new Set(
+        (await consultar<{ alumno_id: string }>(tx,
+          `SELECT alumno_id FROM notas_tareas WHERE tarea_id = ? AND alumno_id IN (${placeholders})`,
+          [tarea.id, ...ids]
+        )).map((fila) => fila.alumno_id)
+      );
+      const actualizados: string[] = [];
       for (const m of miembros) {
         await tx.execute({
           sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en) VALUES (?, ?, ?, ?, ?, ?)
@@ -159,9 +170,89 @@ async function sincronizarProgresoGrupo(tx: Transaction, tarea: TareaFila, grupo
                 ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, completada_en = excluded.completada_en`,
           args: [tarea.id, m.id, m.nombre, fechaNota]
         });
+        if (!conNotaAntes.has(m.id)) actualizados.push(m.nombre);
       }
+      return { integrantes: actualizados, nota: String(notaSincronizar ?? '') };
     }
   }
+  return { integrantes: [], nota: null };
+}
+
+/** Tras cargar una nota personal (p. ej. campus): replica al resto del grupo de esa tarea. */
+export async function propagarNotaGrupalTrasCargaCampus(
+  db: Client,
+  tareaId: string,
+  alumnoId: string
+): Promise<{
+  tareaNombre: string;
+  nota: string;
+  integrantesActualizados: string[];
+  integrantesGrupo: string[];
+} | null> {
+  const fila = await db.execute({
+    sql: `SELECT i.grupo_id, t.nombre AS tarea_nombre
+          FROM integrantes_tareas i
+          JOIN tareas t ON t.id = i.tarea_id
+          WHERE i.tarea_id = ? AND i.alumno_id = ? AND COALESCE(t.grupal, 0) = 1`,
+    args: [tareaId, alumnoId]
+  });
+  const grupoId = fila.rows[0]?.grupo_id;
+  if (!grupoId) return null;
+  const tareaNombre = String(fila.rows[0]?.tarea_nombre || 'Tarea grupal');
+  const propagado = await transaccion(db, async (tx) => {
+    const tarea = await obtenerTarea(tx, tareaId);
+    return sincronizarProgresoGrupo(tx, tarea, String(grupoId));
+  });
+  if (!propagado.nota) return null;
+  const miembros = await db.execute({
+    sql: `SELECT a.nombre FROM integrantes_tareas i JOIN alumnos a ON a.id = i.alumno_id WHERE i.grupo_id = ? ORDER BY a.nombre`,
+    args: [String(grupoId)]
+  });
+  const integrantesGrupo = miembros.rows.map((r) => String(r.nombre));
+  return {
+    tareaNombre,
+    nota: propagado.nota,
+    integrantesActualizados: propagado.integrantes,
+    integrantesGrupo
+  };
+}
+
+/** Tras sync o carga manual: replica nota/entrega del grupo a todos los integrantes. */
+export async function propagarNotasGrupalesEnMaterias(
+  db: Client,
+  alumnoId: string,
+  materiaIds: string[]
+): Promise<Array<{ tareaId: string; tareaNombre: string; nota: string; integrantes: string[] }>> {
+  if (!materiaIds.length) return [];
+  const marcas = materiaIds.map(() => '?').join(',');
+  const resGrupos = await db.execute({
+    sql: `SELECT DISTINCT t.id AS tarea_id, i.grupo_id, t.nombre AS tarea_nombre
+          FROM tareas t
+          JOIN integrantes_tareas i ON i.tarea_id = t.id
+          WHERE t.materia_id IN (${marcas}) AND COALESCE(t.grupal, 0) = 1 AND i.alumno_id = ?`,
+    args: [...materiaIds, alumnoId]
+  });
+  const filas = resGrupos.rows.map((fila) => ({
+    tarea_id: String(fila.tarea_id),
+    grupo_id: String(fila.grupo_id),
+    tarea_nombre: String(fila.tarea_nombre)
+  }));
+  const resultado: Array<{ tareaId: string; tareaNombre: string; nota: string; integrantes: string[] }> = [];
+  for (const fila of filas) {
+    const propagado = await transaccion(db, async (tx) => {
+      const tarea = await obtenerTarea(tx, fila.tarea_id);
+      return sincronizarProgresoGrupo(tx, tarea, fila.grupo_id);
+    });
+    if (propagado.integrantes.length && propagado.nota) {
+      resultado.push({
+        tareaId: fila.tarea_id,
+        tareaNombre: fila.tarea_nombre,
+        nota: propagado.nota,
+        integrantes: propagado.integrantes
+      });
+    }
+  }
+  return resultado;
 }
 
 // El servidor debe pasar el alumno obtenido de la sesión, nunca del formulario.

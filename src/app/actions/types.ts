@@ -26,6 +26,8 @@ export interface RespuestaAction {
   ugrUsuario?: string | null;
   resumen?: ResumenMateriaSync[];
   materiasInscriptas?: MateriaInscriptaSync[];
+  /** Lista detallada de lo que hizo la última sync UGR (para mostrar en pantalla). */
+  informeLineas?: string[];
 }
 
 export interface RespuestaSiuSync {

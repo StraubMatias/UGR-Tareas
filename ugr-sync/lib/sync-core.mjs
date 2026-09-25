@@ -1311,6 +1311,7 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
           args: [id, alumnoId, alumnoNombre || '']
         });
         cargadas.push({
+          tareaId: id,
           materia: item.materiaNombre || '',
           nombre: item.nombre,
           nota: notaGuardar,

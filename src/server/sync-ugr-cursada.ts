@@ -1,6 +1,7 @@
 import { db } from '../app/turso';
 import { PLAN_DE_ESTUDIO } from '../app/plan-utils';
 import type { MateriaInscriptaSync, ResumenMateriaSync } from '../app/actions/types';
+import { construirLineasInformeSync, mensajeDesdeInforme, type NotaCampusInforme } from '../lib/informe-sync-ugr';
 import { texto, textoONull } from './action-internals';
 
 export async function periodoDeCursada(): Promise<string> {
@@ -113,8 +114,8 @@ export function armarMensajeSync({
   const n = materias.length;
   if (partes.length === 0) {
     return n === 1
-      ? 'Revisamos tu materia del período: no había tareas nuevas ni cambios en fechas.'
-      : `Revisamos ${n} materias: no había tareas nuevas ni cambios en fechas.`;
+      ? 'Revisamos tu materia del período: no había tareas nuevas, cambios en fechas ni notas nuevas.'
+      : `Revisamos ${n} materias: no había tareas nuevas, cambios en fechas ni notas nuevas.`;
   }
   const encabezado = n === 1 ? 'Sincronización lista.' : `Sincronización lista (${n} materias).`;
   return `${encabezado} ${partes.join(' ')}`;
@@ -136,7 +137,13 @@ export async function sincronizarCursadaDelAlumno({
   alumnoId: string;
   alumnoNombre: string;
   cliente: unknown;
-}): Promise<{ mensaje: string; resumen: ResumenMateriaSync[]; materiasInscriptas: MateriaInscriptaSync[] }> {
+}): Promise<{
+  mensaje: string;
+  resumen: ResumenMateriaSync[];
+  materiasInscriptas: MateriaInscriptaSync[];
+  notasCampus: NotaCampusInforme[];
+  lineasInforme: string[];
+}> {
   const {
     listarCursosDelCampus,
     asegurarMateriasDeLaCursada,
@@ -307,10 +314,10 @@ export async function sincronizarCursadaDelAlumno({
     });
 
   const vistas = new Set<string>();
-  const notasCargadas = [...(notasTardias.cargadas || []), ...((complemento.notasCargadas || []) as Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>)]
-    .filter((item) => {
+  const notasCargadas: NotaCampusInforme[] = [...(notasTardias.cargadas || []), ...(complemento.notasCargadas || [])]
+    .filter((item): item is NotaCampusInforme => {
       const clave = `${item.nombre}|${item.nota}`;
-      if (!item.nombre || !item.nota || vistas.has(clave)) return false;
+      if (!item?.nombre || !item?.nota || vistas.has(clave)) return false;
       vistas.add(clave);
       return true;
     });
@@ -339,24 +346,29 @@ export async function sincronizarCursadaDelAlumno({
   for (const item of pendientesEntrega) anexar(item.materia, 'pendientesEntrega', String(item.nombre));
   for (const item of notasNoLeidas) anexar(item.materia, 'notasNoLeidas', String(item.nombre));
 
+  const resumenParaInforme = [...resumen];
   resumen = resumen.filter(filaTieneCambios);
+
+  const materiasCount = nombresPorId.size;
+  const lineasInforme = construirLineasInformeSync({
+    notasCampus: notasCargadas,
+    resumen: resumenParaInforme,
+    parcialesNuevos: parcialesResultado.insertadas,
+    eventos: eventosInsertados + complemento.eventos,
+    horarios: complemento.horarios,
+    fechas: complemento.fechas,
+    fechasDetalle,
+    condiciones: Number(tareas.condicionesActualizadas || 0),
+    pendientesEntrega,
+    notasNoLeidas
+  });
 
   return {
     resumen,
     materiasInscriptas,
-    mensaje: armarMensajeSync({
-      materias: [...nombresPorId.entries()].map(([, nombre]) => ({ nombre })),
-      resumen,
-      parciales: parcialesResultado.insertadas,
-      eventos: eventosInsertados + complemento.eventos,
-      horarios: complemento.horarios,
-      notasCargadas,
-      notasNoLeidas,
-      pendientesEntrega,
-      fechas: complemento.fechas,
-      condiciones: Number(tareas.condicionesActualizadas || 0),
-      fechasDetalle
-    })
+    notasCampus: notasCargadas,
+    lineasInforme,
+    mensaje: mensajeDesdeInforme(lineasInforme, materiasCount)
   };
 }
 
