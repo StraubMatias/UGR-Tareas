@@ -8,6 +8,8 @@ import {
   coincidirParcial,
   emparejarCursosConMaterias,
   esNombreConsignaValido,
+  formatearNotaParaMostrar,
+  notaEnEscalaDiez,
   filtrarTareasDuplicadas,
   agruparResumenSync,
   armarMensajeCursada,
@@ -371,6 +373,19 @@ test('la nota de un parcial no existe hasta el día en que se rinde', async () =
   assert.equal(parcialYaSeRindio('2026-09-21', '2026-09-21'), true);
   assert.equal(parcialYaSeRindio('2026-10-28', '2026-09-21'), false);
   assert.equal(parcialYaSeRindio('Sin fecha', '2026-09-21'), false);
+});
+
+test('notaEnEscalaDiez convierte calificaciones sobre 100 a la escala del tablero', () => {
+  assert.equal(notaEnEscalaDiez(100, 100), 10);
+  assert.equal(notaEnEscalaDiez(60, 100), 6);
+  assert.equal(notaEnEscalaDiez(0, 100), 0);
+  assert.equal(notaEnEscalaDiez(7.5, 10), 7.5);
+});
+
+test('formatearNotaParaMostrar evita decimales innecesarios', () => {
+  assert.equal(formatearNotaParaMostrar(10), '10');
+  assert.equal(formatearNotaParaMostrar('10.0'), '10');
+  assert.equal(formatearNotaParaMostrar(6.5), '6.5');
 });
 
 test('esNombreConsignaValido descarta notas sueltas y acepta títulos reales', () => {
