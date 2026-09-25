@@ -1,5 +1,6 @@
 import type { FormEvent } from 'react';
-import type { Tarea } from '../../core/cursada';
+import { flagsDeModoEntrega, type Tarea } from '../../core/cursada';
+import CamposModoEntregaTarea, { modoEntregaDesdeTarea } from '../CamposModoEntregaTarea';
 import ModalOverlay from './ModalOverlay';
 
 export interface EdicionAlumno {
@@ -188,36 +189,28 @@ export default function ModalesEdicion({
               />
               Esta tarea se califica con nota
             </label>
-            <label className="flex items-center gap-3 text-sm font-semibold text-cyan-200">
-              <input
-                type="checkbox"
-                checked={Boolean(tareaEnEdicion.tarea.grupal)}
-                onChange={(e) =>
-                  onCambiarTarea({
-                    ...tareaEnEdicion,
-                    tarea: { ...tareaEnEdicion.tarea, grupal: e.target.checked }
-                  })
-                }
-              />
-              Trabajo grupal (en grupo comparten entrega; sin grupo, entrega individual)
-            </label>
-            {Boolean(tareaEnEdicion.tarea.grupal) && (
-              <div className="flex flex-col gap-1 mt-2">
-                <label className="block text-xs font-semibold text-slate-300">Cupo máximo por grupo (0 = sin límite)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={tareaEnEdicion.tarea.cupo_maximo ?? 0}
-                  onChange={(e) =>
-                    onCambiarTarea({
-                      ...tareaEnEdicion,
-                      tarea: { ...tareaEnEdicion.tarea, cupo_maximo: parseInt(e.target.value, 10) || 0 }
-                    })
+            <CamposModoEntregaTarea
+              modo={modoEntregaDesdeTarea(tareaEnEdicion.tarea)}
+              onModo={(modo) => {
+                const flags = flagsDeModoEntrega(modo);
+                onCambiarTarea({
+                  ...tareaEnEdicion,
+                  tarea: {
+                    ...tareaEnEdicion.tarea,
+                    grupal: flags.grupal,
+                    permite_individual: flags.permiteIndividual,
+                    cupo_maximo: flags.grupal ? (tareaEnEdicion.tarea.cupo_maximo ?? 0) : 0
                   }
-                  className="w-full bg-[#0f141c] border border-slate-800 focus:border-blue-500 rounded-xl p-2.5 text-xs text-white focus:outline-none"
-                />
-              </div>
-            )}
+                });
+              }}
+              cupoMaximo={Number(tareaEnEdicion.tarea.cupo_maximo) || 0}
+              onCupoMaximo={(cupo) =>
+                onCambiarTarea({
+                  ...tareaEnEdicion,
+                  tarea: { ...tareaEnEdicion.tarea, cupo_maximo: cupo }
+                })
+              }
+            />
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">Abre</label>

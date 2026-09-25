@@ -1,5 +1,6 @@
 import { useCallback, type FormEvent } from 'react';
 import { crearTareaAction, editarTareaAction, eliminarTareaAction } from '../../app/actions';
+import { flagsDeModoEntrega, modoEntregaDeTarea } from '../../core/cursada';
 import { conRecargaTablero } from '../../lib/action-resultado';
 import type { UseTableroAccionesOptions } from './types';
 
@@ -14,7 +15,7 @@ export function useTableroAccionesTareas(opts: UseTableroAccionesOptions) {
     detallesTarea,
     unidadTarea,
     tareaConNota,
-    tareaGrupal,
+    modoEntregaTarea,
     cupoMaximo,
     tipoTarea,
     setNombreTarea,
@@ -23,7 +24,7 @@ export function useTableroAccionesTareas(opts: UseTableroAccionesOptions) {
     setDetallesTarea,
     setUnidadTarea,
     setTareaConNota,
-    setTareaGrupal,
+    setModoEntregaTarea,
     setCupoMaximo,
     setTipoTarea,
     tareaEnEdicion,
@@ -33,6 +34,7 @@ export function useTableroAccionesTareas(opts: UseTableroAccionesOptions) {
   const handleCrearTarea = useCallback(async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!nombreTarea.trim() || !materiaSel) return;
+    const flags = flagsDeModoEntrega(modoEntregaTarea);
     const ok = await conRecargaTablero(
       () => crearTareaAction({
         materiaId: materiaSel,
@@ -42,8 +44,9 @@ export function useTableroAccionesTareas(opts: UseTableroAccionesOptions) {
         detalles: detallesTarea,
         unidad: unidadTarea,
         conNota: tareaConNota || tipoTarea === 'trabajo_practico',
-        grupal: tareaGrupal,
-        cupoMaximo,
+        grupal: flags.grupal,
+        permiteIndividual: flags.permiteIndividual,
+        cupoMaximo: flags.grupal ? cupoMaximo : 0,
         tipo: tipoTarea
       }),
       cargarBD,
@@ -56,15 +59,16 @@ export function useTableroAccionesTareas(opts: UseTableroAccionesOptions) {
     setDetallesTarea('');
     setUnidadTarea('');
     setTareaConNota(false);
-    setTareaGrupal(false);
+    setModoEntregaTarea('individual');
     setCupoMaximo(0);
     setTipoTarea('actividad');
     setPestana('materias');
-  }, [nombreTarea, materiaSel, fechaInicio, fechaFin, detallesTarea, unidadTarea, tareaConNota, tareaGrupal, cupoMaximo, tipoTarea, cargarBD, setNombreTarea, setFechaInicio, setFechaFin, setDetallesTarea, setUnidadTarea, setTareaConNota, setTareaGrupal, setCupoMaximo, setTipoTarea, setPestana]);
+  }, [nombreTarea, materiaSel, fechaInicio, fechaFin, detallesTarea, unidadTarea, tareaConNota, modoEntregaTarea, cupoMaximo, tipoTarea, cargarBD, setNombreTarea, setFechaInicio, setFechaFin, setDetallesTarea, setUnidadTarea, setTareaConNota, setModoEntregaTarea, setCupoMaximo, setTipoTarea, setPestana]);
 
   const handleGuardarEdicionTarea = useCallback(async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!tareaEnEdicion) return;
+    const flags = flagsDeModoEntrega(modoEntregaDeTarea(tareaEnEdicion.tarea));
     const ok = await conRecargaTablero(
       () => editarTareaAction({
         ...tareaEnEdicion.tarea,
@@ -72,8 +76,9 @@ export function useTableroAccionesTareas(opts: UseTableroAccionesOptions) {
         unidad: tareaEnEdicion.tarea.unidad ?? '',
         detalles: tareaEnEdicion.tarea.detalles ?? '',
         tipo: tareaEnEdicion.tarea.tipo ?? 'actividad',
-        grupal: Boolean(tareaEnEdicion.tarea.grupal),
-        cupoMaximo: Number(tareaEnEdicion.tarea.cupo_maximo) || 0
+        grupal: flags.grupal,
+        permiteIndividual: flags.permiteIndividual,
+        cupoMaximo: flags.grupal ? (Number(tareaEnEdicion.tarea.cupo_maximo) || 0) : 0
       }),
       cargarBD,
       { mensajeError: 'No se pudo editar la tarea.' }

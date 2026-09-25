@@ -47,5 +47,6 @@ export interface TareaActionParams {
   conNota: boolean;
   tipo: string;
   grupal?: boolean;
+  permiteIndividual?: boolean;
   cupoMaximo?: number;
 }

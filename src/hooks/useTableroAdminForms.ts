@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Parcial, Tarea } from '../core/cursada';
+import type { ModoEntregaTarea, Parcial, Tarea } from '../core/cursada';
 import type { MateriaCondicionesEdicion, ProgresoPlanEdicion, TableroAdminForms } from './tablero-estado/types';
 
 export function useTableroAdminForms() {
@@ -14,7 +14,7 @@ export function useTableroAdminForms() {
   const [detallesTarea, setDetallesTarea] = useState('');
   const [unidadTarea, setUnidadTarea] = useState('');
   const [tareaConNota, setTareaConNota] = useState(false);
-  const [tareaGrupal, setTareaGrupal] = useState(false);
+  const [modoEntregaTarea, setModoEntregaTarea] = useState<ModoEntregaTarea>('individual');
   const [cupoMaximo, setCupoMaximo] = useState(0);
   const [tipoTarea, setTipoTarea] = useState('actividad');
   const [materiaCondicionesEnEdicion, setMateriaCondicionesEnEdicion] = useState<MateriaCondicionesEdicion | null>(null);
@@ -53,8 +53,8 @@ export function useTableroAdminForms() {
       setTipoTarea,
       tareaConNota,
       setTareaConNota,
-      tareaGrupal,
-      setTareaGrupal,
+      modoEntregaTarea,
+      setModoEntregaTarea,
       cupoMaximo,
       setCupoMaximo,
       fechaInicio,
@@ -93,7 +93,7 @@ export function useTableroAdminForms() {
       unidadTarea,
       tipoTarea,
       tareaConNota,
-      tareaGrupal,
+      modoEntregaTarea,
       cupoMaximo,
       fechaInicio,
       fechaFin,
@@ -140,7 +140,7 @@ export function useTableroAdminForms() {
     detallesTarea,
     unidadTarea,
     tareaConNota,
-    tareaGrupal,
+    modoEntregaTarea,
     cupoMaximo,
     tipoTarea,
     setNombreTarea,
@@ -149,7 +149,7 @@ export function useTableroAdminForms() {
     setDetallesTarea,
     setUnidadTarea,
     setTareaConNota,
-    setTareaGrupal,
+    setModoEntregaTarea,
     setCupoMaximo,
     setTipoTarea,
     materiaCondicionesEnEdicion,

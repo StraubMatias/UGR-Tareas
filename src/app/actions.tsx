@@ -50,5 +50,7 @@ export {
   eliminarParcialAction,
   guardarNotaParcialAction,
   guardarNotaTareaAction,
-  gestionarGrupoTareaAction
+  gestionarGrupoTareaAction,
+  invitarAGrupoTareaAction,
+  responderInvitacionGrupoAction
 } from './actions/evaluaciones';

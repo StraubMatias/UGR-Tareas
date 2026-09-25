@@ -1,4 +1,5 @@
 import type { NovedadTablero } from './types';
+import type { PortalPestana } from './types';
 
 interface CampanaNotificacionesProps {
   notificaciones: NovedadTablero[];
@@ -6,7 +7,8 @@ interface CampanaNotificacionesProps {
   abiertas: boolean;
   onToggleAbiertas: () => void;
   onMarcarVistas: (ids: string[]) => void;
-  onNavegar: (pestana: 'parciales' | 'horarios' | 'materias') => void;
+  onNavegar: (pestana: PortalPestana) => void;
+  onResponderInvitacion?: (invitacionId: string, aceptar: boolean) => Promise<{ exito: boolean; mensaje?: string }>;
   etiquetaMateria: (nombre: string) => string;
   contenedorRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -18,6 +20,7 @@ export default function CampanaNotificaciones({
   onToggleAbiertas,
   onMarcarVistas,
   onNavegar,
+  onResponderInvitacion,
   etiquetaMateria,
   contenedorRef
 }: CampanaNotificacionesProps) {
@@ -57,26 +60,74 @@ export default function CampanaNotificaciones({
           ) : (
             <div className="max-h-72 overflow-y-auto divide-y divide-slate-800">
               {notificaciones.map((notificacion) => {
-                const texto = notificacion.tipo === 'parcial'
-                  ? 'Rendís mañana'
-                  : notificacion.tipo === 'nuevo-parcial'
-                    ? 'Nuevo parcial cargado'
-                    : notificacion.tipo === 'nueva-tarea'
-                      ? 'Nueva tarea cargada'
-                      : notificacion.tipo === 'aviso-nuevo'
-                        ? 'Aviso en el campus'
-                        : notificacion.tipo === 'apertura'
-                          ? 'Se habilita mañana'
-                          : notificacion.dias === 0
-                            ? 'Vence hoy'
-                            : `Vence en ${notificacion.dias} ${notificacion.dias === 1 ? 'día' : 'días'}`;
+                const esInvitacion = notificacion.tipo === 'invitacion-grupo';
+                const texto = esInvitacion
+                  ? `${notificacion.deAlumno} te invitó al grupo «${notificacion.grupoNombre || 'grupo'}»`
+                  : notificacion.tipo === 'parcial'
+                    ? 'Rendís mañana'
+                    : notificacion.tipo === 'nuevo-parcial'
+                      ? 'Nuevo parcial cargado'
+                      : notificacion.tipo === 'nueva-tarea'
+                        ? 'Nueva tarea cargada'
+                        : notificacion.tipo === 'aviso-nuevo'
+                          ? 'Aviso en el campus'
+                          : notificacion.tipo === 'apertura'
+                            ? 'Se habilita mañana'
+                            : notificacion.dias === 0
+                              ? 'Vence hoy'
+                              : `Vence en ${notificacion.dias} ${notificacion.dias === 1 ? 'día' : 'días'}`;
+
+                if (esInvitacion && notificacion.invitacionId) {
+                  return (
+                    <div
+                      key={notificacion.id}
+                      className={`px-4 py-3 ${notificacionesVistas.includes(notificacion.id) ? 'opacity-60' : ''}`}
+                    >
+                      <p className="text-sm font-semibold text-slate-100 truncate">{notificacion.nombre}</p>
+                      <p className="text-xs text-slate-400 mt-1">{etiquetaMateria(notificacion.materia)}</p>
+                      <p className="text-xs font-bold mt-2 text-cyan-300">{texto}</p>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          className="flex-1 rounded-lg bg-cyan-500 px-2 py-1.5 text-xs font-bold text-slate-950 cursor-pointer"
+                          onClick={() => {
+                            void onResponderInvitacion?.(notificacion.invitacionId!, true).then(() => {
+                              onMarcarVistas([notificacion.id]);
+                              onNavegar('alumnos');
+                            });
+                          }}
+                        >
+                          Unirme
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-slate-600 px-2 py-1.5 text-xs font-semibold text-slate-300 cursor-pointer"
+                          onClick={() => {
+                            void onResponderInvitacion?.(notificacion.invitacionId!, false).then(() => {
+                              onMarcarVistas([notificacion.id]);
+                            });
+                          }}
+                        >
+                          No
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <div key={notificacion.id} className="relative">
                     <button
                       type="button"
                       onClick={() => {
                         onMarcarVistas([notificacion.id]);
-                        onNavegar(['parcial', 'nuevo-parcial'].includes(notificacion.tipo) ? 'parciales' : notificacion.tipo === 'aviso-nuevo' ? 'horarios' : 'materias');
+                        onNavegar(
+                          ['parcial', 'nuevo-parcial'].includes(notificacion.tipo)
+                            ? 'parciales'
+                            : notificacion.tipo === 'aviso-nuevo'
+                              ? 'horarios'
+                              : 'materias'
+                        );
                       }}
                       className={`w-full text-left px-4 py-3 hover:bg-slate-800/70 transition-colors cursor-pointer ${notificacionesVistas.includes(notificacion.id) ? 'opacity-60' : ''}`}
                     >

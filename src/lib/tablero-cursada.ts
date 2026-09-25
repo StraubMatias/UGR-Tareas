@@ -10,7 +10,7 @@ import {
   diasCalendarioDelMes,
   eventosDelDiaCalendario
 } from './calendario-tablero';
-import type { AvisoCampusMoodle, NovedadTablero } from '../components/portal/types';
+import type { AvisoCampusMoodle, InvitacionGrupoTablero, NovedadTablero } from '../components/portal/types';
 import type { EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
 import { obtenerFechaParcialEnMs, ordenarParciales } from '../core/cursada';
 const FECHA_CREACION_PORTAL = new Date(2026, 7, 24);
@@ -62,6 +62,7 @@ export function armarDerivadosTablero({
   alumnos,
   novedades,
   avisos,
+  invitacionesGrupo = [],
   mesCalendario,
   materiasMisCursadas,
   materiaRankingVisible,
@@ -77,6 +78,7 @@ export function armarDerivadosTablero({
   alumnos: string[];
   novedades: NovedadTablero[];
   avisos: AvisoCampusMoodle[];
+  invitacionesGrupo?: InvitacionGrupoTablero[];
   mesCalendario: Date;
   materiasMisCursadas: Materia[];
   materiaRankingVisible: string;
@@ -99,6 +101,7 @@ export function armarDerivadosTablero({
     usuarioActual,
     novedades,
     avisos,
+    invitacionesGrupo,
     materias,
     parciales,
     inscripciones,

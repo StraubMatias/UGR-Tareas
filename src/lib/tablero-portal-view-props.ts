@@ -7,7 +7,7 @@ import type { ComponentProps } from 'react';
 type PortalModalesProps = ComponentProps<typeof PortalModales>;
 
 export function buildPortalVistasCursadaProps(vm: TableroPortalViewModel): PortalVistasCursadaProps {
-  const { datos, ui, acceso, admin, esAdmin, plan, cargarBD, acciones, derivados, materiasMisCursadas, materiaRankingVisible } = vm;
+  const { datos, ui, acceso, admin, esAdmin, plan, cargarBD, acciones, derivados, materiasMisCursadas, materiaRankingVisible, navegarA } = vm;
   const usuario = acceso.usuarioActual;
   if (!usuario) {
     throw new Error('buildPortalVistasCursadaProps requiere sesión activa');
@@ -77,7 +77,8 @@ export function buildPortalVistasCursadaProps(vm: TableroPortalViewModel): Porta
     setMateriaEnEdicion: admin.setMateriaEnEdicion,
     setTareaEnEdicion: admin.setTareaEnEdicion,
     acciones,
-    adminForms: admin.adminForms
+    adminForms: admin.adminForms,
+    navegarA
   };
 }
 

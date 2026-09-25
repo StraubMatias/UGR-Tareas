@@ -12,6 +12,7 @@ import { useTableroEstadoUi } from './useTableroEstadoUi';
 import { useTableroEstadoAcceso } from './useTableroEstadoAcceso';
 import { useTableroAdminForms } from './useTableroAdminForms';
 import type { PortalPestana } from '../components/portal/types';
+import { responderInvitacionGrupoAction } from '../app/actions';
 
 export function useTableroPortal() {
   const datos = useTableroEstadoDatos();
@@ -104,6 +105,7 @@ export function useTableroPortal() {
     setCronograma: datos.setCronograma,
     setProgresoPlan: datos.setProgresoPlan,
     setAvisos: datos.setAvisos,
+    setInvitacionesGrupo: datos.setInvitacionesGrupo,
     setNotasInputs: datos.setNotasInputs,
     setNotasTareasInputs: datos.setNotasTareasInputs,
     setMateriaSel: admin.setMateriaSel,
@@ -190,7 +192,7 @@ export function useTableroPortal() {
     detallesTarea: admin.detallesTarea,
     unidadTarea: admin.unidadTarea,
     tareaConNota: admin.tareaConNota,
-    tareaGrupal: admin.tareaGrupal,
+    modoEntregaTarea: admin.modoEntregaTarea,
     cupoMaximo: admin.cupoMaximo,
     tipoTarea: admin.tipoTarea,
     setNombreTarea: admin.setNombreTarea,
@@ -199,7 +201,7 @@ export function useTableroPortal() {
     setDetallesTarea: admin.setDetallesTarea,
     setUnidadTarea: admin.setUnidadTarea,
     setTareaConNota: admin.setTareaConNota,
-    setTareaGrupal: admin.setTareaGrupal,
+    setModoEntregaTarea: admin.setModoEntregaTarea,
     setCupoMaximo: admin.setCupoMaximo,
     setTipoTarea: admin.setTipoTarea,
     tareaEnEdicion: admin.tareaEnEdicion,
@@ -245,6 +247,7 @@ export function useTableroPortal() {
       alumnos: datos.alumnos,
       novedades: ui.novedades,
       avisos: datos.avisos,
+      invitacionesGrupo: datos.invitacionesGrupo,
       mesCalendario: ui.mesCalendario,
       materiasMisCursadas,
       materiaRankingVisible,
@@ -260,6 +263,7 @@ export function useTableroPortal() {
       datos.notas,
       datos.alumnos,
       datos.avisos,
+      datos.invitacionesGrupo,
       ui.novedades,
       ui.mesCalendario,
       materiasMisCursadas,
@@ -269,6 +273,15 @@ export function useTableroPortal() {
   );
 
   const diasPagina = useMemo(() => diasDesdeCreacionPortal(), []);
+
+  const responderInvitacionGrupo = useCallback(
+    async (invitacionId: string, aceptar: boolean) => {
+      const resultado = await responderInvitacionGrupoAction(invitacionId, aceptar);
+      if (resultado.exito) await cargarBD(false);
+      return resultado;
+    },
+    [cargarBD]
+  );
 
   const marcarNotificacionesVistas = useCallback(
     (ids: string[]) => {
@@ -312,6 +325,7 @@ export function useTableroPortal() {
     derivados,
     diasPagina,
     marcarNotificacionesVistas,
+    responderInvitacionGrupo,
     abrirModalPassword,
     cerrarModalPassword,
     materiasMisCursadas,

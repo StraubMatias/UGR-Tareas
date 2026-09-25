@@ -43,7 +43,7 @@ export interface UseTableroAccionesOptions {
   detallesTarea: string;
   unidadTarea: string;
   tareaConNota: boolean;
-  tareaGrupal: boolean;
+  modoEntregaTarea: import('../../core/cursada').ModoEntregaTarea;
   cupoMaximo: number;
   tipoTarea: string;
   setNombreTarea: Dispatch<SetStateAction<string>>;
@@ -52,7 +52,7 @@ export interface UseTableroAccionesOptions {
   setDetallesTarea: Dispatch<SetStateAction<string>>;
   setUnidadTarea: Dispatch<SetStateAction<string>>;
   setTareaConNota: Dispatch<SetStateAction<boolean>>;
-  setTareaGrupal: Dispatch<SetStateAction<boolean>>;
+  setModoEntregaTarea: Dispatch<SetStateAction<import('../../core/cursada').ModoEntregaTarea>>;
   setCupoMaximo: Dispatch<SetStateAction<number>>;
   setTipoTarea: Dispatch<SetStateAction<string>>;
   tareaEnEdicion: { materiaId: string; tarea: Tarea } | null;

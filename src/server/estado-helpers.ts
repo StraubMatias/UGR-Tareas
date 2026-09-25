@@ -13,8 +13,18 @@ export function armarMaterias(
   filasTareas: Row[],
   filasCompletadas: Row[],
   filasNotas: Row[],
-  filasGrupos: Row[]
+  filasGrupos: Row[],
+  filasPreferencias: Row[] = []
 ) {
+  const entregaIndividualPorTarea = new Map<string, Record<string, boolean>>();
+  for (const fila of filasPreferencias) {
+    const tareaId = texto(fila.tarea_id);
+    const alumno = texto(fila.alumno);
+    if (!tareaId || !alumno) continue;
+    const mapa = entregaIndividualPorTarea.get(tareaId) || {};
+    mapa[alumno] = true;
+    entregaIndividualPorTarea.set(tareaId, mapa);
+  }
   const gruposPorTarea = new Map<string, Map<string, { id: string; nombre: string; integrantes: string[] }>>();
   for (const fila of filasGrupos) {
     const tareaId = texto(fila.tarea_id);
@@ -75,7 +85,9 @@ export function armarMaterias(
         unidad: t.unidad == null || t.unidad === '' ? '' : texto(t.unidad),
         conNota: Number(t.con_nota) === 1,
         grupal: Number(t.grupal) === 1,
+        permite_individual: Number(t.permite_individual ?? 1) === 1,
         cupo_maximo: Number(t.cupo_maximo) || 0,
+        entregaIndividualPor: entregaIndividualPorTarea.get(tareaId) || {},
         grupos: [...(gruposPorTarea.get(tareaId)?.values() || [])],
         tipo: texto(t.tipo) || 'actividad',
         url: texto(t.url),

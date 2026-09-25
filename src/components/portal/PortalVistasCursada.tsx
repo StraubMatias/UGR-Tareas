@@ -89,6 +89,7 @@ export interface PortalVistasCursadaProps {
   setTareaEnEdicion: Dispatch<SetStateAction<{ materiaId: string; tarea: Materia['tareas'][number] } | null>>;
   acciones: Acciones;
   adminForms: TableroAdminForms;
+  navegarA: (pestana: PortalPestana) => void;
 }
 
 export default function PortalVistasCursada({
@@ -155,7 +156,8 @@ export default function PortalVistasCursada({
   setMateriaEnEdicion,
   setTareaEnEdicion,
   acciones,
-  adminForms
+  adminForms,
+  navegarA
 }: PortalVistasCursadaProps) {
   if (cargando) {
     return (
@@ -183,6 +185,7 @@ export default function PortalVistasCursada({
       notasTareasInputs={notasTareasInputs}
       handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
       handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
+      recargarTablero={cargarBD}
     />
   );
 
@@ -203,6 +206,7 @@ export default function PortalVistasCursada({
 
       {pestana === 'materias' && (
         <VistaMaterias
+          onIrAEstadoAlumno={() => navegarA('alumnos')}
           recargar={cargarBD}
           materias={materias}
           inscripciones={inscripciones}
@@ -358,8 +362,8 @@ export default function PortalVistasCursada({
           onTipoTarea={adminForms.setTipoTarea}
           tareaConNota={adminForms.tareaConNota}
           onTareaConNota={adminForms.setTareaConNota}
-          tareaGrupal={adminForms.tareaGrupal}
-          onTareaGrupal={adminForms.setTareaGrupal}
+          modoEntregaTarea={adminForms.modoEntregaTarea}
+          onModoEntregaTarea={adminForms.setModoEntregaTarea}
           cupoMaximo={adminForms.cupoMaximo}
           onCupoMaximo={adminForms.setCupoMaximo}
           fechaInicio={adminForms.fechaInicio}

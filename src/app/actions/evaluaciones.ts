@@ -1,7 +1,14 @@
 'use server';
 
 import { db } from '../turso';
-import { asignarGrupo, actualizarProgresoTarea, ErrorGrupo } from '../../lib/grupos-tareas';
+import {
+  asignarGrupo,
+  actualizarProgresoTarea,
+  ErrorGrupo,
+  marcarEntregaIndividual,
+  enviarInvitacionGrupo,
+  responderInvitacionGrupo
+} from '../../lib/grupos-tareas';
 import { convertirValidacion } from '../../lib/utils';
 import { parcialHabilitado, validarNota } from '../validators';
 import type { RespuestaAction } from './types';
@@ -225,10 +232,11 @@ export interface GestionarGrupoParams {
   salir?: boolean;
   alumnoNombre?: string;
   eliminarGrupoId?: string;
+  entregaIndividual?: boolean;
 }
 
 export async function gestionarGrupoTareaAction(params: GestionarGrupoParams): Promise<RespuestaAction> {
-  const { tareaId, nombre, grupoId, salir = false, alumnoNombre, eliminarGrupoId } = params;
+  const { tareaId, nombre, grupoId, salir = false, alumnoNombre, eliminarGrupoId, entregaIndividual } = params;
   try {
     const usuario = await obtenerUsuarioSesion();
     if (!usuario) return { exito: false, mensaje: 'Debés iniciar sesión.' };
@@ -273,6 +281,17 @@ export async function gestionarGrupoTareaAction(params: GestionarGrupoParams): P
       }
     }
 
+    if (entregaIndividual === true || entregaIndividual === false) {
+      await marcarEntregaIndividual(db, tareaId, alumno.id, entregaIndividual);
+      await registrarAuditoria({
+        accion: 'grupo_tarea',
+        usuario,
+        detalle: `${entregaIndividual ? 'Marcó entrega individual' : 'Quitó entrega individual'} en ${tareaId} (${nombreAlumnoObjetivo})`,
+        ip: await obtenerIPReal()
+      });
+      return { exito: true };
+    }
+
     await asignarGrupo(db, tareaId, alumno.id, {
       nombre,
       grupoId,
@@ -292,6 +311,85 @@ export async function gestionarGrupoTareaAction(params: GestionarGrupoParams): P
     return {
       exito: false,
       mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo actualizar el grupo.'
+    };
+  }
+}
+
+export async function invitarAGrupoTareaAction({
+  tareaId,
+  grupoId,
+  alumnoNombre
+}: {
+  tareaId: string;
+  grupoId: string;
+  alumnoNombre: string;
+}): Promise<RespuestaAction> {
+  try {
+    const usuario = await obtenerUsuarioSesion();
+    if (!usuario) return { exito: false, mensaje: 'Debés iniciar sesión.' };
+    const limite = await verificarRateLimitEscritura(usuario);
+    if (!limite.exito) return limite;
+
+    const yo = await obtenerAlumno(usuario);
+    if (!yo) return { exito: false, mensaje: 'No se encontró tu cuenta.' };
+    const invitado = await obtenerAlumno(alumnoNombre.trim());
+    if (!invitado) return { exito: false, mensaje: 'No encontramos a ese compañero.' };
+
+    const tareaFila = await db.execute({ sql: 'SELECT materia_id FROM tareas WHERE id = ?', args: [tareaId] });
+    const materiaId = texto(tareaFila.rows[0]?.materia_id);
+    if (!materiaId) return { exito: false, mensaje: 'La tarea no existe.' };
+    for (const alumnoId of [yo.id, invitado.id]) {
+      const cursa = await db.execute({
+        sql: 'SELECT 1 FROM inscripciones WHERE materia_id = ? AND alumno_id = ?',
+        args: [materiaId, alumnoId]
+      });
+      if (cursa.rows.length === 0) {
+        return { exito: false, mensaje: 'Solo podés invitar a quien curse la misma materia.' };
+      }
+    }
+
+    await enviarInvitacionGrupo(db, tareaId, yo.id, invitado.id, grupoId);
+    await registrarAuditoria({
+      accion: 'invitar_grupo_tarea',
+      usuario,
+      detalle: `Invitó a ${invitado.nombre} al grupo ${grupoId} (${tareaId})`,
+      ip: await obtenerIPReal()
+    });
+    return { exito: true, mensaje: `Invitación enviada a ${invitado.nombre}.` };
+  } catch (error) {
+    console.error('Error al invitar al grupo:', error);
+    return {
+      exito: false,
+      mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo enviar la invitación.'
+    };
+  }
+}
+
+export async function responderInvitacionGrupoAction(
+  invitacionId: string,
+  aceptar: boolean
+): Promise<RespuestaAction> {
+  try {
+    const usuario = await obtenerUsuarioSesion();
+    if (!usuario) return { exito: false, mensaje: 'Debés iniciar sesión.' };
+    const limite = await verificarRateLimitEscritura(usuario);
+    if (!limite.exito) return limite;
+    const yo = await obtenerAlumno(usuario);
+    if (!yo) return { exito: false, mensaje: 'No se encontró tu cuenta.' };
+
+    await responderInvitacionGrupo(db, invitacionId, yo.id, aceptar);
+    await registrarAuditoria({
+      accion: 'responder_invitacion_grupo',
+      usuario,
+      detalle: `${aceptar ? 'Aceptó' : 'Rechazó'} la invitación ${invitacionId}`,
+      ip: await obtenerIPReal()
+    });
+    return { exito: true, mensaje: aceptar ? 'Te uniste al grupo.' : 'Invitación rechazada.' };
+  } catch (error) {
+    console.error('Error al responder invitación:', error);
+    return {
+      exito: false,
+      mensaje: error instanceof ErrorGrupo ? error.message : 'No se pudo responder la invitación.'
     };
   }
 }

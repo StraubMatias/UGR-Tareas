@@ -1,6 +1,6 @@
 import { nombreNotificacionAviso } from './avisos';
 import { materiasQueCursa } from './companeros';
-import type { AvisoCampusMoodle, NovedadTablero } from '../components/portal/types';
+import type { AvisoCampusMoodle, InvitacionGrupoTablero, NovedadTablero } from '../components/portal/types';
 import type { EventoCronograma, Materia, Parcial } from '../core/cursada';
 import { obtenerDiasHastaFecha, obtenerDiasHastaTarea, tareaCompletadaPor } from '../core/cursada';
 
@@ -11,11 +11,13 @@ export function armarNotificacionesTablero({
   materias,
   parciales,
   inscripciones,
-  cronogramaCursada
+  cronogramaCursada,
+  invitacionesGrupo = []
 }: {
   usuarioActual: string | null;
   novedades: NovedadTablero[];
   avisos: AvisoCampusMoodle[];
+  invitacionesGrupo?: InvitacionGrupoTablero[];
   materias: Materia[];
   parciales: Parcial[];
   inscripciones: { alumno: string; materiaId: string }[];
@@ -29,6 +31,16 @@ export function armarNotificacionesTablero({
   const nombresDeLaCursada = new Set(materiasDeLaCursada.map((materia) => materia.nombre));
 
   return ([
+    ...invitacionesGrupo.map((inv) => ({
+      id: `invitacion-grupo-${inv.id}`,
+      tipo: 'invitacion-grupo',
+      nombre: inv.tareaNombre,
+      materia: inv.materiaNombre,
+      invitacionId: inv.id,
+      grupoNombre: inv.grupoNombre,
+      deAlumno: inv.deAlumno,
+      tareaId: inv.tareaId
+    })),
     ...novedades,
     ...avisos.filter((aviso) => nombresDeLaCursada.has(aviso.materia_nombre)).map((aviso) => ({
       id: `aviso-${aviso.id}`,

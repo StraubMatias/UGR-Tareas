@@ -24,6 +24,20 @@ export interface NotificacionTablero {
   materia: string;
   dias?: number | null;
   url?: string;
+  invitacionId?: string;
+  grupoNombre?: string;
+  deAlumno?: string;
+  tareaId?: string;
+}
+
+export interface InvitacionGrupoTablero {
+  id: string;
+  grupoId: string;
+  tareaId: string;
+  grupoNombre: string;
+  tareaNombre: string;
+  materiaNombre: string;
+  deAlumno: string;
 }
 
 /** Recordatorio o novedad en campana / aviso de inicio. */

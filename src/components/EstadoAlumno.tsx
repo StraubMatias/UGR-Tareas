@@ -28,6 +28,7 @@ interface Props {
   notasTareasInputs: Record<string, string>;
   handleNotaTareaChangeLocal: (tareaId: string, alumno: string, valor: string) => void;
   handleGuardarNotaTareaOnBlur: (tareaId: string, alumno: string) => void;
+  recargarTablero?: (mostrarCarga?: boolean) => void | Promise<unknown>;
 }
 
 export default function EstadoAlumno({ alumno, materias, inscripciones = [], abierto, alAlternar, esAdmin = false, ...acciones }: Props) {
@@ -114,6 +115,8 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                         notasTareasInputs={acciones.notasTareasInputs}
                         handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
                         handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
+                        recargarTablero={acciones.recargarTablero}
+                        esAdmin={esAdmin}
           />
                     </div>
                   ))}

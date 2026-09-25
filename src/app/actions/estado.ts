@@ -76,6 +76,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       resCompletadas,
       resNotasTareas,
       resGrupos,
+      resPreferenciasGrupo,
       resAlumnos,
       resParciales,
       resNotasParciales,
@@ -84,7 +85,8 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       resProgreso,
       resAvisos,
       resRol,
-      resInscripciones
+      resInscripciones,
+      resInvitacionesGrupo
     ] = await db.batch([
       { sql: 'SELECT id, anio, cuatrimestre, nombre, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC', args: [] },
       consultaPeriodo(
@@ -96,9 +98,9 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       ),
       consultaPeriodo(
         periodoParaCargar,
-        `SELECT t.id, t.materia_id, t.nombre, t.inicio, t.fin, t.detalles, t.unidad, t.con_nota, t.tipo, t.url, t.grupal, t.cupo_maximo
+        `SELECT t.id, t.materia_id, t.nombre, t.inicio, t.fin, t.detalles, t.unidad, t.con_nota, t.tipo, t.url, t.grupal, t.permite_individual, t.cupo_maximo
          FROM tareas t JOIN materias m ON m.id = t.materia_id WHERE m.periodo_id = ?`,
-        `SELECT id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, url, grupal, cupo_maximo FROM tareas`
+        `SELECT id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, url, grupal, permite_individual, cupo_maximo FROM tareas`
       ),
       consultaPeriodo(
         periodoParaCargar,
@@ -126,6 +128,13 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         sql: `SELECT g.id, g.tarea_id, g.nombre, a.nombre AS alumno
           FROM grupos_tareas g LEFT JOIN integrantes_tareas i ON i.grupo_id = g.id
           LEFT JOIN alumnos a ON a.id = i.alumno_id ORDER BY g.nombre, a.nombre`,
+        args: []
+      },
+      {
+        sql: `SELECT p.tarea_id, a.nombre AS alumno
+              FROM preferencias_tarea_alumno p
+              JOIN alumnos a ON a.id = p.alumno_id
+              WHERE p.entrega_individual = 1`,
         args: []
       },
       { sql: 'SELECT nombre FROM alumnos ORDER BY nombre ASC', args: [] },
@@ -181,10 +190,29 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
               FROM inscripciones i
               JOIN alumnos a ON a.id = i.alumno_id`,
         args: []
+      },
+      {
+        sql: `SELECT i.id, i.grupo_id, i.tarea_id, g.nombre AS grupo_nombre,
+                     t.nombre AS tarea_nombre, m.nombre AS materia_nombre, a.nombre AS de_alumno
+              FROM invitaciones_grupo i
+              JOIN grupos_tareas g ON g.id = i.grupo_id AND g.tarea_id = i.tarea_id
+              JOIN tareas t ON t.id = i.tarea_id
+              JOIN materias m ON m.id = t.materia_id
+              JOIN alumnos a ON a.id = i.de_alumno_id
+              WHERE i.para_alumno_id = ? AND i.estado = 'pendiente'
+              ORDER BY i.creada_en DESC`,
+        args: [texto(cuenta?.id)]
       }
     ], 'read');
 
-    const materiasArmadas = armarMaterias(resMaterias.rows, resTareas.rows, resCompletadas.rows, resNotasTareas.rows, resGrupos.rows);
+    const materiasArmadas = armarMaterias(
+      resMaterias.rows,
+      resTareas.rows,
+      resCompletadas.rows,
+      resNotasTareas.rows,
+      resGrupos.rows,
+      resPreferenciasGrupo.rows
+    );
     const inscripciones = resInscripciones.rows.map((fila) => ({
       alumno: texto(fila.alumno),
       materiaId: texto(fila.materia_id)
@@ -284,7 +312,16 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
           url: texto(fila.url),
           estado: texto(fila.estado)
         })),
-      inscripciones
+      inscripciones,
+      invitacionesGrupo: resInvitacionesGrupo.rows.map((fila) => ({
+        id: texto(fila.id),
+        grupoId: texto(fila.grupo_id),
+        tareaId: texto(fila.tarea_id),
+        grupoNombre: texto(fila.grupo_nombre),
+        tareaNombre: texto(fila.tarea_nombre),
+        materiaNombre: texto(fila.materia_nombre),
+        deAlumno: texto(fila.de_alumno)
+      }))
     };
   } catch (error) {
     console.error('Error en obtenerEstadoCompleto:', error);

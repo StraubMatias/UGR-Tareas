@@ -68,6 +68,7 @@ export default function TableroCuerpo({ vm }: { vm: TableroPortalViewModel }) {
           notasTareasInputs={datos.notasTareasInputs}
           handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
           handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
+          recargarTablero={cargarBD}
         />
       </div>
     );

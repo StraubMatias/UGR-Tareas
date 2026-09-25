@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
-import type { AvisoCampusMoodle, Periodo } from '../components/portal/types';
+import type { AvisoCampusMoodle, InvitacionGrupoTablero, Periodo } from '../components/portal/types';
 import type { EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
 
 export interface EstadoCompletoTablero {
@@ -25,6 +25,7 @@ export interface EstadoCompletoTablero {
     actualizado_en: string;
   }[];
   avisos?: AvisoCampusMoodle[];
+  invitacionesGrupo?: InvitacionGrupoTablero[];
 }
 
 export interface AplicarEstadoTableroCallbacks {
@@ -39,6 +40,7 @@ export interface AplicarEstadoTableroCallbacks {
   setCronograma: Dispatch<SetStateAction<EventoCronograma[]>>;
   setProgresoPlan: Dispatch<SetStateAction<NonNullable<EstadoCompletoTablero['progresoPlan']>>>;
   setAvisos: Dispatch<SetStateAction<AvisoCampusMoodle[]>>;
+  setInvitacionesGrupo: Dispatch<SetStateAction<InvitacionGrupoTablero[]>>;
   setRolUsuario: Dispatch<SetStateAction<string | null>>;
   setOrigenCuenta: Dispatch<SetStateAction<string | null>>;
   setUgrUsuarioCuenta: Dispatch<SetStateAction<string | null>>;
@@ -68,6 +70,7 @@ export function aplicarEstadoTablero(
   cb.setCronograma(estado.cronograma || []);
   cb.setProgresoPlan(estado.progresoPlan || []);
   cb.setAvisos(estado.avisos || []);
+  cb.setInvitacionesGrupo(estado.invitacionesGrupo || []);
   if (estado.rol) cb.setRolUsuario(estado.rol);
   if (estado.origen) cb.setOrigenCuenta(estado.origen);
   if ('ugrUsuario' in estado) cb.setUgrUsuarioCuenta(estado.ugrUsuario || null);
