@@ -40,7 +40,6 @@ export default function VistaAlumnos({
     <div className="estado-alumnos min-w-0 space-y-6">
       <header>
         <h2 className="text-xl font-bold text-white">Estado por alumno</h2>
-        <p className="mt-2 text-sm text-slate-400">Entregas, notas y equipos de trabajo. Elegí un estado para consultar las tareas.</p>
       </header>
       {usuarioActual && (
         <EstadoAlumno alumno={usuarioActual} abierto={situacionPropiaAbierta}

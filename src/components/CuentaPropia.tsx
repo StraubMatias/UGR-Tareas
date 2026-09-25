@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useProgresoSyncEstimado } from '../hooks/useProgresoSyncEstimado';
 import { sincronizarCuentaUgrAction, sincronizarCuentaSiuAction, type ResumenMateriaSync } from '../app/actions';
 import dynamic from 'next/dynamic';
 
@@ -120,14 +121,39 @@ export function ResumenCursada({ resumen }: { resumen: ResumenMateriaSync[] }) {
 type FuenteSync = 'ugr' | 'siu';
 type FaseSync = 'credenciales' | 'cargando' | 'listo' | 'error';
 
-function SyncCargando({ fuente }: { fuente: FuenteSync }) {
+function SyncCargando({
+  fuente,
+  progreso,
+  etapa
+}: {
+  fuente: FuenteSync;
+  progreso: number;
+  etapa: string;
+}) {
+  const titulo = fuente === 'siu' ? 'Sincronizando con SIU Guaraní' : 'Sincronizando con UGR Virtual';
+  const barra = fuente === 'siu' ? 'from-blue-500 to-cyan-400' : 'from-cyan-500 to-emerald-400';
+
   return (
-    <div className="text-center py-10">
-      <span className="text-3xl animate-spin inline-block" aria-hidden="true">⏳</span>
-      <p className="mt-3 text-sm font-semibold text-slate-200">
-        {fuente === 'siu' ? 'Estamos sincronizando con SIU Guaraní…' : 'Estamos sincronizando con UGR Virtual…'}
-      </p>
-      <p className="mt-2 text-xs text-slate-400">No cierres esta ventana hasta que termine.</p>
+    <div className="py-8 px-1">
+      <p className="text-sm font-semibold text-slate-200 text-center">{titulo}</p>
+      <p className="mt-1 text-xs text-slate-400 text-center min-h-[1.25rem]">{etapa || 'Iniciando…'}</p>
+
+      <div
+        className="mt-6 w-full h-2.5 rounded-full bg-slate-800/90 border border-slate-700/80 overflow-hidden"
+        role="progressbar"
+        aria-valuenow={progreso}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={titulo}
+      >
+        <div
+          className={`h-full rounded-full bg-gradient-to-r ${barra} transition-[width] duration-500 ease-out`}
+          style={{ width: `${progreso}%` }}
+        />
+      </div>
+
+      <p className="mt-2 text-center text-xs font-semibold tabular-nums text-slate-400">{progreso}%</p>
+      <p className="mt-4 text-center text-xs text-slate-500">No cierres esta ventana hasta que termine.</p>
     </div>
   );
 }
@@ -164,6 +190,8 @@ export default function CuentaPropia({
     notasCargadas: NotaPlanSiu[];
     notasYaCargadas: NotaPlanSiu[];
   } | null>(null);
+
+  const { progreso, etapa, marcarCompletado } = useProgresoSyncEstimado(fase === 'cargando', fuente);
 
   const reiniciarCredenciales = () => {
     setError('');
@@ -204,6 +232,7 @@ export default function CuentaPropia({
         const aviso = resultado.mensaje || 'Cursada actualizada.';
         setMensaje(aviso);
         setResumen(resultado.resumen || []);
+        await marcarCompletado();
         setFase('listo');
         onCompletado?.();
       } else {
@@ -221,6 +250,7 @@ export default function CuentaPropia({
           notasCargadas: resultado.notasCargadas || [],
           notasYaCargadas: resultado.notasYaCargadas || []
         });
+        await marcarCompletado();
         setFase('listo');
         onCompletado?.();
       }
@@ -355,7 +385,7 @@ export default function CuentaPropia({
         </>
       )}
 
-      {fase === 'cargando' && <SyncCargando fuente={fuente} />}
+      {fase === 'cargando' && <SyncCargando fuente={fuente} progreso={progreso} etapa={etapa} />}
 
       {fase === 'error' && (
         <div className="space-y-4">

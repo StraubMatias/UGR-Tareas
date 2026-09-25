@@ -8,7 +8,7 @@ import { crearCliente } from './red.mjs';
 import { optimizarLecturas } from './lecturas.mjs';
 import { autorEsEquipoDocente, esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from './materias.mjs';
-import { extraerFechasActividad, extraerActividadesOverview, extraerNotasDeLibreta, extraerProgresoDeActividad, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from './tareas.mjs';
+import { extraerConsignasDeCurso, extraerFechasActividad, extraerNotasDeLibreta, extraerProgresoDeActividad, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from './tareas.mjs';
 import {
   analizarAvisosParaCronograma,
   DIAS_HACIA_ATRAS,
@@ -41,7 +41,7 @@ import {
 
 export { emparejarCursosConMaterias, filtrarTareasDuplicadas, agruparResumenSync, armarMensajeCursada, limpiarTextoParaBusqueda, separarEvaluaciones };
 import { ajustarClasesAlHorario, clasificarEventosCalendario, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
-import { MODULOS_CONSIGNA, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
+import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { cabeceraCookies } from './autenticar.mjs';
 import { extraerEnlacesDeCursada, interpretarCondiciones, textoDeArchivoCampus, urlArchivoDeRecurso } from './metodologia.mjs';
 
@@ -559,30 +559,19 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
   // detalle de fechas se lee SOLO para las actividades que todavía no existen en
   // la base: un sync sin novedades no encadena un pedido HTTP por tarea (ese era
   // el motivo principal de la lentitud cuando no había nada nuevo que importar).
-  const overviews = await conPool(mapeos, 4, async ({ curso, coincidencia }) => {
+  const cursosConActividades = await conPool(mapeos, 4, async ({ curso, coincidencia }) => {
     try {
-      // Vista unificada de Moodle 4.5: /course/overview.php agrupa por tipo los
-      // módulos del curso (assigns, foros, cuestionarios, feedback, …). Se piden
-      // todos los tipos «consigna» de una sola vez y se parsean juntos; así un
-      // sync alcanza también los quizzes/formation que antes solo vivían en
-      // páginas que ni siquiera miramos (/mod/quiz/index.php, /mod/feedback/…).
-      const pagina = await cliente.pedir(UGR_RUTAS.overviewCurso(curso.id, MODULOS_CONSIGNA));
-      return { curso, coincidencia, html: pagina.html };
+      const actividades = await extraerConsignasDeCurso(cliente, curso.id, { baseUrl: UGR_BASE_URL, rutas: UGR_RUTAS });
+      return { curso, coincidencia, actividades };
     } catch {
       return null;
     }
   });
 
-  await conPool(overviews, 4, async (resultado) => {
+  await conPool(cursosConActividades, 4, async (resultado) => {
     if (!resultado) return;
-    const { curso, coincidencia, html } = resultado;
-    const tareas = extraerActividadesOverview(html, UGR_BASE_URL);
-    const idsVistos = new Set();
-    const tareasUnicas = tareas.filter((t) => {
-      if (!t.id || idsVistos.has(t.id)) return false;
-      idsVistos.add(t.id);
-      return true;
-    });
+    const { curso, coincidencia, actividades } = resultado;
+    const tareasUnicas = (actividades || []).filter((t) => t?.id);
 
     // Las tareas ya importadas no se vuelven a insertar; pero las de antes de
     // que existiera la columna `url` quedaron sin enlace, así que los

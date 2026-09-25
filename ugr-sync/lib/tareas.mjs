@@ -8,7 +8,7 @@
 //   2. Overview (Moodle 4.5): celdas con data-mdl-overview-item="name|duedate",
 //      id en data-mdl-overview-cmid y fechas como <span data-timestamp="...">.
 import { load } from 'cheerio';
-import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE } from './constantes.mjs';
+import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { inferirTipoTarea, limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
 
 function indiceColumna(encabezados, rotulos) {
@@ -305,6 +305,96 @@ export function extraerActividadesOverview(html, baseUrl = '') {
       vistos.add(cmid);
     });
   });
+
+  return actividades;
+}
+
+function combinarCamposActividad(base, extra) {
+  const salida = { ...base };
+  for (const [clave, valor] of Object.entries(extra)) {
+    if (valor == null || valor === '') continue;
+    if (clave === 'inicio' || clave === 'fin') {
+      if (!salida[clave] || salida[clave] === 'Sin fecha') salida[clave] = valor;
+      continue;
+    }
+    if (salida[clave] == null || salida[clave] === '') salida[clave] = valor;
+  }
+  if (extra.nombre && String(extra.nombre).length > String(salida.nombre || '').length) {
+    salida.nombre = extra.nombre;
+  }
+  return salida;
+}
+
+// Une listas de actividades detectadas en distintas páginas/parsers (overview,
+// índice de assign, foros…) deduplicando por id de módulo Moodle.
+export function fusionarActividadesConsigna(listas) {
+  const mapa = new Map();
+  for (const lista of listas) {
+    for (const actividad of Array.isArray(lista) ? lista : []) {
+      if (!actividad?.id) continue;
+      const esForo = actividad.tipo === 'foro' || /\/mod\/forum\//.test(actividad.url || '');
+      const normalizada = {
+        ...actividad,
+        tipo: actividad.tipo || (esForo ? 'foro' : inferirTipoTarea(actividad.nombre)),
+        conNota: actividad.conNota ?? !esForo
+      };
+      if (mapa.has(actividad.id)) {
+        mapa.set(actividad.id, combinarCamposActividad(mapa.get(actividad.id), normalizada));
+      } else {
+        mapa.set(actividad.id, normalizada);
+      }
+    }
+  }
+  return [...mapa.values()];
+}
+
+// Aplica todos los parsers de consignas sobre un mismo HTML. El overview unificado
+// usa contenedores `*_overview`, pero /mod/assign/index.php a veces devuelve solo
+// la tabla de asignaciones (sin ese contenedor): ahí `extraerTareas` es el que
+// encuentra los trabajos prácticos.
+export function extraerConsignasDeHtml(html, baseUrl = '') {
+  if (!html) return [];
+  const desdeOverview = extraerActividadesOverview(html, baseUrl);
+  const desdeTareas = extraerTareas(html, baseUrl)
+    .filter((t) => !esForoInformativo(t.nombre))
+    .map((t) => ({
+      ...t,
+      tipo: t.tipo || inferirTipoTarea(t.nombre),
+      conNota: t.conNota ?? true
+    }));
+  const desdeForos = extraerForos(html, baseUrl);
+  return fusionarActividadesConsigna([desdeOverview, desdeTareas, desdeForos]);
+}
+
+async function pedirHtmlCurso(cliente, ruta) {
+  try {
+    const pagina = await cliente.pedir(ruta);
+    if (pagina?.html && !pagina.es_requiere_login) return pagina.html;
+  } catch {
+    // Sin sesión o error de red: el llamador puede usar otro índice como respaldo.
+  }
+  return '';
+}
+
+// Descubre todas las consignas de un curso: overview completo y, si faltan
+// asignaciones (o el overview falló), índices dedicados de tareas y foros.
+export async function extraerConsignasDeCurso(cliente, cursoId, { baseUrl = UGR_BASE_URL, rutas = UGR_RUTAS } = {}) {
+  const htmlOverview = await pedirHtmlCurso(cliente, rutas.overviewCurso(cursoId, MODULOS_CONSIGNA));
+  let actividades = extraerConsignasDeHtml(htmlOverview, baseUrl);
+
+  const tieneAssign = actividades.some((a) => /\/mod\/assign\//.test(a.url || ''));
+  if (!htmlOverview || !tieneAssign) {
+    const [htmlAssign, htmlForos] = await Promise.all([
+      pedirHtmlCurso(cliente, rutas.tareasDeCurso(cursoId)),
+      pedirHtmlCurso(cliente, rutas.forosDeCurso(cursoId))
+    ]);
+    const htmlsExtra = [];
+    if (htmlAssign && htmlAssign !== htmlOverview) htmlsExtra.push(htmlAssign);
+    if (htmlForos && htmlForos !== htmlOverview && htmlForos !== htmlAssign) htmlsExtra.push(htmlForos);
+    for (const html of htmlsExtra) {
+      actividades = fusionarActividadesConsigna([actividades, extraerConsignasDeHtml(html, baseUrl)]);
+    }
+  }
 
   return actividades;
 }
