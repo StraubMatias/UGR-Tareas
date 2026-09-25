@@ -1,4 +1,5 @@
 import type { Row, Value } from '@libsql/client';
+import { formatearNotaParaMostrar } from '../app/validators';
 import { texto, textoONull } from './action-internals';
 
 export function consultaPeriodo(periodoId: string | null, sqlConPeriodo: string, sqlSinPeriodo: string) {
@@ -83,7 +84,10 @@ export function armarMaterias(
           completadas.map((c) => [texto(c.alumno), texto(c.completada_en)])
         ),
         notas: Object.fromEntries(
-          Object.entries(notas).map(([alumnoNota, valor]) => [alumnoNota, valor == null ? null : texto(valor)])
+          Object.entries(notas).map(([alumnoNota, valor]) => [
+            alumnoNota,
+            valor == null ? null : formatearNotaParaMostrar(texto(valor))
+          ])
         ),
         notaCargadaEn: Object.fromEntries(
           Object.entries(notaCargadaEn).map(([alumnoNota, valor]) => [alumnoNota, texto(valor)])

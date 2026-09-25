@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from '../lib/materias.mjs';
-import { consignasDesdeCourseContents, esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeHtml, extraerConsignasDePaginaCurso, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
+import { consignasDesdeCourseContents, esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeHtml, extraerConsignasDePaginaCurso, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, parsearNotaPublicada, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -460,6 +460,24 @@ test('el último intento pisa la nota de la libreta', () => {
   );
   assert.equal(progreso[0].nota, 7.5);
   assert.equal(progreso[0].forzar, true);
+});
+
+test('parsearNotaPublicada entiende 100 sobre 100 y 60/100', () => {
+  assert.equal(parsearNotaPublicada('100.00 / 100.00'), 10);
+  assert.equal(parsearNotaPublicada('60 sobre 100'), 6);
+  assert.equal(parsearNotaPublicada('0 / 100'), 0);
+});
+
+test('extraerNotaUltimoIntento lee lecciones calificadas sobre 100', () => {
+  const html = `
+    <body>
+      <h4>Intento 1</h4>
+      <table>
+        <tr><th>Estado</th><td>Finalizado</td></tr>
+        <tr><th>Calificación</th><td>100.00 / 100.00</td></tr>
+      </table>
+    </body>`;
+  assert.equal(extraerNotaUltimoIntento(html), 10);
 });
 
 test('parsearNotaCampus lee la calificación que publica el campus', () => {

@@ -29,15 +29,25 @@ export function tareaDentroDelPlazo(fecha: string | null | undefined): boolean {
   return !Number.isNaN(fechaCierre.getTime()) && hoy < fechaCierre;
 }
 
+export function formatearNotaParaMostrar(nota: string | number | null | undefined): string {
+  if (nota == null || nota === '') return '';
+  const num = Number(String(nota).replace(',', '.'));
+  if (!Number.isFinite(num)) return String(nota);
+  const redondeada = Math.round(num * 100) / 100;
+  if (Math.abs(redondeada - Math.round(redondeada)) < 0.001) return String(Math.round(redondeada));
+  return String(redondeada).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+}
+
 export function validarNota(nota: string | number | null | undefined): { valida: boolean; vacia: boolean; valor: string } {
   const notaLimpia = typeof nota === 'string' ? nota.trim().replace(',', '.') : String(nota ?? '').trim();
   if (!notaLimpia) return { valida: false, vacia: true, valor: '' };
 
   const valor = Number(notaLimpia);
+  const valorFormateado = formatearNotaParaMostrar(notaLimpia);
   return {
     valida: Number.isFinite(valor) && valor >= 1 && valor <= 10,
     vacia: false,
-    valor: notaLimpia
+    valor: valorFormateado || notaLimpia
   };
 }
 

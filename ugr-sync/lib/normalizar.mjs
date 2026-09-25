@@ -429,6 +429,33 @@ export function inferirTipoTarea(nombre) {
   return 'actividad';
 }
 
+// Convierte calificaciones «60/100», «7 de 10», etc. a la escala 1–10 del tablero.
+export function notaEnEscalaDiez(obtenido, maximo) {
+  const a = Number(String(obtenido).replace(',', '.'));
+  const b = Number(String(maximo).replace(',', '.'));
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= 0) return null;
+  let enDiez;
+  if (b <= 10) {
+    if (a < 0 || a > b) return null;
+    enDiez = (a / b) * 10;
+  } else if (b === 100) {
+    enDiez = a / 10;
+  } else {
+    enDiez = (a / b) * 10;
+  }
+  if (enDiez < 0 || enDiez > 10) return null;
+  return Math.round(enDiez * 100) / 100;
+}
+
+export function formatearNotaParaMostrar(nota) {
+  if (nota == null || nota === '') return '';
+  const num = Number(String(nota).replace(',', '.'));
+  if (!Number.isFinite(num)) return String(nota);
+  const redondeada = Math.round(num * 100) / 100;
+  if (Math.abs(redondeada - Math.round(redondeada)) < 0.001) return String(Math.round(redondeada));
+  return String(redondeada).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+}
+
 // Descarta rótulos que no son el nombre real de la consigna (notas, estados, etc.).
 export function esNombreConsignaValido(nombre) {
   const n = String(nombre || '').replace(/\s+/g, ' ').trim();

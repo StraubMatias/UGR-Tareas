@@ -10,7 +10,7 @@
 import { load } from 'cheerio';
 import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { extraerSesskey } from './materias.mjs';
-import { esNombreConsignaValido, inferirTipoTarea, limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
+import { esNombreConsignaValido, inferirTipoTarea, limpiarTextoParaBusqueda, notaEnEscalaDiez, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
 
 function indiceColumna(encabezados, rotulos) {
   for (let i = 0; i < encabezados.length; i += 1) {
@@ -584,26 +584,25 @@ export function extraerFechasActividad(html) {
 }
 
 export function parsearNotaCampus(texto) {
-  const limpio = String(texto || '').replace(/\s+/g, ' ').trim();
-  if (!limpio || limpio === '-' || /^acciones/i.test(limpio)) return null;
-  const numero = limpio.replace(',', '.').match(/(\d+(?:\.\d+)?)/);
-  if (!numero) return null;
-  const valor = Number(numero[1]);
-  if (!Number.isFinite(valor) || valor < 1 || valor > 10) return null;
-  return Math.round(valor * 100) / 100;
+  return parsearNotaPublicada(texto);
 }
 
 // Acepta 0: un intento finalizado en 0 es una nota, no un campo vacío.
 export function parsearNotaPublicada(texto) {
   const limpio = String(texto || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   if (!limpio || limpio === '-' || /^acciones/i.test(limpio) || /sin calificar|not yet graded|no grade/i.test(limpio)) return null;
-  const normalizado = limpio.replace(',', '.');
-  const explicita = normalizado.match(/(\d+(?:\.\d+)?)\s*(?:de|\/)\s*\d+/i);
-  const numero = explicita || normalizado.match(/(\d+(?:\.\d+)?)/);
+  const normalizado = limpio.replace(/,/g, '.');
+  const fraccion = normalizado.match(/(\d+(?:\.\d+)?)\s*(?:de|\/|sobre)\s*(\d+(?:\.\d+)?)/i);
+  if (fraccion) {
+    return notaEnEscalaDiez(Number(fraccion[1]), Number(fraccion[2]));
+  }
+  const numero = normalizado.match(/(\d+(?:\.\d+)?)/);
   if (!numero) return null;
   const valor = Number(numero[1]);
-  if (!Number.isFinite(valor) || valor < 0 || valor > 10) return null;
-  return Math.round(valor * 100) / 100;
+  if (!Number.isFinite(valor)) return null;
+  if (valor >= 0 && valor <= 10) return Math.round(valor * 100) / 100;
+  if (valor === 100) return 10;
+  return null;
 }
 
 function notaDeCuerpoDeIntento(cuerpo) {

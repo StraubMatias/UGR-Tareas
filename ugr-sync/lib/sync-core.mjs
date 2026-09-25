@@ -28,6 +28,7 @@ import {
   coincidirParcial,
   emparejarCursosConMaterias,
   filtrarTareasDuplicadas,
+  formatearNotaParaMostrar,
   fechasACorregir,
   agruparResumenSync,
   armarMensajeCursada,
@@ -1221,8 +1222,7 @@ function mismaNota(anterior, nueva) {
 }
 
 function textoNota(nota) {
-  const n = Math.round(Number(String(nota).replace(',', '.')) * 100) / 100;
-  return Number.isFinite(n) ? String(n) : String(nota);
+  return formatearNotaParaMostrar(nota);
 }
 
 async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
@@ -1258,12 +1258,21 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
               WHERE tarea_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))`,
         args: [id, alumnoId, alumnoNombre || '']
       });
-      const entregadaAca = entrega.rows.length > 0;
+      let entregadaAca = entrega.rows.length > 0;
+      if (item.nota != null && !entregadaAca && item.forzar) {
+        escrituras.push({
+          sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, datetime('now'))
+                ON CONFLICT(tarea_id, alumno) DO NOTHING`,
+          args: [id, alumnoId, alumnoNombre || '']
+        });
+        entregadaAca = true;
+      }
       if (item.nota != null && !entregadaAca) {
         pendientesEntrega.push({ materia: item.materiaNombre || '', nombre: item.nombre });
         continue;
       }
       if (item.nota != null && entregadaAca) {
+        const notaGuardar = textoNota(item.nota);
         const previa = await db.execute({
           sql: 'SELECT nota FROM notas_tareas WHERE tarea_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))',
           args: [id, alumnoId, alumnoNombre || '']
@@ -1271,8 +1280,8 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
         cargadas.push({
           materia: item.materiaNombre || '',
           nombre: item.nombre,
-          nota: textoNota(item.nota),
-          yaEstaba: mismaNota(previa.rows[0]?.nota, item.nota)
+          nota: notaGuardar,
+          yaEstaba: mismaNota(previa.rows[0]?.nota, notaGuardar)
         });
         const guardaCerrada = item.forzar ? '' : 'WHERE notas_tareas.cerrada = 0';
         escrituras.push({
@@ -1284,7 +1293,7 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
                   cargada_en = excluded.cargada_en,
                   cerrada = 1
                 ${guardaCerrada}`,
-          args: [`nota_tarea_${id}_${alumnoId}`, id, alumnoId, alumnoNombre || '', item.nota]
+          args: [`nota_tarea_${id}_${alumnoId}`, id, alumnoId, alumnoNombre || '', notaGuardar]
         });
       }
     }
