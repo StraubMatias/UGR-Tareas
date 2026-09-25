@@ -4,10 +4,17 @@ export interface ResumenMateriaSync {
   yaEstaban: string[];
   cronogramaNuevo?: string[];
   cronogramaYa?: string[];
+  fechasActualizadas?: string[];
+  parcialesNuevos?: string[];
   materiaNueva?: boolean;
   notasCargadas?: string[];
   notasNoLeidas?: string[];
   pendientesEntrega?: string[];
+}
+
+export interface MateriaInscriptaSync {
+  materia: string;
+  materiaNueva?: boolean;
 }
 
 export interface RespuestaAction {
@@ -18,6 +25,7 @@ export interface RespuestaAction {
   origen?: string;
   ugrUsuario?: string | null;
   resumen?: ResumenMateriaSync[];
+  materiasInscriptas?: MateriaInscriptaSync[];
 }
 
 export interface RespuestaSiuSync {

@@ -180,7 +180,8 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
     return {
       exito: true,
       mensaje: sync.mensaje,
-      resumen: sync.resumen
+      resumen: sync.resumen,
+      materiasInscriptas: sync.materiasInscriptas
     };
   } catch (error) {
     const mensaje = error instanceof Error ? error.message : '';

@@ -273,6 +273,13 @@ export function emparejarCursosConMaterias(cursos, materias, plan = []) {
   return resultado;
 }
 
+export function formatearFechaTablero(valor) {
+  if (!valor || valor === 'Sin fecha') return 'sin fecha';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(valor).trim());
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  return String(valor);
+}
+
 export function armarMensajeCursada({
   materias = [],
   tareasNuevas = 0,
@@ -413,6 +420,24 @@ export function agruparResumenSync({ nuevas = [], yaEstaban = [], cronogramaNuev
     if (titulo) asegurar(item).cronogramaYa.push(titulo);
   }
   return [...mapa.values()];
+}
+
+export function anexarLineasResumenSync(resumen, { campo, items }) {
+  const lista = Array.isArray(items) ? items : [];
+  const filas = Array.isArray(resumen) ? resumen : [];
+  for (const item of lista) {
+    const textoLinea = item?.texto || item?.linea || item?.nombre;
+    if (!textoLinea) continue;
+    const materia = item.materiaNombre || item.materia || 'Cursada';
+    let fila = filas.find((f) => f.materia === materia);
+    if (!fila) {
+      fila = { materia, nuevas: [], yaEstaban: [], cronogramaNuevo: [], cronogramaYa: [] };
+      filas.push(fila);
+    }
+    if (!Array.isArray(fila[campo])) fila[campo] = [];
+    if (!fila[campo].includes(textoLinea)) fila[campo].push(textoLinea);
+  }
+  return filas;
 }
 
 export function pareceEvaluacion(nombre) {

@@ -1,5 +1,6 @@
 export type {
   ResumenMateriaSync,
+  MateriaInscriptaSync,
   RespuestaAction,
   RespuestaSiuSync,
   TareaActionParams
