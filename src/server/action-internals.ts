@@ -12,6 +12,7 @@ import {
   sentenciaLimpiarGruposVacios,
   sentenciasBorrarAlumno
 } from '../lib/cuentas';
+import { asegurarEsquemaCuentasEnServidor } from './asegurar-esquema-cuentas';
 import type { RespuestaAction } from '../app/actions/types';
 
 const scryptAsync = promisify(scrypt);
@@ -179,6 +180,7 @@ export function esNombreRepetido(error: unknown): boolean {
 /** Registra entrada al tablero (login o uso con sesión). */
 export async function registrarUltimoAcceso(usuario: string, intervaloMinimoMs = 6 * 60 * 60 * 1000): Promise<void> {
   try {
+    await asegurarEsquemaCuentasEnServidor();
     const res = await db.execute({
       sql: 'SELECT id, ultimo_acceso FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
       args: [usuario]
@@ -201,6 +203,7 @@ export async function registrarUltimoAcceso(usuario: string, intervaloMinimoMs =
 
 export async function borrarCuentasSinSincronizar(): Promise<void> {
   try {
+    await asegurarEsquemaCuentasEnServidor();
     const candidatas = await db.execute(`
       SELECT a.id, a.nombre, COALESCE(a.origen, 'comision') AS origen,
              COALESCE(a.rol, 'alumno') AS rol,
