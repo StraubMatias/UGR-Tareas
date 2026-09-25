@@ -432,11 +432,17 @@ export const obtenerResumenGruposTarea = (tarea: Tarea, listaAlumnos: string[] =
   };
 };
 
+/** Tareas grupal que siguen en el filtro «Grupales» (armar grupo / entregar); las ya entregadas o con nota van a «Completadas». */
+export const tareaGrupalPendienteEnTablero = (tarea: Tarea, alumno: string | null | undefined): boolean => (
+  Boolean(tarea.grupal && alumno && !tareaCompletadaPor(tarea, alumno))
+);
+
 export interface ResumenTareas {
   pendientes: Tarea[];
   faltaNota: Tarea[];
   futuras: Tarea[];
   completadas: Tarea[];
+  grupales: Tarea[];
   tareasNoCompletadas: Tarea[];
   total: number;
   totalGrupales: number;
@@ -453,13 +459,14 @@ export const obtenerResumenTareasAlumno = (alumno: string, materias: Materia[]):
     .filter((tarea) => !tareaFaltaNota(tarea, alumno) && tareaEstaHabilitada(tarea.inicio));
   const futuras = tareasNoCompletadas
     .filter((tarea) => !tareaFaltaNota(tarea, alumno) && !tareaEstaHabilitada(tarea.inicio));
-  const grupales = todasTareas.filter((tarea) => tarea.grupal);
+  const grupales = todasTareas.filter((tarea) => tareaGrupalPendienteEnTablero(tarea, alumno));
 
   return {
     pendientes,
     faltaNota,
     futuras,
     completadas,
+    grupales,
     tareasNoCompletadas,
     total: todasTareas.length,
     totalGrupales: grupales.length
