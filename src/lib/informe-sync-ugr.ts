@@ -86,6 +86,47 @@ export function construirLineasInformeSync({
   return lineas;
 }
 
+export function fusionarLineasInforme(...listas: string[][]): string[] {
+  const vistas = new Set<string>();
+  const salida: string[] = [];
+  for (const lista of listas) {
+    for (const linea of lista) {
+      if (!linea || vistas.has(linea)) continue;
+      vistas.add(linea);
+      salida.push(linea);
+    }
+  }
+  return salida;
+}
+
+export function fusionarResumenSync(a: ResumenMateriaSync[], b: ResumenMateriaSync[]): ResumenMateriaSync[] {
+  const porMateria = new Map<string, ResumenMateriaSync>();
+  const unir = (prev: string[] = [], extra: string[] = []) => [...new Set([...prev, ...extra])];
+  for (const fila of [...a, ...b]) {
+    const base = porMateria.get(fila.materia) || {
+      materia: fila.materia,
+      nuevas: [],
+      yaEstaban: [],
+      cronogramaNuevo: [],
+      cronogramaYa: []
+    };
+    porMateria.set(fila.materia, {
+      ...base,
+      nuevas: unir(base.nuevas, fila.nuevas),
+      yaEstaban: unir(base.yaEstaban, fila.yaEstaban),
+      cronogramaNuevo: unir(base.cronogramaNuevo, fila.cronogramaNuevo),
+      cronogramaYa: unir(base.cronogramaYa, fila.cronogramaYa),
+      fechasActualizadas: unir(base.fechasActualizadas, fila.fechasActualizadas),
+      parcialesNuevos: unir(base.parcialesNuevos, fila.parcialesNuevos),
+      notasCargadas: unir(base.notasCargadas, fila.notasCargadas),
+      pendientesEntrega: unir(base.pendientesEntrega, fila.pendientesEntrega),
+      notasNoLeidas: unir(base.notasNoLeidas, fila.notasNoLeidas),
+      materiaNueva: base.materiaNueva || fila.materiaNueva
+    });
+  }
+  return [...porMateria.values()];
+}
+
 export function mensajeDesdeInforme(lineas: string[], materiasRevisadas: number): string {
   if (lineas.length === 0) {
     return materiasRevisadas === 1

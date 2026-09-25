@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '../turso';
-import type { RespuestaAction, RespuestaSiuSync } from './types';
+import type { OpcionesSincronizarUgr, RespuestaAction, RespuestaSiuSync } from './types';
 import {
   texto,
   obtenerIPReal,
@@ -23,7 +23,62 @@ import {
 import { asegurarEsquemaCuentasEnServidor } from '../../server/asegurar-esquema-cuentas';
 import { mensajeDesdeInforme } from '../../lib/informe-sync-ugr';
 import { propagarNotaGrupalTrasCargaCampus } from '../../lib/grupos-tareas';
-import { sincronizarCursadaDelAlumno } from '../../server/sync-ugr-cursada';
+import { sincronizarCursadaDelAlumno, type FaseSyncUgrCursada } from '../../server/sync-ugr-cursada';
+
+async function conectarClienteUgr(
+  usarCredencialesServidor: boolean,
+  dni: string,
+  contrasena: string
+) {
+  const { conectarUGR, conectarUGRCon } = await import('../../../ugr-sync/lib/sync-core.mjs');
+  const cliente = usarCredencialesServidor
+    ? await conectarUGR()
+    : await conectarUGRCon({ usuario: dni, contrasena, rutaSesion: null });
+  const clienteUgr = cliente as { autenticar?: () => Promise<unknown> };
+  if (typeof clienteUgr.autenticar === 'function') await clienteUgr.autenticar();
+  return cliente;
+}
+
+async function ejecutarFaseSyncUgr({
+  fase,
+  alumnoId,
+  alumnoNombre,
+  cliente,
+  materiaIds
+}: {
+  fase: FaseSyncUgrCursada;
+  alumnoId: string;
+  alumnoNombre: string;
+  cliente: unknown;
+  materiaIds?: string[];
+}) {
+  const sync = await sincronizarCursadaDelAlumno({
+    alumnoId,
+    alumnoNombre,
+    cliente,
+    fase,
+    materiaIds
+  });
+  const lineasInforme = [...sync.lineasInforme];
+  if (fase === 'materias' || fase === 'nucleo' || fase === 'completa') {
+    for (const nota of sync.notasCampus) {
+      if (!nota.tareaId) continue;
+      const grupo = await propagarNotaGrupalTrasCargaCampus(db, nota.tareaId, alumnoId);
+      if (nota.yaEstaba || !grupo || grupo.integrantesActualizados.length === 0) continue;
+      const nombres = grupo.integrantesGrupo.join(', ');
+      lineasInforme.push(
+        `Tarea grupal «${grupo.tareaNombre}»: al ser trabajo en grupo, la nota ${grupo.nota} quedó para todo el grupo (${nombres}).`
+      );
+    }
+  }
+  const materiasSync = Math.max(sync.materiasInscriptas?.length || 0, 1);
+  return {
+    sync,
+    lineasInforme,
+    mensaje: mensajeDesdeInforme(lineasInforme, materiasSync),
+    materiasSync
+  };
+}
 
 // Admin: usa SIU_USER / SIU_PASSWORD del servidor (atajo sin tipear clave).
 export async function syncSiuAction(): Promise<RespuestaSiuSync> {
@@ -122,7 +177,11 @@ export async function sincronizarCuentaSiuAction(usuarioInput: string, passwordI
 // Cada alumno trae su cursada del período actual. Las materias, tareas,
 // parciales y eventos se guardan una sola vez: el siguiente de la misma
 // materia los ve. DNI y clave de UGR no se persisten.
-export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrInput: string): Promise<RespuestaAction> {
+export async function sincronizarCuentaUgrAction(
+  dniInput: string,
+  passwordUgrInput: string,
+  opciones?: OpcionesSincronizarUgr
+): Promise<RespuestaAction> {
   const dni = normalizarDni(dniInput);
   const contrasena = String(passwordUgrInput || '');
   const usarCredencialesServidor = !dni && !contrasena && await verificarAdmin();
@@ -154,52 +213,48 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
 
     await asegurarEsquemaCuentasEnServidor();
 
-    const { conectarUGR, conectarUGRCon } = await import('../../../ugr-sync/lib/sync-core.mjs');
-    const cliente = usarCredencialesServidor
-      ? await conectarUGR()
-      : await conectarUGRCon({
-        usuario: dni,
-        contrasena,
-        rutaSesion: null
-      });
-    const clienteUgr = cliente as { autenticar?: () => Promise<unknown> };
-    if (typeof clienteUgr.autenticar === 'function') await clienteUgr.autenticar();
-    const sync = await sincronizarCursadaDelAlumno({
+    const fase = opciones?.fase ?? 'preparar';
+    const cliente = await conectarClienteUgr(usarCredencialesServidor, dni, contrasena);
+    const { sync, lineasInforme, mensaje, materiasSync } = await ejecutarFaseSyncUgr({
+      fase,
       alumnoId,
       alumnoNombre: usuarioSesion,
-      cliente
+      cliente,
+      materiaIds: opciones?.materiaIds
     });
-    const lineasInforme = [...sync.lineasInforme];
-    for (const nota of sync.notasCampus) {
-      if (!nota.tareaId) continue;
-      const grupo = await propagarNotaGrupalTrasCargaCampus(db, nota.tareaId, alumnoId);
-      if (nota.yaEstaba || !grupo || grupo.integrantesActualizados.length === 0) continue;
-      const nombres = grupo.integrantesGrupo.join(', ');
-      lineasInforme.push(
-        `Tarea grupal «${grupo.tareaNombre}»: al ser trabajo en grupo, la nota ${grupo.nota} quedó para todo el grupo (${nombres}).`
-      );
-    }
-    const materiasSync = Math.max(sync.materiasInscriptas?.length || 0, 1);
     const ahoraIso = new Date().toISOString();
-    await db.execute({
-      sql: `UPDATE alumnos SET sincronizado_en = COALESCE(NULLIF(sincronizado_en, ''), ?), ultimo_acceso = ? WHERE id = ?`,
-      args: [ahoraIso, ahoraIso, alumnoId]
-    });
+    if (fase === 'materias' || fase === 'nucleo') {
+      await db.execute({
+        sql: `UPDATE alumnos SET sincronizado_en = COALESCE(NULLIF(sincronizado_en, ''), ?), ultimo_acceso = ? WHERE id = ?`,
+        args: [ahoraIso, ahoraIso, alumnoId]
+      });
+    } else if (fase === 'preparar') {
+      await db.execute({
+        sql: 'UPDATE alumnos SET ultimo_acceso = ? WHERE id = ?',
+        args: [ahoraIso, alumnoId]
+      });
+    } else if (fase === 'avisos') {
+      await db.execute({
+        sql: 'UPDATE alumnos SET ultimo_acceso = ? WHERE id = ?',
+        args: [ahoraIso, alumnoId]
+      });
+    }
 
     if (claves.length > 0) await limpiarIntentosLogin(claves);
     await registrarAuditoria({
       accion: usarCredencialesServidor ? 'sincronizar_cuenta_servidor' : 'sincronizar_cuenta',
       usuario: usuarioSesion,
-      detalle: sync.mensaje,
+      detalle: `${fase}: ${sync.mensaje}`,
       ip: await obtenerIPReal()
     });
 
     return {
       exito: true,
-      mensaje: mensajeDesdeInforme(lineasInforme, materiasSync),
+      mensaje,
       informeLineas: lineasInforme,
       resumen: sync.resumen,
-      materiasInscriptas: sync.materiasInscriptas
+      materiasInscriptas: sync.materiasInscriptas,
+      materiaIdsSync: sync.materiaIds
     };
   } catch (error) {
     const mensaje = error instanceof Error ? error.message : String(error || '');

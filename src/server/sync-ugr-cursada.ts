@@ -1,7 +1,13 @@
 import { db } from '../app/turso';
 import { PLAN_DE_ESTUDIO } from '../app/plan-utils';
 import type { MateriaInscriptaSync, ResumenMateriaSync } from '../app/actions/types';
-import { construirLineasInformeSync, mensajeDesdeInforme, type NotaCampusInforme } from '../lib/informe-sync-ugr';
+import {
+  construirLineasInformeSync,
+  fusionarLineasInforme,
+  fusionarResumenSync,
+  mensajeDesdeInforme,
+  type NotaCampusInforme
+} from '../lib/informe-sync-ugr';
 import { texto, textoONull } from './action-internals';
 
 export async function periodoDeCursada(): Promise<string> {
@@ -129,43 +135,44 @@ type ItemTareaCampus = {
   url?: string;
 };
 
-export async function sincronizarCursadaDelAlumno({
-  alumnoId,
-  alumnoNombre,
-  cliente
-}: {
-  alumnoId: string;
-  alumnoNombre: string;
-  cliente: unknown;
-}): Promise<{
+export type FaseSyncUgrCursada = 'preparar' | 'materias' | 'avisos' | 'nucleo' | 'completa';
+
+export type ResultadoSyncUgr = {
   mensaje: string;
   resumen: ResumenMateriaSync[];
   materiasInscriptas: MateriaInscriptaSync[];
   notasCampus: NotaCampusInforme[];
   lineasInforme: string[];
-}> {
-  const {
-    listarCursosDelCampus,
-    asegurarMateriasDeLaCursada,
-    detectarTareasNuevas,
-    detectarAvisosMoodle,
-    filtrarTareasDuplicadas,
-    agruparResumenSync,
-    anexarLineasResumenSync,
-    describirActualizacionFechas,
-    limpiarTextoParaBusqueda,
-    insertarTareasDetectadas,
-    insertarParcialesSiFaltan,
-    actualizarUrlsTareas,
-    actualizarUrlsParciales,
-    insertarEventosCronograma,
-    aplicarComplementoCampus,
-    cargarNotasDesdeEnlaces
-  } = await import('../../ugr-sync/lib/sync-core.mjs');
+  materiaIds?: string[];
+};
 
-  // 1) Materias de la carrera que esta cuenta está cursando (las extras
-  //    también: Criptografía, Conceptos de Desarrollo, etc.). Lo que no está
-  //    en el plan (Mi Carrera, espacios) se descarta.
+async function nombresMateriasInscriptas(alumnoId: string, periodoId: string) {
+  const res = await db.execute({
+    sql: `SELECT m.id, m.nombre FROM inscripciones i
+          JOIN materias m ON m.id = i.materia_id
+          WHERE i.alumno_id = ? AND m.periodo_id = ?
+          ORDER BY m.nombre`,
+    args: [alumnoId, periodoId]
+  });
+  const nombresPorId = new Map<string, string>();
+  const materiaIds: string[] = [];
+  for (const fila of res.rows) {
+    const id = texto(fila.id);
+    materiaIds.push(id);
+    nombresPorId.set(id, texto(fila.nombre));
+  }
+  return { materiaIds, nombresPorId };
+}
+
+/** Login + alta de materias del período e inscripciones (sin scrapear tareas todavía). */
+export async function prepararCursadaCampusDelAlumno({
+  alumnoId,
+  cliente
+}: {
+  alumnoId: string;
+  cliente: unknown;
+}): Promise<ResultadoSyncUgr> {
+  const { listarCursosDelCampus, asegurarMateriasDeLaCursada, limpiarTextoParaBusqueda } = await import('../../ugr-sync/lib/sync-core.mjs');
   const cursos = await listarCursosDelCampus(cliente);
   const periodoId = await periodoDeCursada();
   const materiasPeriodo = await db.execute({
@@ -185,10 +192,151 @@ export async function sincronizarCursadaDelAlumno({
   if (cursada.materiaIds.length === 0) {
     throw new Error('UGR Virtual no mostró materias de la carrera para esta cuenta.');
   }
-  const { mapeos, materiaIds, nombresPorId, nombresNuevos } = cursada;
-  await inscribirAlumnoEnPeriodo(alumnoId, periodoId, materiaIds);
+  await inscribirAlumnoEnPeriodo(alumnoId, periodoId, cursada.materiaIds);
+  const { nombresPorId, nombresNuevos } = cursada;
+  const orden = new Map([...nombresPorId.values()].map((nombre, indice) => [nombre, indice]));
+  const materiasInscriptas: MateriaInscriptaSync[] = [...nombresPorId.values()]
+    .sort((a, b) => (orden.get(a) ?? 99) - (orden.get(b) ?? 99))
+    .map((nombre) => {
+      const clave = limpiarTextoParaBusqueda(nombre);
+      return { materia: nombre, materiaNueva: !!(clave && nombresNuevos.has(clave)) };
+    });
+  const n = cursada.materiaIds.length;
+  return {
+    materiaIds: cursada.materiaIds,
+    materiasInscriptas,
+    resumen: [],
+    notasCampus: [],
+    lineasInforme: [],
+    mensaje: n === 1
+      ? 'Encontramos 1 materia en UGR Virtual; vamos a sincronizarla.'
+      : `Encontramos ${n} materias en UGR Virtual; las vamos a sincronizar en pasos cortos.`
+  };
+}
 
-  const tareas = await detectarTareasNuevas({ db, cliente, cursos, periodoId, alumnoId, mapeos });
+/** Segunda pasada: foros de avisos y eventos de cronograma (más liviana que el núcleo). */
+export async function sincronizarAvisosCampusDelAlumno({
+  alumnoId,
+  cliente,
+  materiaIds: materiaIdsFiltro
+}: {
+  alumnoId: string;
+  cliente: unknown;
+  materiaIds?: string[];
+}): Promise<ResultadoSyncUgr> {
+  const {
+    mapeosInscripcionesCampus,
+    detectarAvisosMoodle,
+    insertarEventosCronograma
+  } = await import('../../ugr-sync/lib/sync-core.mjs');
+
+  const periodoId = await periodoDeCursada();
+  const { mapeos, materiaIds: materiaIdsInscriptas } = await mapeosInscripcionesCampus({
+    cliente,
+    db,
+    alumnoId,
+    periodoId
+  });
+  const objetivo = materiaIdsFiltro?.length
+    ? new Set(materiaIdsFiltro)
+    : new Set(materiaIdsInscriptas);
+  const mapeosLote = mapeos.filter((m) => objetivo.has(String(m.coincidencia?.materia?.id || '')));
+  const materiaIds = [...objetivo];
+  if (!mapeosLote.length) {
+    return {
+      mensaje: 'No había materias inscriptas para revisar avisos del campus.',
+      resumen: [],
+      materiasInscriptas: [],
+      notasCampus: [],
+      lineasInforme: []
+    };
+  }
+
+  const avisos = await detectarAvisosMoodle({ db, cliente, mapeos: mapeosLote });
+  type ItemEventoCampus = { materiaId?: string; materiaNombre?: string; titulo?: string; fecha?: string };
+  const eventosAvisos = ((avisos.eventosSugeridos || []) as ItemEventoCampus[]).filter((evento) => {
+    return !!evento.materiaId && materiaIds.includes(evento.materiaId);
+  });
+  const eventosInsertados = await insertarEventosCronograma({ db, eventos: eventosAvisos });
+  const lineasInforme: string[] = [];
+  if (eventosInsertados > 0) {
+    lineasInforme.push(`${eventosInsertados} evento(s) del campus agregados al cronograma.`);
+  }
+  const resumen: ResumenMateriaSync[] = eventosInsertados > 0
+    ? [{ materia: 'Cursada', nuevas: [], yaEstaban: [], cronogramaNuevo: [`${eventosInsertados} evento(s) de avisos`], cronogramaYa: [] }]
+    : [];
+
+  return {
+    mensaje: lineasInforme.length
+      ? `Avisos del campus: ${lineasInforme.join(' ')}`
+      : 'Revisamos los foros de avisos: no había eventos nuevos para el cronograma.',
+    resumen,
+    materiasInscriptas: [],
+    notasCampus: [],
+    lineasInforme
+  };
+}
+
+/** Scrapea tareas, notas y fechas solo para las materias del lote (una pasada corta). */
+export async function sincronizarLoteMateriasDelAlumno({
+  alumnoId,
+  alumnoNombre,
+  cliente,
+  materiaIds: materiaIdsLote,
+  materiasEnCursada
+}: {
+  alumnoId: string;
+  alumnoNombre: string;
+  cliente: unknown;
+  materiaIds: string[];
+  materiasEnCursada?: number;
+}): Promise<ResultadoSyncUgr> {
+  const materiaIds = [...new Set(materiaIdsLote.filter(Boolean))];
+  if (!materiaIds.length) {
+    return {
+      mensaje: 'No hay materias en esta pasada.',
+      resumen: [],
+      materiasInscriptas: [],
+      notasCampus: [],
+      lineasInforme: []
+    };
+  }
+  const {
+    mapeosInscripcionesCampus,
+    detectarTareasNuevas,
+    filtrarTareasDuplicadas,
+    agruparResumenSync,
+    anexarLineasResumenSync,
+    describirActualizacionFechas,
+    insertarTareasDetectadas,
+    insertarParcialesSiFaltan,
+    actualizarUrlsTareas,
+    actualizarUrlsParciales,
+    aplicarComplementoCampus,
+    cargarNotasDesdeEnlaces
+  } = await import('../../ugr-sync/lib/sync-core.mjs');
+
+  const periodoId = await periodoDeCursada();
+  const { mapeos, cursos } = await mapeosInscripcionesCampus({
+    cliente,
+    db,
+    alumnoId,
+    periodoId
+  });
+  const objetivo = new Set(materiaIds);
+  const mapeosLote = mapeos.filter((m) => objetivo.has(String(m.coincidencia?.materia?.id || '')));
+  if (!mapeosLote.length) {
+    return {
+      mensaje: 'UGR Virtual no mostró estas materias para tu cuenta en esta pasada.',
+      resumen: [],
+      materiasInscriptas: [],
+      notasCampus: [],
+      lineasInforme: []
+    };
+  }
+  const { nombresPorId } = await nombresMateriasInscriptas(alumnoId, periodoId);
+
+  const tareas = await detectarTareasNuevas({ db, cliente, cursos, periodoId, alumnoId, mapeos: mapeosLote });
   const detectadas = (tareas.detectadas || []) as ItemTareaCampus[];
   const propias = detectadas.filter((item) => item.materiaId && materiaIds.includes(item.materiaId));
   const existentesDb: Array<{ materiaId: string; nombre: string; url?: string }> = [];
@@ -260,18 +408,8 @@ export async function sincronizarCursadaDelAlumno({
     alumnoNombre
   });
 
-  const avisos = await detectarAvisosMoodle({
-    db,
-    cliente,
-    mapeos
-  });
-  const eventosAvisos = ((avisos.eventosSugeridos || []) as ItemEventoCampus[]).filter((evento) => {
-    return !!evento.materiaId && materiaIds.includes(evento.materiaId);
-  });
-  const eventosInsertados = await insertarEventosCronograma({
-    db,
-    eventos: eventosAvisos
-  });
+  const eventosInsertadosAvisos = 0;
+  const eventosAvisos: ItemEventoCampus[] = [];
 
   const vistosCron = new Set<string>();
   const cronogramaNuevo: ItemEventoCampus[] = [];
@@ -306,12 +444,6 @@ export async function sincronizarCursadaDelAlumno({
   ) as ResumenMateriaSync[];
   const orden = new Map([...nombresPorId.values()].map((nombre, indice) => [nombre, indice]));
   resumen.sort((a, b) => (orden.get(a.materia) ?? 99) - (orden.get(b.materia) ?? 99));
-  const materiasInscriptas: MateriaInscriptaSync[] = [...nombresPorId.values()]
-    .sort((a, b) => (orden.get(a) ?? 99) - (orden.get(b) ?? 99))
-    .map((nombre) => {
-      const clave = limpiarTextoParaBusqueda(nombre);
-      return { materia: nombre, materiaNueva: !!(clave && nombresNuevos.has(clave)) };
-    });
 
   const vistas = new Set<string>();
   const notasCargadas: NotaCampusInforme[] = [...(notasTardias.cargadas || []), ...(complemento.notasCargadas || [])]
@@ -349,12 +481,12 @@ export async function sincronizarCursadaDelAlumno({
   const resumenParaInforme = [...resumen];
   resumen = resumen.filter(filaTieneCambios);
 
-  const materiasCount = nombresPorId.size;
+  const materiasCount = materiasEnCursada ?? nombresPorId.size;
   const lineasInforme = construirLineasInformeSync({
     notasCampus: notasCargadas,
     resumen: resumenParaInforme,
     parcialesNuevos: parcialesResultado.insertadas,
-    eventos: eventosInsertados + complemento.eventos,
+    eventos: eventosInsertadosAvisos + complemento.eventos,
     horarios: complemento.horarios,
     fechas: complemento.fechas,
     fechasDetalle,
@@ -365,11 +497,94 @@ export async function sincronizarCursadaDelAlumno({
 
   return {
     resumen,
-    materiasInscriptas,
+    materiasInscriptas: [],
     notasCampus: notasCargadas,
     lineasInforme,
+    mensaje: mensajeDesdeInforme(lineasInforme, materiasCount),
+    materiaIds
+  };
+}
+
+function fusionarResultadosSync(...partes: ResultadoSyncUgr[]): ResultadoSyncUgr {
+  let resumen: ResumenMateriaSync[] = [];
+  let lineasInforme: string[] = [];
+  let notasCampus: NotaCampusInforme[] = [];
+  let materiasInscriptas: MateriaInscriptaSync[] = [];
+  let materiaIds: string[] = [];
+  for (const parte of partes) {
+    resumen = fusionarResumenSync(resumen, parte.resumen);
+    lineasInforme = fusionarLineasInforme(lineasInforme, parte.lineasInforme);
+    notasCampus = [...notasCampus, ...parte.notasCampus];
+    if (parte.materiasInscriptas.length) materiasInscriptas = parte.materiasInscriptas;
+    if (parte.materiaIds?.length) materiaIds = parte.materiaIds;
+  }
+  const materiasCount = Math.max(materiaIds.length, materiasInscriptas.length, 1);
+  return {
+    resumen,
+    lineasInforme,
+    notasCampus,
+    materiasInscriptas,
+    materiaIds,
     mensaje: mensajeDesdeInforme(lineasInforme, materiasCount)
   };
+}
+
+export async function sincronizarCursadaDelAlumno({
+  alumnoId,
+  alumnoNombre,
+  cliente,
+  fase = 'completa',
+  materiaIds: materiaIdsPasada
+}: {
+  alumnoId: string;
+  alumnoNombre: string;
+  cliente: unknown;
+  fase?: FaseSyncUgrCursada;
+  materiaIds?: string[];
+}): Promise<ResultadoSyncUgr> {
+  if (fase === 'preparar') {
+    return prepararCursadaCampusDelAlumno({ alumnoId, cliente });
+  }
+  if (fase === 'avisos') {
+    return sincronizarAvisosCampusDelAlumno({ alumnoId, cliente, materiaIds: materiaIdsPasada });
+  }
+  if (fase === 'materias') {
+    if (!materiaIdsPasada?.length) {
+      throw new Error('Indicá qué materias sincronizar en esta pasada.');
+    }
+    const periodoId = await periodoDeCursada();
+    const { materiaIds: todas } = await nombresMateriasInscriptas(alumnoId, periodoId);
+    return sincronizarLoteMateriasDelAlumno({
+      alumnoId,
+      alumnoNombre,
+      cliente,
+      materiaIds: materiaIdsPasada,
+      materiasEnCursada: todas.length
+    });
+  }
+  if (fase === 'nucleo') {
+    const prep = await prepararCursadaCampusDelAlumno({ alumnoId, cliente });
+    const ids = prep.materiaIds || [];
+    const lote = await sincronizarLoteMateriasDelAlumno({
+      alumnoId,
+      alumnoNombre,
+      cliente,
+      materiaIds: ids,
+      materiasEnCursada: ids.length
+    });
+    return fusionarResultadosSync(prep, lote);
+  }
+  const prep = await prepararCursadaCampusDelAlumno({ alumnoId, cliente });
+  const ids = prep.materiaIds || [];
+  const lote = await sincronizarLoteMateriasDelAlumno({
+    alumnoId,
+    alumnoNombre,
+    cliente,
+    materiaIds: ids,
+    materiasEnCursada: ids.length
+  });
+  const avisos = await sincronizarAvisosCampusDelAlumno({ alumnoId, cliente, materiaIds: ids });
+  return fusionarResultadosSync(prep, lote, avisos);
 }
 
 // Cada alumno trae su cursada del período actual. Las materias, tareas,

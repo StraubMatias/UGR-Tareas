@@ -1,6 +1,8 @@
 export type {
   ResumenMateriaSync,
   MateriaInscriptaSync,
+  OpcionesSincronizarUgr,
+  FaseSincronizarUgr,
   RespuestaAction,
   RespuestaSiuSync,
   TareaActionParams
