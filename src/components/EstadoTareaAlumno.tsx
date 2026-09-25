@@ -12,6 +12,7 @@ interface Props {
   irATareaEnMaterias: (tareaId: string) => void;
   materia: Materia;
   unidad: string | number | null | undefined;
+  ocultarContextoMateria?: boolean;
   toggleTareaDesdeCliente: (tareaId: string, alumno: string, tarea: Tarea) => void;
   notasTareasInputs: Record<string, string>;
   handleNotaTareaChangeLocal: (tareaId: string, alumno: string, valor: string) => void;
@@ -20,6 +21,7 @@ interface Props {
 
 export default function EstadoTareaAlumno({
   tarea, alumno, alumnos, usuarioActual, irATareaEnMaterias, materia, unidad,
+  ocultarContextoMateria = false,
   toggleTareaDesdeCliente, notasTareasInputs, handleNotaTareaChangeLocal,
   handleGuardarNotaTareaOnBlur
 }: Props) {
@@ -33,19 +35,24 @@ export default function EstadoTareaAlumno({
     && tarea.notas?.[nombre] !== undefined && tarea.notas?.[nombre] !== null && tarea.notas?.[nombre] !== '');
 
   return (
-    <li className="estado-tarea min-w-0 rounded-xl border border-slate-800 bg-[#111a24] p-4 space-y-3">
-      {materia && (
+    <div className="estado-tarea min-w-0 rounded-xl border border-slate-800 bg-[#111a24] p-4 space-y-3">
+      {materia && !ocultarContextoMateria && (
         <div className="estado-tarea-contexto border-b border-slate-800">
           <p className="estado-tarea-materia"><span aria-hidden="true">{obtenerIconoMateria(materia.nombre)}</span> {materia.nombre}</p>
           {unidad && <p className="estado-tarea-unidad">{unidad === 'Evaluaciones' ? 'Evaluaciones' : `Unidad ${formatearUnidad(unidad)}`}</p>}
         </div>
+      )}
+      {ocultarContextoMateria && unidad && (
+        <p className="estado-tarea-unidad text-xs text-slate-500 mb-1">
+          {unidad === 'Evaluaciones' ? 'Evaluaciones' : `Unidad ${formatearUnidad(unidad)}`}
+        </p>
       )}
       <div className="flex items-start gap-3">
         {propia && (
           <input type="checkbox" checked={entregada} disabled={!puedeGestionar}
             onChange={() => toggleTareaDesdeCliente(tarea.id, alumno, tarea)}
             aria-label={`Marcar entregada: ${tarea.nombre}`}
-            className="mt-1 h-5 w-5 shrink-0 accent-cyan-400 cursor-pointer disabled:opacity-40" />
+            className="mt-1 h-5 w-5 shrink-0 rounded border border-slate-600 bg-[#0f141c] accent-cyan-400 cursor-pointer disabled:opacity-40" />
         )}
         <div className="min-w-0 flex-1">
           <h4>
@@ -95,6 +102,6 @@ export default function EstadoTareaAlumno({
           )}
         </div>
       )}
-    </li>
+    </div>
   );
 }

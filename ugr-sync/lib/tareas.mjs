@@ -8,8 +8,9 @@
 //   2. Overview (Moodle 4.5): celdas con data-mdl-overview-item="name|duedate",
 //      id en data-mdl-overview-cmid y fechas como <span data-timestamp="...">.
 import { load } from 'cheerio';
-import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE } from './constantes.mjs';
-import { inferirTipoTarea, limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
+import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
+import { extraerSesskey } from './materias.mjs';
+import { esNombreConsignaValido, inferirTipoTarea, limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
 
 function indiceColumna(encabezados, rotulos) {
   for (let i = 0; i < encabezados.length; i += 1) {
@@ -121,7 +122,14 @@ export function extraerTareas(html, baseUrl = '') {
       // En formato overview la celda de nombre trae la unidad en un sub-bloque
       // <div class="small">Unidad II</div>. También la buscamos en el nombre.
       const celdaNombre = $(fila).find('td[data-mdl-overview-item="name"]').first();
-      const nombreTarea = limpiarTexto($(enlace).text()) || celdas[0] || 'Tarea sin nombre';
+      const nombreTarea = limpiarTexto(
+        $(celdaNombre).attr('data-mdl-overview-value')
+          || $(celdaNombre).find('a.activityname').first().text()
+          || $(enlace).filter('.activityname').text()
+          || $(enlace).text()
+          || $(fila).find('a.activityname').first().text()
+      );
+      if (!esNombreConsignaValido(nombreTarea)) return;
       let unidad = null;
       if (celdaNombre.length) {
         unidad = parsearUnidadMoodle(limpiarTexto($(celdaNombre).find('.small').first().text()))
@@ -262,7 +270,7 @@ export function extraerActividadesOverview(html, baseUrl = '') {
           || $(enlace).text()
           || ''
       );
-      if (!idModulo || !nombre) return;
+      if (!idModulo || !nombre || !esNombreConsignaValido(nombre)) return;
 
       // El tipo del módulo se deduce del enlace real (más fiable que la sección).
       const modulo = (href.match(/\/mod\/([a-z0-9_]+)\/view\.php/) || [])[1] || moduloSeccion;
@@ -306,6 +314,246 @@ export function extraerActividadesOverview(html, baseUrl = '') {
     });
   });
 
+  return actividades;
+}
+
+function puntuacionNombreConsigna(nombre) {
+  if (!esNombreConsignaValido(nombre)) return 0;
+  return 1000 + String(nombre).length;
+}
+
+function combinarCamposActividad(base, extra) {
+  const salida = { ...base };
+  for (const [clave, valor] of Object.entries(extra)) {
+    if (valor == null || valor === '') continue;
+    if (clave === 'nombre') continue;
+    if (clave === 'inicio' || clave === 'fin') {
+      if (!salida[clave] || salida[clave] === 'Sin fecha') salida[clave] = valor;
+      continue;
+    }
+    if (salida[clave] == null || salida[clave] === '') salida[clave] = valor;
+  }
+  const nombreBase = salida.nombre;
+  const nombreExtra = extra.nombre;
+  if (puntuacionNombreConsigna(nombreExtra) > puntuacionNombreConsigna(nombreBase)) {
+    salida.nombre = nombreExtra;
+  }
+  return salida;
+}
+
+// Une listas de actividades detectadas en distintas páginas/parsers (overview,
+// índice de assign, foros…) deduplicando por id de módulo Moodle.
+export function fusionarActividadesConsigna(listas) {
+  const mapa = new Map();
+  for (const lista of listas) {
+    for (const actividad of Array.isArray(lista) ? lista : []) {
+      if (!actividad?.id || !esNombreConsignaValido(actividad.nombre)) continue;
+      const esForo = actividad.tipo === 'foro' || /\/mod\/forum\//.test(actividad.url || '');
+      const normalizada = {
+        ...actividad,
+        tipo: actividad.tipo || (esForo ? 'foro' : inferirTipoTarea(actividad.nombre)),
+        conNota: actividad.conNota ?? !esForo
+      };
+      if (mapa.has(actividad.id)) {
+        mapa.set(actividad.id, combinarCamposActividad(mapa.get(actividad.id), normalizada));
+      } else {
+        mapa.set(actividad.id, normalizada);
+      }
+    }
+  }
+  return [...mapa.values()];
+}
+
+// Aplica todos los parsers de consignas sobre un mismo HTML. El overview unificado
+// usa contenedores `*_overview`, pero /mod/assign/index.php a veces devuelve solo
+// la tabla de asignaciones (sin ese contenedor): ahí `extraerTareas` es el que
+// encuentra los trabajos prácticos.
+export function extraerConsignasDeHtml(html, baseUrl = '') {
+  if (!html) return [];
+  const desdeOverview = extraerActividadesOverview(html, baseUrl);
+  const desdeTareas = extraerTareas(html, baseUrl)
+    .filter((t) => !esForoInformativo(t.nombre))
+    .map((t) => ({
+      ...t,
+      tipo: t.tipo || inferirTipoTarea(t.nombre),
+      conNota: t.conNota ?? true
+    }));
+  const desdeForos = extraerForos(html, baseUrl);
+  return fusionarActividadesConsigna([desdeOverview, desdeTareas, desdeForos]);
+}
+
+async function pedirHtmlCurso(cliente, ruta) {
+  try {
+    const pagina = await cliente.pedir(ruta);
+    if (pagina?.html && !pagina.es_requiere_login) return pagina.html;
+  } catch {
+    // Sin sesión o error de red: el llamador puede usar otro índice como respaldo.
+  }
+  return '';
+}
+
+function nombreDeEnlaceActividad($, enlace) {
+  const nodo = $(enlace);
+  const instancia = nodo.find('.instancename').first().clone();
+  instancia.find('.accesshide').remove();
+  return limpiarTexto(
+    instancia.text()
+      || nodo.find('.activityname').first().text()
+      || nodo.attr('title')
+      || nodo.text()
+  );
+}
+
+function actividadDesdeEnlaceModulo({ href, nombre, baseUrl, unidadSeccion = null }) {
+  const modulo = (href.match(/\/mod\/([a-z0-9_]+)\/view\.php/i) || [])[1];
+  if (!modulo || !MODULOS_CONSIGNA.includes(modulo)) return null;
+  const id = (href.match(/[?&]id=(\d+)/) || [])[1];
+  if (!id || !esNombreConsignaValido(nombre)) return null;
+  const esForo = modulo === 'forum';
+  if (esForo ? esForoInformativo(nombre) : esActividadInformativa(nombre)) return null;
+  return {
+    id,
+    nombre,
+    url: completarUrl(href, baseUrl),
+    inicio: 'Sin fecha',
+    fin: 'Sin fecha',
+    unidad: unidadSeccion || parsearUnidadMoodle(nombre),
+    tipo: esForo ? 'foro' : inferirTipoTarea(nombre),
+    conNota: esForo || modulo === 'feedback' ? false : true
+  };
+}
+
+// Índice oficial del curso (mismo contenido que el menú lateral de Moodle).
+export function consignasDesdeCourseContents(secciones, baseUrl = '') {
+  const actividades = [];
+  for (const seccion of Array.isArray(secciones) ? secciones : []) {
+    const unidadSeccion = parsearUnidadMoodle(seccion?.name);
+    for (const mod of seccion?.modules || []) {
+      const modname = mod?.modname;
+      if (!modname || !MODULOS_CONSIGNA.includes(modname)) continue;
+      const nombre = limpiarTexto(mod?.name);
+      const instance = String(mod?.instance || '');
+      const href = mod?.url || (instance ? `/mod/${modname}/view.php?id=${instance}` : '');
+      if (!href) continue;
+      const actividad = actividadDesdeEnlaceModulo({
+        href,
+        nombre,
+        baseUrl,
+        unidadSeccion
+      });
+      if (actividad) actividades.push(actividad);
+    }
+  }
+  return actividades;
+}
+
+async function extraerConsignasDeWebservice(cliente, cursoId, sesskey, baseUrl) {
+  if (!sesskey || !cliente?.pedir) return [];
+  try {
+    const cuerpo = JSON.stringify([{
+      index: 0,
+      methodname: 'core_course_get_contents',
+      args: { courseid: Number(cursoId) }
+    }]);
+    const pagina = await cliente.pedir(UGR_RUTAS.ajax(sesskey), {
+      method: 'POST',
+      cuerpo,
+      tipoCuerpo: 'application/json'
+    });
+    const respuesta = JSON.parse(pagina.html || '[]');
+    const bloque = Array.isArray(respuesta) ? respuesta[0] : respuesta;
+    if (bloque?.error || !Array.isArray(bloque?.data)) return [];
+    return consignasDesdeCourseContents(bloque.data, baseUrl);
+  } catch {
+    return [];
+  }
+}
+
+export function idsSeccionesDeCurso(html) {
+  if (!html) return [];
+  const $ = load(html);
+  const ids = new Set();
+  $('[data-section]').each((_, el) => {
+    const valor = $(el).attr('data-section');
+    if (valor && /^\d+$/.test(valor)) ids.add(valor);
+  });
+  $('a[href*="section="]').each((_, enlace) => {
+    const match = ($(enlace).attr('href') || '').match(/[?&]section=(\d+)/);
+    if (match?.[1]) ids.add(match[1]);
+  });
+  return [...ids].filter((id) => id !== '0');
+}
+
+// Enlaces a consignas en la página del curso (course/view.php) y sus secciones.
+// En Moodle 4 el título suele ir en span.instancename dentro de a.aalink.
+export function extraerConsignasDePaginaCurso(html, baseUrl = '') {
+  if (!html) return [];
+  const $ = load(html);
+  const actividades = [];
+  const vistos = new Set();
+  const agregar = (href, nombre, unidadSeccion = null) => {
+    const actividad = actividadDesdeEnlaceModulo({ href, nombre, baseUrl, unidadSeccion });
+    if (!actividad || vistos.has(actividad.id)) return;
+    vistos.add(actividad.id);
+    actividades.push(actividad);
+  };
+
+  const unidadDeSeccion = parsearUnidadMoodle(
+    limpiarTexto($('.course-content .sectionname, [data-region="section-title"]').first().text())
+  );
+
+  $('a.activityname[href*="/mod/"][href*="/view.php"], a.aalink[href*="/mod/"][href*="/view.php"]').each((_, enlace) => {
+    if ($(enlace).closest('nav, .footer, [role="navigation"]').length) return;
+    agregar($(enlace).attr('href') || '', nombreDeEnlaceActividad($, enlace), unidadDeSeccion);
+  });
+
+  return actividades;
+}
+
+function fusionarHtmlsUnicos(...htmls) {
+  const unicos = [];
+  const vistos = new Set();
+  for (const html of htmls) {
+    if (!html || vistos.has(html)) continue;
+    vistos.add(html);
+    unicos.push(html);
+  }
+  return unicos;
+}
+
+// Descubre todas las consignas de un curso: overview, índices de tareas/foros
+// y la página del curso. Siempre se piden en paralelo y se fusionan: el overview
+// a veces lista quizzes pero se queda corto en asignaciones nuevas.
+export async function extraerConsignasDeCurso(cliente, cursoId, { baseUrl = UGR_BASE_URL, rutas = UGR_RUTAS } = {}) {
+  const [htmlOverview, htmlAssign, htmlForos, htmlCurso] = await Promise.all([
+    pedirHtmlCurso(cliente, rutas.overviewCurso(cursoId, MODULOS_CONSIGNA)),
+    pedirHtmlCurso(cliente, rutas.tareasDeCurso(cursoId)),
+    pedirHtmlCurso(cliente, rutas.forosDeCurso(cursoId)),
+    pedirHtmlCurso(cliente, rutas.curso(cursoId))
+  ]);
+
+  let actividades = [];
+  for (const html of fusionarHtmlsUnicos(htmlOverview, htmlAssign, htmlForos)) {
+    actividades = fusionarActividadesConsigna([actividades, extraerConsignasDeHtml(html, baseUrl)]);
+  }
+  const sesskey = extraerSesskey(htmlCurso) || extraerSesskey(htmlOverview);
+  if (sesskey) {
+    const desdeWebservice = await extraerConsignasDeWebservice(cliente, cursoId, sesskey, baseUrl);
+    actividades = fusionarActividadesConsigna([actividades, desdeWebservice]);
+  }
+
+  if (htmlCurso) {
+    actividades = fusionarActividadesConsigna([actividades, extraerConsignasDePaginaCurso(htmlCurso, baseUrl)]);
+    const secciones = idsSeccionesDeCurso(htmlCurso).slice(0, 12);
+    if (secciones.length > 0) {
+      const htmlsSeccion = await Promise.all(
+        secciones.map((seccion) => pedirHtmlCurso(cliente, `${rutas.curso(cursoId)}&section=${seccion}`))
+      );
+      for (const html of htmlsSeccion) {
+        actividades = fusionarActividadesConsigna([actividades, extraerConsignasDePaginaCurso(html, baseUrl)]);
+      }
+    }
+  }
   return actividades;
 }
 

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from '../lib/materias.mjs';
-import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, parsearNotaCampus, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
+import { consignasDesdeCourseContents, esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeHtml, extraerConsignasDePaginaCurso, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -281,6 +281,78 @@ test('extraerActividadesOverview no captura nada sin overview o sin filas', asyn
     extraerActividadesOverview('<html><body><div id="quiz_overview"><table><tr><td>x</td></tr></table></div></body></html>'),
     []
   );
+});
+
+test('extraerConsignasDeHtml detecta asignaciones del índice sin contenedor *_overview', async () => {
+  const html = await readFile(path.join(DIR, 'tareas-overview.html'), 'utf8');
+  assert.equal(extraerActividadesOverview(html).length, 0);
+  const consignas = extraerConsignasDeHtml(html, 'https://virtual.ugr.edu.ar');
+  assert.equal(consignas.length, 2);
+  assert.equal(consignas[0].id, '199391');
+  assert.equal(consignas[1].id, '201629');
+});
+
+test('extraerConsignasDePaginaCurso lee a.aalink con span.instancename (Moodle 4)', () => {
+  const html = `
+    <div class="course-content">
+      <h3 class="sectionname">Unidad 2</h3>
+      <div class="activity-item">
+        <a class="aalink" href="/mod/lesson/view.php?id=888">
+          <span class="instancename">TP 2<span class="accesshide"> Lección</span></span>
+        </a>
+      </div>
+    </div>`;
+  const consignas = extraerConsignasDePaginaCurso(html, 'https://virtual.ugr.edu.ar');
+  assert.equal(consignas.length, 1);
+  assert.equal(consignas[0].id, '888');
+  assert.equal(consignas[0].nombre, 'TP 2');
+  assert.equal(consignas[0].unidad, 2);
+});
+
+test('consignasDesdeCourseContents trae módulos sin fecha del índice del curso', () => {
+  const consignas = consignasDesdeCourseContents([
+    {
+      name: 'Unidad 2',
+      modules: [
+        {
+          modname: 'assign',
+          name: 'TP 2',
+          instance: 999,
+          url: 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=999'
+        },
+        { modname: 'resource', name: 'PDF', instance: 1 }
+      ]
+    }
+  ], 'https://virtual.ugr.edu.ar');
+  assert.equal(consignas.length, 1);
+  assert.equal(consignas[0].nombre, 'TP 2');
+  assert.equal(consignas[0].fin, 'Sin fecha');
+});
+
+test('extraerConsignasDePaginaCurso lista asignaciones del índice del curso', () => {
+  const html = `
+    <div id="region-main">
+      <a class="activityname" href="/mod/assign/view.php?id=555001">TP 2 - Conceptos</a>
+      <a href="/mod/assign/view.php?id=9">10</a>
+      <a href="/mod/resource/view.php?id=1">Lectura</a>
+    </div>`;
+  const consignas = extraerConsignasDePaginaCurso(html, 'https://virtual.ugr.edu.ar');
+  assert.equal(consignas.length, 1);
+  assert.equal(consignas[0].id, '555001');
+  assert.equal(consignas[0].nombre, 'TP 2 - Conceptos');
+});
+
+test('extraerConsignasDeHtml combina overview unificado e índice de tareas sin duplicar', async () => {
+  const overview = await readFile(path.join(DIR, 'overview.html'), 'utf8');
+  const assign = await readFile(path.join(DIR, 'tareas-overview.html'), 'utf8');
+  const unidas = fusionarActividadesConsigna([
+    extraerConsignasDeHtml(overview, 'https://virtual.ugr.edu.ar'),
+    extraerConsignasDeHtml(assign, 'https://virtual.ugr.edu.ar')
+  ]);
+  const ids = new Set(unidas.map((a) => a.id));
+  assert.equal(ids.size, unidas.length);
+  assert.ok(unidas.some((a) => a.id === '199391'));
+  assert.ok(unidas.some((a) => a.id === '215115'));
 });
 
 test('la nota del cuestionario es la del último intento terminado, no la más alta', () => {

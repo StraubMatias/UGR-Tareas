@@ -153,6 +153,35 @@ export function coincidirNombreTarea(nombreLocal, nombreMoodle) {
   return largo.includes(corto);
 }
 
+// Id del módulo de actividad en UGR Virtual (cmid en view.php?id=…).
+export function idModuloMoodleDeUrl(url) {
+  const m = String(url || '').match(/\/mod\/[a-z0-9_]+\/view\.php[^#]*?[?&]id=(\d+)/i)
+    || String(url || '').match(/[?&]id=(\d+)/);
+  return m?.[1] || '';
+}
+
+function idModuloDeItem(item) {
+  const deUrl = idModuloMoodleDeUrl(item?.url);
+  if (deUrl) return deUrl;
+  const crudo = String(item?.idMoodle || item?.id || '');
+  const sufijo = crudo.match(/_(\d+)$/);
+  if (sufijo) return sufijo[1];
+  return /^\d+$/.test(crudo) ? crudo : '';
+}
+
+export function coincidirActividadMoodle(local, campus) {
+  const materiaLocal = idMateriaDeItem(local);
+  const materiaCampus = idMateriaDeItem(campus);
+  if (materiaLocal && materiaCampus && materiaLocal !== materiaCampus) return false;
+  const idLocal = idModuloDeItem(local);
+  const idCampus = idModuloDeItem(campus);
+  if (idLocal && idCampus && idLocal === idCampus) return true;
+  const claveLocal = claveTareaParaEmparejar(local?.nombre);
+  const claveCampus = claveTareaParaEmparejar(campus?.nombre);
+  if (claveLocal && claveCampus && claveLocal === claveCampus) return true;
+  return coincidirNombreTarea(local?.nombre, campus?.nombre);
+}
+
 // Clave para emparejar una tarea candidata con un PARCIAL ya cargado en la
 // tabla «parciales» (VistaParciales). Los avisos de Moodle suelen incluir al
 // final la fecha/hora del anuncio en el propio nombre («Examen PARCIAL de
@@ -210,10 +239,13 @@ export function nombreMateriaDesdeCurso(nombreCurso) {
 
 export function emparejarCursosConMaterias(cursos, materias, plan = []) {
   const hayPlan = Array.isArray(plan) && plan.length > 0;
-  const vistos = new Set();
+  const cursosVistos = new Set();
   const resultado = [];
   for (const curso of Array.isArray(cursos) ? cursos : []) {
     if (esCursoOrganizativo(curso?.nombre)) continue;
+    const cursoId = String(curso?.id || '');
+    if (cursoId && cursosVistos.has(cursoId)) continue;
+    if (cursoId) cursosVistos.add(cursoId);
 
     let nombrePlan = '';
     if (hayPlan) {
@@ -222,8 +254,7 @@ export function emparejarCursosConMaterias(cursos, materias, plan = []) {
         nombrePlan = delPlan.materia.nombre;
       } else {
         const existente = coincidirMateria(curso?.nombre, materias);
-        if (!existente?.materia?.id || vistos.has(existente.materia.id)) continue;
-        vistos.add(existente.materia.id);
+        if (!existente?.materia?.id) continue;
         resultado.push({ curso, materiaId: existente.materia.id, nombre: existente.materia.nombre, nueva: false });
         continue;
       }
@@ -231,17 +262,12 @@ export function emparejarCursosConMaterias(cursos, materias, plan = []) {
 
     const existente = coincidirMateria(nombrePlan || curso?.nombre, materias);
     if (existente?.materia?.id) {
-      if (vistos.has(existente.materia.id)) continue;
-      vistos.add(existente.materia.id);
       resultado.push({ curso, materiaId: existente.materia.id, nombre: existente.materia.nombre, nueva: false });
       continue;
     }
 
     const nombre = nombrePlan || nombreMateriaDesdeCurso(curso?.nombre);
     if (!nombre) continue;
-    const clave = `n:${limpiarTextoParaBusqueda(nombre)}`;
-    if (vistos.has(clave)) continue;
-    vistos.add(clave);
     resultado.push({ curso, materiaId: null, nombre, nueva: true });
   }
   return resultado;
@@ -335,7 +361,7 @@ function fechaHoyArgentina() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 }
 
-function idMateriaDeItem(item) {
+export function idMateriaDeItem(item) {
   return item?.materiaId || item?.materia_id || '';
 }
 
@@ -346,22 +372,18 @@ export function filtrarTareasDuplicadas(candidatas = [], existentes = []) {
   const duplicadas = [];
   const vistas = (Array.isArray(existentes) ? existentes : []).map((item) => ({
     materiaId: idMateriaDeItem(item),
-    nombre: item?.nombre
+    nombre: item?.nombre,
+    url: item?.url || ''
   }));
   for (const candidata of Array.isArray(candidatas) ? candidatas : []) {
     const materiaId = idMateriaDeItem(candidata);
-    const clave = claveTareaParaEmparejar(candidata?.nombre);
-    const yaEsta = vistas.some((item) => {
-      if (item.materiaId !== materiaId) return false;
-      const claveExistente = claveTareaParaEmparejar(item.nombre);
-      return (clave && claveExistente && clave === claveExistente) || coincidirNombreTarea(item.nombre, candidata?.nombre);
-    });
+    const yaEsta = vistas.some((item) => coincidirActividadMoodle(item, { ...candidata, materiaId }));
     if (yaEsta) {
       duplicadas.push(candidata);
       continue;
     }
     nuevas.push(candidata);
-    vistas.push({ materiaId, nombre: candidata?.nombre });
+    vistas.push({ materiaId, nombre: candidata?.nombre, url: candidata?.url || '' });
   }
   return { nuevas, duplicadas };
 }
@@ -407,9 +429,19 @@ export function inferirTipoTarea(nombre) {
   return 'actividad';
 }
 
+// Descarta rótulos que no son el nombre real de la consigna (notas, estados, etc.).
+export function esNombreConsignaValido(nombre) {
+  const n = String(nombre || '').replace(/\s+/g, ' ').trim();
+  if (!n || n.length < 2) return false;
+  if (/^\d+(?:[.,]\d+)?$/.test(n)) return false;
+  if (/^(sin fecha|no entregado|enviado para calificar|calificar|-+|n\/a)$/i.test(n)) return false;
+  return true;
+}
+
 // Ajusta el nombre para la base: recorta largos y evita repeticiones.
 export function normalizarNombre({ nombre, cursoNombre }) {
   let salida = String(nombre || '').replace(/\s+/g, ' ').trim();
+  if (!esNombreConsignaValido(salida)) salida = '';
   if (!salida) salida = String(cursoNombre || 'Tarea').trim();
   if (salida.length > 200) salida = `${salida.slice(0, 197)}...`;
   return salida;

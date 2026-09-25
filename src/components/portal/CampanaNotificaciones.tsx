@@ -40,7 +40,7 @@ export default function CampanaNotificaciones({
         )}
       </button>
       {abiertas && (
-        <div className="absolute left-0 sm:left-auto sm:right-0 top-11 z-50 w-[calc(100vw-2rem)] max-w-80 bg-[#161c26] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+        <div className="absolute left-0 top-full mt-2 z-50 w-[min(20rem,calc(100vw-1.25rem))] bg-[#161c26] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
             <p className="text-sm font-bold text-white">Recordatorios</p>
             <button

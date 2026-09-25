@@ -8,7 +8,7 @@ import { crearCliente } from './red.mjs';
 import { optimizarLecturas } from './lecturas.mjs';
 import { autorEsEquipoDocente, esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from './materias.mjs';
-import { extraerFechasActividad, extraerActividadesOverview, extraerNotasDeLibreta, extraerProgresoDeActividad, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from './tareas.mjs';
+import { extraerConsignasDeCurso, extraerFechasActividad, extraerNotasDeLibreta, extraerProgresoDeActividad, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from './tareas.mjs';
 import {
   analizarAvisosParaCronograma,
   DIAS_HACIA_ATRAS,
@@ -22,6 +22,7 @@ import {
 } from './avisos.mjs';
 import {
   claveTareaParaEmparejar,
+  coincidirActividadMoodle,
   coincidirMateria,
   coincidirNombreTarea,
   coincidirParcial,
@@ -35,13 +36,14 @@ import {
   fechaDeEvaluacion,
   pareceEvaluacion,
   parcialYaSeRindio,
+  esNombreConsignaValido,
   normalizarNombre,
   separarEvaluaciones
 } from './normalizar.mjs';
 
 export { emparejarCursosConMaterias, filtrarTareasDuplicadas, agruparResumenSync, armarMensajeCursada, limpiarTextoParaBusqueda, separarEvaluaciones };
 import { ajustarClasesAlHorario, clasificarEventosCalendario, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
-import { MODULOS_CONSIGNA, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
+import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { cabeceraCookies } from './autenticar.mjs';
 import { extraerEnlacesDeCursada, interpretarCondiciones, textoDeArchivoCampus, urlArchivoDeRecurso } from './metodologia.mjs';
 
@@ -504,10 +506,12 @@ export async function asegurarMateriasDeLaCursada({ db, cursos, materias = [], p
       return clave && limpiarTextoParaBusqueda(materia.nombre) === clave;
     });
     const materiaId = fila?.id ? String(fila.id) : '';
-    if (!materiaId || materiaIds.includes(materiaId)) continue;
+    if (!materiaId) continue;
     const nombre = String(fila.nombre || item.nombre);
-    materiaIds.push(materiaId);
-    nombresPorId.set(materiaId, nombre);
+    if (!materiaIds.includes(materiaId)) {
+      materiaIds.push(materiaId);
+      nombresPorId.set(materiaId, nombre);
+    }
     mapeos.push({
       curso: item.curso,
       coincidencia: { materia: { id: materiaId, nombre }, score: 100 }
@@ -559,30 +563,19 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
   // detalle de fechas se lee SOLO para las actividades que todavía no existen en
   // la base: un sync sin novedades no encadena un pedido HTTP por tarea (ese era
   // el motivo principal de la lentitud cuando no había nada nuevo que importar).
-  const overviews = await conPool(mapeos, 4, async ({ curso, coincidencia }) => {
+  const cursosConActividades = await conPool(mapeos, 4, async ({ curso, coincidencia }) => {
     try {
-      // Vista unificada de Moodle 4.5: /course/overview.php agrupa por tipo los
-      // módulos del curso (assigns, foros, cuestionarios, feedback, …). Se piden
-      // todos los tipos «consigna» de una sola vez y se parsean juntos; así un
-      // sync alcanza también los quizzes/formation que antes solo vivían en
-      // páginas que ni siquiera miramos (/mod/quiz/index.php, /mod/feedback/…).
-      const pagina = await cliente.pedir(UGR_RUTAS.overviewCurso(curso.id, MODULOS_CONSIGNA));
-      return { curso, coincidencia, html: pagina.html };
+      const actividades = await extraerConsignasDeCurso(cliente, curso.id, { baseUrl: UGR_BASE_URL, rutas: UGR_RUTAS });
+      return { curso, coincidencia, actividades };
     } catch {
       return null;
     }
   });
 
-  await conPool(overviews, 4, async (resultado) => {
+  await conPool(cursosConActividades, 4, async (resultado) => {
     if (!resultado) return;
-    const { curso, coincidencia, html } = resultado;
-    const tareas = extraerActividadesOverview(html, UGR_BASE_URL);
-    const idsVistos = new Set();
-    const tareasUnicas = tareas.filter((t) => {
-      if (!t.id || idsVistos.has(t.id)) return false;
-      idsVistos.add(t.id);
-      return true;
-    });
+    const { curso, coincidencia, actividades } = resultado;
+    const tareasUnicas = (actividades || []).filter((t) => t?.id);
 
     // Las tareas ya importadas no se vuelven a insertar; pero las de antes de
     // que existiera la columna `url` quedaron sin enlace, así que los
@@ -597,6 +590,16 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
     const existentesPorClave = new Map(
       resExistentes.rows.map((t) => [claveTareaParaEmparejar(t.nombre), t])
     );
+    const filaExistente = (nombreFinal, tareaCampus) => {
+      const clave = claveTareaParaEmparejar(nombreFinal);
+      const porClave = existentesPorClave.get(clave);
+      if (porClave) return porClave;
+      const campus = { materiaId: coincidencia.materia.id, nombre: nombreFinal, url: tareaCampus?.url || '', id: tareaCampus?.id };
+      return resExistentes.rows.find((t) => coincidirActividadMoodle(
+        { materiaId: coincidencia.materia.id, nombre: t.nombre, url: t.url, id: t.id },
+        campus
+      )) || null;
+    };
 
     // Exámenes ya cargados como parcial en VistaParciales: no son tareas a
     // insertar de nuevo. Moodle suele etiquetar el examen con la fecha del
@@ -624,10 +627,10 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
     const candidatas = [];
     const aRevisar = [];
     for (const tarea of tareasUnicas) {
+      if (!esNombreConsignaValido(tarea.nombre)) continue;
       const nombreFinal = normalizarNombre({ nombre: tarea.nombre, cursoNombre: curso.nombre });
-      const clave = claveTareaParaEmparejar(nombreFinal);
-      const existente = existentesPorClave.get(clave)
-        || resExistentes.rows.find((t) => coincidirNombreTarea(t.nombre, nombreFinal));
+      if (!esNombreConsignaValido(nombreFinal)) continue;
+      const existente = filaExistente(nombreFinal, tarea);
       if (existente) {
         yaCargadas.push({
           materiaId: coincidencia.materia.id,
@@ -1100,10 +1103,12 @@ export async function insertarTareasDetectadas({ db, detectadas }) {
   const existentes = [];
   for (const materiaId of materiaIds) {
     const res = await db.execute({
-      sql: 'SELECT materia_id, nombre FROM tareas WHERE materia_id = ?',
+      sql: 'SELECT materia_id, nombre, url FROM tareas WHERE materia_id = ?',
       args: [materiaId]
     });
-    for (const fila of res.rows) existentes.push({ materiaId: fila.materia_id, nombre: fila.nombre });
+    for (const fila of res.rows) {
+      existentes.push({ materiaId: fila.materia_id, nombre: fila.nombre, url: fila.url || '' });
+    }
   }
   const { nuevas } = filtrarTareasDuplicadas(lista, existentes);
   const inserts = nuevas.map((t) => ({
