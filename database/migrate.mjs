@@ -582,6 +582,10 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     await db.execute('CREATE INDEX IF NOT EXISTS idx_alumnos_creado_ip ON alumnos(creado_ip)');
   });
 
+  await ejecutarMigracion(25, 'grupos: entrega individual e invitaciones', async () => {
+    await crearEsquemaGrupos(db);
+  });
+
   await db.close?.();
 }
 
