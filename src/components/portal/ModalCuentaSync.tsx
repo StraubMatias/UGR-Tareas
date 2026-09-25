@@ -29,8 +29,8 @@ export default function ModalCuentaSync({
   onInterrumpida
 }: ModalCuentaSyncProps) {
   return (
-    <ModalOverlay maxWidth="2xl">
-      <div className="max-h-[85vh] overflow-y-auto -m-2 p-2">
+    <ModalOverlay maxWidth="2xl" variant="compact">
+      <div className="-m-2 p-2">
         <CuentaPropia
           usuario={usuario}
           fuenteInicial={fuente}

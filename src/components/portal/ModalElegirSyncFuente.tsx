@@ -8,7 +8,7 @@ interface ModalElegirSyncFuenteProps {
 
 export default function ModalElegirSyncFuente({ onElegirUgr, onElegirSiu, onCerrar }: ModalElegirSyncFuenteProps) {
   return (
-    <ModalOverlay maxWidth="md">
+    <ModalOverlay maxWidth="md" variant="compact">
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
