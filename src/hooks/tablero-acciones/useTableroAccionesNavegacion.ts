@@ -8,6 +8,7 @@ export function useTableroAccionesNavegacion(opts: UseTableroAccionesOptions) {
     materias,
     materiasDesplegadas,
     setAlumnosDesplegados,
+    setMateriasExpandidas,
     setMateriasDesplegadas,
     setNotasDesplegadas,
     setTareaFoco,
@@ -18,6 +19,10 @@ export function useTableroAccionesNavegacion(opts: UseTableroAccionesOptions) {
   const toggleDesplegarAlumno = useCallback((nombreAlumno: string) => {
     setAlumnosDesplegados((prev) => ({ ...prev, [nombreAlumno]: !prev[nombreAlumno] }));
   }, [setAlumnosDesplegados]);
+
+  const toggleExpandirMateria = useCallback((materiaId: string) => {
+    setMateriasExpandidas((prev) => ({ ...prev, [materiaId]: !prev[materiaId] }));
+  }, [setMateriasExpandidas]);
 
   const toggleDesplegarMateria = useCallback((materiaId: string) => {
     setMateriasDesplegadas((prev) => ({ ...prev, [materiaId]: !prev[materiaId] }));
@@ -32,13 +37,29 @@ export function useTableroAccionesNavegacion(opts: UseTableroAccionesOptions) {
     const materia = materias.find((m) => m.tareas.some((t) => t.id === tareaId));
     if (!materia) return;
     const tarea = materia.tareas.find((t) => t.id === tareaId);
+    setMateriasExpandidas((prev) => ({ ...prev, [materia.id]: true }));
     if (tarea && !tareaPendienteAlumno(tarea, usuarioActual) && !materiasDesplegadas[materia.id]) {
       setMateriasDesplegadas((prev) => ({ ...prev, [materia.id]: true }));
     }
     setTareaFoco({ materiaId: materia.id, tareaId });
     setTareaFocoVisible(true);
     setPestana('materias');
-  }, [usuarioActual, materias, materiasDesplegadas, setMateriasDesplegadas, setTareaFoco, setTareaFocoVisible, setPestana]);
+  }, [
+    usuarioActual,
+    materias,
+    materiasDesplegadas,
+    setMateriasExpandidas,
+    setMateriasDesplegadas,
+    setTareaFoco,
+    setTareaFocoVisible,
+    setPestana
+  ]);
 
-  return { toggleDesplegarAlumno, toggleDesplegarMateria, toggleNotasParcial, irATareaEnMaterias };
+  return {
+    toggleDesplegarAlumno,
+    toggleExpandirMateria,
+    toggleDesplegarMateria,
+    toggleNotasParcial,
+    irATareaEnMaterias
+  };
 }

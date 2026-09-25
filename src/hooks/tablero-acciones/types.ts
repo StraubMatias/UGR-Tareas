@@ -12,8 +12,10 @@ export interface UseTableroAccionesOptions {
   notas: Nota[];
   notasInputs: Record<string, string>;
   notasTareasInputs: Record<string, string>;
+  materiasExpandidas: Record<string, boolean>;
   materiasDesplegadas: Record<string, boolean>;
   setPestana: Dispatch<SetStateAction<PortalPestana>>;
+  setMateriasExpandidas: Dispatch<SetStateAction<Record<string, boolean>>>;
   setMateriasDesplegadas: Dispatch<SetStateAction<Record<string, boolean>>>;
   setAlumnosDesplegados: Dispatch<SetStateAction<Record<string, boolean>>>;
   setNotasDesplegadas: Dispatch<SetStateAction<Record<string, boolean>>>;

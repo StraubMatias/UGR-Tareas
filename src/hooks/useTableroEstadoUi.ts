@@ -22,6 +22,8 @@ export function useTableroEstadoUi() {
   });
   const [diaCalendarioSeleccionado, setDiaCalendarioSeleccionado] = useState<Date | null>(null);
   const [alumnosDesplegados, setAlumnosDesplegados] = useState<Record<string, boolean>>({});
+  const [materiasExpandidas, setMateriasExpandidas] = useState<Record<string, boolean>>({});
+  /** En Materias: si true, incluye tareas ya completadas (solo cuando la materia está expandida). */
   const [materiasDesplegadas, setMateriasDesplegadas] = useState<Record<string, boolean>>({});
   const [situacionPropiaAbierta, setSituacionPropiaAbierta] = useState(true);
   const [historialPropioAbierto, setHistorialPropioAbierto] = useState(true);
@@ -64,6 +66,8 @@ export function useTableroEstadoUi() {
     setDiaCalendarioSeleccionado,
     alumnosDesplegados,
     setAlumnosDesplegados,
+    materiasExpandidas,
+    setMateriasExpandidas,
     materiasDesplegadas,
     setMateriasDesplegadas,
     situacionPropiaAbierta,

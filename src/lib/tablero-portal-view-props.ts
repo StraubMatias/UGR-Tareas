@@ -56,6 +56,7 @@ export function buildPortalVistasCursadaProps(vm: TableroPortalViewModel): Porta
     setHistorialPropioAbierto: ui.setHistorialPropioAbierto,
     alumnosDesplegados: ui.alumnosDesplegados,
     setAlumnosDesplegados: ui.setAlumnosDesplegados,
+    materiasExpandidas: ui.materiasExpandidas,
     materiasDesplegadas: ui.materiasDesplegadas,
     alumnoComparar: ui.alumnoComparar,
     setAlumnoComparar: ui.setAlumnoComparar,
