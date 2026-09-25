@@ -118,7 +118,10 @@ export async function syncUgrAction({
       eventosCalendarioInsertados,
       horariosInsertados,
       fechasActualizadas,
-      avisos: (avisosDetectados || []).map(({ contenidoHtml, ...aviso }) => aviso),
+      avisos: (avisosDetectados || []).map((item) => {
+        const { contenidoHtml: _html, ...aviso } = item as { contenidoHtml?: string } & Record<string, unknown>;
+        return aviso;
+      }),
       eventosSugeridos,
       avisosAceptados,
       avisosRechazados,

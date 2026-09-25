@@ -6,6 +6,7 @@ import ModalSincronizacion from './ModalSincronizacion';
 import type { SyncResult, SyncTipo, SyncEstado } from './types';
 import type { DetalleSyncSiuProps } from './DetalleSyncSiu';
 import type { Materia, Parcial, Tarea } from '../../core/cursada';
+import type { MateriaCondicionesEdicion } from '../../hooks/tablero-estado/types';
 
 interface PortalModalesProps {
   materias: Materia[];
@@ -32,7 +33,7 @@ interface PortalModalesProps {
   onNuevoUserChange: (v: string) => void;
   onCurrentPassChange: (v: string) => void;
   onNewPassChange: (v: string) => void;
-  onSubmitPassword: (e: FormEvent<HTMLFormElement>) => void;
+  onSubmitPassword: (e: FormEvent<HTMLFormElement>) => void | Promise<void>;
   onCerrarPassword: () => void;
   alumnoEnEdicion: { antiguoNombre: string; nuevoNombre: string } | null;
   setAlumnoEnEdicion: (v: { antiguoNombre: string; nuevoNombre: string } | null) => void;
@@ -43,14 +44,8 @@ interface PortalModalesProps {
   tareaEnEdicion: { materiaId: string; tarea: Tarea } | null;
   setTareaEnEdicion: (v: { materiaId: string; tarea: Tarea } | null) => void;
   onGuardarTarea: (e: FormEvent<HTMLFormElement>) => void;
-  materiaCondicionesEnEdicion: {
-    id: string;
-    condiciones: string;
-    notaMinimaRegularizar: number | string;
-    notaMinimaPromocionar: number | string;
-    reglaPromocion: string;
-  } | null;
-  setMateriaCondicionesEnEdicion: (v: PortalModalesProps['materiaCondicionesEnEdicion']) => void;
+  materiaCondicionesEnEdicion: MateriaCondicionesEdicion | null;
+  setMateriaCondicionesEnEdicion: (v: MateriaCondicionesEdicion | null) => void;
   onGuardarCondiciones: (e: FormEvent<HTMLFormElement>) => void;
   syncAbierto: boolean;
   syncTipo: SyncTipo;

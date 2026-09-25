@@ -1,3 +1,5 @@
+import type { FormEvent } from 'react';
+
 type ModoAcceso = 'login' | 'registro';
 
 interface PantallaAccesoProps {
@@ -13,8 +15,8 @@ interface PantallaAccesoProps {
   onInputPass: (valor: string) => void;
   onRegistroPass: (valor: string) => void;
   onRegistroConfirmacion: (valor: string) => void;
-  onLogin: (e: React.FormEvent) => void;
-  onRegistro: (e: React.FormEvent) => void;
+  onLogin: (e: FormEvent<HTMLFormElement>) => void | Promise<void>;
+  onRegistro: (e: FormEvent<HTMLFormElement>) => void | Promise<void>;
   onAbrirCambioPassword: () => void;
 }
 

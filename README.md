@@ -17,13 +17,13 @@ La presentación para la comisión está en [`UGRTareas.md`](UGRTareas.md). Este
 | Tests | `node:test` (`node --test`). No hay Jest ni runner de componentes |
 | Lint | ESLint 9 + `eslint-config-next` 16.3.5 |
 
-`tsconfig.json` tiene `strict: false`, `noImplicitAny: true`, `strictNullChecks: true`, `noEmit: true`, `moduleResolution: bundler`.
+`tsconfig.json` tiene `strict: true`, `noEmit: true`, `moduleResolution: bundler`.
 
 Instalación: `npm install --legacy-peer-deps`. Hace falta el flag porque typescript-eslint (vía `eslint-config-next`) declara peer de TypeScript `< 6.1` y el compilador de chequeo es 7.
 
 ## Topología
 
-No hay rutas REST. La UI es un client component (`src/app/page.tsx`) y toda escritura pasa por Server Actions de `src/app/actions.tsx` (`'use server'`). El layout (`src/app/layout.tsx`) exporta `maxDuration = 60`: en Vercel Hobby ese es el tope de la función que ejecuta esas actions. Un sync que se pase de 60 s lo corta la plataforma.
+No hay rutas REST. La UI es un client component (`src/components/portal/TableroPortal.tsx`, montado desde `src/app/page.tsx`) y toda escritura pasa por Server Actions de `src/app/actions.tsx` (`'use server'`). El layout (`src/app/layout.tsx`) exporta `maxDuration = 60`: en Vercel Hobby ese es el tope de la función que ejecuta esas actions. Un sync que se pase de 60 s lo corta la plataforma.
 
 ```
 navegador
@@ -44,7 +44,14 @@ Cabeceras en todas las rutas: `X-Frame-Options: DENY`, `nosniff`, `Referrer-Poli
 ## Árbol
 
 ```
-src/app/page.tsx          UI: pestañas, estado de cliente, formularios
+src/app/page.tsx          entrada App Router → TableroPortal
+src/app/page.tsx          reexporta TableroPortal
+src/components/portal/TableroPortal.tsx  orquestador (hook + layout)
+src/components/portal/TableroCuerpo.tsx  login / tablero vacío / pestañas
+src/lib/tablero-portal-view-props.ts  props de vistas y modales desde el view-model
+src/hooks/useTableroPortal.ts  carga, sync, acciones y derivados
+src/hooks/tablero-acciones/  handlers por dominio (alumnos, tareas, parciales, …)
+src/hooks/useTableroAcciones.ts  compone los handlers del tablero
 src/app/actions.tsx       Server Actions, sesión, rate limit, borrado
 src/app/turso.ts          cliente HTTP de Turso
 src/app/plan-utils.ts     PLAN_DE_ESTUDIO (códigos y correlativas)

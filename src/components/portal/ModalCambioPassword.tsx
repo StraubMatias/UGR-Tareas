@@ -1,3 +1,5 @@
+import type { FormEvent } from 'react';
+
 interface MensajePassword {
   tipo: string;
   texto: string;
@@ -14,7 +16,7 @@ interface ModalCambioPasswordProps {
   onNuevoUserChange: (valor: string) => void;
   onCurrentPassChange: (valor: string) => void;
   onNewPassChange: (valor: string) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: FormEvent<HTMLFormElement>) => void | Promise<void>;
   onCerrar: () => void;
 }
 
