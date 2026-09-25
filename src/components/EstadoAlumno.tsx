@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { obtenerResumenTareasAlumno, type Materia, type Tarea } from '../core/cursada';
+import { obtenerIconoMateria, obtenerResumenTareasAlumno, type Materia, type Tarea } from '../core/cursada';
 import { alumnosDeLaMateria, materiasEnComun, materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
 import EstadoTareaAlumno from './EstadoTareaAlumno';
 
@@ -99,8 +99,9 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                   )
                   .map(({ tarea, materia }) => (
                     <div key={tarea.id} className="w-full sm:w-[calc(50%-0.5rem)] bg-slate-800/20 rounded-lg p-3 border border-slate-700/30">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2 pb-2 border-b border-slate-700/30 border-l-2 border-l-cyan-500/50 pl-2">
-                        {materia.nombre}
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2 pb-2 border-b border-slate-700/30 border-l-2 border-l-cyan-500/50 pl-2 flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm normal-case shrink-0" aria-hidden="true">{obtenerIconoMateria(materia.nombre)}</span>
+                        <span className="truncate">{materia.nombre}</span>
                       </p>
                       <EstadoTareaAlumno tarea={tarea} alumno={alumno}
                         materia={materia}

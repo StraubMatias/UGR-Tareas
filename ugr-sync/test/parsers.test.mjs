@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from '../lib/materias.mjs';
-import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeHtml, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
+import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeHtml, extraerConsignasDePaginaCurso, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -290,6 +290,18 @@ test('extraerConsignasDeHtml detecta asignaciones del índice sin contenedor *_o
   assert.equal(consignas.length, 2);
   assert.equal(consignas[0].id, '199391');
   assert.equal(consignas[1].id, '201629');
+});
+
+test('extraerConsignasDePaginaCurso lista asignaciones del índice del curso', () => {
+  const html = `
+    <div id="region-main">
+      <a class="aalink" href="/mod/assign/view.php?id=555001">TP 2 - Conceptos</a>
+      <a href="/mod/resource/view.php?id=1">Lectura</a>
+    </div>`;
+  const consignas = extraerConsignasDePaginaCurso(html, 'https://virtual.ugr.edu.ar');
+  assert.equal(consignas.length, 1);
+  assert.equal(consignas[0].id, '555001');
+  assert.equal(consignas[0].nombre, 'TP 2 - Conceptos');
 });
 
 test('extraerConsignasDeHtml combina overview unificado e índice de tareas sin duplicar', async () => {

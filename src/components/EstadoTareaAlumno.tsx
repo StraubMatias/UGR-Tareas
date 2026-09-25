@@ -35,7 +35,7 @@ export default function EstadoTareaAlumno({
     && tarea.notas?.[nombre] !== undefined && tarea.notas?.[nombre] !== null && tarea.notas?.[nombre] !== '');
 
   return (
-    <li className="estado-tarea min-w-0 rounded-xl border border-slate-800 bg-[#111a24] p-4 space-y-3">
+    <div className="estado-tarea min-w-0 rounded-xl border border-slate-800 bg-[#111a24] p-4 space-y-3">
       {materia && !ocultarContextoMateria && (
         <div className="estado-tarea-contexto border-b border-slate-800">
           <p className="estado-tarea-materia"><span aria-hidden="true">{obtenerIconoMateria(materia.nombre)}</span> {materia.nombre}</p>
@@ -102,6 +102,6 @@ export default function EstadoTareaAlumno({
           )}
         </div>
       )}
-    </li>
+    </div>
   );
 }

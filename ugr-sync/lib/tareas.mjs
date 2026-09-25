@@ -376,26 +376,69 @@ async function pedirHtmlCurso(cliente, ruta) {
   return '';
 }
 
-// Descubre todas las consignas de un curso: overview completo y, si faltan
-// asignaciones (o el overview falló), índices dedicados de tareas y foros.
-export async function extraerConsignasDeCurso(cliente, cursoId, { baseUrl = UGR_BASE_URL, rutas = UGR_RUTAS } = {}) {
-  const htmlOverview = await pedirHtmlCurso(cliente, rutas.overviewCurso(cursoId, MODULOS_CONSIGNA));
-  let actividades = extraerConsignasDeHtml(htmlOverview, baseUrl);
+// Enlaces a consignas en la página principal del curso (course/view.php).
+// Respaldo cuando el overview unificado viene incompleto (p. ej. un TP nuevo
+// que todavía no aparece en assign_overview pero sí en el índice del curso).
+export function extraerConsignasDePaginaCurso(html, baseUrl = '') {
+  if (!html) return [];
+  const $ = load(html);
+  const actividades = [];
+  const vistos = new Set();
+  $('a[href*="/mod/"]').each((_, enlace) => {
+    const href = $(enlace).attr('href') || '';
+    const modulo = (href.match(/\/mod\/([a-z0-9_]+)\/view\.php/i) || [])[1];
+    if (!modulo || !MODULOS_CONSIGNA.includes(modulo)) return;
+    const id = (href.match(/[?&]id=(\d+)/) || [])[1];
+    if (!id || vistos.has(id)) return;
+    const nombre = limpiarTexto($(enlace).text()) || limpiarTexto($(enlace).attr('title'));
+    if (!nombre) return;
+    const esForo = modulo === 'forum';
+    if (esForo ? esForoInformativo(nombre) : esActividadInformativa(nombre)) return;
+    vistos.add(id);
+    actividades.push({
+      id,
+      nombre,
+      url: completarUrl(href, baseUrl),
+      inicio: 'Sin fecha',
+      fin: 'Sin fecha',
+      unidad: parsearUnidadMoodle(nombre),
+      tipo: esForo ? 'foro' : inferirTipoTarea(nombre),
+      conNota: esForo || modulo === 'feedback' ? false : true
+    });
+  });
+  return actividades;
+}
 
-  const tieneAssign = actividades.some((a) => /\/mod\/assign\//.test(a.url || ''));
-  if (!htmlOverview || !tieneAssign) {
-    const [htmlAssign, htmlForos] = await Promise.all([
-      pedirHtmlCurso(cliente, rutas.tareasDeCurso(cursoId)),
-      pedirHtmlCurso(cliente, rutas.forosDeCurso(cursoId))
-    ]);
-    const htmlsExtra = [];
-    if (htmlAssign && htmlAssign !== htmlOverview) htmlsExtra.push(htmlAssign);
-    if (htmlForos && htmlForos !== htmlOverview && htmlForos !== htmlAssign) htmlsExtra.push(htmlForos);
-    for (const html of htmlsExtra) {
-      actividades = fusionarActividadesConsigna([actividades, extraerConsignasDeHtml(html, baseUrl)]);
-    }
+function fusionarHtmlsUnicos(...htmls) {
+  const unicos = [];
+  const vistos = new Set();
+  for (const html of htmls) {
+    if (!html || vistos.has(html)) continue;
+    vistos.add(html);
+    unicos.push(html);
   }
+  return unicos;
+}
 
+// Descubre todas las consignas de un curso: overview, índices de tareas/foros
+// y la página del curso. Siempre se piden en paralelo y se fusionan: el overview
+// a veces lista quizzes pero se queda corto en asignaciones nuevas.
+export async function extraerConsignasDeCurso(cliente, cursoId, { baseUrl = UGR_BASE_URL, rutas = UGR_RUTAS } = {}) {
+  const [htmlOverview, htmlAssign, htmlForos, htmlCurso] = await Promise.all([
+    pedirHtmlCurso(cliente, rutas.overviewCurso(cursoId, MODULOS_CONSIGNA)),
+    pedirHtmlCurso(cliente, rutas.tareasDeCurso(cursoId)),
+    pedirHtmlCurso(cliente, rutas.forosDeCurso(cursoId)),
+    pedirHtmlCurso(cliente, rutas.curso(cursoId))
+  ]);
+
+  let actividades = [];
+  for (const html of fusionarHtmlsUnicos(htmlOverview, htmlAssign, htmlForos, htmlCurso)) {
+    actividades = fusionarActividadesConsigna([
+      actividades,
+      extraerConsignasDeHtml(html, baseUrl),
+      extraerConsignasDePaginaCurso(html, baseUrl)
+    ]);
+  }
   return actividades;
 }
 

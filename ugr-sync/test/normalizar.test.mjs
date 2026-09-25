@@ -372,6 +372,35 @@ test('la nota de un parcial no existe hasta el día en que se rinde', async () =
   assert.equal(parcialYaSeRindio('Sin fecha', '2026-09-21'), false);
 });
 
+test('filtrarTareasDuplicadas reconoce la misma actividad por URL de Moodle aunque cambie el nombre', () => {
+  const { nuevas, duplicadas } = filtrarTareasDuplicadas(
+    [{
+      materiaId: 'ga',
+      nombre: 'Activos según INCIBE',
+      url: 'https://virtual.ugr.edu.ar/mod/feedback/view.php?id=306254'
+    }],
+    [{
+      materiaId: 'ga',
+      nombre: 'Activos según INCIBE (Video 5m)',
+      url: 'https://virtual.ugr.edu.ar/mod/feedback/view.php?id=306254'
+    }]
+  );
+  assert.equal(nuevas.length, 0);
+  assert.equal(duplicadas.length, 1);
+});
+
+test('emparejarCursosConMaterias incluye dos cursos distintos de la misma materia', () => {
+  const materias = [{ id: 'dev', nombre: 'Conceptos de Desarrollo de Software' }];
+  const plan = emparejarCursosConMaterias([
+    { id: '2216', nombre: '(V.TUCS.2.16.1) CONCEPTOS DE DESARROLLO DE SOFTWARE' },
+    { id: '9999', nombre: '(V.TUCS.2.16.1) CONCEPTOS DE DESARROLLO DE SOFTWARE - Comisión B' }
+  ], materias, [{ nombre: 'Conceptos de Desarrollo de Software' }]);
+  assert.equal(plan.length, 2);
+  assert.equal(plan[0].materiaId, 'dev');
+  assert.equal(plan[1].materiaId, 'dev');
+  assert.notEqual(plan[0].curso.id, plan[1].curso.id);
+});
+
 test('filtrarTareasDuplicadas no deja dos TPs iguales en la misma materia', () => {
   const { nuevas, duplicadas } = filtrarTareasDuplicadas(
     [

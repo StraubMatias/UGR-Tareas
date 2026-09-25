@@ -164,7 +164,21 @@ export async function sincronizarCursadaDelAlumno({
   const propias = detectadas.filter((item) => item.materiaId && materiaIds.includes(item.materiaId));
   const yaCargadas = ((tareas.yaCargadas || []) as ItemTareaCampus[])
     .filter((item) => item.materiaId && materiaIds.includes(item.materiaId));
-  const { nuevas: faltantes, duplicadas } = filtrarTareasDuplicadas(propias, yaCargadas);
+  const existentesDb: Array<{ materiaId: string; nombre: string; url?: string }> = [];
+  for (const materiaId of materiaIds) {
+    const res = await db.execute({
+      sql: 'SELECT materia_id, nombre, url FROM tareas WHERE materia_id = ?',
+      args: [materiaId]
+    });
+    for (const fila of res.rows) {
+      existentesDb.push({
+        materiaId: texto(fila.materia_id),
+        nombre: texto(fila.nombre),
+        url: textoONull(fila.url) || undefined
+      });
+    }
+  }
+  const { nuevas: faltantes, duplicadas } = filtrarTareasDuplicadas(propias, existentesDb);
   await insertarTareasDetectadas({ db, detectadas: faltantes });
   const parcialesFuente = ((tareas.parcialesDetectados || []) as ItemTareaCampus[])
     .filter((item) => item.materiaId && materiaIds.includes(item.materiaId) && item.nombre && item.fin);

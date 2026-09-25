@@ -22,6 +22,7 @@ import {
 } from './avisos.mjs';
 import {
   claveTareaParaEmparejar,
+  coincidirActividadMoodle,
   coincidirMateria,
   coincidirNombreTarea,
   coincidirParcial,
@@ -504,10 +505,12 @@ export async function asegurarMateriasDeLaCursada({ db, cursos, materias = [], p
       return clave && limpiarTextoParaBusqueda(materia.nombre) === clave;
     });
     const materiaId = fila?.id ? String(fila.id) : '';
-    if (!materiaId || materiaIds.includes(materiaId)) continue;
+    if (!materiaId) continue;
     const nombre = String(fila.nombre || item.nombre);
-    materiaIds.push(materiaId);
-    nombresPorId.set(materiaId, nombre);
+    if (!materiaIds.includes(materiaId)) {
+      materiaIds.push(materiaId);
+      nombresPorId.set(materiaId, nombre);
+    }
     mapeos.push({
       curso: item.curso,
       coincidencia: { materia: { id: materiaId, nombre }, score: 100 }
@@ -586,6 +589,16 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
     const existentesPorClave = new Map(
       resExistentes.rows.map((t) => [claveTareaParaEmparejar(t.nombre), t])
     );
+    const filaExistente = (nombreFinal, tareaCampus) => {
+      const clave = claveTareaParaEmparejar(nombreFinal);
+      const porClave = existentesPorClave.get(clave);
+      if (porClave) return porClave;
+      const campus = { materiaId: coincidencia.materia.id, nombre: nombreFinal, url: tareaCampus?.url || '', id: tareaCampus?.id };
+      return resExistentes.rows.find((t) => coincidirActividadMoodle(
+        { materiaId: coincidencia.materia.id, nombre: t.nombre, url: t.url, id: t.id },
+        campus
+      )) || null;
+    };
 
     // Exámenes ya cargados como parcial en VistaParciales: no son tareas a
     // insertar de nuevo. Moodle suele etiquetar el examen con la fecha del
@@ -614,9 +627,7 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
     const aRevisar = [];
     for (const tarea of tareasUnicas) {
       const nombreFinal = normalizarNombre({ nombre: tarea.nombre, cursoNombre: curso.nombre });
-      const clave = claveTareaParaEmparejar(nombreFinal);
-      const existente = existentesPorClave.get(clave)
-        || resExistentes.rows.find((t) => coincidirNombreTarea(t.nombre, nombreFinal));
+      const existente = filaExistente(nombreFinal, tarea);
       if (existente) {
         yaCargadas.push({
           materiaId: coincidencia.materia.id,
@@ -1089,10 +1100,12 @@ export async function insertarTareasDetectadas({ db, detectadas }) {
   const existentes = [];
   for (const materiaId of materiaIds) {
     const res = await db.execute({
-      sql: 'SELECT materia_id, nombre FROM tareas WHERE materia_id = ?',
+      sql: 'SELECT materia_id, nombre, url FROM tareas WHERE materia_id = ?',
       args: [materiaId]
     });
-    for (const fila of res.rows) existentes.push({ materiaId: fila.materia_id, nombre: fila.nombre });
+    for (const fila of res.rows) {
+      existentes.push({ materiaId: fila.materia_id, nombre: fila.nombre, url: fila.url || '' });
+    }
   }
   const { nuevas } = filtrarTareasDuplicadas(lista, existentes);
   const inserts = nuevas.map((t) => ({
