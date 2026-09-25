@@ -15,7 +15,8 @@ import {
   guardarSesion,
   cargarSesion,
   normalizarCookie,
-  validarCredencialesUgr
+  validarCredencialesUgr,
+  detectarMantenimientoCampus
 } from '../lib/autenticar.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -88,4 +89,12 @@ test('cookiesAJSON / cookiesDesdeJSON son ida y vuelta', () => {
   const vuelta = cookiesDesdeJSON(cookiesAJSON(jar));
   assert.equal(vuelta.get('A'), '1');
   assert.equal(vuelta.get('B'), '2');
+});
+
+test('detectarMantenimientoCampus identifica 502/503 y pantallas de mantenimiento', () => {
+  assert.match(detectarMantenimientoCampus('', 503), /temporalmente saturado.*503/i);
+  assert.match(detectarMantenimientoCampus('', 502), /temporalmente saturado.*502/i);
+  assert.match(detectarMantenimientoCampus('<h1>Sitio en mantenimiento</h1>', 200), /temporalmente en mantenimiento/i);
+  assert.match(detectarMantenimientoCampus('Database connection failed', 200), /temporalmente en mantenimiento/i);
+  assert.equal(detectarMantenimientoCampus('<html><body>Bienvenido a Moodle</body></html>', 200), null);
 });

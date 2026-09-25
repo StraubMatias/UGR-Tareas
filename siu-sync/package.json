@@ -1,0 +1,10 @@
+{
+  "name": "siu-sync",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/test-conexion.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

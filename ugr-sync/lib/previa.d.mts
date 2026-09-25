@@ -15,6 +15,8 @@ export interface ResultadoPrevia extends ResultadoTareasNuevas {
   parcialesInsertados?: number;
   previaId?: string;
   confirmar?: boolean;
+  notasCargadas?: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>;
+  pendientesEntrega?: Array<{ materia?: string; nombre?: string }>;
 }
 
 export function sincronizarConPrevia(opciones: {
@@ -27,4 +29,6 @@ export function sincronizarConPrevia(opciones: {
   idsEventos?: string[];
   detectar?: () => Promise<ResultadoPrevia>;
   ahora?: number;
+  alumnoId?: string;
+  alumnoNombre?: string;
 }): Promise<ResultadoPrevia>;

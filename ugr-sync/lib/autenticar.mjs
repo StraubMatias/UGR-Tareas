@@ -55,6 +55,27 @@ export function erroresDeLogin(html) {
   return errores.filter(Boolean);
 }
 
+export function detectarMantenimientoCampus(html = '', status = 200) {
+  if (status === 502 || status === 503 || status === 504) {
+    return `UGR Virtual no responde o está temporalmente saturado (código ${status}). Probá de nuevo en unos minutos.`;
+  }
+  const texto = String(html || '').toLowerCase();
+  if (
+    texto.includes('sitio en mantenimiento') ||
+    texto.includes('el sitio se encuentra en mantenimiento') ||
+    texto.includes('mantenimiento programado') ||
+    texto.includes('maintenance mode') ||
+    texto.includes('under maintenance') ||
+    texto.includes('database connection failed') ||
+    texto.includes('error conectando a la base de datos') ||
+    texto.includes('error de base de datos')
+  ) {
+    return 'UGR Virtual se encuentra temporalmente en mantenimiento. Probá más tarde.';
+  }
+  return null;
+}
+
+
 // --- Manejo de cookies (jar simple, suficiente para Moodle) ---
 
 export function normalizarCookie(textoCookie) {
@@ -97,6 +118,14 @@ export function cookiesDesdeJSON(json) {
   return new Map(json?.cookies ?? []);
 }
 
+const TOPE_LOGIN_MS = 8000;
+
+function fetchLoginConTope(url, opciones) {
+  const control = new AbortController();
+  const timer = setTimeout(() => control.abort(), TOPE_LOGIN_MS);
+  return fetch(url, { ...opciones, signal: control.signal }).finally(() => clearTimeout(timer));
+}
+
 // --- Login real vía HTTP ---
 
 export async function iniciarSesion({ usuario, contrasena, baseUrl = UGR_BASE_URL, jar = new Map() } = {}) {
@@ -106,85 +135,114 @@ export async function iniciarSesion({ usuario, contrasena, baseUrl = UGR_BASE_UR
 
   const urlLogin = new URL(UGR_RUTAS.login, baseUrl).toString();
 
-  // 1) GET de la página de login: servimos la cookie de sesión inicial y pescamos el logintoken.
-  const primera = await fetch(urlLogin, {
-    method: 'GET',
-    headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)' },
-    redirect: 'manual'
-  });
-  combinarJar(jar, crearJarCookies([primera.headers.get('set-cookie')]).entries());
-  const htmlLogin = await primera.text();
-  const logintoken = extraerLogintoken(htmlLogin);
-  if (!logintoken) {
-    throw new Error('No se encontró el logintoken en la página de login.');
-  }
-
-  // 2) POST del formulario con el token + credenciales.
-  const accion = extraerAccionLogin(htmlLogin, baseUrl);
-  const form = new URLSearchParams({
-    username: usuario,
-    password: contrasena,
-    logintoken
-  });
-
-  const respuesta = await fetch(accion, {
-    method: 'POST',
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)',
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Cookie: cabeceraCookies(jar)
-    },
-    body: form.toString(),
-    redirect: 'manual'
-  });
-  combinarJar(jar, crearJarCookies([respuesta.headers.get('set-cookie')]).entries());
-
-  // 3) Moodle responde con 303 See Other a /my/ o /login/index.php.
-  const location = respuesta.headers.get('location');
-  const cuerpoPost = await respuesta.text();
-
-  const erroresPost = erroresDeLogin(cuerpoPost);
-  if (esPaginaDeLogin(cuerpoPost) && erroresPost.length > 0) {
-    throw new Error(`Login rechazado: ${erroresPost.join(' — ')}`);
-  }
-
-  if (respuesta.status === 303 && location) {
-    const urlDestino = new URL(location, baseUrl);
-    const pag = await fetch(urlDestino.toString(), {
+  try {
+    // 1) GET de la página de login: servimos la cookie de sesión inicial y pescamos el logintoken.
+    const primera = await fetchLoginConTope(urlLogin, {
       method: 'GET',
-      headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)', Cookie: cabeceraCookies(jar) },
+      headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)' },
       redirect: 'manual'
     });
-    combinarJar(jar, crearJarCookies([pag.headers.get('set-cookie')]).entries());
-    const htmlFinal = await pag.text();
+    combinarJar(jar, crearJarCookies([primera.headers.get('set-cookie')]).entries());
+    const htmlLogin = await primera.text();
 
-    if (pag.status === 303 && pag.headers.get('location')) {
-      const urlFinal = new URL(pag.headers.get('location'), baseUrl).toString();
-      const pag2 = await fetch(urlFinal, {
+    const mantenimientoInicial = detectarMantenimientoCampus(htmlLogin, primera.status);
+    if (mantenimientoInicial) {
+      throw new Error(mantenimientoInicial);
+    }
+
+    const logintoken = extraerLogintoken(htmlLogin);
+    if (!logintoken) {
+      throw new Error('No se encontró el formulario de acceso en UGR Virtual. Es posible que el campus esté en mantenimiento o haya cambiado.');
+    }
+
+    // 2) POST del formulario con el token + credenciales.
+    const accion = extraerAccionLogin(htmlLogin, baseUrl);
+    const form = new URLSearchParams({
+      username: usuario,
+      password: contrasena,
+      logintoken
+    });
+
+    const respuesta = await fetchLoginConTope(accion, {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: cabeceraCookies(jar)
+      },
+      body: form.toString(),
+      redirect: 'manual'
+    });
+    combinarJar(jar, crearJarCookies([respuesta.headers.get('set-cookie')]).entries());
+
+    // 3) Moodle responde con 303 See Other a /my/ o /login/index.php.
+    const location = respuesta.headers.get('location');
+    const cuerpoPost = await respuesta.text();
+
+    const mantenimientoPost = detectarMantenimientoCampus(cuerpoPost, respuesta.status);
+    if (mantenimientoPost) {
+      throw new Error(mantenimientoPost);
+    }
+
+    const erroresPost = erroresDeLogin(cuerpoPost);
+    if (esPaginaDeLogin(cuerpoPost) && erroresPost.length > 0) {
+      throw new Error(`Login rechazado: ${erroresPost.join(' — ')}`);
+    }
+
+    if (respuesta.status === 303 && location) {
+      const urlDestino = new URL(location, baseUrl);
+      const pag = await fetchLoginConTope(urlDestino.toString(), {
         method: 'GET',
         headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)', Cookie: cabeceraCookies(jar) },
         redirect: 'manual'
       });
-      combinarJar(jar, crearJarCookies([pag2.headers.get('set-cookie')]).entries());
-      const htmlFin = await pag2.text();
-      const erroresFin = erroresDeLogin(htmlFin);
-      if (esPaginaDeLogin(htmlFin) && erroresFin.length > 0) {
-        throw new Error(`Login rechazado: ${erroresFin.join(' — ')}`);
+      combinarJar(jar, crearJarCookies([pag.headers.get('set-cookie')]).entries());
+      const htmlFinal = await pag.text();
+
+      const mantenimientoFinal = detectarMantenimientoCampus(htmlFinal, pag.status);
+      if (mantenimientoFinal) {
+        throw new Error(mantenimientoFinal);
       }
-      return { jar, html: htmlFin, url: urlFinal };
+
+      if (pag.status === 303 && pag.headers.get('location')) {
+        const urlFinal = new URL(pag.headers.get('location'), baseUrl).toString();
+        const pag2 = await fetchLoginConTope(urlFinal, {
+          method: 'GET',
+          headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)', Cookie: cabeceraCookies(jar) },
+          redirect: 'manual'
+        });
+        combinarJar(jar, crearJarCookies([pag2.headers.get('set-cookie')]).entries());
+        const htmlFin = await pag2.text();
+
+        const mantenimientoFin = detectarMantenimientoCampus(htmlFin, pag2.status);
+        if (mantenimientoFin) {
+          throw new Error(mantenimientoFin);
+        }
+
+        const erroresFin = erroresDeLogin(htmlFin);
+        if (esPaginaDeLogin(htmlFin) && erroresFin.length > 0) {
+          throw new Error(`Login rechazado: ${erroresFin.join(' — ')}`);
+        }
+        return { jar, html: htmlFin, url: urlFinal };
+      }
+
+      const erroresFinal = erroresDeLogin(htmlFinal);
+      if (esPaginaDeLogin(htmlFinal) && erroresFinal.length > 0) {
+        throw new Error(`Login rechazado: ${erroresFinal.join(' — ')}`);
+      }
+      return { jar, html: htmlFinal, url: urlDestino.toString() };
     }
 
-    const erroresFinal = erroresDeLogin(htmlFinal);
-    if (esPaginaDeLogin(htmlFinal) && erroresFinal.length > 0) {
-      throw new Error(`Login rechazado: ${erroresFinal.join(' — ')}`);
+    if (esPaginaDeLogin(cuerpoPost)) {
+      throw new Error('El inicio de sesión volvió a la página de login sin redirección (sesión no establecida).');
     }
-    return { jar, html: htmlFinal, url: urlDestino.toString() };
+    return { jar, html: cuerpoPost, url: accion };
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('El campus de la UGR tardó demasiado en responder (tiempo de espera agotado). Probá de nuevo en unos minutos.');
+    }
+    throw error;
   }
-
-  if (esPaginaDeLogin(cuerpoPost)) {
-    throw new Error('El inicio de sesión volvió a la página de login sin redirección (sesión no establecida).');
-  }
-  return { jar, html: cuerpoPost, url: accion };
 }
 
 // Comprueba usuario y contraseña contra UGR Virtual con un jar propio.

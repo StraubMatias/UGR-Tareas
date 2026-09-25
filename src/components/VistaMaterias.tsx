@@ -209,7 +209,7 @@ export default function VistaMaterias({
                               >
                                 <span>👥</span>
                                 <span>
-                                  {grupoPropio ? `Grupo: ${grupoPropio.nombre}` : 'Grupal · sin grupo'}
+                                  {grupoPropio ? `Grupo: ${grupoPropio.nombre}` : 'Grupal · entrega individual'}
                                 </span>
                                 {Number(t.cupo_maximo) > 0 && (
                                   <span className="text-[10px] opacity-75 font-normal">
@@ -273,11 +273,15 @@ export default function VistaMaterias({
                                 <input
                                   type="checkbox"
                                   checked={tareaCompletadaPor(t, usuarioActual)}
-                                  disabled={!esAdmin}
+                                  disabled={!usuarioActual || !tareaPuedeGestionarse(t)}
                                   onChange={() => usuarioActual && toggleTareaDesdeCliente(t.id, usuarioActual, t)}
                                   className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
                                 />
-                                {tareaCompletadaPor(t, usuarioActual) ? 'Entregada en UGR Virtual' : 'Todavía no figura entregada en UGR Virtual'}
+                                {tareaCompletadaPor(t, usuarioActual)
+                                  ? 'Marcar como no entregada'
+                                  : t.grupal && !grupoPropio
+                                    ? 'Marcar entregada (individual)'
+                                    : 'Marcar como entregada'}
                               </label>
                               <label className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">
                                 {t.grupal ? 'Nota del grupo (UGR Virtual)' : 'Nota en UGR Virtual'}
@@ -298,8 +302,13 @@ export default function VistaMaterias({
                           ) : (
                           <div>
                             <label className="flex items-center gap-2 text-sm font-bold text-slate-300 mb-3">
-                              <input type="checkbox" checked={tareaCompletadaPor(t, usuarioActual)} disabled={!esAdmin} onChange={() => usuarioActual && toggleTareaDesdeCliente(t.id, usuarioActual, t)} />
-                              {t.grupal ? 'Entrega del grupo' : 'Entregada'}
+                              <input
+                                type="checkbox"
+                                checked={tareaCompletadaPor(t, usuarioActual)}
+                                disabled={!usuarioActual || !tareaPuedeGestionarse(t)}
+                                onChange={() => usuarioActual && toggleTareaDesdeCliente(t.id, usuarioActual, t)}
+                              />
+                              {t.grupal ? (grupoPropio ? 'Entrega del grupo' : 'Entregada (individual)') : 'Entregada'}
                             </label>
                             <span className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">Completada por:</span>
                             <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">

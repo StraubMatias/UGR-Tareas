@@ -54,7 +54,7 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
     ? materiasDelAlumno.flatMap((materia) => materia.tareas || []).filter((tarea) => tarea.grupal)
     : resumen[filtro];
   const ids = new Set(seleccionadas.map((tarea) => tarea.id));
-  const filtros = [...ESTADOS, ['grupales', 'Grupales']];
+  const filtros = ([...ESTADOS, ['grupales', 'Grupales']] as [ClaveFiltro, string][]);
 
   return (
     <section className={`rounded-2xl border overflow-hidden ${propia ? 'border-cyan-500/40 bg-[#131e29]' : 'border-slate-800 bg-[#131b25]'}`}>
@@ -77,7 +77,7 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
         {abierto && (
           <div className="border-t border-slate-800 p-4 sm:p-5 space-y-5">
             <div className="estado-filtros flex flex-wrap gap-2" role="group" aria-label={`Filtrar tareas de ${alumno}`}>
-              {filtros.map(([clave, etiqueta]: [ClaveFiltro, string]) => (
+              {filtros.map(([clave, etiqueta]) => (
                 <button key={clave} type="button" aria-pressed={filtro === clave} onClick={() => setFiltro(clave)}
                   className={`rounded-lg border px-3 py-2 text-xs font-medium cursor-pointer ${filtro === clave ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}>
                   <span>{etiqueta}</span>{' '}

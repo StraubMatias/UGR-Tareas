@@ -208,7 +208,8 @@ async function destinatarios(tx: Transaction, tarea: TareaFila, alumno: Persona)
           WHERE i.tarea_id = ? AND i.grupo_id = (
             SELECT grupo_id FROM integrantes_tareas WHERE tarea_id = ? AND alumno_id = ?
           )`, [tarea.id, tarea.id, alumno.id]);
-  if (!filas.length) throw new ErrorGrupo('Primero creá o unite a un grupo desde Materias.');
+  // Sin grupo asignado: la tarea sigue siendo grupal, pero la entrega/nota es solo de esta persona.
+  if (!filas.length) return [alumno];
   return filas;
 }
 

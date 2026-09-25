@@ -60,7 +60,8 @@ declare module '../../ugr-sync/lib/sync-core.mjs' {
   export function actualizarUrlsTareas(opciones: { db: unknown; urlsActualizar: unknown }): Promise<number>;
   export function actualizarUrlsParciales(opciones: { db: unknown; urlsParcialesActualizar: unknown }): Promise<number>;
   export function insertarEventosCronograma(opciones: { db: unknown; eventos: unknown[] }): Promise<number>;
-  export function aplicarComplementoCampus(opciones: { db: unknown; detectado: unknown; alumnoId?: string; alumnoNombre?: string }): Promise<{ eventos: number; horarios: number; fechas: number; notas: number }>;
+  export function aplicarComplementoCampus(opciones: { db: unknown; detectado: unknown; alumnoId?: string; alumnoNombre?: string }): Promise<{ eventos: number; horarios: number; fechas: number; notas: number; notasCargadas?: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>; pendientesEntrega?: Array<{ materia?: string; nombre?: string }> }>;
+  export function cargarNotasDesdeEnlaces(opciones: { cliente: unknown; db: unknown; materiaIds?: string[]; alumnoId?: string; alumnoNombre?: string }): Promise<{ notas: unknown[]; cargadas: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>; noLeidas: Array<{ materia?: string; nombre?: string }>; pendientesEntrega?: Array<{ materia?: string; nombre?: string }> }>;
 }
 
 declare module '../../ugr-sync/lib/previa.mjs' {
@@ -80,6 +81,8 @@ declare module '../../ugr-sync/lib/previa.mjs' {
     parcialesInsertados?: number;
     previaId?: string;
     confirmar?: boolean;
+    notasCargadas?: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>;
+    pendientesEntrega?: Array<{ materia?: string; nombre?: string }>;
   }
   export function sincronizarConPrevia(opciones: {
     db: unknown;
@@ -91,5 +94,36 @@ declare module '../../ugr-sync/lib/previa.mjs' {
     idsEventos?: string[];
     detectar?: () => Promise<ResultadoPrevia>;
     ahora?: number;
+    alumnoId?: string;
+    alumnoNombre?: string;
   }): Promise<ResultadoPrevia>;
+}
+
+declare module '../../siu-sync/lib/red.mjs' {
+  export function crearClienteSIU(opciones?: {
+    usuario?: string;
+    contrasena?: string;
+    baseUrl?: string;
+    rutaSesion?: string | null;
+  }): Promise<{
+    pedir: (ruta: string, opciones?: unknown) => Promise<{ url: string; html: string; status: number }>;
+    autenticar: () => Promise<unknown>;
+    jar: Map<string, string>;
+  }>;
+}
+
+declare module '../../siu-sync/lib/sync-core.mjs' {
+  export function conectarSIU(): Promise<unknown>;
+  export function sincronizarSIU(opciones?: { cliente?: unknown }): Promise<{
+    planEstudio: unknown[];
+    materiasAprobadas: unknown[];
+    enCurso: number;
+    inscripcionesExamenes: unknown[];
+    error: string | null;
+  }>;
+  export function parsearPlanEstudio(html: string): unknown[];
+  export function clasificarImportacionPlanSiu(
+    materiasPlan: unknown[],
+    progresoExistente?: Map<string, { estado: string; nota: string | null }>
+  ): { cargadas: unknown[]; yaTenias: unknown[]; enCurso: number };
 }

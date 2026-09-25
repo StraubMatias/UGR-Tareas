@@ -26,7 +26,7 @@ export function optimizarLecturas(cliente) {
       const clave = new URL(ruta, UGR_BASE_URL).toString();
       if (!cache.has(clave)) {
         const pendiente = limitar(() => cliente.pedir(ruta, opciones)).then((pagina) => {
-          if (pagina.es_requiere_login || pagina.status >= 300) cache.delete(clave);
+          if (pagina.es_requiere_login || !pagina.status || pagina.status >= 300) cache.delete(clave);
           return pagina;
         }).catch((error) => {
           cache.delete(clave);

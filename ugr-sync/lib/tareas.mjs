@@ -9,7 +9,7 @@
 //      id en data-mdl-overview-cmid y fechas como <span data-timestamp="...">.
 import { load } from 'cheerio';
 import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE } from './constantes.mjs';
-import { inferirTipoTarea, limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle } from './normalizar.mjs';
+import { inferirTipoTarea, limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
 
 function indiceColumna(encabezados, rotulos) {
   for (let i = 0; i < encabezados.length; i += 1) {
@@ -283,9 +283,9 @@ export function extraerActividadesOverview(html, baseUrl = '') {
       };
       const inicio = fechaItem('allowsubmissionsfromdate') || fechaItem('timeopen') || 'Sin fecha';
       const fin = fechaItem('duedate') || fechaItem('timeclose') || fechaItem('cutoffdate') || 'Sin fecha';
-      const notaCampus = parsearNotaCampus($(fila).find('td[data-mdl-overview-item="Calificación"]').attr('data-mdl-overview-value')
-        || $(fila).find('td[data-mdl-overview-item="Calificación"]').text());
-      const entregada = entregadaEnCelda($(fila).find('td[data-mdl-overview-item="submitted"], td[data-mdl-overview-item="submissionstatus"]'));
+      const notaCampus = parsearNotaCampus($(fila).find('td[data-mdl-overview-item="Calificación"], td[data-mdl-overview-item="Grade"], td[data-mdl-overview-item="grade"]').attr('data-mdl-overview-value')
+        || $(fila).find('td[data-mdl-overview-item="Calificación"], td[data-mdl-overview-item="Grade"], td[data-mdl-overview-item="grade"]').text());
+      const entregada = entregadaEnCelda($(fila).find('td[data-mdl-overview-item="submitted"], td[data-mdl-overview-item="submissionstatus"], td[data-mdl-overview-item="status"]'));
 
       // Sección del curso («General», «Unidad 2», …) dentro de la celda de nombre.
       const unidad = parsearUnidadMoodle(limpiarTexto($(celdaNombre).find('.small').first().text()));
@@ -345,6 +345,213 @@ export function parsearNotaCampus(texto) {
   return Math.round(valor * 100) / 100;
 }
 
+// Acepta 0: un intento finalizado en 0 es una nota, no un campo vacío.
+export function parsearNotaPublicada(texto) {
+  const limpio = String(texto || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!limpio || limpio === '-' || /^acciones/i.test(limpio) || /sin calificar|not yet graded|no grade/i.test(limpio)) return null;
+  const normalizado = limpio.replace(',', '.');
+  const explicita = normalizado.match(/(\d+(?:\.\d+)?)\s*(?:de|\/)\s*\d+/i);
+  const numero = explicita || normalizado.match(/(\d+(?:\.\d+)?)/);
+  if (!numero) return null;
+  const valor = Number(numero[1]);
+  if (!Number.isFinite(valor) || valor < 0 || valor > 10) return null;
+  return Math.round(valor * 100) / 100;
+}
+
+function notaDeCuerpoDeIntento(cuerpo) {
+  const enCurso = /en curso|sin finalizar|in progress/i.test(cuerpo);
+  const cerrado = /finalizado|completado|completed/i.test(cuerpo);
+  if (enCurso && !cerrado) return null;
+  const todas = String(cuerpo).matchAll(/Calificaci[oó]n(?:\s+m[aá]s alta|\s+para aprobar)?\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/gi);
+  for (const encontrada of todas) {
+    if (/m[aá]s alta|para aprobar/i.test(encontrada[0])) continue;
+    const nota = parsearNotaPublicada(encontrada[1]);
+    if (nota != null) return nota;
+  }
+  return null;
+}
+
+function intentoEnCurso(estado) {
+  return /en curso|sin finalizar|in progress/i.test(estado) && !/finalizado|finished|completado|completed/i.test(estado);
+}
+
+function esRotuloDeNota(rotulo) {
+  const texto = limpiarTexto(rotulo).toLowerCase();
+  if (!texto || /m[aá]s alta|para aprobar|to pass|highest|gradepass/.test(texto)) return false;
+  return /calificaci[oó]n|\bgrade\b|\bnota\b|\bmarks?\b/.test(texto);
+}
+
+function notaDeRotuloCalificacion(texto) {
+  const limpio = limpiarTexto(texto);
+  if (!limpio || /m[aá]s alta|para aprobar|to pass|highest/i.test(limpio)) return null;
+  return parsearNotaPublicada(limpio);
+}
+
+function numeroDeIntento(titulo) {
+  return Number(limpiarTexto(titulo).match(/\b(?:intento|attempt)\b(?:\s+n[ºo°.]*)?\s*(\d+)/i)?.[1]);
+}
+
+function notaDeFilasDeTabla($, tabla) {
+  let estado = '';
+  let nota = null;
+  if (!tabla || !tabla.length) return { estado, nota };
+  $(tabla).find('tr').each((_, tr) => {
+    const rotulo = limpiarTexto($(tr).find('th').first().text());
+    const celda = $(tr).find('td').first();
+    const cruda = celda.length ? (celda.html() || celda.text()) : $(tr).text();
+    if (/estado|status/i.test(rotulo)) estado = limpiarTexto(celda.text());
+    if (esRotuloDeNota(rotulo)) nota = notaDeRotuloCalificacion(cruda);
+  });
+  return { estado, nota };
+}
+
+function extraerIntentosTerminados($, texto) {
+  const intentos = [];
+  $('h4, h3').each((_, titulo) => {
+    const numero = numeroDeIntento($(titulo).text());
+    if (!numero) return;
+    const tarjeta = $(titulo).closest('.card, li, section');
+    const alcance = tarjeta.length ? tarjeta : $(titulo).parent();
+    const { estado, nota } = notaDeFilasDeTabla($, alcance.find('table').first());
+    const cuerpo = limpiarTexto(alcance.text());
+    if (intentoEnCurso(estado || cuerpo)) return;
+    const valor = nota != null ? nota : notaDeCuerpoDeIntento(cuerpo);
+    if (valor == null) return;
+    intentos.push({ n: numero, nota: valor });
+  });
+  $('table.quizreviewsummary, table.quizattemptsummary').each((_, tabla) => {
+    const nodo = $(tabla);
+    const tarjeta = nodo.closest('.card, li, section');
+    const numero = numeroDeIntento(tarjeta.find('h4, h3').first().text())
+      || numeroDeIntento(nodo.prevAll('h4, h3').first().text());
+    const { estado, nota } = notaDeFilasDeTabla($, nodo);
+    if (intentoEnCurso(estado)) return;
+    if (nota == null) return;
+    intentos.push({ n: numero || 0, nota });
+  });
+  const bloques = String(texto).matchAll(/\b(?:intento|attempt)\s+(\d+)(?!\d)([\s\S]*?)(?=\b(?:intento|attempt)\s+\d+(?!\d)|$)/gi);
+  for (const bloque of bloques) {
+    const nota = notaDeCuerpoDeIntento(bloque[2]);
+    if (nota == null) continue;
+    intentos.push({ n: Number(bloque[1]), nota });
+  }
+  return intentos;
+}
+
+function elegirUltimoIntento(intentos) {
+  if (!intentos.length) return null;
+  const conNumero = intentos.filter((item) => item.n > 0);
+  const lista = conNumero.length > 0 ? conNumero : intentos;
+  lista.sort((a, b) => b.n - a.n);
+  return lista[0].nota;
+}
+
+// La nota que vale es la del último intento terminado. «Calificación más alta»
+// se usa solo si la página no lista intentos.
+export function extraerNotaUltimoIntento(html) {
+  if (!html) return null;
+  const $ = load(html);
+  const texto = ($('body').length ? $('body').text() : String(html)).replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ');
+  const intentos = extraerIntentosTerminados($, texto);
+  const deIntentos = elegirUltimoIntento(intentos);
+  if (deIntentos != null) return deIntentos;
+  $('table').each((_, tabla) => {
+    const encabezados = $(tabla).find('th').toArray().map((th) => limpiarTexto($(th).text()).toLowerCase());
+    const textoEncabezado = encabezados.join(' ');
+    if (!/intento|attempt/.test(textoEncabezado) || !/calific|grade|nota|mark/.test(textoEncabezado)) return;
+    const columnaNota = encabezados.findIndex((encabezado) => esRotuloDeNota(encabezado));
+    $(tabla).find('tbody tr, tr').each((__, fila) => {
+      const celdas = $(fila).find('th, td').toArray().map((celda) => limpiarTexto($(celda).text()));
+      const numero = Number(String(celdas[0] || '').match(/\d+/)?.[0]);
+      if (!Number.isFinite(numero)) return;
+      const cruda = columnaNota >= 0 ? celdas[columnaNota] : celdas.find((celda) => parsearNotaPublicada(celda) != null);
+      const nota = parsearNotaPublicada(cruda);
+      if (nota == null || intentoEnCurso(celdas.join(' '))) return;
+      intentos.push({ n: numero, nota });
+    });
+  });
+  const deTabla = elegirUltimoIntento(intentos);
+  if (deTabla != null) return deTabla;
+  const sueltas = [];
+  $('tr').each((_, tr) => {
+    const rotulo = limpiarTexto($(tr).find('th').first().text());
+    if (!esRotuloDeNota(rotulo)) return;
+    const celda = $(tr).find('td').first();
+    const nota = notaDeRotuloCalificacion(celda.html() || celda.text());
+    if (nota != null) sueltas.push(nota);
+  });
+  if (sueltas.length === 1) return sueltas[0];
+  const final = texto.match(/calificaci[oó]n final(?:\s+en\s+este\s+cuestionario)?(?:\s+es)?\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/i);
+  if (final) return parsearNotaPublicada(final[1]);
+  const suelta = texto.match(/(?:su calificaci[oó]n(?:\s+es)?|calificaci[oó]n m[aá]s alta)\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/i);
+  return suelta ? parsearNotaPublicada(suelta[1]) : null;
+}
+
+export function extraerProgresoDeActividad(html) {
+  if (!html) return { nota: null, entregada: false };
+  const nota = extraerNotaUltimoIntento(html);
+  const $ = load(html);
+  const plano = $('body').text();
+  const hayRevision = $('a[href*="review.php"]').length > 0;
+  const hayIntento = /\b(?:intento|attempt)\s+\d+/i.test(plano) && /finalizado|finished|completado|completed/i.test(plano);
+  const envio = $('[data-region="activity-header"], .submissionstatustable, .submissionstatus, .submissionsummarytable').text();
+  const enviada = /enviad|entregad|submitted|graded|para calificar/i.test(envio)
+    && !/no entregad|no enviad|not submitted/i.test(envio);
+  return { nota, entregada: nota != null || hayRevision || hayIntento || enviada };
+}
+
+// Si el cuestionario no publica el número en el resumen, el último intento
+// terminado enlaza a review.php, que sí lo muestra.
+export function urlDeUltimaRevision(html, baseUrl = '') {
+  if (!html) return null;
+  const $ = load(html);
+  const candidatos = [];
+  $('h4').each((_, h4) => {
+    const numero = numeroDeIntento($(h4).text());
+    if (!numero) return;
+    const tarjeta = $(h4).closest('.card, li, section');
+    const alcance = tarjeta.length && tarjeta.find('h4').length === 1 ? tarjeta : $(h4).parent();
+    const estado = limpiarTexto(alcance.text());
+    if (intentoEnCurso(estado)) return;
+    const href = alcance.find('a[href*="review.php"]').attr('href');
+    if (href) candidatos.push({ n: numero, href });
+  });
+  if (candidatos.length === 0) {
+    const href = $('a[href*="/mod/quiz/review.php"]').first().attr('href');
+    return href ? completarUrl(href, baseUrl) : null;
+  }
+  candidatos.sort((a, b) => b.n - a.n);
+  return completarUrl(candidatos[0].href, baseUrl);
+}
+
+export function priorizarNotaDeUltimoIntento(progreso = [], intentos = []) {
+  const salida = progreso.map((item) => ({ ...item }));
+  for (const intento of intentos) {
+    if (!intento?.materiaId || !intento.nombre) continue;
+    if (intento.nota == null && !intento.entregada) continue;
+    const indice = salida.findIndex((item) => item.materiaId === intento.materiaId && (
+      (intento.id && item.id === intento.id)
+      || coincidirNombreTarea(item.nombre, intento.nombre)
+    ));
+    const previa = indice >= 0 ? salida[indice] : null;
+    const nota = intento.nota != null ? intento.nota : previa?.nota ?? null;
+    const fila = {
+      materiaId: intento.materiaId,
+      materiaNombre: intento.materiaNombre || previa?.materiaNombre,
+      nombre: intento.nombre,
+      tabla: intento.tabla || previa?.tabla || (intento.id ? 'tareas' : 'nueva'),
+      id: intento.id || previa?.id || null,
+      fecha: intento.fecha || previa?.fecha,
+      nota,
+      entregada: Boolean(intento.entregada || nota != null || previa?.entregada),
+      forzar: intento.nota != null
+    };
+    if (indice >= 0) salida[indice] = { ...salida[indice], ...fila };
+    else salida.push(fila);
+  }
+  return salida;
+}
+
 function entregadaEnCelda(celda) {
   if (!celda || celda.length === 0) return false;
   const valor = String(celda.attr('data-mdl-overview-value') || '').trim();
@@ -357,12 +564,12 @@ export function extraerNotasDeLibreta(html) {
   const $ = load(html);
   const notas = [];
   const vistos = new Set();
-  $('a.gradeitemheader[href*="/mod/"]').each((_, enlace) => {
-    const href = $(enlace).attr('href') || '';
+  $('tr').each((_, tr) => {
+    const enlace = $(tr).find('a.gradeitemheader[href*="/mod/"], a[href*="/mod/"][href*="view.php"]').first();
+    const href = enlace.attr('href') || '';
     const id = (href.match(/[?&]id=(\d+)/) || [])[1];
-    const nombre = limpiarTexto($(enlace).text());
-    const fila = $(enlace).closest('tr');
-    const nota = parsearNotaCampus(fila.find('td.column-grade, td[class*="column-grade"]').first().text());
+    const nombre = limpiarTexto(enlace.text());
+    const nota = parsearNotaCampus($(tr).find('td.column-grade, td[class*="column-grade"], td.grade').first().text());
     if (!id || !nombre || nota == null || vistos.has(id)) return;
     vistos.add(id);
     notas.push({ id, nombre, nota, url: completarUrl(href, '') });

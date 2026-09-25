@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from '../lib/materias.mjs';
-import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerNotasDeLibreta, extraerTareas, parsearNotaCampus } from '../lib/tareas.mjs';
+import { esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, parsearNotaCampus, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -281,6 +281,113 @@ test('extraerActividadesOverview no captura nada sin overview o sin filas', asyn
     extraerActividadesOverview('<html><body><div id="quiz_overview"><table><tr><td>x</td></tr></table></div></body></html>'),
     []
   );
+});
+
+test('la nota del cuestionario es la del último intento terminado, no la más alta', () => {
+  const html = `
+    <body>
+      <p>Calificación para aprobar: 10,00 de 10,00</p>
+      <p>Calificación más alta: 10,00 / 10,00.</p>
+      <h3>Sus intentos</h3>
+      <section>
+        <h4>Intento 2</h4>
+        <p>Estado Finalizado</p>
+        <p>Calificación 7,50 de 10,00 (75%)</p>
+      </section>
+      <section>
+        <h4>Intento 1</h4>
+        <p>Estado Finalizado</p>
+        <p>Calificación 10,00 de 10,00 (100%)</p>
+      </section>
+    </body>`;
+  assert.equal(extraerNotaUltimoIntento(html), 7.5);
+  assert.equal(extraerNotaUltimoIntento('<body><p>Calificación para aprobar: 10,00 de 10,00</p></body>'), null);
+  assert.equal(extraerNotaUltimoIntento('<body><p>Su calificación es 8,00 / 10,00</p></body>'), 8);
+  const conCurso = `
+    <body>
+      <h4>Intento 3</h4><p>Estado En curso</p>
+      <h4>Intento 2</h4><p>Estado Finalizado</p><p>Calificación 0,00 de 10,00 (0%)</p>
+    </body>`;
+  assert.equal(extraerNotaUltimoIntento(conCurso), 0);
+});
+
+test('la tarjeta de Moodle trae la nota del último intento, no la más alta', () => {
+  const html = `
+    <body>
+      <p>Calificación para aprobar: 10,00 de 10,00</p>
+      <p>Calificación más alta: 10,00 / 10,00</p>
+      <h3>Resumen de sus intentos previos</h3>
+      <ul>
+        <li class="col">
+          <div class="card">
+            <h4 class="card-title">Intento 2</h4>
+            <table class="generaltable quizreviewsummary">
+              <tr><th class="cell" scope="row">Estado</th><td class="cell">Finalizado</td></tr>
+              <tr><th class="cell" scope="row">Calificación</th><td class="cell">10,00 de 10,00 (100%)</td></tr>
+            </table>
+            <a href="https://virtual.ugr.edu.ar/mod/quiz/review.php?attempt=22">Revisión</a>
+          </div>
+        </li>
+        <li class="col">
+          <div class="card">
+            <h4 class="card-title">Intento 1</h4>
+            <table class="generaltable quizreviewsummary">
+              <tr><th class="cell" scope="row">Estado</th><td class="cell">Finalizado</td></tr>
+              <tr><th class="cell" scope="row">Calificación</th><td class="cell">0,00 de 10,00 (0%)</td></tr>
+            </table>
+            <a href="https://virtual.ugr.edu.ar/mod/quiz/review.php?attempt=11">Revisión</a>
+          </div>
+        </li>
+      </ul>
+    </body>`;
+  assert.equal(extraerNotaUltimoIntento(html), 10);
+  assert.equal(urlDeUltimaRevision(html), 'https://virtual.ugr.edu.ar/mod/quiz/review.php?attempt=22');
+  assert.equal(extraerNotaUltimoIntento(`
+    <p>Calificación para aprobar: 10,00 de 10,00</p>
+    <h3>Tu calificación final en este cuestionario es 10,00 de 10,00.</h3>
+  `), 10);
+  assert.equal(extraerNotaUltimoIntento(`
+    <table class="quizreviewsummary"><tr><th>Estado</th><td>Finalizado</td></tr><tr><th>Calificación</th><td><b>10,00</b> de 10,00 (<b>100</b>%)</td></tr></table>
+    <table class="quizreviewsummary"><tr><th>Estado</th><td>Finalizado</td></tr><tr><th>Calificación</th><td>0,00 de 10,00 (0%)</td></tr></table>
+  `), 10);
+  const viejoPrimero = `
+    <div class="card"><h4>Intento 1</h4><table class="quizreviewsummary"><tr><th>Calificación</th><td>0,00 de 10,00</td></tr></table></div>
+    <div class="card"><h4>Intento 2</h4><table class="quizreviewsummary"><tr><th>Calificación</th><td>10,00 de 10,00</td></tr></table></div>`;
+  assert.equal(extraerNotaUltimoIntento(viejoPrimero), 10);
+  assert.equal(extraerProgresoDeActividad(viejoPrimero).entregada, true);
+  assert.equal(extraerProgresoDeActividad(viejoPrimero).nota, 10);
+});
+
+test('si el resumen no trae número, la revisión del último intento es la que hay que abrir', () => {
+  const html = `
+    <div class="card">
+      <h4 class="card-title">Intento 2</h4>
+      <table><tr><th>Estado</th><td>Finalizado</td></tr><tr><th>Calificación</th><td>Sin calificar</td></tr></table>
+      <a href="/mod/quiz/review.php?attempt=22">Revisión</a>
+    </div>`;
+  assert.equal(extraerNotaUltimoIntento(html), null);
+  assert.equal(urlDeUltimaRevision(html, 'https://virtual.ugr.edu.ar'), 'https://virtual.ugr.edu.ar/mod/quiz/review.php?attempt=22');
+  assert.equal(extraerNotaUltimoIntento(`
+    <table class="quizreviewsummary"><tr><th>Calificación</th><td>10,00 de 10,00 (100%)</td></tr></table>
+  `), 10);
+});
+
+test('si Moodle la tiene hecha, se marca entrega aunque todavía no haya nota', () => {
+  const progreso = priorizarNotaDeUltimoIntento(
+    [],
+    [{ materiaId: 'act', nombre: 'TP 1', id: 't1', entregada: true }]
+  );
+  assert.equal(progreso[0].entregada, true);
+  assert.equal(progreso[0].nota, null);
+});
+
+test('el último intento pisa la nota de la libreta', () => {
+  const progreso = priorizarNotaDeUltimoIntento(
+    [{ materiaId: 'act', nombre: 'Lea y responda- Vargas y Ollarves', id: 't1', tabla: 'tareas', nota: 10, entregada: true }],
+    [{ materiaId: 'act', nombre: 'Lea y responda- Vargas y Ollarves', id: 't1', nota: 7.5 }]
+  );
+  assert.equal(progreso[0].nota, 7.5);
+  assert.equal(progreso[0].forzar, true);
 });
 
 test('parsearNotaCampus lee la calificación que publica el campus', () => {
