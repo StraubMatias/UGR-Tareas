@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { crearEsquemaGrupos } from '../database/grupos-schema.mjs';
-import { asignarGrupo, actualizarProgresoTarea } from '../src/lib/grupos-tareas.ts';
+import { asignarGrupo, actualizarProgresoTarea, propagarNotasGrupalesEnMaterias } from '../src/lib/grupos-tareas.ts';
 
 async function preparar(t) {
   const directorio = mkdtempSync(join(tmpdir(), 'ugr-grupos-'));
@@ -91,6 +91,29 @@ test('aislamiento de tareas, grupos e individuales y validaciones', async (t) =>
   await actualizarProgresoTarea(db, 't', ana, { nota: '8' });
   await actualizarProgresoTarea(db, 'individual', beto, { nota: '7' });
   assert.deepEqual((await db.execute('SELECT tarea_id, alumno FROM notas_tareas ORDER BY tarea_id')).rows.map((r) => [r.tarea_id, r.alumno]), [['individual', 'Beto'], ['t', 'Ana']]);
+});
+
+test('propagarNotasGrupalesEnMaterias replica nota tras sync de un integrante', async (t) => {
+  const db = await preparar(t);
+  await db.batch([
+    'CREATE TABLE materias (id TEXT PRIMARY KEY)',
+    "INSERT INTO materias VALUES ('m1')",
+    'ALTER TABLE tareas ADD COLUMN materia_id TEXT',
+    'ALTER TABLE tareas ADD COLUMN nombre TEXT',
+    "UPDATE tareas SET materia_id = 'm1', nombre = 'TP grupal' WHERE id = 't'"
+  ], 'write');
+  const { grupoId } = await asignarGrupo(db, 't', 'a', { nombre: 'G' });
+  await asignarGrupo(db, 't', 'b', { grupoId });
+  await db.execute({
+    sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en)
+          VALUES ('n1', 't', 'a', 'Ana', '8', datetime('now'))`,
+    args: []
+  });
+  const propagado = await propagarNotasGrupalesEnMaterias(db, 'a', ['m1']);
+  assert.equal(propagado.length, 1);
+  assert.deepEqual(propagado[0].integrantes, ['Beto']);
+  const notas = (await db.execute('SELECT alumno, nota FROM notas_tareas ORDER BY alumno')).rows;
+  assert.deepEqual(notas, [{ alumno: 'Ana', nota: '8' }, { alumno: 'Beto', nota: '8' }]);
 });
 
 test('cupo máximo de integrantes por grupo', async (t) => {

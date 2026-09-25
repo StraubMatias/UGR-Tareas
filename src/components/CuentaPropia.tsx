@@ -20,24 +20,45 @@ function filaTieneCambios(fila: ResumenMateriaSync): boolean {
   );
 }
 
+export function InformeSyncUgr({ lineas }: { lineas: string[] }) {
+  if (lineas.length === 0) {
+    return (
+      <div className="rounded-xl border border-slate-700/80 bg-slate-900/50 px-4 py-5 text-center">
+        <p className="text-sm font-medium text-slate-200">Nada nuevo que cargar</p>
+        <p className="mt-1 text-xs text-slate-500">UGR Virtual no tenía tareas, fechas ni notas nuevas para vos.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-4">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Qué hizo la sincronización</p>
+      <ul className="mt-3 space-y-2 text-sm text-emerald-50/95 list-none">
+        {lineas.map((linea) => (
+          <li key={linea} className="flex gap-2">
+            <span className="text-emerald-400 shrink-0" aria-hidden="true">•</span>
+            <span>{linea}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function ResumenCursada({
   resumen,
-  materiasInscriptas = []
+  materiasInscriptas = [],
+  informeLineas = []
 }: {
   resumen: ResumenMateriaSync[];
   materiasInscriptas?: MateriaInscriptaSync[];
+  informeLineas?: string[];
 }) {
   const filas = resumen.filter(filaTieneCambios);
   const hayCambios = filas.length > 0;
 
   return (
     <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-      {!hayCambios && (
-        <div className="rounded-xl border border-slate-700/80 bg-slate-900/50 px-4 py-5 text-center">
-          <p className="text-sm font-medium text-slate-200">Nada nuevo que cargar</p>
-          <p className="mt-1 text-xs text-slate-500">Las tareas que ya tenías siguen igual en el tablero.</p>
-        </div>
-      )}
+      <InformeSyncUgr lineas={informeLineas} />
 
       {hayCambios && (
         <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300/90">Qué cambió</p>
@@ -219,6 +240,7 @@ export default function CuentaPropia({
   const [mensaje, setMensaje] = useState('');
   const [error, setError] = useState('');
   const [resumen, setResumen] = useState<ResumenMateriaSync[]>([]);
+  const [informeLineas, setInformeLineas] = useState<string[]>([]);
   const [materiasInscriptas, setMateriasInscriptas] = useState<MateriaInscriptaSync[]>([]);
   const [detalleSiu, setDetalleSiu] = useState<{
     mensaje: string;
@@ -233,6 +255,7 @@ export default function CuentaPropia({
     setError('');
     setMensaje('');
     setResumen([]);
+    setInformeLineas([]);
     setMateriasInscriptas([]);
     setDetalleSiu(null);
     setDni('');
@@ -254,6 +277,7 @@ export default function CuentaPropia({
     setMensaje('');
     setError('');
     setResumen([]);
+    setInformeLineas([]);
     setMateriasInscriptas([]);
     setDetalleSiu(null);
     setDni('');
@@ -267,8 +291,8 @@ export default function CuentaPropia({
           setFase('error');
           return;
         }
-        const aviso = resultado.mensaje || 'Cursada actualizada.';
-        setMensaje(aviso);
+        setMensaje(resultado.mensaje || 'Cursada actualizada.');
+        setInformeLineas(resultado.informeLineas || []);
         setResumen(resultado.resumen || []);
         setMateriasInscriptas(resultado.materiasInscriptas || []);
         await marcarCompletado();
@@ -456,13 +480,7 @@ export default function CuentaPropia({
           <h3 className="text-base font-bold text-white">{titulo}</h3>
           {fuente === 'ugr' ? (
             <>
-              {mensaje && (
-                <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300 mb-1">Resultado</p>
-                  <p>{mensaje}</p>
-                </div>
-              )}
-              <ResumenCursada resumen={resumen} materiasInscriptas={materiasInscriptas} />
+              <ResumenCursada resumen={resumen} informeLineas={informeLineas} materiasInscriptas={materiasInscriptas} />
             </>
           ) : (
             detalleSiu && <DetalleSyncSiu {...detalleSiu} />

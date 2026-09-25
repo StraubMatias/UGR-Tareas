@@ -21,6 +21,8 @@ import {
   MAX_USUARIO_LENGTH
 } from '../../server/action-internals';
 import { asegurarEsquemaCuentasEnServidor } from '../../server/asegurar-esquema-cuentas';
+import { mensajeDesdeInforme } from '../../lib/informe-sync-ugr';
+import { propagarNotaGrupalTrasCargaCampus } from '../../lib/grupos-tareas';
 import { sincronizarCursadaDelAlumno } from '../../server/sync-ugr-cursada';
 
 // Admin: usa SIU_USER / SIU_PASSWORD del servidor (atajo sin tipear clave).
@@ -167,6 +169,17 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
       alumnoNombre: usuarioSesion,
       cliente
     });
+    const lineasInforme = [...sync.lineasInforme];
+    for (const nota of sync.notasCampus) {
+      if (!nota.tareaId || nota.yaEstaba) continue;
+      const grupo = await propagarNotaGrupalTrasCargaCampus(db, nota.tareaId, alumnoId);
+      if (!grupo || grupo.integrantesActualizados.length === 0) continue;
+      const nombres = grupo.integrantesGrupo.join(', ');
+      lineasInforme.push(
+        `Tarea grupal «${grupo.tareaNombre}»: al ser trabajo en grupo, la nota ${grupo.nota} quedó para todo el grupo (${nombres}).`
+      );
+    }
+    const materiasSync = Math.max(sync.materiasInscriptas?.length || 0, 1);
     const ahoraIso = new Date().toISOString();
     await db.execute({
       sql: `UPDATE alumnos SET sincronizado_en = COALESCE(NULLIF(sincronizado_en, ''), ?), ultimo_acceso = ? WHERE id = ?`,
@@ -183,7 +196,8 @@ export async function sincronizarCuentaUgrAction(dniInput: string, passwordUgrIn
 
     return {
       exito: true,
-      mensaje: sync.mensaje,
+      mensaje: mensajeDesdeInforme(lineasInforme, materiasSync),
+      informeLineas: lineasInforme,
       resumen: sync.resumen,
       materiasInscriptas: sync.materiasInscriptas
     };
