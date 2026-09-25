@@ -36,6 +36,7 @@ import {
   fechaDeEvaluacion,
   pareceEvaluacion,
   parcialYaSeRindio,
+  esNombreConsignaValido,
   normalizarNombre,
   separarEvaluaciones
 } from './normalizar.mjs';
@@ -626,7 +627,9 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
     const candidatas = [];
     const aRevisar = [];
     for (const tarea of tareasUnicas) {
+      if (!esNombreConsignaValido(tarea.nombre)) continue;
       const nombreFinal = normalizarNombre({ nombre: tarea.nombre, cursoNombre: curso.nombre });
+      if (!esNombreConsignaValido(nombreFinal)) continue;
       const existente = filaExistente(nombreFinal, tarea);
       if (existente) {
         yaCargadas.push({

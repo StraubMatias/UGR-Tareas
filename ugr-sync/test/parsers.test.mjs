@@ -295,7 +295,8 @@ test('extraerConsignasDeHtml detecta asignaciones del índice sin contenedor *_o
 test('extraerConsignasDePaginaCurso lista asignaciones del índice del curso', () => {
   const html = `
     <div id="region-main">
-      <a class="aalink" href="/mod/assign/view.php?id=555001">TP 2 - Conceptos</a>
+      <a class="activityname" href="/mod/assign/view.php?id=555001">TP 2 - Conceptos</a>
+      <a href="/mod/assign/view.php?id=9">10</a>
       <a href="/mod/resource/view.php?id=1">Lectura</a>
     </div>`;
   const consignas = extraerConsignasDePaginaCurso(html, 'https://virtual.ugr.edu.ar');

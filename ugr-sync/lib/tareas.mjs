@@ -9,7 +9,7 @@
 //      id en data-mdl-overview-cmid y fechas como <span data-timestamp="...">.
 import { load } from 'cheerio';
 import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
-import { inferirTipoTarea, limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
+import { esNombreConsignaValido, inferirTipoTarea, limpiarTextoParaBusqueda, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
 
 function indiceColumna(encabezados, rotulos) {
   for (let i = 0; i < encabezados.length; i += 1) {
@@ -121,7 +121,14 @@ export function extraerTareas(html, baseUrl = '') {
       // En formato overview la celda de nombre trae la unidad en un sub-bloque
       // <div class="small">Unidad II</div>. También la buscamos en el nombre.
       const celdaNombre = $(fila).find('td[data-mdl-overview-item="name"]').first();
-      const nombreTarea = limpiarTexto($(enlace).text()) || celdas[0] || 'Tarea sin nombre';
+      const nombreTarea = limpiarTexto(
+        $(celdaNombre).attr('data-mdl-overview-value')
+          || $(celdaNombre).find('a.activityname').first().text()
+          || $(enlace).filter('.activityname').text()
+          || $(enlace).text()
+          || $(fila).find('a.activityname').first().text()
+      );
+      if (!esNombreConsignaValido(nombreTarea)) return;
       let unidad = null;
       if (celdaNombre.length) {
         unidad = parsearUnidadMoodle(limpiarTexto($(celdaNombre).find('.small').first().text()))
@@ -262,7 +269,7 @@ export function extraerActividadesOverview(html, baseUrl = '') {
           || $(enlace).text()
           || ''
       );
-      if (!idModulo || !nombre) return;
+      if (!idModulo || !nombre || !esNombreConsignaValido(nombre)) return;
 
       // El tipo del módulo se deduce del enlace real (más fiable que la sección).
       const modulo = (href.match(/\/mod\/([a-z0-9_]+)\/view\.php/) || [])[1] || moduloSeccion;
@@ -309,18 +316,26 @@ export function extraerActividadesOverview(html, baseUrl = '') {
   return actividades;
 }
 
+function puntuacionNombreConsigna(nombre) {
+  if (!esNombreConsignaValido(nombre)) return 0;
+  return 1000 + String(nombre).length;
+}
+
 function combinarCamposActividad(base, extra) {
   const salida = { ...base };
   for (const [clave, valor] of Object.entries(extra)) {
     if (valor == null || valor === '') continue;
+    if (clave === 'nombre') continue;
     if (clave === 'inicio' || clave === 'fin') {
       if (!salida[clave] || salida[clave] === 'Sin fecha') salida[clave] = valor;
       continue;
     }
     if (salida[clave] == null || salida[clave] === '') salida[clave] = valor;
   }
-  if (extra.nombre && String(extra.nombre).length > String(salida.nombre || '').length) {
-    salida.nombre = extra.nombre;
+  const nombreBase = salida.nombre;
+  const nombreExtra = extra.nombre;
+  if (puntuacionNombreConsigna(nombreExtra) > puntuacionNombreConsigna(nombreBase)) {
+    salida.nombre = nombreExtra;
   }
   return salida;
 }
@@ -331,7 +346,7 @@ export function fusionarActividadesConsigna(listas) {
   const mapa = new Map();
   for (const lista of listas) {
     for (const actividad of Array.isArray(lista) ? lista : []) {
-      if (!actividad?.id) continue;
+      if (!actividad?.id || !esNombreConsignaValido(actividad.nombre)) continue;
       const esForo = actividad.tipo === 'foro' || /\/mod\/forum\//.test(actividad.url || '');
       const normalizada = {
         ...actividad,
@@ -384,14 +399,19 @@ export function extraerConsignasDePaginaCurso(html, baseUrl = '') {
   const $ = load(html);
   const actividades = [];
   const vistos = new Set();
-  $('a[href*="/mod/"]').each((_, enlace) => {
+  const selectores = [
+    '#region-main a.activityname[href*="/mod/"]',
+    '.course-content a.activityname[href*="/mod/"]',
+    '.activity-item a.instancename[href*="/mod/"]'
+  ].join(', ');
+  $(selectores).each((_, enlace) => {
     const href = $(enlace).attr('href') || '';
     const modulo = (href.match(/\/mod\/([a-z0-9_]+)\/view\.php/i) || [])[1];
     if (!modulo || !MODULOS_CONSIGNA.includes(modulo)) return;
     const id = (href.match(/[?&]id=(\d+)/) || [])[1];
     if (!id || vistos.has(id)) return;
     const nombre = limpiarTexto($(enlace).text()) || limpiarTexto($(enlace).attr('title'));
-    if (!nombre) return;
+    if (!esNombreConsignaValido(nombre)) return;
     const esForo = modulo === 'forum';
     if (esForo ? esForoInformativo(nombre) : esActividadInformativa(nombre)) return;
     vistos.add(id);
@@ -432,12 +452,11 @@ export async function extraerConsignasDeCurso(cliente, cursoId, { baseUrl = UGR_
   ]);
 
   let actividades = [];
-  for (const html of fusionarHtmlsUnicos(htmlOverview, htmlAssign, htmlForos, htmlCurso)) {
-    actividades = fusionarActividadesConsigna([
-      actividades,
-      extraerConsignasDeHtml(html, baseUrl),
-      extraerConsignasDePaginaCurso(html, baseUrl)
-    ]);
+  for (const html of fusionarHtmlsUnicos(htmlOverview, htmlAssign, htmlForos)) {
+    actividades = fusionarActividadesConsigna([actividades, extraerConsignasDeHtml(html, baseUrl)]);
+  }
+  if (htmlCurso) {
+    actividades = fusionarActividadesConsigna([actividades, extraerConsignasDePaginaCurso(htmlCurso, baseUrl)]);
   }
   return actividades;
 }

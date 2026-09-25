@@ -7,6 +7,7 @@ import {
   coincidirNombreTarea,
   coincidirParcial,
   emparejarCursosConMaterias,
+  esNombreConsignaValido,
   filtrarTareasDuplicadas,
   agruparResumenSync,
   armarMensajeCursada,
@@ -370,6 +371,13 @@ test('la nota de un parcial no existe hasta el día en que se rinde', async () =
   assert.equal(parcialYaSeRindio('2026-09-21', '2026-09-21'), true);
   assert.equal(parcialYaSeRindio('2026-10-28', '2026-09-21'), false);
   assert.equal(parcialYaSeRindio('Sin fecha', '2026-09-21'), false);
+});
+
+test('esNombreConsignaValido descarta notas sueltas y acepta títulos reales', () => {
+  assert.equal(esNombreConsignaValido('10'), false);
+  assert.equal(esNombreConsignaValido('0'), false);
+  assert.equal(esNombreConsignaValido('Activos según INCIBE'), true);
+  assert.equal(esNombreConsignaValido('TP 2'), true);
 });
 
 test('filtrarTareasDuplicadas reconoce la misma actividad por URL de Moodle aunque cambie el nombre', () => {

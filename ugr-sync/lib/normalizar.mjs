@@ -429,9 +429,19 @@ export function inferirTipoTarea(nombre) {
   return 'actividad';
 }
 
+// Descarta rótulos que no son el nombre real de la consigna (notas, estados, etc.).
+export function esNombreConsignaValido(nombre) {
+  const n = String(nombre || '').replace(/\s+/g, ' ').trim();
+  if (!n || n.length < 2) return false;
+  if (/^\d+(?:[.,]\d+)?$/.test(n)) return false;
+  if (/^(sin fecha|no entregado|enviado para calificar|calificar|-+|n\/a)$/i.test(n)) return false;
+  return true;
+}
+
 // Ajusta el nombre para la base: recorta largos y evita repeticiones.
 export function normalizarNombre({ nombre, cursoNombre }) {
   let salida = String(nombre || '').replace(/\s+/g, ' ').trim();
+  if (!esNombreConsignaValido(salida)) salida = '';
   if (!salida) salida = String(cursoNombre || 'Tarea').trim();
   if (salida.length > 200) salida = `${salida.slice(0, 197)}...`;
   return salida;
