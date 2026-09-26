@@ -1,4 +1,5 @@
 import type { EventoCronograma, Horario, Materia, Parcial } from '../core/cursada';
+import { presentarCronogramaDelDia } from './cronograma-vista';
 
 export const NOMBRES_DIAS: Record<number, string> = {
   1: 'Lunes',
@@ -68,7 +69,7 @@ export function eventosDelDiaCalendario(
   }
 ) {
   if (!fecha || !fechaDentroDelCronograma(fecha)) {
-    return { parciales: [], tareas: [], horarios: [], cronograma: [] };
+    return { parciales: [], tareas: [], horarios: [], cronograma: [], enlacesClasePorMateria: new Map<string, string>() };
   }
 
   const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
@@ -99,10 +100,20 @@ export function eventosDelDiaCalendario(
     return deHoraYMedia.length > 0 ? deHoraYMedia : grupo;
   }).sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio)) || String(a.materia_id).localeCompare(String(b.materia_id)));
 
+  const parciales = parcialesDeLaCursada.filter((parcial) => obtenerClaveDiaCalendario(parcial.fecha) === claveDia);
+  const tareas = tareasCalendario.filter(({ tarea }) => obtenerClaveDiaCalendario(tarea.fin) === claveDia);
+  const { eventos: cronograma, enlaceClasePorMateria } = presentarCronogramaDelDia(
+    eventosCronogramaDia,
+    horariosReales,
+    parciales,
+    tareas.map(({ tarea }) => ({ nombre: tarea.nombre }))
+  );
+
   return {
-    parciales: parcialesDeLaCursada.filter((parcial) => obtenerClaveDiaCalendario(parcial.fecha) === claveDia),
-    tareas: tareasCalendario.filter(({ tarea }) => obtenerClaveDiaCalendario(tarea.fin) === claveDia),
+    parciales,
+    tareas,
     horarios: horariosReales,
-    cronograma: eventosCronogramaDia
+    cronograma,
+    enlacesClasePorMateria: enlaceClasePorMateria
   };
 }

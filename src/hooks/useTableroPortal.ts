@@ -115,12 +115,22 @@ export function useTableroPortal() {
     setMateriaRanking: ui.setMateriaRanking
   });
 
-  ui.pausarRefrescoRef.current = Boolean(
-    acceso.modalPasswordOpen
-    || admin.hayModalAbierto
-    || ui.syncPickerAbierto
-    || ui.syncCuentaFuente !== null
-  );
+  const { pausarRefrescoRef } = ui;
+
+  useEffect(() => {
+    pausarRefrescoRef.current = Boolean(
+      acceso.modalPasswordOpen
+      || admin.hayModalAbierto
+      || ui.syncPickerAbierto
+      || ui.syncCuentaFuente !== null
+    );
+  }, [
+    pausarRefrescoRef,
+    acceso.modalPasswordOpen,
+    admin.hayModalAbierto,
+    ui.syncPickerAbierto,
+    ui.syncCuentaFuente
+  ]);
 
   const portalAcceso = usePortalAcceso({
     setIniciado: ui.setIniciado,

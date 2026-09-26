@@ -177,6 +177,19 @@ function pareceClase(titulo) {
   return /clase|encuentro|sincr|zoom|sala virtual|revisi[oó]n/i.test(titulo);
 }
 
+/** Enlace/turno de Zoom sin tema de la clase; el horario semanal ya lo muestra el tablero. */
+export function esTituloClaseGenericaDelCampus(titulo) {
+  const t = limpiarTexto(titulo);
+  if (!t) return true;
+  if (/^(se abre|se cierra)\b/i.test(t)) return true;
+  if (/^vencimiento de\b/i.test(t)) return false;
+  if (/^link de clase\b/i.test(t)) return true;
+  if (/^clases sincr[oó]nicas\s*-/i.test(t)) return true;
+  if (/^enlace a la clase sincr[oó]nica/i.test(t)) return true;
+  if (/^clase sincr[oó]nica semanal/i.test(t)) return true;
+  return false;
+}
+
 function tituloConHorario(evento) {
   if (!evento.horaInicio) return evento.titulo;
   if (/\d{1,2}\s*:\s*\d{2}|\d{1,2}\s*hs\b/i.test(evento.titulo)) return evento.titulo;
@@ -228,11 +241,13 @@ export function clasificarEventosCalendario({ eventos, actividades, materiaId })
       continue;
     }
     if (esRecordatorioDeActividad(evento.titulo) && !conocida) {
+      if (/^(?:se abre|se cierra)\b/i.test(limpiarTexto(evento.titulo))) continue;
       cronograma.push(eventoCronograma(evento, materiaId));
       continue;
     }
     if (conocida && !pareceClase(evento.titulo)) continue;
-    cronograma.push(eventoCronograma(evento, materiaId));
+    const generica = pareceClase(evento.titulo) && esTituloClaseGenericaDelCampus(evento.titulo);
+    if (!generica) cronograma.push(eventoCronograma(evento, materiaId));
     sumarHorario(horarioDeclaradoEnTitulo(evento.titulo));
     const lista = repeticiones.get(evento.titulo) || [];
     lista.push(evento);
@@ -268,11 +283,13 @@ export function ajustarClasesAlHorario(cronograma, horarios) {
       inicio === real.horaInicio && fin === real.horaFin ? coincidencia : rango
     ));
     const detallesDeCampus = /horario del campus/i.test(evento.detalles || '');
+    const soloHorario = esTituloClaseGenericaDelCampus(evento.titulo)
+      || esTituloClaseGenericaDelCampus(titulo);
     if (titulo === evento.titulo && !detallesDeCampus) return evento;
     return {
       ...evento,
       titulo,
-      detalles: `Clase de ${real.horaInicio} a ${real.horaFin}.`
+      detalles: soloHorario ? '' : (evento.detalles && !detallesDeCampus ? evento.detalles : '')
     };
   });
 }

@@ -7,12 +7,14 @@ import {
   type Tarea
 } from '../core/cursada';
 import type { ReactNode } from 'react';
+import { mostrarEtiquetaTipoCronograma, tituloDestacadoCronograma } from '../lib/cronograma-vista';
 
 interface EventosDia {
   parciales: Parcial[];
   tareas: { tarea: Tarea; materia: Materia }[];
   horarios: Horario[];
   cronograma: EventoCronograma[];
+  enlacesClasePorMateria?: Map<string, string>;
 }
 
 interface Props {
@@ -205,14 +207,18 @@ export default function VistaHorarios({
                                   : esConsulta
                                     ? 'Consulta'
                                     : 'Clase';
+                        const tituloChip = tituloDestacadoCronograma(evento);
+                        const mostrarEtiquetaChip = mostrarEtiquetaTipoCronograma(evento);
                         return (
                           <div
                             key={evento.id}
                             className={`calendar-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : esExamen ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}
-                            title={`${evento.titulo} · ${materia?.nombre || 'Materia'}`}
+                            title={`${tituloChip} · ${materia?.nombre || 'Materia'}`}
                           >
-                            <span className="font-bold">{etiqueta}</span>
-                            {!esSinClases && <span className="block truncate opacity-90">{evento.titulo}</span>}
+                            {mostrarEtiquetaChip && <span className="font-bold">{etiqueta}</span>}
+                            {!esSinClases && (
+                              <span className={`block truncate ${mostrarEtiquetaChip ? 'opacity-90' : 'font-bold'}`}>{tituloChip}</span>
+                            )}
                           </div>
                         );
                       })}
@@ -305,11 +311,18 @@ export default function VistaHorarios({
                       if (orden < actual.orden) actual.orden = orden;
                       return actual;
                     };
+                    const enlacesClase = eventos.enlacesClasePorMateria ?? new Map<string, string>();
                     for (const horario of eventos.horarios) {
+                      const enlaceClase = enlacesClase.get(horario.materia_id);
                       grupoDe(horario.materia_id, horario.hora_inicio).bloques.push(
                         <div key={`modal-${horario.id}`} className="calendar-modal-event calendar-class">
                           <p className="text-sm font-extrabold">Cursada · {horario.hora_inicio} - {horario.hora_fin}</p>
                           {horario.aula && horario.aula !== 'Virtual' && <p className="mt-1 text-xs opacity-75">Aula {horario.aula}</p>}
+                          {enlaceClase && (
+                            <a href={enlaceClase} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-2">
+                              Ver en UGR ↗
+                            </a>
+                          )}
                         </div>
                       );
                     }
@@ -355,13 +368,19 @@ export default function VistaHorarios({
                                 : esConsulta
                                   ? 'Consulta'
                                   : 'Clase';
+                      const tituloVisible = tituloDestacadoCronograma(evento);
+                      const mostrarEtiqueta = mostrarEtiquetaTipoCronograma(evento);
                       grupoDe(evento.materia_id, esSinClases ? '00' : '70').bloques.push(
                         <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : esExamen ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}>
-                          <p className="text-sm font-extrabold">{etiqueta}</p>
-                          {!esSinClases && evento.titulo && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
-                          {esSinClases && evento.titulo && evento.titulo.toLowerCase() !== 'sin clases' && <p className="mt-1 text-sm opacity-85">{evento.titulo}</p>}
+                          {mostrarEtiqueta && <p className="text-sm font-extrabold">{etiqueta}</p>}
+                          {!esSinClases && tituloVisible && (
+                            <p className={`text-sm ${mostrarEtiqueta ? 'mt-1 opacity-85' : 'font-extrabold'}`}>{tituloVisible}</p>
+                          )}
+                          {esSinClases && tituloVisible && tituloVisible.toLowerCase() !== 'sin clases' && (
+                            <p className="mt-1 text-sm opacity-85">{tituloVisible}</p>
+                          )}
                           {evento.detalles && <p className="mt-2 text-sm opacity-85">{evento.detalles}</p>}
-                          {evento.url && (
+                          {evento.url && !enlacesClase.has(evento.materia_id) && (
                             <a href={evento.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-2">
                               Ver en UGR ↗
                             </a>

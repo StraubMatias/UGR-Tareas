@@ -40,7 +40,10 @@ interface UsePortalAccesoOptions {
 
 export function usePortalAcceso(opts: UsePortalAccesoOptions) {
   const optsRef = useRef(opts);
-  optsRef.current = opts;
+
+  useEffect(() => {
+    optsRef.current = opts;
+  });
 
   const iniciarSesionLocal = useCallback((usuario: string, rol: string, origen = 'comision', ugrUsuario: string | null = null) => {
     const o = optsRef.current;

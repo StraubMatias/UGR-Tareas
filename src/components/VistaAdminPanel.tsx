@@ -310,7 +310,7 @@ export default function VistaAdminPanel(props: VistaAdminPanelProps) {
                   {/* NUEVO: CARGAR PARCIAL */}
                   <div className="bg-[#161c26] border border-slate-800 rounded-2xl p-6 shadow-sm">
                     <h2 className="text-base font-bold text-white mb-4 pb-2 border-b border-slate-800 flex items-center gap-2">
-                      <span>📋</span> 'Nuevo Parcial'
+                      <span>📋</span> Nuevo Parcial
                     </h2>
                     <form onSubmit={onCrearParcial} className="space-y-4">
                       <div>
@@ -360,7 +360,7 @@ export default function VistaAdminPanel(props: VistaAdminPanelProps) {
                       </div>
 
                       <button type="submit" className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
-                        'Publicar Parcial'
+                        Publicar Parcial
                       </button>
                     </form>
                   </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { gestionarGrupoTareaAction, invitarAGrupoTareaAction } from '../app/actions';
 import {
   alumnoEligioEntregaIndividual,
@@ -57,7 +57,7 @@ export default function GrupoTarea({
   const [ocupado, setOcupado] = useState(false);
   const [mensaje, setMensaje] = useState('');
   const [busquedaInvitar, setBusquedaInvitar] = useState('');
-  const [invitadosPendientes, setInvitadosPendientes] = useState<Set<string>>(() => new Set());
+  const [invitadosOptimistas, setInvitadosOptimistas] = useState<Set<string>>(() => new Set());
   const [verOtros, setVerOtros] = useState(false);
   const [mostrarAdmin, setMostrarAdmin] = useState(false);
   const [adminAlumno, setAdminAlumno] = useState('');
@@ -74,17 +74,33 @@ export default function GrupoTarea({
     : undefined;
   const puedeGestionar = Boolean(usuarioActual && (!alumnoContexto || alumnoContexto.toLowerCase() === usuarioActual.toLowerCase()));
   const entregaIndividualActiva = sujeto ? alumnoEligioEntregaIndividual(tarea, sujeto) : false;
-  const ocupados = new Set(grupos.flatMap((grupo) => grupo.integrantes || []).map((nombreIntegrante) => nombreIntegrante.toLowerCase()));
-  const libres = alumnos.filter((alumno) => !ocupados.has(alumno.toLowerCase()));
-  const libresParaVer = libres.filter((alumno) => alumno.toLowerCase() !== usuarioActual?.toLowerCase());
+  const libres = useMemo(() => {
+    const ocupados = new Set(
+      grupos.flatMap((grupo) => grupo.integrantes || []).map((nombreIntegrante) => nombreIntegrante.toLowerCase())
+    );
+    return alumnos.filter((alumno) => !ocupados.has(alumno.toLowerCase()));
+  }, [alumnos, grupos]);
 
-  useEffect(() => {
+  const libresParaVer = useMemo(
+    () => libres.filter((alumno) => alumno.toLowerCase() !== usuarioActual?.toLowerCase()),
+    [libres, usuarioActual]
+  );
+
+  const invitadosDesdeServidor = useMemo(() => {
     const grupoId = propio?.id;
     const nombres = invitacionesPendientesEnviadas
       .filter((inv) => inv.tareaId === tarea.id && (!grupoId || inv.grupoId === grupoId))
       .map((inv) => inv.paraAlumno.toLowerCase());
-    setInvitadosPendientes(new Set(nombres));
+    return new Set(nombres);
   }, [invitacionesPendientesEnviadas, propio?.id, tarea.id]);
+
+  const invitadosPendientes = useMemo(() => {
+    const merged = new Set(invitadosDesdeServidor);
+    invitadosOptimistas.forEach((nombre) => {
+      if (!invitadosDesdeServidor.has(nombre)) merged.add(nombre);
+    });
+    return merged;
+  }, [invitadosDesdeServidor, invitadosOptimistas]);
 
   const terminoInvitar = busquedaInvitar.trim().toLowerCase();
   const alumnosParaInvitar = useMemo(() => {
@@ -116,7 +132,7 @@ export default function GrupoTarea({
         setMensaje(resultado?.mensaje || 'No se pudo enviar la invitación.');
         return;
       }
-      setInvitadosPendientes((prev) => new Set(prev).add(alumnoNombre.toLowerCase()));
+      setInvitadosOptimistas((prev) => new Set(prev).add(alumnoNombre.toLowerCase()));
       await recargar(false);
     } catch {
       setMensaje('No se pudo enviar la invitación.');
