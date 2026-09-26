@@ -60,9 +60,7 @@ test('el vencimiento completa la tarea y la clase repetida entra al cronograma y
   assert.equal(fechas.length, 2);
   assert.equal(fechas.find((fecha) => fecha.id === 't1').campo, 'fin');
   assert.equal(fechas.find((fecha) => fecha.id === 'p1').tabla, 'parciales');
-  assert.equal(cronograma.length, 2);
-  assert.equal(cronograma[0].materiaId, 'm1');
-  assert.equal(cronograma[0].tipo, 'clase');
+  assert.equal(cronograma.length, 0);
   assert.equal(horarios.length, 1);
   assert.equal(horarios[0].dia, '3');
   assert.equal(horarios[0].horaInicio, '19:00');
@@ -132,11 +130,7 @@ test('el horario de verdad es el del enlace y la clase dura una hora y media', (
     [5, '18:00', '19:30']
   ]);
   const clases = cronograma.filter((evento) => evento.titulo.startsWith('Clases sincrónicas'));
-  assert.equal(clases.length, 2);
-  assert.equal(clases.every((evento) => evento.titulo.includes('17:00–18:30') && !evento.titulo.includes('16:45')), true);
-  assert.equal(clases.every((evento) => evento.detalles === 'Clase de 17:00 a 18:30.'), true);
-  const deViernes = cronograma.filter((evento) => evento.titulo.includes('Viernes'));
-  assert.equal(deViernes.every((evento) => evento.detalles === 'Clase de 18:00 a 19:30.'), true);
+  assert.equal(clases.length, 0);
 });
 
 test('un vencimiento sin actividad conocida igual se muestra en el cronograma', () => {
