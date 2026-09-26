@@ -9,7 +9,6 @@ export function useNotificacionesPortal(
 ) {
   useEffect(() => {
     if (!usuarioActual) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotificacionesVistas([]);
       return;
     }

@@ -64,7 +64,7 @@ src/lib/grupos-tareas.ts  alta/baja de grupo dentro de una transacción
 src/components/           vistas (estado, materias, grupos, plan, …)
 ugr-sync/lib/             parsers y núcleo de sync (ver su README)
 ugr-sync/scripts/         CLI login y sync
-database/migrate.mjs      migraciones 1–24, idempotentes
+database/migrate.mjs      migraciones 1–26, idempotentes
 database/grupos-schema.mjs
 tests/                    tests de la app
 ugr-sync/test/            tests del sync, con fixtures HTML de Moodle
@@ -72,11 +72,11 @@ ugr-sync/test/            tests del sync, con fixtures HTML de Moodle
 
 ## Modelo de datos
 
-SQLite en Turso. Las migraciones viven en `database/migrate.mjs` y se registran en `migraciones(numero, nombre, aplicada_en)`. Correr dos veces no reejecuta un número ya insertado. Hoy el último número es **24**.
+SQLite en Turso. Las migraciones viven en `database/migrate.mjs` y se registran en `migraciones(numero, nombre, aplicada_en)`. Correr dos veces no reejecuta un número ya insertado. Hoy el último número es **26** (25: grupos con entrega individual e invitaciones; 26: `alumnos.ultimo_acceso` para cuentas propias inactivas).
 
 Identidad y cursada:
 
-- `alumnos`: `id`, `nombre` (único case-insensitive, índice `alumnos_nombre_unico` sobre `LOWER(nombre)`), `password` (`scrypt$<salt hex>$<64 bytes hex>`), `rol` (`admin` | `alumno`), `sesion_version`, `origen` (`comision` | `propio`), `creado_en`, `sincronizado_en`, `creado_ip`. Las columnas `ugr_usuario`, `ugr_secreto` y `ugr_vinculado_en` existen por migraciones viejas y la 20 las deja en `NULL`. No se vuelven a escribir.
+- `alumnos`: `id`, `nombre` (único case-insensitive, índice `alumnos_nombre_unico` sobre `LOWER(nombre)`), `password` (`scrypt$<salt hex>$<64 bytes hex>`), `rol` (`admin` | `alumno`), `sesion_version`, `origen` (`comision` | `propio`), `creado_en`, `sincronizado_en`, `creado_ip`, `ultimo_acceso` (migración 26). Las columnas `ugr_usuario`, `ugr_secreto` y `ugr_vinculado_en` existen por migraciones viejas y la 20 las deja en `NULL`. No se vuelven a escribir.
 - `periodos`: año, cuatrimestre, `activo`.
 - `materias`: del período. Condiciones de promoción en `condiciones`, `nota_minima_regularizar`, `nota_minima_promocionar`, `regla_promocion`.
 - `inscripciones`: PK `(alumno_id, materia_id)`. Es la cursada real. El tablero de un alumno y el estado de un compañero salen de acá, no de “toda la comisión”.
@@ -141,6 +141,8 @@ Ranking y “misma cursada” siguen en `alumnosConLaMismaCursada` (conjunto exa
 
 Grupos: la UI y `gestionarGrupoTareaAction` solo aceptan alumnos con fila en `inscripciones` para la `materia_id` de esa tarea. Salir o borrar el grupo no exige eso.
 
+Filtro **Grupales** en Estado (`tareaGrupalPendienteEnTablero` en `src/core/cursada.ts`): tareas grupales **sin nota** en el tablero del alumno (incluye entregadas pero aún sin calificación). Si la tarea lleva nota y el alumno ya tiene nota, pasa a **Completadas**. Si la tarea no lleva nota (`con_nota = 0`), sale de Grupales cuando figura entregada.
+
 Un alumno no escribe entregas ni notas propias. Esas filas las escribe el sync (o el admin, para corregir). El campus es la fuente. `guardarProgresoPlanAction` sí deja que el alumno marque una materia del plan como aprobada o promocionada: eso no sale del campus.
 
 ## Sincronización con el campus
@@ -148,6 +150,8 @@ Un alumno no escribe entregas ni notas propias. Esas filas las escribe el sync (
 Un botón **Sincronizar** (UGR o SIU). Ninguna ruta persiste DNI ni contraseña de UGR en la base.
 
 **Alumno** — `sincronizarCuentaUgrAction(dni, password)` o `sincronizarCuentaSiuAction(usuario, password)`. UGR usa `conectarUGRCon({ usuario, contrasena, rutaSesion: null })`: jar aislado, no pisa la cookie de la comisión. Si Moodle rechaza el login, la action responde “UGR Virtual no aceptó ese DNI o contraseña” y no loguea las credenciales. Una sync buena reemplaza las inscripciones del período actual (`inscribirAlumnoEnPeriodo`): la cursada queda en lo que el campus dice ahora.
+
+**UGR en varias pasadas (cuenta propia y admin en la UI):** un solo botón **Sincronizar** encadena varias server actions para no superar el techo de **60 s por request** (`maxDuration` en `layout.tsx`). Orden: `fase: 'preparar'` (login, inscripciones, lista de materias) → varios lotes `fase: 'materias'` con `materiaIds` (tamaño de lote en `src/lib/sync-ugr-orquestacion.ts`, típicamente 2 materias; 3 si hay muchas) → lotes `fase: 'avisos'`. El texto de progreso habla de pasadas (p. ej. “materias 1/4”), no del total de materias de la cursada. SIU sigue siendo una sola action. Detalle en `src/server/sync-ugr-cursada.ts` y `src/components/CuentaPropia.tsx`.
 
 **Admin** — mismo flujo en la UI; si no ingresa credenciales, el servidor usa `UGRVIRTUAL_*` (UGR, `conectarUGR()`) o `SIU_USER` / `SIU_PASSWORD` (SIU). La cookie de Moodle de la comisión se guarda en `data/ugr-sesion.json` (local, gitignored) o en `/tmp/ugr-sesion.json` si `VERCEL=1`.
 
@@ -224,8 +228,8 @@ Orden:
    TURSO_DATABASE_URL=… TURSO_AUTH_TOKEN=… ADMIN_USUARIO=… npm run migrate
    ```
 
-   O el equivalente con `--env-file`. La 11 promueve `ADMIN_USUARIO`. La 24 agrega `creado_ip`; sin ella el `INSERT` del alta pública falla.
-4. Deploy. `layout.tsx` ya declara `maxDuration = 60`. No hay otra función: todo el App Router comparte ese techo. Un sync de alumno con muchas materias nuevas (metodología + libreta + calendario) es el camino que más se acerca al límite.
+   O el equivalente con `--env-file`. La 11 promueve `ADMIN_USUARIO`. La 24 agrega `creado_ip`; sin ella el `INSERT` del alta pública falla. La **25** crea tablas de grupos/invitaciones; la **26**, `ultimo_acceso`.
+4. Deploy. `layout.tsx` ya declara `maxDuration = 60` **por invocación** de server action. El sync UGR desde la UI hace varias invocaciones seguidas (preparar + lotes de materias + avisos); cada una tiene su propio tope de 60 s. SIU y el atajo servidor `fase: 'nucleo'` siguen siendo una sola pasada y son los que más se acercan al límite si la cursada es grande.
 5. `npm run admin:reset-password` contra la misma base si la contraseña del admin hay que rotarla. Imprime la clave nueva una vez; no queda en el repo.
 
 Filesystem: no persistir nada fuera de Turso. `data/` es local y gitignored. En Vercel la sesión de la comisión vive en `/tmp` y puede perderse entre invocaciones; el cliente vuelve a loguearse. La sesión personal no se escribe a disco (`rutaSesion: null`).

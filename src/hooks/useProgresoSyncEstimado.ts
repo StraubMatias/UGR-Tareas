@@ -29,11 +29,7 @@ export function useProgresoSyncEstimado(activo: boolean, fuente: FuenteSync) {
   const [etapa, setEtapa] = useState('');
 
   useEffect(() => {
-    if (!activo) {
-      setProgreso(0);
-      setEtapa('');
-      return undefined;
-    }
+    if (!activo) return undefined;
 
     const inicio = Date.now();
     const escalaMs = fuente === 'ugr' ? 95_000 : 38_000;
@@ -56,5 +52,9 @@ export function useProgresoSyncEstimado(activo: boolean, fuente: FuenteSync) {
     await new Promise((resolver) => window.setTimeout(resolver, 450));
   }, []);
 
-  return { progreso, etapa, marcarCompletado };
+  return {
+    progreso: activo ? progreso : 0,
+    etapa: activo ? etapa : '',
+    marcarCompletado
+  };
 }

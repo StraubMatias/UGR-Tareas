@@ -30,7 +30,10 @@ export function useTableroCarga(options: UseTableroCargaOptions) {
   } = options;
 
   const optionsRef = useRef(options);
-  optionsRef.current = options;
+
+  useEffect(() => {
+    optionsRef.current = options;
+  });
 
   const aplicarEstado = useCallback((estado: EstadoCompletoTablero | null | undefined) => {
     aplicarEstadoTablero(estado, optionsRef.current);
