@@ -307,7 +307,8 @@ async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNom
                  nt.nota AS nota_guardada, nt.cargada_en AS nota_cargada_en, nt.cerrada AS nota_cerrada
           FROM tareas t JOIN materias m ON m.id = t.materia_id
           LEFT JOIN notas_tareas nt ON nt.tarea_id = t.id AND (nt.alumno_id = ? OR LOWER(nt.alumno) = LOWER(?))
-          WHERE t.materia_id IN (${marcas}) AND TRIM(COALESCE(t.url, '')) != '' AND COALESCE(t.tipo, '') != 'foro'`,
+          WHERE t.materia_id IN (${marcas}) AND TRIM(COALESCE(t.url, '')) != ''
+            AND (COALESCE(t.tipo, '') != 'foro' OR t.con_nota = 1)`,
     args: [alumnoId || '', alumnoNombre || '', ...materiaIds]
   });
   const parciales = await db.execute({
@@ -710,6 +711,18 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
               materiaId: coincidencia.materia.id,
               materiaNombre: coincidencia.materia.nombre,
               ...parche
+            });
+          }
+          if (alumnoId && tarea.notaCampus != null) {
+            notasIntento.push({
+              materiaId: coincidencia.materia.id,
+              materiaNombre: coincidencia.materia.nombre,
+              nombre: nombreFinal,
+              id: existente.id,
+              tabla: 'tareas',
+              nota: tarea.notaCampus,
+              entregada: true,
+              forzar: true
             });
           }
         }
@@ -1142,11 +1155,14 @@ async function leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId })
         progresoAlumno.push({
           alumnoId,
           materiaId: libreta.materiaId,
+          materiaNombre: item.materiaNombre,
           nombre: item.nombre,
           tabla: tarea.id ? 'tareas' : 'nueva',
           id: tarea.id || tarea.idMoodle,
           nota: item.nota,
-          entregada: true
+          entregada: true,
+          // La libreta ya implica corrección; los foros no pasan por «entregada» en completadas.
+          forzar: item.nota != null
         });
       }
       if (parcial) {

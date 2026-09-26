@@ -487,9 +487,23 @@ test('parsearNotaCampus lee la calificación que publica el campus', () => {
   assert.equal(parsearNotaCampus('11'), null);
 });
 
+test('extraerProgresoDeActividad lee calificación de foro y participación', () => {
+  const html = `
+    <div class="forum-post-container">Mi aporte</div>
+    <table><tr><th>Calificación</th><td>8,50 de 10,00</td></tr></table>
+  `;
+  const progreso = extraerProgresoDeActividad(html);
+  assert.equal(progreso.nota, 8.5);
+  assert.equal(progreso.entregada, true);
+});
+
 test('extraerNotasDeLibreta toma el ítem y la nota de la libreta del alumno', () => {
   const notas = extraerNotasDeLibreta(`
     <table class="user-grade">
+      <tr>
+        <th><a class="gradeitemheader" href="https://virtual.ugr.edu.ar/mod/forum/view.php?id=267799">Hallazgos de la Semana</a></th>
+        <td class="column-grade">9,00 de 10,00</td>
+      </tr>
       <tr>
         <th><a class="gradeitemheader" href="https://virtual.ugr.edu.ar/mod/quiz/view.php?id=215115">Lea y responda (Basadre)</a></th>
         <td class="column-grade">10,00 Acciones</td>
@@ -500,9 +514,9 @@ test('extraerNotasDeLibreta toma el ítem y la nota de la libreta del alumno', (
       </tr>
     </table>
   `);
-  assert.equal(notas.length, 1);
-  assert.equal(notas[0].id, '215115');
-  assert.equal(notas[0].nota, 10);
+  assert.equal(notas.length, 2);
+  assert.equal(notas.find((n) => n.id === '267799')?.nota, 9);
+  assert.equal(notas.find((n) => n.id === '215115')?.nota, 10);
 });
 
 test('extraerFechasActividad entiende Abre y Cierra, los rótulos actuales de Moodle', () => {

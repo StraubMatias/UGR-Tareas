@@ -108,10 +108,26 @@ test('el segundo alumno no vuelve a insertar las tareas que ya cargó el primero
     });
     assert.equal(sinEntrega.notas, 0);
     assert.equal(sinEntrega.pendientesEntrega[0].nombre, 'TP 1 Criptografía');
-    await db.execute({
-      sql: "INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, datetime('now'))",
-      args: [tarea.id, 'alu_x', 'Alumno X']
+
+    const desdeLibreta = await aplicarComplementoCampus({
+      db,
+      alumnoId: 'alu_x',
+      alumnoNombre: 'Alumno X',
+      detectado: {
+        progresoAlumno: [{
+          tabla: 'tareas',
+          id: tarea.id,
+          materiaId: 'cri',
+          nombre: 'Hallazgos de la Semana (FORO)',
+          nota: '9',
+          entregada: true,
+          forzar: true
+        }]
+      }
     });
+    assert.equal(desdeLibreta.notasCargadas.length, 1);
+    assert.equal(desdeLibreta.notasCargadas[0].nota, '9');
+    assert.equal(desdeLibreta.pendientesEntrega.length, 0);
     const marcas = await aplicarComplementoCampus({
       db,
       alumnoId: 'alu_x',
@@ -227,15 +243,15 @@ test('cargarNotasDesdeEnlaces omite actividades cuya nota fue cargada hace más 
   try {
     await db.batch([
       'CREATE TABLE materias (id TEXT PRIMARY KEY, nombre TEXT)',
-      'CREATE TABLE tareas (id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, url TEXT, tipo TEXT)',
+      'CREATE TABLE tareas (id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, url TEXT, tipo TEXT, con_nota INTEGER NOT NULL DEFAULT 0)',
       'CREATE TABLE parciales (id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, url TEXT, fecha TEXT)',
       'CREATE TABLE notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT, cargada_en TEXT, cerrada INTEGER DEFAULT 0)',
       'CREATE TABLE notas_parciales (id TEXT PRIMARY KEY, parcial_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT, cerrada INTEGER DEFAULT 0)',
       'CREATE TABLE completadas (tarea_id TEXT, alumno_id TEXT, alumno TEXT, completada_en TEXT)',
       "INSERT INTO materias VALUES ('cri', 'Criptografía')",
-      "INSERT INTO tareas VALUES ('t_vieja', 'cri', 'TP 1 Antiguo', 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=1', 'actividad')",
-      "INSERT INTO tareas VALUES ('t_nueva', 'cri', 'TP 2 Reciente', 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=2', 'actividad')",
-      "INSERT INTO tareas VALUES ('t_sin_nota', 'cri', 'TP 3 Sin Nota', 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=3', 'actividad')",
+      "INSERT INTO tareas VALUES ('t_vieja', 'cri', 'TP 1 Antiguo', 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=1', 'actividad', 1)",
+      "INSERT INTO tareas VALUES ('t_nueva', 'cri', 'TP 2 Reciente', 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=2', 'actividad', 1)",
+      "INSERT INTO tareas VALUES ('t_sin_nota', 'cri', 'TP 3 Sin Nota', 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=3', 'actividad', 1)",
       "INSERT INTO completadas VALUES ('t_vieja', 'alu_1', 'Alumno 1', datetime('now'))",
       "INSERT INTO completadas VALUES ('t_nueva', 'alu_1', 'Alumno 1', datetime('now'))",
       "INSERT INTO completadas VALUES ('t_sin_nota', 'alu_1', 'Alumno 1', datetime('now'))",
