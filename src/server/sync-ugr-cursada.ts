@@ -405,7 +405,8 @@ export async function sincronizarLoteMateriasDelAlumno({
     db,
     detectado: tareas,
     alumnoId,
-    alumnoNombre
+    alumnoNombre,
+    materiaIds
   });
 
   const eventosInsertadosAvisos = 0;
@@ -432,14 +433,21 @@ export async function sincronizarLoteMateriasDelAlumno({
   }) as ResumenMateriaSync[];
   resumen = anexarLineasResumenSync(resumen, { campo: 'fechasActualizadas', items: fechasDetalle }) as ResumenMateriaSync[];
   const parcialesInsertados = (parcialesResultado.insertadasItems || []) as Array<{ materiaNombre?: string; nombre?: string }>;
+  const parcialesCronograma = (complemento.parcialesDesdeCronogramaItems || []) as Array<{ materiaId?: string; nombre?: string }>;
   resumen = anexarLineasResumenSync(
     resumen,
     {
       campo: 'parcialesNuevos',
-      items: parcialesInsertados.map((item) => ({
-        materiaNombre: item.materiaNombre,
-        texto: item.nombre
-      }))
+      items: [
+        ...parcialesInsertados.map((item) => ({
+          materiaNombre: item.materiaNombre,
+          texto: item.nombre
+        })),
+        ...parcialesCronograma.map((item) => ({
+          materiaNombre: nombresPorId.get(item.materiaId || '') || '',
+          texto: item.nombre ? `${item.nombre} (cronograma)` : ''
+        })).filter((item) => item.texto)
+      ]
     }
   ) as ResumenMateriaSync[];
   const orden = new Map([...nombresPorId.values()].map((nombre, indice) => [nombre, indice]));

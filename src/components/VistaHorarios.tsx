@@ -15,6 +15,7 @@ interface EventosDia {
   horarios: Horario[];
   cronograma: EventoCronograma[];
   enlacesClasePorMateria?: Map<string, string>;
+  tituloClaseEnCursadaPorMateria?: Map<string, string>;
 }
 
 interface Props {
@@ -160,9 +161,12 @@ export default function VistaHorarios({
                         <div className="mt-2 space-y-1.5">
                       {eventos.horarios.map((horario) => {
                         const materia = materias.find((item) => item.id === horario.materia_id);
+                        const tema = eventos.tituloClaseEnCursadaPorMateria?.get(horario.materia_id);
+                        const titulo = tema || materia?.nombre || 'Materia';
                         return (
-                          <div key={`${claveDia}-${horario.id}`} className="calendar-event calendar-class" title={`${materia?.nombre || 'Materia'} · ${horario.hora_inicio} - ${horario.hora_fin}`}>
-                            <span className="font-bold">{horario.hora_inicio}</span> {materia?.nombre || 'Materia'}
+                          <div key={`${claveDia}-${horario.id}`} className="calendar-event calendar-class" title={`${titulo} · ${horario.hora_inicio} - ${horario.hora_fin}`}>
+                            <span className="font-bold">{horario.hora_inicio}</span>
+                            <span className="block truncate">{titulo}</span>
                           </div>
                         );
                       })}
@@ -184,7 +188,8 @@ export default function VistaHorarios({
                         const materia = materias.find((item) => item.id === evento.materia_id);
                         const esAsincronico = evento.modalidad === 'asincrónico';
                         const esSinClases = esEventoDeSinClases(evento);
-                        const esExamen = evento.tipo === 'examen';
+                        const esFinal = evento.tipo === 'examen_final';
+                        const esParcial = evento.tipo === 'examen';
                         const esEntrega = evento.tipo === 'entrega';
                         const esExposicion = evento.tipo === 'exposición';
                         const esConsulta = evento.tipo === 'consulta';
@@ -198,8 +203,10 @@ export default function VistaHorarios({
                                 : esConsulta
                                   ? 'Consulta asínc.'
                                   : 'Asincrónica'
-                            : esExamen
-                              ? 'Examen'
+                            : esFinal
+                              ? 'Mesa / final'
+                              : esParcial
+                                ? 'Parcial'
                               : esEntrega
                                 ? 'Entrega'
                                 : esExposicion
@@ -212,7 +219,7 @@ export default function VistaHorarios({
                         return (
                           <div
                             key={evento.id}
-                            className={`calendar-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : esExamen ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}
+                            className={`calendar-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : (esParcial || esFinal) ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}
                             title={`${tituloChip} · ${materia?.nombre || 'Materia'}`}
                           >
                             {mostrarEtiquetaChip && <span className="font-bold">{etiqueta}</span>}
@@ -314,9 +321,11 @@ export default function VistaHorarios({
                     const enlacesClase = eventos.enlacesClasePorMateria ?? new Map<string, string>();
                     for (const horario of eventos.horarios) {
                       const enlaceClase = enlacesClase.get(horario.materia_id);
+                      const tema = eventos.tituloClaseEnCursadaPorMateria?.get(horario.materia_id);
                       grupoDe(horario.materia_id, horario.hora_inicio).bloques.push(
                         <div key={`modal-${horario.id}`} className="calendar-modal-event calendar-class">
                           <p className="text-sm font-extrabold">Cursada · {horario.hora_inicio} - {horario.hora_fin}</p>
+                          {tema && <p className="mt-1 text-sm opacity-90">{tema}</p>}
                           {horario.aula && horario.aula !== 'Virtual' && <p className="mt-1 text-xs opacity-75">Aula {horario.aula}</p>}
                           {enlaceClase && (
                             <a href={enlaceClase} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-2">
@@ -345,7 +354,8 @@ export default function VistaHorarios({
                     for (const evento of eventos.cronograma) {
                       const esAsincronico = evento.modalidad === 'asincrónico';
                       const esSinClases = esEventoDeSinClases(evento);
-                      const esExamen = evento.tipo === 'examen';
+                      const esFinal = evento.tipo === 'examen_final';
+                      const esParcial = evento.tipo === 'examen';
                       const esEntrega = evento.tipo === 'entrega';
                       const esExposicion = evento.tipo === 'exposición';
                       const esConsulta = evento.tipo === 'consulta';
@@ -359,8 +369,10 @@ export default function VistaHorarios({
                               : esConsulta
                                 ? 'Consulta asincrónica'
                                 : 'Clase asincrónica'
-                          : esExamen
-                            ? 'Examen'
+                          : esFinal
+                            ? 'Mesa / final'
+                            : esParcial
+                              ? 'Parcial'
                             : esEntrega
                               ? 'Entrega'
                               : esExposicion
@@ -371,7 +383,7 @@ export default function VistaHorarios({
                       const tituloVisible = tituloDestacadoCronograma(evento);
                       const mostrarEtiqueta = mostrarEtiquetaTipoCronograma(evento);
                       grupoDe(evento.materia_id, esSinClases ? '00' : '70').bloques.push(
-                        <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : esExamen ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}>
+                        <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : (esParcial || esFinal) ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}>
                           {mostrarEtiqueta && <p className="text-sm font-extrabold">{etiqueta}</p>}
                           {!esSinClases && tituloVisible && (
                             <p className={`text-sm ${mostrarEtiqueta ? 'mt-1 opacity-85' : 'font-extrabold'}`}>{tituloVisible}</p>

@@ -148,6 +148,15 @@ test('el segundo alumno no vuelve a insertar las tareas que ya cargó el primero
     const evento = { materiaId: 'cri', fecha: '2026-10-06', titulo: 'Clase de criptografía', tipo: 'clase' };
     assert.equal(await insertarEventosCronograma({ db, eventos: [evento] }), 1);
     assert.equal(await insertarEventosCronograma({ db, eventos: [evento] }), 0);
+    await db.execute({
+      sql: `INSERT INTO cronograma_eventos (id, materia_id, fecha, modalidad, tipo, titulo, detalles, origen)
+            VALUES ('plan', 'cri', '2026-10-13', 'sincrónico', 'clase', 'Módulo II: TLS', '', 'manual')`
+    });
+    assert.equal(await insertarEventosCronograma({
+      db,
+      eventos: [{ materiaId: 'cri', fecha: '2026-10-13', titulo: 'Link de Clase Sincrónica', tipo: 'clase' }]
+    }), 0);
+    assert.equal((await db.execute("SELECT COUNT(*) AS n FROM cronograma_eventos WHERE materia_id='cri' AND fecha='2026-10-13'")).rows[0].n, 1);
   } finally {
     db.close();
     await rm(dir, { recursive: true, force: true });

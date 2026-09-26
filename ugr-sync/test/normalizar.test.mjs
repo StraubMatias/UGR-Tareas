@@ -10,6 +10,8 @@ import {
   esNombreConsignaValido,
   formatearNotaParaMostrar,
   notaEnEscalaDiez,
+  esExamenFinalDelCronograma,
+  pareceParcialCuatrimestre,
   filtrarTareasDuplicadas,
   agruparResumenSync,
   armarMensajeCursada,
@@ -422,6 +424,13 @@ test('emparejarCursosConMaterias incluye dos cursos distintos de la misma materi
   assert.equal(plan[0].materiaId, 'dev');
   assert.equal(plan[1].materiaId, 'dev');
   assert.notEqual(plan[0].curso.id, plan[1].curso.id);
+});
+
+test('esExamenFinalDelCronograma distingue parcial de mesa', () => {
+  assert.equal(esExamenFinalDelCronograma('1er llamado Turno Diciembre'), true);
+  assert.equal(esExamenFinalDelCronograma('1er examen parcial'), false);
+  assert.equal(pareceParcialCuatrimestre('Primer Parcialito'), true);
+  assert.equal(pareceParcialCuatrimestre('Repaso integrador'), false);
 });
 
 test('filtrarTareasDuplicadas no deja dos TPs iguales en la misma materia', () => {

@@ -10,6 +10,8 @@ export function esTituloClaseGenericaDelCampus(titulo: string) {
   if (/^clases sincr[oó]nicas\s*-/i.test(t)) return true;
   if (/^enlace a la clase sincr[oó]nica/i.test(t)) return true;
   if (/^clase sincr[oó]nica semanal/i.test(t)) return true;
+  if (/^sala virtual\b/i.test(t)) return true;
+  if (/^enlace zoom\b/i.test(t)) return true;
   return false;
 }
 
@@ -42,6 +44,8 @@ export interface CronogramaDiaPresentacion {
   eventos: EventoCronograma[];
   /** Primer enlace UGR/Zoom de una clase genérica filtrada, por materia. */
   enlaceClasePorMateria: Map<string, string>;
+  /** Tema de la clase del plan, mostrado junto al bloque de cursada del mismo día. */
+  tituloClaseEnCursadaPorMateria: Map<string, string>;
 }
 
 /**
@@ -53,6 +57,21 @@ function nombreDeVencimiento(titulo: string) {
     .replace(/^vencimiento de\s+/i, '')
     .trim()
     .toLowerCase();
+}
+
+/** Si el día ya tiene parcial en la tabla, no repetir el mismo examen del cronograma. */
+export function ocultarExamenesCronogramaDuplicados(
+  eventos: EventoCronograma[],
+  parcialesDelDia: Parcial[]
+) {
+  const clavesParcial = new Set(
+    parcialesDelDia.map((p) => `${p.materia_id}|${String(p.fecha || '').slice(0, 10)}`)
+  );
+  return eventos.filter((evento) => {
+    if (evento.tipo !== 'examen') return true;
+    const clave = `${evento.materia_id}|${String(evento.fecha || '').slice(0, 10)}`;
+    return !clavesParcial.has(clave);
+  });
 }
 
 export function presentarCronogramaDelDia(
@@ -113,12 +132,23 @@ export function presentarCronogramaDelDia(
   }
 
   const visibles = [...mejorPorClave.values()].sort((a, b) => {
-    const ordenTipo = (e: EventoCronograma) => (e.tipo === 'sin_clases' ? 0 : e.tipo === 'examen' ? 1 : 2);
+    const ordenTipo = (e: EventoCronograma) => (
+      e.tipo === 'sin_clases' ? 0 : (e.tipo === 'examen' || e.tipo === 'examen_final') ? 1 : 2
+    );
     return ordenTipo(a) - ordenTipo(b)
       || String(a.titulo).localeCompare(String(b.titulo), 'es');
   });
 
-  return { eventos: visibles, enlaceClasePorMateria };
+  const tituloClaseEnCursadaPorMateria = new Map<string, string>();
+  const eventosPresentados = visibles.filter((evento) => {
+    if (evento.tipo !== 'clase' || evento.modalidad === 'asincrónico') return true;
+    if (!materiasConCursada.has(evento.materia_id)) return true;
+    const titulo = tituloDestacadoCronograma(evento);
+    if (titulo) tituloClaseEnCursadaPorMateria.set(evento.materia_id, titulo);
+    return false;
+  });
+
+  return { eventos: eventosPresentados, enlaceClasePorMateria, tituloClaseEnCursadaPorMateria };
 }
 
 export function tituloDestacadoCronograma(evento: EventoCronograma) {

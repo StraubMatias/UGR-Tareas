@@ -38,6 +38,8 @@ import {
   limpiarTextoParaBusqueda,
   fechaDeEvaluacion,
   pareceEvaluacion,
+  pareceParcialCuatrimestre,
+  esExamenFinalDelCronograma,
   parcialYaSeRindio,
   esNombreConsignaValido,
   normalizarNombre,
@@ -54,7 +56,7 @@ export {
   separarEvaluaciones,
   describirActualizacionFechas
 };
-import { ajustarClasesAlHorario, clasificarEventosCalendario, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
+import { ajustarClasesAlHorario, clasificarEventosCalendario, esTituloClaseGenericaDelCampus, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { cabeceraCookies } from './autenticar.mjs';
 import { extraerEnlacesDeCursada, interpretarCondiciones, textoDeArchivoCampus, urlArchivoDeRecurso } from './metodologia.mjs';
@@ -1220,6 +1222,62 @@ export async function insertarTareasDetectadas({ db, detectadas }) {
   return inserts.length;
 }
 
+function esEventoCronogramaParcial(evento) {
+  const tipo = String(evento?.tipo || '').toLowerCase();
+  const titulo = String(evento?.titulo || '').trim();
+  if (!titulo || tipo === 'sin_clases' || tipo === 'examen_final') return false;
+  if (esExamenFinalDelCronograma(titulo)) return false;
+  if (tipo === 'examen') return true;
+  return pareceParcialCuatrimestre(titulo) && !/^unidad\s+\d/i.test(titulo);
+}
+
+function nombreParcialDesdeEventoCronograma(evento) {
+  const titulo = String(evento?.titulo || '').trim();
+  if (titulo) return titulo.slice(0, 100);
+  return 'Parcial';
+}
+
+/** Crea filas en `parciales` a partir del plan (cronograma_eventos tipo examen) cuando Moodle no tiene la actividad. */
+export async function promoverParcialesDesdeCronograma({ db, materiaIds }) {
+  const ids = [...new Set((materiaIds || []).filter(Boolean))];
+  if (!ids.length) return { insertadas: 0, insertadasItems: [] };
+  const insertadasItems = [];
+  let insertadas = 0;
+
+  for (const materiaId of ids) {
+    const eventos = await db.execute({
+      sql: 'SELECT fecha, titulo, detalles, url, tipo FROM cronograma_eventos WHERE materia_id = ?',
+      args: [materiaId]
+    });
+    const parciales = await db.execute({
+      sql: 'SELECT id, nombre, fecha, url FROM parciales WHERE materia_id = ?',
+      args: [materiaId]
+    });
+    const listaParciales = [...parciales.rows];
+
+    for (const evento of eventos.rows) {
+      if (!esEventoCronogramaParcial(evento)) continue;
+      const fecha = String(evento.fecha || '').slice(0, 10);
+      if (!fecha) continue;
+      const nombre = nombreParcialDesdeEventoCronograma(evento);
+      if (coincidirParcial({ parciales: listaParciales, nombre, fin: fecha })) continue;
+
+      const id = `parcial_${randomUUID()}`;
+      const detalles = String(evento.detalles || '').trim()
+        || 'Fecha del cronograma académico (sin actividad equivalente en UGR Virtual).';
+      await db.execute({
+        sql: 'INSERT INTO parciales (id, materia_id, nombre, fecha, detalles, url) VALUES (?, ?, ?, ?, ?, ?)',
+        args: [id, materiaId, nombre, fecha, detalles.slice(0, 500), evento.url || '']
+      });
+      listaParciales.push({ id, nombre, fecha, url: evento.url || '' });
+      insertadas += 1;
+      insertadasItems.push({ materiaId, nombre, fecha });
+    }
+  }
+
+  return { insertadas, insertadasItems };
+}
+
 export async function insertarParcialesSiFaltan({ db, detectadas }) {
   const lista = Array.isArray(detectadas) ? detectadas : [];
   const escrituras = [];
@@ -1274,8 +1332,8 @@ export async function actualizarUrlsTareas({ db, urlsActualizar }) {
 // los detecta cuando la misma actividad aparece en Moodle y completa el link
 // para que «Ver en UGR» funcione también en Parciales y en Estado por Alumno.
 // Acepta una lista de { id, url } y devuelve cuántas actualizó.
-export async function aplicarComplementoCampus({ db, detectado, alumnoId, alumnoNombre } = {}) {
-  if (!detectado) return { eventos: 0, horarios: 0, fechas: 0, notas: 0, notasCargadas: [], pendientesEntrega: [] };
+export async function aplicarComplementoCampus({ db, detectado, alumnoId, alumnoNombre, materiaIds } = {}) {
+  if (!detectado) return { eventos: 0, horarios: 0, fechas: 0, notas: 0, notasCargadas: [], pendientesEntrega: [], parcialesDesdeCronograma: 0 };
   const eventos = await insertarEventosCronograma({ db, eventos: detectado.eventosCalendario || [] });
   const horarios = await insertarHorariosDetectados({ db, horarios: detectado.horariosNuevos || [] });
   const fechas = await actualizarFechasCampus({
@@ -1283,6 +1341,13 @@ export async function aplicarComplementoCampus({ db, detectado, alumnoId, alumno
     tareas: detectado.fechasActualizar,
     parciales: detectado.fechasParcialesActualizar
   });
+  const idsMaterias = [...new Set([
+    ...(materiaIds || []),
+    ...(detectado.materiaIds || []),
+    ...(detectado.eventosCalendario || []).map((e) => e.materiaId),
+    ...(detectado.parcialesDetectados || []).map((p) => p.materiaId)
+  ].filter(Boolean))];
+  const parcialesCron = await promoverParcialesDesdeCronograma({ db, materiaIds: idsMaterias });
   const progreso = alumnoId
     ? await aplicarProgresoCampus({ db, progreso: detectado.progresoAlumno, alumnoId, alumnoNombre })
     : { cantidad: 0, cargadas: [], pendientesEntrega: [] };
@@ -1292,7 +1357,9 @@ export async function aplicarComplementoCampus({ db, detectado, alumnoId, alumno
     fechas,
     notas: progreso.cantidad,
     notasCargadas: progreso.cargadas,
-    pendientesEntrega: progreso.pendientesEntrega
+    pendientesEntrega: progreso.pendientesEntrega,
+    parcialesDesdeCronograma: parcialesCron.insertadas,
+    parcialesDesdeCronogramaItems: parcialesCron.insertadasItems
   };
 }
 
@@ -1815,19 +1882,25 @@ export async function insertarEventosCronograma({ db, eventos }) {
   const materiaIds = [...new Set(validos.map((e) => e.materiaId))];
   const exactos = new Set();
   const porBase = new Map();
+  const manualEnFecha = new Set();
   for (const materiaId of materiaIds) {
     const res = await db.execute({
-      sql: 'SELECT id, fecha, titulo FROM cronograma_eventos WHERE materia_id = ?',
+      sql: 'SELECT id, fecha, titulo, origen, tipo FROM cronograma_eventos WHERE materia_id = ?',
       args: [materiaId]
     });
     for (const fila of res.rows) {
       exactos.add(`${materiaId}|${fila.fecha}|${fila.titulo}`);
       porBase.set(`${materiaId}|${fila.fecha}|${tituloSinRango(fila.titulo)}`, fila);
+      if (fila.origen === 'manual' && fila.tipo !== 'sin_clases') {
+        manualEnFecha.add(`${materiaId}|${fila.fecha}`);
+      }
     }
   }
   const cambios = [];
   for (const e of validos) {
     const titulo = String(e.titulo).slice(0, 200);
+    if (/^(se abre|se cierra)\b/i.test(titulo.trim())) continue;
+    if (manualEnFecha.has(`${e.materiaId}|${e.fecha}`) && esTituloClaseGenericaDelCampus(titulo)) continue;
     const clave = `${e.materiaId}|${e.fecha}|${titulo}`;
     if (exactos.has(clave)) continue;
     const previa = porBase.get(`${e.materiaId}|${e.fecha}|${tituloSinRango(titulo)}`);
