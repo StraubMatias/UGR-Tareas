@@ -1,6 +1,42 @@
 import type { EventoCronograma, Horario, Materia, Parcial } from '../core/cursada';
 import { ocultarExamenesCronogramaDuplicados, presentarCronogramaDelDia } from './cronograma-vista';
 
+/** Eventos sincrónicos del plan suelen venir con la fecha del PDF; se alinean al día de cursada semanal. */
+export function debeAlinearEventoAlHorario(evento: EventoCronograma) {
+  if (evento.modalidad === 'asincrónico') return false;
+  if (evento.tipo === 'entrega' || evento.tipo === 'exposición') return false;
+  if (evento.tipo === 'examen_final') return false;
+  return true;
+}
+
+export function alinearFechaEventoAlHorarioMateria(
+  fechaIso: string,
+  materiaId: string,
+  horarios: Horario[]
+): string {
+  const clave = formatearFechaCalendario(fechaIso);
+  if (!clave) return String(fechaIso || '').slice(0, 10);
+  const horario = horarios.find((h) => h.materia_id === materiaId);
+  if (!horario) return clave;
+  const [y, m, d] = clave.split('-').map(Number);
+  const fecha = new Date(y, m - 1, d);
+  const diaEvento = obtenerDiaSemanaHorario(fecha);
+  const diaClase = Number(horario.dia);
+  if (!Number.isFinite(diaClase) || diaEvento === diaClase) return clave;
+  let delta = diaClase - diaEvento;
+  if (delta > 3) delta -= 7;
+  if (delta < -3) delta += 7;
+  const alineada = new Date(y, m - 1, d + delta);
+  return claveHoyCalendario(alineada);
+}
+
+function fechaCalendarioDeEvento(evento: EventoCronograma, horarios: Horario[]) {
+  if (!debeAlinearEventoAlHorario(evento)) {
+    return formatearFechaCalendario(evento.fecha) || String(evento.fecha || '').slice(0, 10);
+  }
+  return alinearFechaEventoAlHorarioMateria(evento.fecha, evento.materia_id, horarios);
+}
+
 export const NOMBRES_DIAS: Record<number, string> = {
   1: 'Lunes',
   2: 'Martes',
@@ -69,13 +105,22 @@ export function eventosDelDiaCalendario(
   }
 ) {
   if (!fecha || !fechaDentroDelCronograma(fecha)) {
-    return { parciales: [], tareas: [], horarios: [], cronograma: [], enlacesClasePorMateria: new Map<string, string>() };
+    return {
+      parciales: [],
+      tareas: [],
+      horarios: [],
+      cronograma: [],
+      enlacesClasePorMateria: new Map<string, string>(),
+      tituloClaseEnCursadaPorMateria: new Map<string, string>()
+    };
   }
 
   const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
   const diaSemana = obtenerDiaSemanaHorario(fecha);
 
-  const eventosCronogramaDia = cronogramaDeLaCursada.filter((evento) => obtenerClaveDiaCalendario(evento.fecha) === claveDia);
+  const eventosCronogramaDia = cronogramaDeLaCursada.filter(
+    (evento) => fechaCalendarioDeEvento(evento, horariosDeLaCursada) === claveDia
+  );
   const materiasSinCursadaDia = new Set(
     eventosCronogramaDia
       .filter((evento) => evento.modalidad !== 'sincrónico' || evento.tipo === 'sin_clases')
@@ -103,18 +148,20 @@ export function eventosDelDiaCalendario(
   const parciales = parcialesDeLaCursada.filter((parcial) => obtenerClaveDiaCalendario(parcial.fecha) === claveDia);
   const tareas = tareasCalendario.filter(({ tarea }) => obtenerClaveDiaCalendario(tarea.fin) === claveDia);
   const cronogramaSinDuplicarParciales = ocultarExamenesCronogramaDuplicados(eventosCronogramaDia, parciales);
-  const { eventos: cronograma, enlaceClasePorMateria } = presentarCronogramaDelDia(
+  const presentacion = presentarCronogramaDelDia(
     cronogramaSinDuplicarParciales,
     horariosReales,
     parciales,
     tareas.map(({ tarea }) => ({ nombre: tarea.nombre }))
   );
+  const { eventos: cronograma, enlaceClasePorMateria } = presentacion;
 
   return {
     parciales,
     tareas,
     horarios: horariosReales,
     cronograma,
-    enlacesClasePorMateria: enlaceClasePorMateria
+    enlacesClasePorMateria: enlaceClasePorMateria,
+    tituloClaseEnCursadaPorMateria: presentacion.tituloClaseEnCursadaPorMateria
   };
 }

@@ -44,6 +44,8 @@ export interface CronogramaDiaPresentacion {
   eventos: EventoCronograma[];
   /** Primer enlace UGR/Zoom de una clase genérica filtrada, por materia. */
   enlaceClasePorMateria: Map<string, string>;
+  /** Tema de la clase del plan, mostrado junto al bloque de cursada del mismo día. */
+  tituloClaseEnCursadaPorMateria: Map<string, string>;
 }
 
 /**
@@ -137,7 +139,16 @@ export function presentarCronogramaDelDia(
       || String(a.titulo).localeCompare(String(b.titulo), 'es');
   });
 
-  return { eventos: visibles, enlaceClasePorMateria };
+  const tituloClaseEnCursadaPorMateria = new Map<string, string>();
+  const eventosPresentados = visibles.filter((evento) => {
+    if (evento.tipo !== 'clase' || evento.modalidad === 'asincrónico') return true;
+    if (!materiasConCursada.has(evento.materia_id)) return true;
+    const titulo = tituloDestacadoCronograma(evento);
+    if (titulo) tituloClaseEnCursadaPorMateria.set(evento.materia_id, titulo);
+    return false;
+  });
+
+  return { eventos: eventosPresentados, enlaceClasePorMateria, tituloClaseEnCursadaPorMateria };
 }
 
 export function tituloDestacadoCronograma(evento: EventoCronograma) {

@@ -57,11 +57,11 @@ test('presentarCronogramaDelDia oculta enlaces de clase si ya hay cursada', () =
     { id: 'h2', materia_id: 'gestion', dia: 1, hora_inicio: '19:00', hora_fin: '20:30', aula: 'Virtual' }
   ];
 
-  const { eventos: visibles, enlaceClasePorMateria } = presentarCronogramaDelDia(eventos, horarios, [], []);
+  const { eventos: visibles, enlaceClasePorMateria, tituloClaseEnCursadaPorMateria } = presentarCronogramaDelDia(eventos, horarios, [], []);
 
-  assert.equal(visibles.length, 2);
-  assert.equal(visibles.some((e) => e.titulo.includes('Unidad 3')), true);
-  assert.equal(visibles.some((e) => e.titulo.includes('Inventario')), true);
+  assert.equal(visibles.length, 0);
+  assert.match(tituloClaseEnCursadaPorMateria.get('ciber') || '', /Unidad 3/);
+  assert.match(tituloClaseEnCursadaPorMateria.get('gestion') || '', /Inventario/);
   assert.equal(visibles.some((e) => e.titulo.includes('Se abre')), false);
   assert.equal(enlaceClasePorMateria.get('ciber'), 'https://virtual.ugr.edu.ar/mod/zoom/view.php?id=1');
 });

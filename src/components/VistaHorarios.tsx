@@ -15,6 +15,7 @@ interface EventosDia {
   horarios: Horario[];
   cronograma: EventoCronograma[];
   enlacesClasePorMateria?: Map<string, string>;
+  tituloClaseEnCursadaPorMateria?: Map<string, string>;
 }
 
 interface Props {
@@ -160,9 +161,12 @@ export default function VistaHorarios({
                         <div className="mt-2 space-y-1.5">
                       {eventos.horarios.map((horario) => {
                         const materia = materias.find((item) => item.id === horario.materia_id);
+                        const tema = eventos.tituloClaseEnCursadaPorMateria?.get(horario.materia_id);
+                        const titulo = tema || materia?.nombre || 'Materia';
                         return (
-                          <div key={`${claveDia}-${horario.id}`} className="calendar-event calendar-class" title={`${materia?.nombre || 'Materia'} · ${horario.hora_inicio} - ${horario.hora_fin}`}>
-                            <span className="font-bold">{horario.hora_inicio}</span> {materia?.nombre || 'Materia'}
+                          <div key={`${claveDia}-${horario.id}`} className="calendar-event calendar-class" title={`${titulo} · ${horario.hora_inicio} - ${horario.hora_fin}`}>
+                            <span className="font-bold">{horario.hora_inicio}</span>
+                            <span className="block truncate">{titulo}</span>
                           </div>
                         );
                       })}
@@ -317,9 +321,11 @@ export default function VistaHorarios({
                     const enlacesClase = eventos.enlacesClasePorMateria ?? new Map<string, string>();
                     for (const horario of eventos.horarios) {
                       const enlaceClase = enlacesClase.get(horario.materia_id);
+                      const tema = eventos.tituloClaseEnCursadaPorMateria?.get(horario.materia_id);
                       grupoDe(horario.materia_id, horario.hora_inicio).bloques.push(
                         <div key={`modal-${horario.id}`} className="calendar-modal-event calendar-class">
                           <p className="text-sm font-extrabold">Cursada · {horario.hora_inicio} - {horario.hora_fin}</p>
+                          {tema && <p className="mt-1 text-sm opacity-90">{tema}</p>}
                           {horario.aula && horario.aula !== 'Virtual' && <p className="mt-1 text-xs opacity-75">Aula {horario.aula}</p>}
                           {enlaceClase && (
                             <a href={enlaceClase} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-2">

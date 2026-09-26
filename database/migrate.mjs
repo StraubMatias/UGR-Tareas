@@ -648,6 +648,21 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     console.log(`   Cronograma: ${cronogramaActualizado} fila(s) pasaron a examen_final; ${idsBorrar.length} parcial(es) de mesa/final o repaso eliminados.`);
   });
 
+  await ejecutarMigracion(30, 'fechas de plan Conceptos y Criptografía al día de cursada', async () => {
+    const { buscarMateriaPorFragmento, insertarPlanesCronograma } = await import('./planes-cronograma-comision.mjs');
+    const materias = await db.execute('SELECT id, nombre FROM materias');
+    for (const frag of ['CONCEPTOS DE DESARROLLO', 'INTRODUCCIÓN A LA CRIPTOGRAFÍA']) {
+      const materia = buscarMateriaPorFragmento(materias.rows, frag);
+      if (!materia) continue;
+      await db.execute({
+        sql: "DELETE FROM cronograma_eventos WHERE materia_id = ? AND origen = 'manual'",
+        args: [materia.id]
+      });
+    }
+    const insertados = await insertarPlanesCronograma(db, materias.rows);
+    console.log(`   Cronograma: ${insertados} fila(s) manual(es) de Conceptos/Criptografía recargadas.`);
+  });
+
   await db.close?.();
 }
 
