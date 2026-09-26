@@ -1,5 +1,5 @@
 import type { EventoCronograma, Horario, Materia, Parcial } from '../core/cursada';
-import { presentarCronogramaDelDia } from './cronograma-vista';
+import { ocultarExamenesCronogramaDuplicados, presentarCronogramaDelDia } from './cronograma-vista';
 
 export const NOMBRES_DIAS: Record<number, string> = {
   1: 'Lunes',
@@ -102,8 +102,9 @@ export function eventosDelDiaCalendario(
 
   const parciales = parcialesDeLaCursada.filter((parcial) => obtenerClaveDiaCalendario(parcial.fecha) === claveDia);
   const tareas = tareasCalendario.filter(({ tarea }) => obtenerClaveDiaCalendario(tarea.fin) === claveDia);
+  const cronogramaSinDuplicarParciales = ocultarExamenesCronogramaDuplicados(eventosCronogramaDia, parciales);
   const { eventos: cronograma, enlaceClasePorMateria } = presentarCronogramaDelDia(
-    eventosCronogramaDia,
+    cronogramaSinDuplicarParciales,
     horariosReales,
     parciales,
     tareas.map(({ tarea }) => ({ nombre: tarea.nombre }))

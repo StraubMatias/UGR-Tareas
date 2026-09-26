@@ -64,7 +64,8 @@ src/lib/grupos-tareas.ts  alta/baja de grupo dentro de una transacción
 src/components/           vistas (estado, materias, grupos, plan, …)
 ugr-sync/lib/             parsers y núcleo de sync (ver su README)
 ugr-sync/scripts/         CLI login y sync
-database/migrate.mjs      migraciones 1–26, idempotentes
+database/migrate.mjs      migraciones 1–29, idempotentes
+database/planes-cronograma-comision.mjs  planes oficiales (manual) por materia de la comisión
 database/grupos-schema.mjs
 tests/                    tests de la app
 ugr-sync/test/            tests del sync, con fixtures HTML de Moodle
@@ -72,7 +73,7 @@ ugr-sync/test/            tests del sync, con fixtures HTML de Moodle
 
 ## Modelo de datos
 
-SQLite en Turso. Las migraciones viven en `database/migrate.mjs` y se registran en `migraciones(numero, nombre, aplicada_en)`. Correr dos veces no reejecuta un número ya insertado. Hoy el último número es **26** (25: grupos con entrega individual e invitaciones; 26: `alumnos.ultimo_acceso` para cuentas propias inactivas).
+SQLite en Turso. Las migraciones viven en `database/migrate.mjs` y se registran en `migraciones(numero, nombre, aplicada_en)`. Correr dos veces no reejecuta un número ya insertado. Hoy el último número es **29** (27–28: planes y higiene UGR; 29: `examen_final` en cronograma para mesas/llamados y `parciales` solo desde evaluaciones del cuatrimestre, no finales).
 
 Identidad y cursada:
 

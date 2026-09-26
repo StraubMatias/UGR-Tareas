@@ -445,6 +445,29 @@ export function pareceEvaluacion(nombre) {
   return /\b(?:parcial(?:es|ito)?|examen(?:es)?|evaluacion(?:es)?|recuperatorio|coloquio|integrador)\b/.test(n);
 }
 
+/** Mesa / llamado / final de cursada: va al cronograma, no a la tabla `parciales`. */
+export function esExamenFinalDelCronograma(titulo) {
+  const n = limpiarTextoParaBusqueda(titulo);
+  if (!n) return false;
+  if (/\bparcial(ito|es)?\b/.test(n)) return false;
+  if (/\b(llamado|turno)\b/.test(n)) return true;
+  if (/\bmesa(s)?\s+de\s+examen\b/.test(n)) return true;
+  if (/\bexamen\s+final\b/.test(n)) return true;
+  if (/\bexamen\s+regular\b/.test(n)) return true;
+  return false;
+}
+
+/** Evaluación durante el cuatrimestre (parcial, parcialito, avance de medio cursado). */
+export function pareceParcialCuatrimestre(titulo) {
+  const n = limpiarTextoParaBusqueda(titulo);
+  if (!n || esExamenFinalDelCronograma(titulo)) return false;
+  if (/\b(repaso|cierre)\s+integrador\b/.test(n)) return false;
+  if (/\bparcial(ito|es)?\b/.test(n)) return true;
+  if (/\bevaluacion\s+de\s+avance\b/.test(n)) return true;
+  if (/\bmedio\s+cursado\b/.test(n)) return true;
+  return false;
+}
+
 // Inferir el tipo de tarea según el nombre, igual que hace la app
 // (actividad | foro | trabajo_practico).
 export function inferirTipoTarea(nombre) {

@@ -2,7 +2,7 @@
 // que ve el alumno. Ahí están las clases sincrónicas y los vencimientos, con la
 // fecha en hora de Argentina.
 import { load } from 'cheerio';
-import { coincidirNombreTarea } from './normalizar.mjs';
+import { coincidirNombreTarea, esExamenFinalDelCronograma, pareceEvaluacion } from './normalizar.mjs';
 import { parsearTimestampMoodle } from './normalizar.mjs';
 
 const ZONA_CAMPUS = 'America/Argentina/Buenos_Aires';
@@ -187,6 +187,8 @@ export function esTituloClaseGenericaDelCampus(titulo) {
   if (/^clases sincr[oó]nicas\s*-/i.test(t)) return true;
   if (/^enlace a la clase sincr[oó]nica/i.test(t)) return true;
   if (/^clase sincr[oó]nica semanal/i.test(t)) return true;
+  if (/^sala virtual\b/i.test(t)) return true;
+  if (/^enlace zoom\b/i.test(t)) return true;
   return false;
 }
 
@@ -200,7 +202,10 @@ function tituloConHorario(evento) {
 }
 
 function tipoCronograma(titulo) {
-  if (/consulta|revisi[oó]n/i.test(titulo)) return 'consulta';
+  const t = String(titulo || '');
+  if (/consulta|revisi[oó]n/i.test(t)) return 'consulta';
+  if (esExamenFinalDelCronograma(t)) return 'examen_final';
+  if (pareceEvaluacion(t) && !/^unidad\s+\d/i.test(t)) return 'examen';
   return 'clase';
 }
 

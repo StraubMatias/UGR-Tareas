@@ -184,7 +184,8 @@ export default function VistaHorarios({
                         const materia = materias.find((item) => item.id === evento.materia_id);
                         const esAsincronico = evento.modalidad === 'asincrónico';
                         const esSinClases = esEventoDeSinClases(evento);
-                        const esExamen = evento.tipo === 'examen';
+                        const esFinal = evento.tipo === 'examen_final';
+                        const esParcial = evento.tipo === 'examen';
                         const esEntrega = evento.tipo === 'entrega';
                         const esExposicion = evento.tipo === 'exposición';
                         const esConsulta = evento.tipo === 'consulta';
@@ -198,8 +199,10 @@ export default function VistaHorarios({
                                 : esConsulta
                                   ? 'Consulta asínc.'
                                   : 'Asincrónica'
-                            : esExamen
-                              ? 'Examen'
+                            : esFinal
+                              ? 'Mesa / final'
+                              : esParcial
+                                ? 'Parcial'
                               : esEntrega
                                 ? 'Entrega'
                                 : esExposicion
@@ -212,7 +215,7 @@ export default function VistaHorarios({
                         return (
                           <div
                             key={evento.id}
-                            className={`calendar-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : esExamen ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}
+                            className={`calendar-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : (esParcial || esFinal) ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}
                             title={`${tituloChip} · ${materia?.nombre || 'Materia'}`}
                           >
                             {mostrarEtiquetaChip && <span className="font-bold">{etiqueta}</span>}
@@ -345,7 +348,8 @@ export default function VistaHorarios({
                     for (const evento of eventos.cronograma) {
                       const esAsincronico = evento.modalidad === 'asincrónico';
                       const esSinClases = esEventoDeSinClases(evento);
-                      const esExamen = evento.tipo === 'examen';
+                      const esFinal = evento.tipo === 'examen_final';
+                      const esParcial = evento.tipo === 'examen';
                       const esEntrega = evento.tipo === 'entrega';
                       const esExposicion = evento.tipo === 'exposición';
                       const esConsulta = evento.tipo === 'consulta';
@@ -359,8 +363,10 @@ export default function VistaHorarios({
                               : esConsulta
                                 ? 'Consulta asincrónica'
                                 : 'Clase asincrónica'
-                          : esExamen
-                            ? 'Examen'
+                          : esFinal
+                            ? 'Mesa / final'
+                            : esParcial
+                              ? 'Parcial'
                             : esEntrega
                               ? 'Entrega'
                               : esExposicion
@@ -371,7 +377,7 @@ export default function VistaHorarios({
                       const tituloVisible = tituloDestacadoCronograma(evento);
                       const mostrarEtiqueta = mostrarEtiquetaTipoCronograma(evento);
                       grupoDe(evento.materia_id, esSinClases ? '00' : '70').bloques.push(
-                        <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : esExamen ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}>
+                        <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : (esParcial || esFinal) ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}>
                           {mostrarEtiqueta && <p className="text-sm font-extrabold">{etiqueta}</p>}
                           {!esSinClases && tituloVisible && (
                             <p className={`text-sm ${mostrarEtiqueta ? 'mt-1 opacity-85' : 'font-extrabold'}`}>{tituloVisible}</p>

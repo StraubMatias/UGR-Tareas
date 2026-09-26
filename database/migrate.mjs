@@ -597,6 +597,57 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     });
   });
 
+  await ejecutarMigracion(27, 'planes de cronograma, higiene UGR y parciales desde plan', async () => {
+    const { insertarPlanesCronograma } = await import('./planes-cronograma-comision.mjs');
+    const { ejecutarHigieneCronograma } = await import('./cronograma-higiene.mjs');
+    const materias = await db.execute('SELECT id, nombre FROM materias');
+    const insertados = await insertarPlanesCronograma(db, materias.rows);
+    const higiene = await ejecutarHigieneCronograma(db);
+    console.log(`   Cronograma: ${insertados} fila(s) manual(es) nuevas; ${higiene.eventosEliminados} evento(s) UGR de ruido eliminados; ${higiene.parcialesInsertados} parcial(es) desde plan.`);
+  });
+
+  await ejecutarMigracion(28, 'higiene UGR en materias con plan manual completo', async () => {
+    const { ejecutarHigieneCronograma } = await import('./cronograma-higiene.mjs');
+    const higiene = await ejecutarHigieneCronograma(db);
+    console.log(`   Cronograma: ${higiene.eventosEliminados} evento(s) UGR de ruido eliminados.`);
+  });
+
+  await ejecutarMigracion(29, 'finales en cronograma; parciales solo del cuatrimestre', async () => {
+    const { esExamenFinalDelCronograma } = await import('../ugr-sync/lib/normalizar.mjs');
+    const eventos = await db.execute("SELECT id, titulo FROM cronograma_eventos WHERE tipo = 'examen'");
+    let cronogramaActualizado = 0;
+    for (const fila of eventos.rows) {
+      if (!esExamenFinalDelCronograma(fila.titulo)) continue;
+      await db.execute({
+        sql: "UPDATE cronograma_eventos SET tipo = 'examen_final' WHERE id = ?",
+        args: [fila.id]
+      });
+      cronogramaActualizado += 1;
+    }
+    const parciales = await db.execute('SELECT id, nombre FROM parciales');
+    const idsBorrar = [];
+    for (const fila of parciales.rows) {
+      const nombre = String(fila.nombre || '').trim();
+      if (esExamenFinalDelCronograma(nombre)) idsBorrar.push(fila.id);
+      else if (/^(repaso|cierre)\s+integrador$/i.test(nombre)) idsBorrar.push(fila.id);
+    }
+    if (idsBorrar.length > 0) {
+      for (let i = 0; i < idsBorrar.length; i += 80) {
+        const trozo = idsBorrar.slice(i, i + 80);
+        const marks = trozo.map(() => '?').join(',');
+        await db.execute({
+          sql: `DELETE FROM notas_parciales WHERE parcial_id IN (${marks})`,
+          args: trozo
+        });
+        await db.execute({
+          sql: `DELETE FROM parciales WHERE id IN (${marks})`,
+          args: trozo
+        });
+      }
+    }
+    console.log(`   Cronograma: ${cronogramaActualizado} fila(s) pasaron a examen_final; ${idsBorrar.length} parcial(es) de mesa/final o repaso eliminados.`);
+  });
+
   await db.close?.();
 }
 

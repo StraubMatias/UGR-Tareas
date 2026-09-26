@@ -70,4 +70,6 @@ test('esTituloClaseGenericaDelCampus distingue plan de enlace', () => {
   assert.equal(esTituloClaseGenericaDelCampus('Link de Clase Sincrónica'), true);
   assert.equal(esTituloClaseGenericaDelCampus('Unidad 3: regulación internacional'), false);
   assert.equal(esTituloClaseGenericaDelCampus('Se cierra Evaluación de avance'), true);
+  assert.equal(esTituloClaseGenericaDelCampus('Sala Virtual'), true);
+  assert.equal(esTituloClaseGenericaDelCampus('Enlace zoom - clases sincronicas'), true);
 });
