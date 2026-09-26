@@ -306,7 +306,7 @@ export function extraerActividadesOverview(html, baseUrl = '') {
         fin,
         unidad,
         tipo: esForo ? 'foro' : inferirTipoTarea(nombre),
-        conNota: esForo || modulo === 'feedback' ? false : true,
+        conNota: esForo ? notaCampus != null : modulo === 'feedback' ? false : true,
         notaCampus,
         entregada: entregada || notaCampus != null
       });
@@ -734,9 +734,29 @@ export function extraerNotaUltimoIntento(html) {
   return suelta ? parsearNotaPublicada(suelta[1]) : null;
 }
 
+function extraerNotaDeForo(html) {
+  if (!html) return null;
+  const $ = load(html);
+  const texto = ($('body').length ? $('body').text() : String(html)).replace(/\u00a0/g, ' ');
+  const deTabla = [];
+  $('tr').each((_, tr) => {
+    const rotulo = limpiarTexto($(tr).find('th').first().text());
+    if (!esRotuloDeNota(rotulo) && !/calific|rating|puntuaci[oó]n/i.test(rotulo)) return;
+    const celda = $(tr).find('td').first();
+    const nota = notaDeRotuloCalificacion(celda.html() || celda.text()) ?? parsearNotaPublicada(celda.text());
+    if (nota != null) deTabla.push(nota);
+  });
+  if (deTabla.length === 1) return deTabla[0];
+  const inline = texto.match(/(?:tu\s+)?calificaci[oó]n(?:\s+en\s+este\s+foro)?(?:\s+es)?\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/i)
+    || texto.match(/(?:grade|rating)\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/i);
+  return inline ? parsearNotaPublicada(inline[1]) : null;
+}
+
 export function extraerProgresoDeActividad(html) {
   if (!html) return { nota: null, entregada: false };
-  const nota = extraerNotaUltimoIntento(html);
+  const esForo = /\/mod\/forum\//i.test(html) || /forum-post-container|mod_forum/i.test(html);
+  const notaForo = esForo ? extraerNotaDeForo(html) : null;
+  const nota = notaForo ?? extraerNotaUltimoIntento(html);
   const $ = load(html);
   const plano = $('body').text();
   const hayRevision = $('a[href*="review.php"]').length > 0;
@@ -744,7 +764,12 @@ export function extraerProgresoDeActividad(html) {
   const envio = $('[data-region="activity-header"], .submissionstatustable, .submissionstatus, .submissionsummarytable').text();
   const enviada = /enviad|entregad|submitted|graded|para calificar/i.test(envio)
     && !/no entregad|no enviad|not submitted/i.test(envio);
-  return { nota, entregada: nota != null || hayRevision || hayIntento || enviada };
+  const participoForo = esForo && (
+    nota != null
+    || $('.forum-post-container, article.forumpost, [data-content="forum-post"]').length > 0
+    || /ya\s+publicaste|you\s+posted|mensajes?\s+publicados/i.test(plano)
+  );
+  return { nota, entregada: nota != null || hayRevision || hayIntento || enviada || participoForo };
 }
 
 // Si el cuestionario no publica el número en el resumen, el último intento
