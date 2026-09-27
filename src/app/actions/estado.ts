@@ -316,6 +316,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
           id: texto(fila.id),
           curso_id: texto(fila.curso_id),
           curso_nombre: texto(fila.curso_nombre),
+          materia_id: texto(fila.materia_id),
           materia_nombre: texto(fila.materia_nombre),
           foro_nombre: texto(fila.foro_nombre),
           titulo: texto(fila.titulo),
