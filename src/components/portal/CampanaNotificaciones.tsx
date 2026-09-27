@@ -64,7 +64,7 @@ export default function CampanaNotificaciones({
                 const texto = esInvitacion
                   ? `${notificacion.deAlumno} te invitó al grupo «${notificacion.grupoNombre || 'grupo'}»`
                   : notificacion.tipo === 'parcial'
-                    ? 'Rendís mañana'
+                    ? (notificacion.dias === 0 ? 'Rendís hoy' : 'Rendís mañana')
                     : notificacion.tipo === 'nuevo-parcial'
                       ? 'Nuevo parcial cargado'
                       : notificacion.tipo === 'nueva-tarea'
