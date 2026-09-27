@@ -55,6 +55,7 @@ export interface AvisoCampusMoodle {
   id: string;
   curso_id: string;
   curso_nombre: string;
+  materia_id: string;
   materia_nombre: string;
   foro_nombre: string;
   titulo: string;
