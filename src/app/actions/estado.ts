@@ -93,7 +93,8 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       resInscripciones,
       resInvitacionesGrupo,
       resInvitacionesGrupoEnviadas,
-      resNotasManualesCampus
+      resNotasManualesCampus,
+      resEntregasTareas
     ] = await db.batch([
       { sql: 'SELECT id, anio, cuatrimestre, nombre, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC', args: [] },
       consultaPeriodo(
@@ -252,7 +253,21 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         args: periodoParaCargar
           ? [texto(cuenta?.id), periodoParaCargar, texto(cuenta?.id), periodoParaCargar]
           : [texto(cuenta?.id), texto(cuenta?.id)]
-      }
+      },
+      consultaPeriodo(
+        periodoParaCargar,
+        `SELECT te.tarea_id, COALESCE(a.nombre, '') AS alumno, te.numero, te.indice_entrega, te.es_activa,
+                te.estado, te.nota, te.nota_origen, te.comentario_prof, te.feedback_url, te.feedback_nombre
+         FROM tareas_entregas te
+         JOIN tareas t ON t.id = te.tarea_id
+         JOIN materias m ON m.id = t.materia_id
+         LEFT JOIN alumnos a ON a.id = te.alumno_id
+         WHERE m.periodo_id = ?`,
+        `SELECT te.tarea_id, COALESCE(a.nombre, '') AS alumno, te.numero, te.indice_entrega, te.es_activa,
+                te.estado, te.nota, te.nota_origen, te.comentario_prof, te.feedback_url, te.feedback_nombre
+         FROM tareas_entregas te
+         LEFT JOIN alumnos a ON a.id = te.alumno_id`
+      )
     ], 'read');
 
     const materiasArmadas = armarMaterias(
@@ -261,7 +276,8 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       resCompletadas.rows,
       resNotasTareas.rows,
       resGrupos.rows,
-      resPreferenciasGrupo.rows
+      resPreferenciasGrupo.rows,
+      resEntregasTareas.rows
     );
     const inscripciones = resInscripciones.rows.map((fila) => ({
       alumno: texto(fila.alumno),

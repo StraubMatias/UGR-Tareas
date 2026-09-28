@@ -26,6 +26,20 @@ export interface Tarea {
   entregaIndividualPor?: Record<string, boolean>;
   grupos?: Grupo[];
   cupo_maximo?: number | string;
+  entregas?: Record<string, EntregaHitoTarea[]>;
+}
+
+export interface EntregaHitoTarea {
+  numero: number;
+  indiceEntrega: number | null;
+  esActiva: boolean;
+  estado: string;
+  nota: string | number | null;
+  notaOrigen?: string | null;
+  comentarioProf?: string | null;
+  feedbackUrl?: string | null;
+  feedbackNombre?: string | null;
+  pendiente?: boolean;
 }
 
 export type ModoEntregaTarea = 'individual' | 'grupal_opcional' | 'grupal_obligatorio';
@@ -107,11 +121,17 @@ export interface HistorialRegistro {
 
 // Funciones corregidas con tipos explícitos
 
-export const tareaCompletadaPor = (tarea: Tarea, alumno: string | null | undefined): boolean => (
-  Boolean(alumno)
-  && (tarea.completadoPor.includes(alumno as string)
-    || (tarea.conNota && Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno as string)))
-);
+export const tareaCompletadaPor = (tarea: Tarea, alumno: string | null | undefined): boolean => {
+  if (!alumno) return false;
+  const hitos = tarea.entregas?.[alumno as string];
+  if (hitos?.length) {
+    const activa = hitos.find((h) => h.esActiva);
+    if (activa && (activa.pendiente || /reabiert|reopened/i.test(activa.estado || ''))) return false;
+  }
+  return tarea.completadoPor.includes(alumno as string)
+    || (tarea.conNota && Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno as string)
+      && tarea.notas?.[alumno as string] !== null && tarea.notas?.[alumno as string] !== '');
+};
 
 export const fechaEntregaTarea = (tarea: Tarea, alumno: string | null | undefined): string | null => (
   !alumno ? null : tarea.completadoEn?.[alumno] || (tarea.conNota ? tarea.notaCargadaEn?.[alumno] ?? null : null)

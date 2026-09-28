@@ -14,7 +14,8 @@ export function armarMaterias(
   filasCompletadas: Row[],
   filasNotas: Row[],
   filasGrupos: Row[],
-  filasPreferencias: Row[] = []
+  filasPreferencias: Row[] = [],
+  filasEntregas: Row[] = []
 ) {
   const entregaIndividualPorTarea = new Map<string, Record<string, boolean>>();
   for (const fila of filasPreferencias) {
@@ -51,6 +52,17 @@ export function armarMaterias(
     completadasTarea.push(completada);
     completadasPorTarea.set(tareaId, completadasTarea);
   });
+
+  const entregasPorTarea = new Map<string, Record<string, Row[]>>();
+  for (const fila of filasEntregas) {
+    const tareaId = texto(fila.tarea_id);
+    const alumno = texto(fila.alumno);
+    if (!tareaId || !alumno) continue;
+    const mapa = entregasPorTarea.get(tareaId) || {};
+    if (!mapa[alumno]) mapa[alumno] = [];
+    mapa[alumno].push(fila);
+    entregasPorTarea.set(tareaId, mapa);
+  }
 
   const notasPorTarea = new Map<string, Record<string, Value>>();
   const fechasNotasPorTarea = new Map<string, Record<string, Value>>();
@@ -103,6 +115,25 @@ export function armarMaterias(
         ),
         notaCargadaEn: Object.fromEntries(
           Object.entries(notaCargadaEn).map(([alumnoNota, valor]) => [alumnoNota, texto(valor)])
+        ),
+        entregas: Object.fromEntries(
+          Object.entries(entregasPorTarea.get(tareaId) || {}).map(([alumnoEntrega, filas]) => [
+            alumnoEntrega,
+            filas
+              .sort((a, b) => Number(a.indice_entrega || a.numero) - Number(b.indice_entrega || b.numero))
+              .map((f) => ({
+                numero: Number(f.numero),
+                indiceEntrega: f.indice_entrega == null ? null : Number(f.indice_entrega),
+                esActiva: Number(f.es_activa) === 1,
+                estado: texto(f.estado),
+                nota: f.nota == null || f.nota === '' ? null : formatearNotaParaMostrar(texto(f.nota)),
+                notaOrigen: textoONull(f.nota_origen),
+                comentarioProf: textoONull(f.comentario_prof),
+                feedbackUrl: textoONull(f.feedback_url),
+                feedbackNombre: textoONull(f.feedback_nombre),
+                pendiente: Number(f.es_activa) === 1 && /reabiert|reopened/i.test(texto(f.estado))
+              }))
+          ])
         )
       };
     });
