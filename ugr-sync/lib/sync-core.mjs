@@ -60,6 +60,7 @@ import { ajustarClasesAlHorario, clasificarEventosCalendario, esTituloClaseGener
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { cabeceraCookies } from './autenticar.mjs';
 import { extraerEnlacesDeCursada, interpretarCondiciones, textoDeArchivoCampus, urlArchivoDeRecurso } from './metodologia.mjs';
+import { sincronizarEntregasAssignDesdeHtml } from './assign-entregas.mjs';
 
 // Credenciales de UGR: se leen en el momento de conectar directamente de
 // process.env, igual que las variables TURSO_* en src/app/turso.js. Por lo
@@ -330,8 +331,26 @@ async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNom
         if (esQuiz) noLeidas.push({ materia: fila.materia, nombre: fila.nombre });
         return;
       }
+      const esAssign = /\/mod\/assign\//.test(String(fila.url));
+      let resumenEntregas = null;
+      if (esAssign && guardar && alumnoId) {
+        const syncEnt = await sincronizarEntregasAssignDesdeHtml({
+          cliente,
+          db,
+          tareaId: fila.id,
+          alumnoId,
+          alumnoNombre,
+          html: pagina.html,
+          baseUrl: UGR_BASE_URL
+        });
+        resumenEntregas = syncEnt.resumen;
+      }
       const progreso = await notaDePagina(cliente, pagina.html);
-      if (progreso.nota == null && !progreso.entregada) {
+      if (resumenEntregas) {
+        if (resumenEntregas.notaParaTablero != null) progreso.nota = resumenEntregas.notaParaTablero;
+        progreso.entregada = resumenEntregas.entregada;
+      }
+      if (progreso.nota == null && !progreso.entregada && !resumenEntregas) {
         if (esQuiz && pareceCuestionarioHecho(pagina.html)) noLeidas.push({ materia: fila.materia, nombre: fila.nombre });
         return;
       }
@@ -343,11 +362,11 @@ async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNom
         tabla: fila.tabla,
         fecha: fila.fecha || null,
         nota: progreso.nota,
-        entregada: true,
+        entregada: progreso.entregada,
         forzar: guardar && progreso.nota != null
       };
       notas.push(item);
-      if (guardar && alumnoId) {
+      if (guardar && alumnoId && (item.nota != null || item.entregada)) {
         const escrito = await aplicarProgresoCampus({ db, progreso: [item], alumnoId, alumnoNombre });
         cargadas.push(...escrito.cargadas);
         pendientesEntrega.push(...(escrito.pendientesEntrega || []));

@@ -7,7 +7,8 @@ import {
   obtenerResumenGruposTarea,
   obtenerResumenTareasAlumno,
   formatearFechaDDMMAAAA,
-  calcularEstadoSemaforo
+  calcularEstadoSemaforo,
+  tareaCompletadaPor
 } from '../src/core/cursada.ts';
 
 test('obtenerGrupoDeAlumno: encuentra el grupo correspondiente o retorna null', () => {
@@ -116,6 +117,29 @@ test('obtenerResumenTareasAlumno: tarea grupal con nota no cuenta en Grupales', 
   assert.equal(resumen.grupales.length, 1);
   assert.equal(resumen.grupales[0].id, 't2');
   assert.equal(resumen.totalGrupales, 1);
+});
+
+test('tareaCompletadaPor destilda si hay entrega activa reabierta', () => {
+  const tarea = {
+    id: 't1',
+    nombre: 'TP',
+    inicio: null,
+    fin: null,
+    conNota: true,
+    completadoPor: ['Ana'],
+    notas: { Ana: 8 },
+    entregas: {
+      Ana: [{
+        numero: 3,
+        indiceEntrega: 2,
+        esActiva: true,
+        estado: 'Reabierto',
+        nota: null,
+        pendiente: true
+      }]
+    }
+  };
+  assert.equal(tareaCompletadaPor(tarea, 'Ana'), false);
 });
 
 test('obtenerResumenTareasAlumno: grupal entregada sin nota sigue en Grupales', () => {

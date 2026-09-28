@@ -1,3 +1,4 @@
+import EntregasHitosTarea from './EntregasHitosTarea';
 import {
   type Materia,
   type Tarea,
@@ -291,6 +292,10 @@ export default function VistaMaterias({
                               {t.detalles || 'Sin observaciones adicionales.'}
                             </p>
                           </div>
+
+                          {usuarioActual && t.entregas?.[usuarioActual]?.length ? (
+                            <EntregasHitosTarea entregas={t.entregas[usuarioActual]} usuarioActual={usuarioActual} />
+                          ) : null}
     
                           <div className="flex flex-wrap gap-5 text-xs sm:text-sm text-slate-400 pt-1 font-medium">
                             <span className="flex items-center gap-1.5">
