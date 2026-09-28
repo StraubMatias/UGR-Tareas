@@ -15,7 +15,7 @@ async function preparar(t) {
     'CREATE TABLE alumnos (id TEXT PRIMARY KEY, nombre TEXT)',
     'CREATE TABLE tareas (id TEXT PRIMARY KEY, inicio TEXT, con_nota INTEGER)',
     'CREATE TABLE completadas (tarea_id TEXT, alumno_id TEXT, alumno TEXT, completada_en TEXT, UNIQUE(tarea_id, alumno))',
-    'CREATE TABLE notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT, cargada_en TEXT, UNIQUE(tarea_id, alumno))',
+    'CREATE TABLE notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT, cargada_en TEXT, cerrada INTEGER NOT NULL DEFAULT 0, UNIQUE(tarea_id, alumno))',
     "INSERT INTO alumnos VALUES ('a', 'Ana'), ('b', 'Beto'), ('c', 'Caro')",
     "INSERT INTO tareas VALUES ('t', 'Sin fecha', 1), ('otra', 'Sin fecha', 1), ('individual', 'Sin fecha', 1)"
   ], 'write');

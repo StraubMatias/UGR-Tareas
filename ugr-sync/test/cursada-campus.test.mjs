@@ -246,7 +246,7 @@ test('un parcial cargado como tarea pasa al apartado de parciales', async () => 
   }
 });
 
-test('cargarNotasDesdeEnlaces omite actividades cuya nota fue cargada hace más de 7 días', async () => {
+test('cargarNotasDesdeEnlaces vuelve a consultar el campus aunque la nota sea antigua', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ugr-cache-notas-'));
   const db = createClient({ url: `file:${join(dir, 'test.db')}` });
   try {
@@ -287,12 +287,56 @@ test('cargarNotasDesdeEnlaces omite actividades cuya nota fue cargada hace más 
       alumnoNombre: 'Alumno 1'
     });
 
-    // t_vieja (>7 días) no debe haberse pedido.
-    // t_nueva (<7 días) y t_sin_nota (sin nota) sí deben pedirse.
-    assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=1'), false);
+    assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=1'), true);
     assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=2'), true);
     assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=3'), true);
-    assert.equal(urlsPedidas.length, 2);
+    assert.equal(urlsPedidas.length, 3);
+  } finally {
+    db.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('el sync con forzar reemplaza una nota manual del tablero', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ugr-manual-nota-'));
+  const db = createClient({ url: `file:${join(dir, 'test.db')}` });
+  try {
+    await db.batch([
+      'CREATE TABLE materias (id TEXT PRIMARY KEY, nombre TEXT)',
+      'CREATE TABLE tareas (id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, url TEXT, tipo TEXT, con_nota INTEGER NOT NULL DEFAULT 1)',
+      'CREATE TABLE completadas (tarea_id TEXT, alumno_id TEXT, alumno TEXT, completada_en TEXT, UNIQUE(tarea_id, alumno))',
+      `CREATE TABLE notas_tareas (
+        id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT, cargada_en TEXT,
+        cerrada INTEGER NOT NULL DEFAULT 0, UNIQUE(tarea_id, alumno)
+      )`,
+      "INSERT INTO materias VALUES ('cri', 'Criptografía')",
+      "INSERT INTO tareas VALUES ('t1', 'cri', 'TP 1', 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=9', 'actividad', 1)",
+      "INSERT INTO completadas VALUES ('t1', 'alu_1', 'Alumno 1', datetime('now'))",
+      "INSERT INTO notas_tareas VALUES ('nt', 't1', 'alu_1', 'Alumno 1', '5', datetime('now'), 0)"
+    ], 'write');
+    const { aplicarComplementoCampus } = await import('../lib/sync-core.mjs');
+    await aplicarComplementoCampus({
+      db,
+      alumnoId: 'alu_1',
+      alumnoNombre: 'Alumno 1',
+      detectado: {
+        progresoAlumno: [{
+          tabla: 'tareas',
+          id: 't1',
+          materiaId: 'cri',
+          nombre: 'TP 1',
+          nota: '8',
+          entregada: true,
+          forzar: true
+        }]
+      }
+    });
+    const fila = await db.execute({
+      sql: 'SELECT nota, cerrada FROM notas_tareas WHERE tarea_id = ?',
+      args: ['t1']
+    });
+    assert.equal(fila.rows[0].nota, '8');
+    assert.equal(Number(fila.rows[0].cerrada), 1);
   } finally {
     db.close();
     await rm(dir, { recursive: true, force: true });

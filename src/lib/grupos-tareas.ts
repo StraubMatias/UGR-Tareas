@@ -431,8 +431,12 @@ export async function actualizarProgresoTarea(
           await tx.execute({ sql: 'DELETE FROM notas_tareas WHERE tarea_id = ? AND alumno_id = ?', args: [tareaId, integrante.id] });
         } else {
           await tx.execute({
-            sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en) VALUES (?, ?, ?, ?, ?, ?)
-                  ON CONFLICT(tarea_id, alumno) DO UPDATE SET alumno_id = excluded.alumno_id, nota = excluded.nota, cargada_en = excluded.cargada_en`,
+            sql: `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en, cerrada) VALUES (?, ?, ?, ?, ?, ?, 0)
+                  ON CONFLICT(tarea_id, alumno) DO UPDATE SET
+                    alumno_id = excluded.alumno_id,
+                    nota = excluded.nota,
+                    cargada_en = excluded.cargada_en,
+                    cerrada = 0`,
             args: [`nota_tarea_${randomUUID()}`, tarea.id, integrante.id, integrante.nombre, validacion.valor, fecha]
           });
           await tx.execute({

@@ -92,7 +92,8 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       resRol,
       resInscripciones,
       resInvitacionesGrupo,
-      resInvitacionesGrupoEnviadas
+      resInvitacionesGrupoEnviadas,
+      resNotasManualesCampus
     ] = await db.batch([
       { sql: 'SELECT id, anio, cuatrimestre, nombre, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC', args: [] },
       consultaPeriodo(
@@ -215,6 +216,42 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
               JOIN alumnos a ON a.id = i.para_alumno_id
               WHERE i.de_alumno_id = ? AND i.estado = 'pendiente'`,
         args: [texto(cuenta?.id)]
+      },
+      {
+        sql: periodoParaCargar
+          ? `SELECT COUNT(*) AS c FROM (
+              SELECT nt.id FROM notas_tareas nt
+              JOIN tareas t ON t.id = nt.tarea_id
+              JOIN materias m ON m.id = t.materia_id
+              WHERE nt.alumno_id = ? AND COALESCE(nt.cerrada, 0) = 0
+                AND TRIM(COALESCE(nt.nota, '')) != ''
+                AND TRIM(COALESCE(t.url, '')) != ''
+                AND m.periodo_id = ?
+              UNION ALL
+              SELECT np.id FROM notas_parciales np
+              JOIN parciales p ON p.id = np.parcial_id
+              JOIN materias m ON m.id = p.materia_id
+              WHERE np.alumno_id = ? AND COALESCE(np.cerrada, 0) = 0
+                AND TRIM(COALESCE(np.nota, '')) != ''
+                AND TRIM(COALESCE(p.url, '')) != ''
+                AND m.periodo_id = ?
+            )`
+          : `SELECT COUNT(*) AS c FROM (
+              SELECT nt.id FROM notas_tareas nt
+              JOIN tareas t ON t.id = nt.tarea_id
+              WHERE nt.alumno_id = ? AND COALESCE(nt.cerrada, 0) = 0
+                AND TRIM(COALESCE(nt.nota, '')) != ''
+                AND TRIM(COALESCE(t.url, '')) != ''
+              UNION ALL
+              SELECT np.id FROM notas_parciales np
+              JOIN parciales p ON p.id = np.parcial_id
+              WHERE np.alumno_id = ? AND COALESCE(np.cerrada, 0) = 0
+                AND TRIM(COALESCE(np.nota, '')) != ''
+                AND TRIM(COALESCE(p.url, '')) != ''
+            )`,
+        args: periodoParaCargar
+          ? [texto(cuenta?.id), periodoParaCargar, texto(cuenta?.id), periodoParaCargar]
+          : [texto(cuenta?.id), texto(cuenta?.id)]
       }
     ], 'read');
 
@@ -340,7 +377,8 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         tareaId: texto(fila.tarea_id),
         grupoId: texto(fila.grupo_id),
         paraAlumno: texto(fila.para_alumno)
-      }))
+      })),
+      notasManualesCampus: Number(resNotasManualesCampus.rows[0]?.c || 0)
     };
   } catch (error) {
     console.error('Error en obtenerEstadoCompleto:', error);
