@@ -65,10 +65,25 @@ test('extraerEntregasAssign parsea intentos y reabierto actual', async () => {
   const intento2 = entregas.find((e) => e.numero === 2);
   assert.ok(intento2?.tieneDevolucion);
   assert.equal(intento2?.archivos?.length, 1);
-  const intento1 = entregas.find((e) => e.numero === 1);
-  assert.equal(intento1?.archivos?.length || 0, 0);
+  assert.equal(intento2?.indiceEntrega, 1);
+  assert.ok(!entregas.some((e) => e.numero === 1), 'intento 1 sin devolución no se lista');
   const activa = entregas.find((e) => e.esActiva);
   assert.equal(activa?.numero, 3);
+  assert.equal(activa?.indiceEntrega, 2);
+  assert.equal(activa?.pendiente, true);
+});
+
+test('extraerEntregasAssign no mezcla el intento actual en intentos anteriores (Moodle 4)', async () => {
+  const html = await readFile(join(DIR, 'fixtures/assign-entregas-sgsi-moodle4.html'), 'utf8');
+  const { entregas, intentoActual } = extraerEntregasAssign(html);
+  assert.equal(intentoActual, 3);
+  const e1 = entregas.find((e) => e.indiceEntrega === 1);
+  assert.ok(e1);
+  assert.match(e1.estado, /reabierto/i);
+  assert.ok(e1.comentarioProf?.includes('correcto'));
+  assert.ok(!e1.estado.includes('Este es el intento 3'));
+  const e2 = entregas.find((e) => e.esActiva);
+  assert.equal(e2?.indiceEntrega, 2);
 });
 
 test('enriquecerNotasDesdeDevoluciones descarga docx y asigna nota', async () => {

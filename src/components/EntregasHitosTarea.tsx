@@ -1,4 +1,4 @@
-import type { EntregaHitoTarea } from '../core/cursada';
+import { faseEntregaDesdeHitos, type EntregaHitoTarea } from '../core/cursada';
 
 interface EntregasHitosTareaProps {
   entregas: EntregaHitoTarea[];
@@ -11,12 +11,19 @@ export default function EntregasHitosTarea({ entregas, usuarioActual }: Entregas
   const ordenadas = [...entregas].sort(
     (a, b) => (a.indiceEntrega ?? a.numero) - (b.indiceEntrega ?? b.numero)
   );
+  const fase = faseEntregaDesdeHitos(entregas);
 
   return (
     <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4 space-y-3">
       <p className="text-xs font-bold uppercase tracking-wider text-cyan-300">
         Entregas del trabajo (sincronizado desde UGR)
       </p>
+      {fase?.requiereEntrega && fase.indice != null && (
+        <p className="text-sm text-amber-100/95 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2">
+          <span className="font-semibold">Fase actual en UGR Virtual: {fase.etiqueta}.</span>
+          {' '}Es la que tenés que subir ahora en el campus (el intento anterior ya fue corregido).
+        </p>
+      )}
       <ul className="space-y-2">
         {ordenadas.map((entrega) => {
           const etiqueta = entrega.indiceEntrega
@@ -42,7 +49,11 @@ export default function EntregasHitosTarea({ entregas, usuarioActual }: Entregas
                     )}
                   </span>
                 ) : entrega.pendiente || entrega.esActiva ? (
-                  <span className="text-amber-300 text-xs font-semibold">Pendiente</span>
+                  <span className="text-amber-300 text-xs font-semibold">
+                    {entrega.esActiva && entrega.indiceEntrega
+                      ? `A entregar ahora · Entrega ${entrega.indiceEntrega}`
+                      : 'Pendiente'}
+                  </span>
                 ) : null}
               </div>
               {entrega.estado && (
