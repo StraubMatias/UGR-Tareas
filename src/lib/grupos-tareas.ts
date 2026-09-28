@@ -250,6 +250,76 @@ export async function propagarNotaGrupalTrasCargaCampus(
   };
 }
 
+/** Replica filas de tareas_entregas (hitos assign) del alumno que sincronizó al resto del grupo. */
+export async function propagarEntregasHitosGrupoTrasSync(
+  db: Client,
+  tareaId: string,
+  alumnoFuenteId: string
+): Promise<string[]> {
+  const fila = await db.execute({
+    sql: `SELECT i.grupo_id FROM integrantes_tareas i
+          JOIN tareas t ON t.id = i.tarea_id
+          WHERE i.tarea_id = ? AND i.alumno_id = ? AND COALESCE(t.grupal, 0) = 1`,
+    args: [tareaId, alumnoFuenteId]
+  });
+  const grupoId = fila.rows[0]?.grupo_id;
+  if (!grupoId) return [];
+
+  const miembros = await db.execute({
+    sql: `SELECT a.id, a.nombre FROM integrantes_tareas i JOIN alumnos a ON a.id = i.alumno_id WHERE i.grupo_id = ?`,
+    args: [String(grupoId)]
+  });
+  const fuente = await db.execute({
+    sql: 'SELECT * FROM tareas_entregas WHERE tarea_id = ? AND alumno_id = ?',
+    args: [tareaId, alumnoFuenteId]
+  });
+  if (!fuente.rows.length) return [];
+
+  const actualizados: string[] = [];
+  for (const m of miembros.rows) {
+    const destId = String(m.id);
+    if (destId === alumnoFuenteId) continue;
+    for (const row of fuente.rows) {
+      const id = `te_${tareaId}_${destId}_${row.numero}`;
+      await db.execute({
+        sql: `INSERT INTO tareas_entregas (
+                id, tarea_id, alumno_id, numero, indice_entrega, es_activa, estado, nota, nota_origen,
+                comentario_prof, feedback_url, feedback_nombre, devolucion_texto, sincronizado_en
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(tarea_id, alumno_id, numero) DO UPDATE SET
+                indice_entrega = excluded.indice_entrega,
+                es_activa = excluded.es_activa,
+                estado = excluded.estado,
+                nota = excluded.nota,
+                nota_origen = excluded.nota_origen,
+                comentario_prof = excluded.comentario_prof,
+                feedback_url = excluded.feedback_url,
+                feedback_nombre = excluded.feedback_nombre,
+                devolucion_texto = excluded.devolucion_texto,
+                sincronizado_en = excluded.sincronizado_en`,
+        args: [
+          id,
+          tareaId,
+          destId,
+          row.numero,
+          row.indice_entrega,
+          row.es_activa,
+          row.estado,
+          row.nota,
+          row.nota_origen,
+          row.comentario_prof,
+          row.feedback_url,
+          row.feedback_nombre,
+          row.devolucion_texto,
+          row.sincronizado_en
+        ]
+      });
+    }
+    actualizados.push(String(m.nombre));
+  }
+  return actualizados;
+}
+
 /** Tras sync o carga manual: replica nota/entrega del grupo a todos los integrantes. */
 export async function propagarNotasGrupalesEnMaterias(
   db: Client,

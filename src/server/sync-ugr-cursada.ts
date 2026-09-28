@@ -145,6 +145,7 @@ export type ResultadoSyncUgr = {
   notasCampus: NotaCampusInforme[];
   lineasInforme: string[];
   materiaIds?: string[];
+  tareasEntregasActualizadas?: string[];
 };
 
 async function nombresMateriasInscriptas(alumnoId: string, periodoId: string) {
@@ -539,7 +540,8 @@ export async function sincronizarLoteMateriasDelAlumno({
     notasCampus: notasCargadas,
     lineasInforme,
     mensaje: mensajeDesdeInforme(lineasInforme, materiasCount),
-    materiaIds
+    materiaIds,
+    tareasEntregasActualizadas: hitosAssign.tareasEntregasActualizadas || []
   };
 }
 
@@ -549,10 +551,12 @@ function fusionarResultadosSync(...partes: ResultadoSyncUgr[]): ResultadoSyncUgr
   let notasCampus: NotaCampusInforme[] = [];
   let materiasInscriptas: MateriaInscriptaSync[] = [];
   let materiaIds: string[] = [];
+  let tareasEntregasActualizadas: string[] = [];
   for (const parte of partes) {
     resumen = fusionarResumenSync(resumen, parte.resumen);
     lineasInforme = fusionarLineasInforme(lineasInforme, parte.lineasInforme);
     notasCampus = [...notasCampus, ...parte.notasCampus];
+    tareasEntregasActualizadas = [...new Set([...tareasEntregasActualizadas, ...(parte.tareasEntregasActualizadas || [])])];
     if (parte.materiasInscriptas.length) materiasInscriptas = parte.materiasInscriptas;
     if (parte.materiaIds?.length) materiaIds = parte.materiaIds;
   }
@@ -563,6 +567,7 @@ function fusionarResultadosSync(...partes: ResultadoSyncUgr[]): ResultadoSyncUgr
     notasCampus,
     materiasInscriptas,
     materiaIds,
+    tareasEntregasActualizadas,
     mensaje: mensajeDesdeInforme(lineasInforme, materiasCount)
   };
 }

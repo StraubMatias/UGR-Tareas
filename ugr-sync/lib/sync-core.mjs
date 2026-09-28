@@ -435,12 +435,13 @@ export async function sincronizarHitosAssignEnMaterias({
   alumnoId,
   alumnoNombre
 }) {
-  const filas = await listarTareasAssignConUrl(db, materiaIds, alumnoId);
+  const filas = await listarTareasAssignConUrl(db, materiaIds);
   const lineasInforme = [];
   const notasCargadas = [];
-  if (!filas.length || !alumnoId) return { lineasInforme, notasCargadas, tareas: 0 };
+  const tareasEntregasActualizadas = [];
+  if (!filas.length || !alumnoId) return { lineasInforme, notasCargadas, tareas: 0, tareasEntregasActualizadas };
 
-  await conPool(filas, 2, async (fila) => {
+  await conPool(filas, 1, async (fila) => {
     try {
       const pagina = await cliente.pedir(fila.url);
       if (!pagina?.html || pagina.es_requiere_login) {
@@ -461,6 +462,7 @@ export async function sincronizarHitosAssignEnMaterias({
         lineasInforme.push(`«${fila.nombre}»: sin hitos de entrega legibles en el campus.`);
         return;
       }
+      tareasEntregasActualizadas.push(fila.id);
       const partes = entregas
         .filter((e) => e.indiceEntrega != null)
         .map((e) => {
@@ -480,31 +482,37 @@ export async function sincronizarHitosAssignEnMaterias({
           nota: String(resumen.notaParaTablero),
           yaEstaba: false
         };
-        const escrito = await aplicarProgresoCampus({
-          db,
-          progreso: [{
-            materiaId: fila.materia_id,
-            materiaNombre: fila.materia,
-            nombre: fila.nombre,
-            id: fila.id,
-            tabla: 'tareas',
-            nota: resumen.notaParaTablero,
-            entregada: resumen.entregada,
-            forzar: true
-          }],
-          alumnoId,
-          alumnoNombre
-        });
-        const cargada = escrito.cargadas?.[0];
-        if (cargada) item.yaEstaba = Boolean(cargada.yaEstaba);
-        notasCargadas.push(item);
+        try {
+          const escrito = await aplicarProgresoCampus({
+            db,
+            progreso: [{
+              materiaId: fila.materia_id,
+              materiaNombre: fila.materia,
+              nombre: fila.nombre,
+              id: fila.id,
+              tabla: 'tareas',
+              nota: resumen.notaParaTablero,
+              entregada: resumen.entregada,
+              forzar: true
+            }],
+            alumnoId,
+            alumnoNombre
+          });
+          const cargada = escrito.cargadas?.[0];
+          if (cargada) item.yaEstaba = Boolean(cargada.yaEstaba);
+          notasCargadas.push(item);
+        } catch (errorNota) {
+          const detalle = String(errorNota?.message || 'nota').slice(0, 80);
+          lineasInforme.push(`«${fila.nombre}»: entregas guardadas; no pudimos escribir la nota en el tablero (${detalle}).`);
+        }
       }
-    } catch {
-      lineasInforme.push(`Error al leer entregas de «${fila.nombre}».`);
+    } catch (error) {
+      const detalle = String(error?.message || 'error').slice(0, 100);
+      lineasInforme.push(`Error al leer entregas de «${fila.nombre}» (${detalle}).`);
     }
   });
 
-  return { lineasInforme, notasCargadas, tareas: filas.length };
+  return { lineasInforme, notasCargadas, tareas: filas.length, tareasEntregasActualizadas };
 }
 
 // Cursos en los que el alumno está inscripto ahora. El índice clásico y el

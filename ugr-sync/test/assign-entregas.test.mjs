@@ -12,7 +12,8 @@ import {
   extraerEntregasAssign,
   extraerNotaDeTextoDevolucion,
   enriquecerNotasDesdeDevoluciones,
-  aplicarEntregasAssignEnDb
+  aplicarEntregasAssignEnDb,
+  esTareaBuzonEntregasMultiples
 } from '../lib/assign-entregas.mjs';
 import { textoDesdeDocx } from '../lib/docx-texto.mjs';
 
@@ -51,12 +52,21 @@ test('textoDesdeDocx extrae texto y nota', () => {
   assert.equal(extraerNotaDeTextoDevolucion(texto), 8);
 });
 
+test('esTareaBuzonEntregasMultiples detecta trabajo práctico SGSI', () => {
+  assert.equal(esTareaBuzonEntregasMultiples('Entregas del trabajo práctico- Análisis de un caso'), true);
+  assert.equal(esTareaBuzonEntregasMultiples('Auditorías de SI, UII Tarea nro.1'), false);
+});
+
 test('extraerEntregasAssign parsea intentos y reabierto actual', async () => {
   const html = await readFile(join(DIR, 'fixtures/assign-entregas-sgsi.html'), 'utf8');
   const { entregas, intentoActual, requiereNuevaEntrega } = extraerEntregasAssign(html);
   assert.equal(intentoActual, 3);
   assert.equal(requiereNuevaEntrega, true);
-  assert.ok(entregas.some((e) => e.numero === 2 && e.tieneDevolucion));
+  const intento2 = entregas.find((e) => e.numero === 2);
+  assert.ok(intento2?.tieneDevolucion);
+  assert.equal(intento2?.archivos?.length, 1);
+  const intento1 = entregas.find((e) => e.numero === 1);
+  assert.equal(intento1?.archivos?.length || 0, 0);
   const activa = entregas.find((e) => e.esActiva);
   assert.equal(activa?.numero, 3);
 });

@@ -12,6 +12,11 @@ export function esUrlAssign(url) {
   return /assign\/view\.php|\/mod\/assign\//i.test(String(url || ''));
 }
 
+/** Buzones Moodle con varias entregas / devoluciones Word (p. ej. SGSI trabajo práctico). */
+export function esTareaBuzonEntregasMultiples(nombre) {
+  return /entregas?\s+del\s+trabajo|trabajo\s+pr[aá]ctico/i.test(String(nombre || ''));
+}
+
 function completarUrl(href, baseUrl) {
   if (!href) return '';
   try {
@@ -26,6 +31,8 @@ export function extraerNotaDeTextoDevolucion(texto) {
   const plano = limpiarTexto(texto);
   if (!plano) return null;
   const patrones = [
+    /devoluci[oó]n[\s\S]{0,120}?(\d+(?:[.,]\d+)?)\s*(?:\/|\s*de\s*)\s*10\b/i,
+    /entrega\s*\d+[\s\S]{0,80}?(\d+(?:[.,]\d+)?)\s*(?:\/|\s*de\s*)\s*10\b/i,
     /nota\s*(?:final|obtenida|del\s+trabajo)?\s*(?:es|:)?\s*(\d+(?:[.,]\d+)?)\s*(?:\/|\s*de\s*)\s*10\b/i,
     /calificaci[oó]n\s*(?:final)?\s*:?\s*(\d+(?:[.,]\d+)?)\s*(?:\/|\s*de\s*)\s*10\b/i,
     /puntuaci[oó]n\s*:?\s*(\d+(?:[.,]\d+)?)\s*(?:\/|\s*de\s*)\s*10\b/i,
@@ -62,7 +69,7 @@ function enlacesDevolucion($, alcance, baseUrl) {
   alcance.find('a[href]').each((_, a) => {
     const href = $(a).attr('href') || '';
     const nombre = limpiarTexto($(a).text()) || 'Devolución';
-    if (!/pluginfile\.php|\.docx|\.doc|\.pdf/i.test(href) && !/devoluci[oó]n|retroalimentaci[oó]n|feedback/i.test(nombre)) return;
+    if (!/pluginfile\.php|\.docx|\.doc|\.pdf/i.test(href) && !/devoluci[oó]n|retroalimentaci[oó]n|feedback|entrega\s*\d/i.test(nombre)) return;
     archivos.push({
       url: completarUrl(href, baseUrl),
       nombre
@@ -139,14 +146,28 @@ export function extraerEntregasAssign(html, baseUrl = '') {
 
   const porNumero = new Map();
 
-  $('#region-previous-attempts h3, #region-previous-attempts h4, h3, h4, h5, .card-title, .collapsible-actions').each((_, titulo) => {
+  $('#region-previous-attempts h3, #region-previous-attempts h4').each((_, titulo) => {
     const texto = limpiarTexto($(titulo).text());
     const m = texto.match(/^Intento\s+(\d+)\s*:?/i) || texto.match(/^Attempt\s+(\d+)\s*:?/i);
     if (!m) return;
     const numero = Number(m[1]);
-    const tarjeta = $(titulo).closest('.card, .box, section, li, [data-region="attempt-summary"], .generalbox');
-    const alcance = tarjeta.length ? tarjeta : $(titulo).parent().parent();
-    porNumero.set(numero, parsearBloqueIntento($, alcance, numero, baseUrl));
+    const $titulo = $(titulo);
+    const bloque = $('<div class="ugr-attempt-block"/>');
+    bloque.append($titulo.clone());
+    bloque.append($titulo.nextUntil('h3, h4').clone());
+    porNumero.set(numero, parsearBloqueIntento($, bloque, numero, baseUrl));
+  });
+
+  $('[data-region="attempt-summary"] h3, [data-region="attempt-summary"] h4, .path-mod-assign .submissionstatustable').each((_, titulo) => {
+    const texto = limpiarTexto($(titulo).text());
+    const m = texto.match(/^Intento\s+(\d+)\s*:?/i) || texto.match(/^Attempt\s+(\d+)\s*:?/i);
+    if (!m || porNumero.has(Number(m[1]))) return;
+    const numero = Number(m[1]);
+    const $titulo = $(titulo);
+    const bloque = $('<div class="ugr-attempt-block"/>');
+    bloque.append($titulo.clone());
+    bloque.append($titulo.nextUntil('h3, h4').clone());
+    porNumero.set(numero, parsearBloqueIntento($, bloque, numero, baseUrl));
   });
 
   const bloquesTexto = plano.split(/\bIntento\s+(\d+)\s*:/i);
@@ -219,22 +240,40 @@ export function extraerEntregasAssign(html, baseUrl = '') {
 export async function descargarArchivoConSesion(cliente, url) {
   if (!cliente?.jar || !url) return null;
   try {
-    const control = new AbortController();
-    const timer = setTimeout(() => control.abort(), 22000);
-    let respuesta;
-    try {
-      respuesta = await fetch(url, {
-        headers: {
-          Cookie: cabeceraCookies(cliente.jar),
-          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)'
-        },
-        signal: control.signal
-      });
-    } finally {
-      clearTimeout(timer);
+    let actual = String(url);
+    for (let salto = 0; salto < 6; salto += 1) {
+      const control = new AbortController();
+      const timer = setTimeout(() => control.abort(), 45000);
+      let respuesta;
+      try {
+        respuesta = await fetch(actual, {
+          headers: {
+            Cookie: cabeceraCookies(cliente.jar),
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)',
+            Accept: '*/*'
+          },
+          redirect: 'manual',
+          signal: control.signal
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!respuesta) return null;
+      if (respuesta.status >= 300 && respuesta.status < 400) {
+        const destino = respuesta.headers.get('location');
+        if (!destino) return null;
+        actual = new URL(destino, actual).toString();
+        continue;
+      }
+      if (!respuesta.ok) return null;
+      const buf = Buffer.from(await respuesta.arrayBuffer());
+      if (buf.length < 4) return null;
+      const cabeza = buf.subarray(0, Math.min(120, buf.length)).toString('utf8').toLowerCase();
+      if (cabeza.includes('<!doctype') || cabeza.includes('<html')) return null;
+      if (buf[0] === 0x50 && buf[1] === 0x4b) return buf;
+      return buf;
     }
-    if (!respuesta?.ok) return null;
-    return Buffer.from(await respuesta.arrayBuffer());
+    return null;
   } catch {
     return null;
   }
@@ -260,7 +299,12 @@ export async function enriquecerNotasDesdeDevoluciones(cliente, entregas) {
 
     for (const archivo of entrega.archivos || []) {
       if (!/\.docx?$/i.test(archivo.url) && !/\.docx?/i.test(archivo.nombre)) continue;
-      const buffer = await descargarArchivoConSesion(cliente, archivo.url);
+      let buffer = null;
+      try {
+        buffer = await descargarArchivoConSesion(cliente, archivo.url);
+      } catch {
+        buffer = null;
+      }
       if (!buffer) continue;
       const texto = textoDesdeDocx(buffer);
       if (texto && texto.length > devolucionTexto.length) devolucionTexto = texto.slice(0, 8000);
@@ -353,8 +397,8 @@ export async function aplicarEntregasAssignEnDb({
   const resumen = resumirEntregasParaTablero(entregas);
   if (!resumen.entregada) {
     await db.execute({
-      sql: 'DELETE FROM completadas WHERE tarea_id = ? AND alumno_id = ?',
-      args: [tareaId, alumnoId]
+      sql: `DELETE FROM completadas WHERE tarea_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))`,
+      args: [tareaId, alumnoId, alumnoNombre || '']
     });
   } else {
     await db.execute({
@@ -390,7 +434,7 @@ export async function sincronizarEntregasAssignDesdeHtml({
 }
 
 /** Prioridad al inicio del sync: buzones assign con varias entregas y devoluciones Word. */
-export async function listarTareasAssignConUrl(db, materiaIds, alumnoId) {
+export async function listarTareasAssignConUrl(db, materiaIds) {
   if (!materiaIds?.length) return [];
   const marcas = materiaIds.map(() => '?').join(', ');
   const res = await db.execute({
@@ -400,5 +444,13 @@ export async function listarTareasAssignConUrl(db, materiaIds, alumnoId) {
             AND (LOWER(t.url) LIKE '%assign%')`,
     args: [...materiaIds]
   });
-  return res.rows.filter((fila) => fila?.url);
+  return res.rows
+    .filter((fila) => fila?.url && esTareaBuzonEntregasMultiples(fila.nombre))
+    .map((fila) => ({
+      id: String(fila.id),
+      materia_id: String(fila.materia_id),
+      nombre: String(fila.nombre),
+      url: String(fila.url),
+      materia: String(fila.materia || '')
+    }));
 }
