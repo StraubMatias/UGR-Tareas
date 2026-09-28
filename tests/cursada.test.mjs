@@ -8,7 +8,9 @@ import {
   obtenerResumenTareasAlumno,
   formatearFechaDDMMAAAA,
   calcularEstadoSemaforo,
-  tareaCompletadaPor
+  tareaCompletadaPor,
+  faseEntregaDesdeHitos,
+  textoBadgeFaseEntrega
 } from '../src/core/cursada.ts';
 
 test('obtenerGrupoDeAlumno: encuentra el grupo correspondiente o retorna null', () => {
@@ -164,4 +166,17 @@ test('obtenerResumenTareasAlumno: grupal entregada sin nota sigue en Grupales', 
   const resumen = obtenerResumenTareasAlumno('Ana', materias);
   assert.equal(resumen.grupales.length, 1);
   assert.equal(resumen.completadas.length, 0);
+});
+
+test('faseEntregaDesdeHitos indica Entrega 2 cuando el campus está reabierto', () => {
+  const hitos = [
+    { numero: 2, indiceEntrega: 1, esActiva: false, estado: 'Reabierto', nota: '8', pendiente: false },
+    { numero: 3, indiceEntrega: 2, esActiva: true, estado: 'Reabierto', nota: null, pendiente: true }
+  ];
+  const fase = faseEntregaDesdeHitos(hitos);
+  assert.equal(fase?.etiqueta, 'Entrega 2');
+  assert.equal(fase?.requiereEntrega, true);
+  const tarea = { id: 't', nombre: 'TP', entregas: { Ana: hitos }, completadoPor: [], conNota: true };
+  assert.match(textoBadgeFaseEntrega(tarea, 'Ana'), /Entrega 2/);
+  assert.equal(tareaCompletadaPor(tarea, 'Ana'), false);
 });

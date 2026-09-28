@@ -12,7 +12,8 @@ import {
   tareaCompletadaPor,
   tareaFaltaNota,
   tareaPendienteAlumno,
-  tareaPuedeGestionarse
+  tareaPuedeGestionarse,
+  textoBadgeFaseEntrega
 } from '../core/cursada';
 
 import { useMemo } from 'react';
@@ -189,6 +190,7 @@ export default function VistaMaterias({
                       )}
                       {grupo.tareas.map((t) => {
                         const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
+                        const badgeFase = usuarioActual ? textoBadgeFaseEntrega(t, usuarioActual) : null;
                         const diasParaAbrir = obtenerDiasHastaApertura(t.inicio);
                         const grupoPropio = usuarioActual
                           ? t.grupos?.find((g) => g.integrantes?.includes(usuarioActual))
@@ -225,6 +227,11 @@ export default function VistaMaterias({
                             <span className={`text-xs px-3 py-1 rounded-md border ${semaforo.estilo}`}>
                               {semaforo.texto}
                             </span>
+                            {badgeFase && (
+                              <span className="text-xs px-3 py-1 rounded-md border bg-amber-500/15 text-amber-100 border-amber-500/40 font-semibold">
+                                📤 {badgeFase}
+                              </span>
+                            )}
                             {t.conNota && (
                               <span className="text-xs px-3 py-1 rounded-md border bg-purple-500/10 text-purple-300 border-purple-500/30">
                                 {tareaFaltaNota(t, usuarioActual) ? 'Entregada · falta nota' : 'Tarea con nota'}

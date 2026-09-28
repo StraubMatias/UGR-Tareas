@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   calcularEstadoSemaforo, formatearFechaDDMMAAAA, formatearUnidad, etiquetaModoEntregaTarea, obtenerIconoMateria,
-  tareaCompletadaPor, tareaFaltaNota, tareaPuedeGestionarse, type Materia, type Tarea
+  tareaCompletadaPor, tareaFaltaNota, tareaPuedeGestionarse, textoBadgeFaseEntrega, type Materia, type Tarea
 } from '../core/cursada';
 import EstadoGrupoAlumno from './EstadoGrupoAlumno';
 import type { InvitacionGrupoEnviadaTablero } from './portal/types';
@@ -37,6 +37,7 @@ export default function EstadoTareaAlumno({
   const entregada = tareaCompletadaPor(tarea, alumno);
   const faltaNota = tareaFaltaNota(tarea, alumno);
   const semaforo = calcularEstadoSemaforo(tarea.fin, tarea.inicio);
+  const badgeFase = propia ? textoBadgeFaseEntrega(tarea, alumno) : null;
   const puedeGestionar = tareaPuedeGestionarse(tarea);
   const notasOtros = alumnos.filter((nombre) => nombre !== alumno
     && tarea.notas?.[nombre] !== undefined && tarea.notas?.[nombre] !== null && tarea.notas?.[nombre] !== '');
@@ -82,6 +83,11 @@ export default function EstadoTareaAlumno({
         <span className={`estado-tarea-estado rounded-md border px-2 py-1 ${entregada ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : semaforo.estilo}`}>
           {faltaNota ? 'Entregada · falta nota' : entregada ? 'Completada' : semaforo.texto}
         </span>
+        {badgeFase && (
+          <span className="estado-tarea-estado rounded-md border px-2 py-1 bg-amber-500/15 text-amber-100 border-amber-500/40 font-semibold">
+            📤 {badgeFase}
+          </span>
+        )}
         {tarea.url && <a href={tarea.url} target="_blank" rel="noopener noreferrer" className="estado-tarea-campus hover:underline">Ver en UGR ↗</a>}
       </div>
       <EstadoGrupoAlumno

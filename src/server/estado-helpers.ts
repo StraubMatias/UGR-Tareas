@@ -125,13 +125,18 @@ export function armarMaterias(
                 numero: Number(f.numero),
                 indiceEntrega: f.indice_entrega == null ? null : Number(f.indice_entrega),
                 esActiva: Number(f.es_activa) === 1,
-                estado: texto(f.estado),
+                estado: texto(f.estado).length > 120
+                  ? `${texto(f.estado).slice(0, 117)}…`
+                  : texto(f.estado),
                 nota: f.nota == null || f.nota === '' ? null : formatearNotaParaMostrar(texto(f.nota)),
                 notaOrigen: textoONull(f.nota_origen),
                 comentarioProf: textoONull(f.comentario_prof),
                 feedbackUrl: textoONull(f.feedback_url),
                 feedbackNombre: textoONull(f.feedback_nombre),
-                pendiente: Number(f.es_activa) === 1 && /reabiert|reopened/i.test(texto(f.estado))
+                pendiente: Boolean(
+                  Number(f.es_activa) === 1
+                  && (Number(f.indice_entrega) > 0 || /reabiert|reopened|sin calificar/i.test(texto(f.estado)))
+                )
               }))
           ])
         )

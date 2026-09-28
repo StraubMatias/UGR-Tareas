@@ -121,6 +121,64 @@ export interface HistorialRegistro {
 
 // Funciones corregidas con tipos explícitos
 
+export const entregaActivaEnHitos = (hitos: EntregaHitoTarea[] | undefined): EntregaHitoTarea | null => {
+  if (!hitos?.length) return null;
+  return hitos.find((h) => h.esActiva) ?? null;
+};
+
+export const entregaActivaDeTarea = (
+  tarea: Tarea,
+  alumno: string | null | undefined
+): EntregaHitoTarea | null => {
+  if (!alumno) return null;
+  return entregaActivaEnHitos(tarea.entregas?.[alumno as string]);
+};
+
+/** Fase de entrega múltiple que Moodle tiene abierta ahora (p. ej. Entrega 2). */
+export const faseEntregaDesdeHitos = (
+  hitos: EntregaHitoTarea[] | undefined
+): { indice: number | null; etiqueta: string; requiereEntrega: boolean } | null => {
+  const activa = entregaActivaEnHitos(hitos);
+  if (!activa) return null;
+  const requiereEntrega = Boolean(
+    activa.pendiente || /reabiert|reopened|sin calificar/i.test(activa.estado || '')
+  );
+  if (activa.indiceEntrega != null) {
+    return {
+      indice: activa.indiceEntrega,
+      etiqueta: `Entrega ${activa.indiceEntrega}`,
+      requiereEntrega
+    };
+  }
+  return {
+    indice: null,
+    etiqueta: `Intento ${activa.numero}`,
+    requiereEntrega
+  };
+};
+
+export const faseEntregaCampus = (
+  tarea: Tarea,
+  alumno: string | null | undefined
+): { indice: number | null; etiqueta: string; requiereEntrega: boolean } | null => {
+  if (!alumno) return null;
+  return faseEntregaDesdeHitos(tarea.entregas?.[alumno as string]);
+};
+
+export const textoBadgeFaseEntrega = (
+  tarea: Tarea,
+  alumno: string | null | undefined
+): string | null => {
+  const fase = faseEntregaCampus(tarea, alumno);
+  if (!fase) return null;
+  if (fase.indice != null) {
+    return fase.requiereEntrega
+      ? `${fase.etiqueta} — a entregar en UGR`
+      : `${fase.etiqueta} (campus)`;
+  }
+  return fase.requiereEntrega ? `${fase.etiqueta} — reabierto en UGR` : null;
+};
+
 export const tareaCompletadaPor = (tarea: Tarea, alumno: string | null | undefined): boolean => {
   if (!alumno) return false;
   const hitos = tarea.entregas?.[alumno as string];

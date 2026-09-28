@@ -78,6 +78,19 @@ function enlacesDevolucion($, alcance, baseUrl) {
   return archivos;
 }
 
+export function acortarEstadoCampus(texto) {
+  const t = limpiarTexto(texto);
+  if (!t) return '';
+  const fila = t.match(/estado de la entrega\s+(.+?)(?:\s+estado de la calificación|\s+n[uú]mero del intento|$)/i);
+  if (fila) return limpiarTexto(fila[1]).slice(0, 80);
+  const corto = t.match(
+    /^(reabierto|entregado|enviado para calificar|calificado|sin entregar|no entregado|graded|submitted)/i
+  );
+  if (corto) return corto[1];
+  if (t.length <= 80) return t;
+  return `${t.slice(0, 77)}…`;
+}
+
 function parsearBloqueIntento($, alcance, numero, baseUrl) {
   const tablas = alcance.find('table');
   let estadoEntrega = '';
@@ -103,20 +116,42 @@ function parsearBloqueIntento($, alcance, numero, baseUrl) {
     }
   });
   if (archivos.length === 0) archivos = enlacesDevolucion($, alcance, baseUrl);
-  const textoBloque = limpiarTexto(alcance.text());
   if (!estadoEntrega) {
+    const textoBloque = limpiarTexto(alcance.text());
     const m = textoBloque.match(/estado de la entrega\s+([^\n]+)/i);
     if (m) estadoEntrega = limpiarTexto(m[1]);
   }
+  estadoEntrega = acortarEstadoCampus(estadoEntrega);
   const tieneDevolucion = archivos.length > 0 || comentario.length > 20;
   return {
     numero,
-    estado: estadoEntrega || textoBloque.slice(0, 120),
+    estado: estadoEntrega,
     notaCampus: notaHtml,
     comentarioProf: comentario,
     archivos,
     tieneDevolucion
   };
+}
+
+function bloqueIntentoDesdeTitulo($, titulo, baseUrl) {
+  const texto = limpiarTexto($(titulo).text());
+  const m = texto.match(/^Intento\s+(\d+)\s*:?/i) || texto.match(/^Attempt\s+(\d+)\s*:?/i);
+  if (!m) return null;
+  const numero = Number(m[1]);
+  const $titulo = $(titulo);
+  const bloque = $('<div class="ugr-attempt-block"/>');
+  bloque.append($titulo.clone());
+  bloque.append($titulo.nextUntil('h3, h4, .submissionstatustable, [data-region="submission-status"]').clone());
+  return { numero, datos: parsearBloqueIntento($, bloque, numero, baseUrl) };
+}
+
+function parsearIntentosEnRegion($, region, baseUrl) {
+  const porNumero = new Map();
+  region.find('h3, h4').each((_, titulo) => {
+    const parsed = bloqueIntentoDesdeTitulo($, titulo, baseUrl);
+    if (parsed) porNumero.set(parsed.numero, parsed.datos);
+  });
+  return porNumero;
 }
 
 /**
@@ -127,57 +162,34 @@ export function extraerEntregasAssign(html, baseUrl = '') {
     return { entregas: [], intentoActual: null, requiereNuevaEntrega: false };
   }
   const $ = load(html);
-  const plano = $('body').text().replace(/\u00a0/g, ' ');
+  const regionEnvio = $('[data-region="submission-status"], .submissionstatustable, .submissionstatus, .submissionsummarytable').first();
+  const textoEnvio = limpiarTexto(regionEnvio.text() || '');
   const intentoActual = Number(
-    plano.match(/este es el intento\s+(\d+)/i)?.[1]
-    || plano.match(/n[uú]mero del intento[\s\S]*?(\d+)/i)?.[1]
-    || plano.match(/attempt\s+(\d+)/i)?.[1]
+    textoEnvio.match(/este es el intento\s+(\d+)/i)?.[1]
+    || textoEnvio.match(/attempt\s+(\d+)/i)?.[1]
   ) || null;
 
-  const envio = limpiarTexto(
-    $('[data-region="submission-status"], .submissionstatustable, .submissionstatus, .submissionsummarytable').text()
-    || plano.slice(0, 2500)
+  const estadoActual = acortarEstadoCampus(
+    textoEnvio.match(/estado de la entrega\s+([^\n]+)/i)?.[1]
+    || textoEnvio.match(/estado de la calificación\s+([^\n]+)/i)?.[1]
+    || ''
   );
-  const estadoActual = envio.match(/estado de la entrega\s+([^\n]+)/i)?.[1]
-    || envio.match(/estado de la calificación\s+([^\n]+)/i)?.[1]
-    || '';
   const requiereNuevaEntrega = /reabiert|reopened/i.test(estadoActual)
-    || /reabiert|reopened/i.test(envio);
+    || /reabiert|reopened/i.test(textoEnvio);
 
   const porNumero = new Map();
-
-  $('#region-previous-attempts h3, #region-previous-attempts h4').each((_, titulo) => {
-    const texto = limpiarTexto($(titulo).text());
-    const m = texto.match(/^Intento\s+(\d+)\s*:?/i) || texto.match(/^Attempt\s+(\d+)\s*:?/i);
-    if (!m) return;
-    const numero = Number(m[1]);
-    const $titulo = $(titulo);
-    const bloque = $('<div class="ugr-attempt-block"/>');
-    bloque.append($titulo.clone());
-    bloque.append($titulo.nextUntil('h3, h4').clone());
-    porNumero.set(numero, parsearBloqueIntento($, bloque, numero, baseUrl));
-  });
-
-  $('[data-region="attempt-summary"] h3, [data-region="attempt-summary"] h4, .path-mod-assign .submissionstatustable').each((_, titulo) => {
-    const texto = limpiarTexto($(titulo).text());
-    const m = texto.match(/^Intento\s+(\d+)\s*:?/i) || texto.match(/^Attempt\s+(\d+)\s*:?/i);
-    if (!m || porNumero.has(Number(m[1]))) return;
-    const numero = Number(m[1]);
-    const $titulo = $(titulo);
-    const bloque = $('<div class="ugr-attempt-block"/>');
-    bloque.append($titulo.clone());
-    bloque.append($titulo.nextUntil('h3, h4').clone());
-    porNumero.set(numero, parsearBloqueIntento($, bloque, numero, baseUrl));
-  });
-
-  const bloquesTexto = plano.split(/\bIntento\s+(\d+)\s*:/i);
-  for (let i = 1; i < bloquesTexto.length; i += 2) {
-    const numero = Number(bloquesTexto[i]);
-    if (!Number.isFinite(numero) || porNumero.has(numero)) continue;
-    const fragmento = bloquesTexto[i + 1] || '';
-    const $frag = load(`<div id="frag">${fragmento.slice(0, 12000)}</div>`);
-    porNumero.set(numero, parsearBloqueIntento($frag, $frag('#frag'), numero, baseUrl));
+  const regionAnteriores = $('#region-previous-attempts, [data-region="previous-attempts"]').first();
+  if (regionAnteriores.length) {
+    for (const [num, datos] of parsearIntentosEnRegion($, regionAnteriores, baseUrl)) {
+      porNumero.set(num, datos);
+    }
   }
+
+  $('[data-region="attempt-summary"]').each((_, region) => {
+    for (const [num, datos] of parsearIntentosEnRegion($, $(region), baseUrl)) {
+      if (!porNumero.has(num)) porNumero.set(num, datos);
+    }
+  });
 
   if (porNumero.size === 0) {
     const archivosPagina = enlacesDevolucion($, $('body'), baseUrl);
@@ -188,8 +200,8 @@ export function extraerEntregasAssign(html, baseUrl = '') {
       const n = intentoActual || 1;
       porNumero.set(n, {
         numero: n,
-        estado: estadoActual || envio.slice(0, 80),
-        notaCampus: parsearNotaPublicada(envio),
+        estado: estadoActual,
+        notaCampus: parsearNotaPublicada(textoEnvio),
         comentarioProf: comentario,
         archivos: archivosPagina,
         tieneDevolucion: archivosPagina.length > 0 || comentario.length > 15
@@ -200,8 +212,8 @@ export function extraerEntregasAssign(html, baseUrl = '') {
   if (intentoActual && !porNumero.has(intentoActual)) {
     porNumero.set(intentoActual, {
       numero: intentoActual,
-      estado: estadoActual || envio.slice(0, 80),
-      notaCampus: parsearNotaPublicada(envio),
+      estado: estadoActual,
+      notaCampus: parsearNotaPublicada(textoEnvio),
       comentarioProf: '',
       archivos: [],
       tieneDevolucion: false
@@ -213,7 +225,8 @@ export function extraerEntregasAssign(html, baseUrl = '') {
   const entregas = numeros.map((numero) => {
     const fila = porNumero.get(numero);
     const esActiva = intentoActual != null && numero === intentoActual;
-    const cerradaConDevolucion = !esActiva && (fila.tieneDevolucion || fila.notaCampus != null);
+    const devolucionReal = (fila.archivos?.length > 0) || (fila.comentarioProf?.length > 15) || fila.notaCampus != null;
+    const cerradaConDevolucion = !esActiva && devolucionReal;
     let indice = null;
     let pendiente = false;
     if (cerradaConDevolucion) {
@@ -232,7 +245,7 @@ export function extraerEntregasAssign(html, baseUrl = '') {
       indiceEntrega: indice,
       pendiente
     };
-  });
+  }).filter((fila) => fila.indiceEntrega != null || fila.esActiva);
 
   return { entregas, intentoActual, requiereNuevaEntrega, estadoActual };
 }
@@ -315,6 +328,17 @@ export async function enriquecerNotasDesdeDevoluciones(cliente, entregas) {
         feedbackUrl = archivo.url;
         feedbackNombre = archivo.nombre;
         break;
+      }
+    }
+
+    if (nota == null && feedbackNombre) {
+      const deNombre = feedbackNombre.match(/entrega\s*(\d+)/i);
+      if (deNombre && entrega.comentarioProf) {
+        const deCom = extraerNotaDeTextoDevolucion(entrega.comentarioProf);
+        if (deCom != null) {
+          nota = deCom;
+          notaOrigen = 'devolucion_texto';
+        }
       }
     }
 
