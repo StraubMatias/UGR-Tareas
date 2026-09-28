@@ -19,7 +19,8 @@ export function construirLineasInformeSync({
   fechasDetalle = [],
   condiciones = 0,
   pendientesEntrega = [],
-  notasNoLeidas = []
+  notasNoLeidas = [],
+  lineasEntregasHitos = []
 }: {
   notasCampus?: NotaCampusInforme[];
   resumen?: ResumenMateriaSync[];
@@ -31,8 +32,13 @@ export function construirLineasInformeSync({
   condiciones?: number;
   pendientesEntrega?: Array<{ materia?: string; nombre?: string }>;
   notasNoLeidas?: Array<{ materia?: string; nombre?: string }>;
+  lineasEntregasHitos?: string[];
 }): string[] {
   const lineas: string[] = [];
+
+  for (const linea of lineasEntregasHitos) {
+    if (linea && !lineas.includes(linea)) lineas.push(linea.endsWith('.') ? linea : `${linea}.`);
+  }
 
   for (const nota of notasCampus) {
     if (!nota.nombre || !nota.nota || nota.yaEstaba) continue;
@@ -55,6 +61,10 @@ export function construirLineasInformeSync({
     }
     for (const linea of fila.notasCargadas || []) {
       if (!lineas.some((item) => item.includes(linea))) lineas.push(`${fila.materia}: ${linea}.`);
+    }
+    for (const linea of fila.entregasHitos || []) {
+      const texto = linea.endsWith('.') ? linea : `${linea}.`;
+      if (!lineas.includes(texto)) lineas.push(texto);
     }
   }
 
@@ -119,6 +129,7 @@ export function fusionarResumenSync(a: ResumenMateriaSync[], b: ResumenMateriaSy
       fechasActualizadas: unir(base.fechasActualizadas, fila.fechasActualizadas),
       parcialesNuevos: unir(base.parcialesNuevos, fila.parcialesNuevos),
       notasCargadas: unir(base.notasCargadas, fila.notasCargadas),
+      entregasHitos: unir(base.entregasHitos, fila.entregasHitos),
       pendientesEntrega: unir(base.pendientesEntrega, fila.pendientesEntrega),
       notasNoLeidas: unir(base.notasNoLeidas, fila.notasNoLeidas),
       materiaNueva: base.materiaNueva || fila.materiaNueva

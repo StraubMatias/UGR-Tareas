@@ -18,6 +18,7 @@ function filaTieneCambios(fila: ResumenMateriaSync): boolean {
     || (fila.cronogramaNuevo?.length ?? 0) > 0
     || (fila.parcialesNuevos?.length ?? 0) > 0
     || (fila.notasCargadas?.length ?? 0) > 0
+    || (fila.entregasHitos?.length ?? 0) > 0
     || (fila.pendientesEntrega?.length ?? 0) > 0
     || (fila.notasNoLeidas?.length ?? 0) > 0
   );
@@ -374,7 +375,12 @@ export default function CuentaPropia({
         }
 
         const lotesAvisos = plan.lotesAvisos;
+        const saltarAvisosTrasCursada = lotesMaterias.length > 0;
+        if (saltarAvisosTrasCursada) {
+          setAvisoParcial('No revisamos los foros de avisos en esta pasada (así evitamos el corte por tiempo); tareas, notas y entregas del campus ya quedaron actualizadas.');
+        }
         for (let indice = 0; indice < lotesAvisos.length; indice += 1) {
+          if (saltarAvisosTrasCursada) break;
           setEtapaManual(etiquetaSyncAvisos(indice, lotesAvisos, totalMaterias));
           try {
             const resultadoAvisos = await llamarUgr({ fase: 'avisos', materiaIds: lotesAvisos[indice] });

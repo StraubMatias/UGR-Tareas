@@ -21,6 +21,7 @@ import {
   MAX_USUARIO_LENGTH
 } from '../../server/action-internals';
 import { asegurarEsquemaCuentasEnServidor } from '../../server/asegurar-esquema-cuentas';
+import { asegurarEsquemaEntregasEnServidor } from '../../server/asegurar-esquema-entregas';
 import { mensajeDesdeInforme } from '../../lib/informe-sync-ugr';
 import { propagarNotaGrupalTrasCargaCampus } from '../../lib/grupos-tareas';
 import { sincronizarCursadaDelAlumno, type FaseSyncUgrCursada } from '../../server/sync-ugr-cursada';
@@ -212,6 +213,7 @@ export async function sincronizarCuentaUgrAction(
     if (!alumnoId) return { exito: false, mensaje: 'No se encontró la cuenta.' };
 
     await asegurarEsquemaCuentasEnServidor();
+    await asegurarEsquemaEntregasEnServidor(db);
 
     const fase = opciones?.fase ?? 'preparar';
     const cliente = await conectarClienteUgr(usarCredencialesServidor, dni, contrasena);

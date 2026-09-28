@@ -20,6 +20,7 @@ import {
 } from '../../server/action-internals';
 import { armarMaterias, consultaPeriodo } from '../../server/estado-helpers';
 import { asegurarEsquemaGruposEnServidor } from '../../server/asegurar-esquema-grupos';
+import { asegurarEsquemaEntregasEnServidor } from '../../server/asegurar-esquema-entregas';
 import { validarNota } from '../validators';
 
 // Una ida a Turso con todas las lecturas del tablero. Antes cada refresco
@@ -64,6 +65,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
     }
 
     await asegurarEsquemaGruposEnServidor(db);
+    await asegurarEsquemaEntregasEnServidor(db);
     await registrarUltimoAcceso(usuarioSesion);
 
     let periodoParaCargar = periodoIdSolicitado || null;
