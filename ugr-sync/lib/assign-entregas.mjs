@@ -8,6 +8,10 @@ function limpiarTexto(texto) {
   return String(texto || '').replace(/\s+/g, ' ').trim();
 }
 
+export function esUrlAssign(url) {
+  return /assign\/view\.php|\/mod\/assign\//i.test(String(url || ''));
+}
+
 function completarUrl(href, baseUrl) {
   if (!href) return '';
   try {
@@ -117,9 +121,11 @@ export function extraerEntregasAssign(html, baseUrl = '') {
   }
   const $ = load(html);
   const plano = $('body').text().replace(/\u00a0/g, ' ');
-  const intentoActual = Number(plano.match(/este es el intento\s+(\d+)/i)?.[1])
-    || Number(plano.match(/attempt\s+(\d+)/i)?.[1])
-    || null;
+  const intentoActual = Number(
+    plano.match(/este es el intento\s+(\d+)/i)?.[1]
+    || plano.match(/n[uú]mero del intento[\s\S]*?(\d+)/i)?.[1]
+    || plano.match(/attempt\s+(\d+)/i)?.[1]
+  ) || null;
 
   const envio = limpiarTexto(
     $('[data-region="submission-status"], .submissionstatustable, .submissionstatus, .submissionsummarytable').text()
@@ -133,12 +139,12 @@ export function extraerEntregasAssign(html, baseUrl = '') {
 
   const porNumero = new Map();
 
-  $('h3, h4, h5, .card-title, .collapsible-actions').each((_, titulo) => {
+  $('#region-previous-attempts h3, #region-previous-attempts h4, h3, h4, h5, .card-title, .collapsible-actions').each((_, titulo) => {
     const texto = limpiarTexto($(titulo).text());
     const m = texto.match(/^Intento\s+(\d+)\s*:?/i) || texto.match(/^Attempt\s+(\d+)\s*:?/i);
     if (!m) return;
     const numero = Number(m[1]);
-    const tarjeta = $(titulo).closest('.card, .box, section, li, [data-region="attempt-summary"]');
+    const tarjeta = $(titulo).closest('.card, .box, section, li, [data-region="attempt-summary"], .generalbox');
     const alcance = tarjeta.length ? tarjeta : $(titulo).parent().parent();
     porNumero.set(numero, parsearBloqueIntento($, alcance, numero, baseUrl));
   });
@@ -148,8 +154,26 @@ export function extraerEntregasAssign(html, baseUrl = '') {
     const numero = Number(bloquesTexto[i]);
     if (!Number.isFinite(numero) || porNumero.has(numero)) continue;
     const fragmento = bloquesTexto[i + 1] || '';
-    const envoltorio = load(`<div id="frag">${fragmento.slice(0, 12000)}</div>`);
-    porNumero.set(numero, parsearBloqueIntento($, envoltorio('#frag'), numero, baseUrl));
+    const $frag = load(`<div id="frag">${fragmento.slice(0, 12000)}</div>`);
+    porNumero.set(numero, parsearBloqueIntento($frag, $frag('#frag'), numero, baseUrl));
+  }
+
+  if (porNumero.size === 0) {
+    const archivosPagina = enlacesDevolucion($, $('body'), baseUrl);
+    if (archivosPagina.length > 0 || /retroalimentaci[oó]n|pluginfile\.php.*assignfeedback/i.test(html)) {
+      const comentario = limpiarTexto(
+        $('td.cell').filter((_, td) => /retroalimentaci[oó]n/i.test($(td).prev('th').text())).first().text()
+      );
+      const n = intentoActual || 1;
+      porNumero.set(n, {
+        numero: n,
+        estado: estadoActual || envio.slice(0, 80),
+        notaCampus: parsearNotaPublicada(envio),
+        comentarioProf: comentario,
+        archivos: archivosPagina,
+        tieneDevolucion: archivosPagina.length > 0 || comentario.length > 15
+      });
+    }
   }
 
   if (intentoActual && !porNumero.has(intentoActual)) {
@@ -195,13 +219,21 @@ export function extraerEntregasAssign(html, baseUrl = '') {
 export async function descargarArchivoConSesion(cliente, url) {
   if (!cliente?.jar || !url) return null;
   try {
-    const respuesta = await fetch(url, {
-      headers: {
-        Cookie: cabeceraCookies(cliente.jar),
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)'
-      }
-    });
-    if (!respuesta.ok) return null;
+    const control = new AbortController();
+    const timer = setTimeout(() => control.abort(), 22000);
+    let respuesta;
+    try {
+      respuesta = await fetch(url, {
+        headers: {
+          Cookie: cabeceraCookies(cliente.jar),
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)'
+        },
+        signal: control.signal
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!respuesta?.ok) return null;
     return Buffer.from(await respuesta.arrayBuffer());
   } catch {
     return null;
@@ -355,4 +387,18 @@ export async function sincronizarEntregasAssignDesdeHtml({
     entregas: enriquecidas
   });
   return { entregas: enriquecidas, resumen };
+}
+
+/** Prioridad al inicio del sync: buzones assign con varias entregas y devoluciones Word. */
+export async function listarTareasAssignConUrl(db, materiaIds, alumnoId) {
+  if (!materiaIds?.length) return [];
+  const marcas = materiaIds.map(() => '?').join(', ');
+  const res = await db.execute({
+    sql: `SELECT t.id, t.materia_id, t.nombre, t.url, m.nombre AS materia
+          FROM tareas t JOIN materias m ON m.id = t.materia_id
+          WHERE t.materia_id IN (${marcas}) AND TRIM(COALESCE(t.url, '')) != ''
+            AND (LOWER(t.url) LIKE '%assign%')`,
+    args: [...materiaIds]
+  });
+  return res.rows.filter((fila) => fila?.url);
 }

@@ -54,6 +54,7 @@ function filaTieneCambios(fila: ResumenMateriaSync): boolean {
     || (fila.cronogramaNuevo?.length ?? 0) > 0
     || (fila.parcialesNuevos?.length ?? 0) > 0
     || (fila.notasCargadas?.length ?? 0) > 0
+    || (fila.entregasHitos?.length ?? 0) > 0
     || (fila.pendientesEntrega?.length ?? 0) > 0
     || (fila.notasNoLeidas?.length ?? 0) > 0
   );
@@ -313,7 +314,8 @@ export async function sincronizarLoteMateriasDelAlumno({
     actualizarUrlsTareas,
     actualizarUrlsParciales,
     aplicarComplementoCampus,
-    cargarNotasDesdeEnlaces
+    cargarNotasDesdeEnlaces,
+    sincronizarHitosAssignEnMaterias
   } = await import('../../ugr-sync/lib/sync-core.mjs');
 
   const periodoId = await periodoDeCursada();
@@ -367,12 +369,22 @@ export async function sincronizarLoteMateriasDelAlumno({
   });
   await actualizarUrlsTareas({ db, urlsActualizar: tareas.urlsActualizar });
   await actualizarUrlsParciales({ db, urlsParcialesActualizar: tareas.urlsParcialesActualizar });
-  const notasTardias = await cargarNotasDesdeEnlaces({
+
+  const hitosAssign = await sincronizarHitosAssignEnMaterias({
     db,
     cliente,
     materiaIds,
     alumnoId,
     alumnoNombre
+  });
+
+  const notasTardias = await cargarNotasDesdeEnlaces({
+    db,
+    cliente,
+    materiaIds,
+    alumnoId,
+    alumnoNombre,
+    procesarEntregasAssign: false
   }) as {
     cargadas?: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>;
     noLeidas?: Array<{ materia?: string; nombre?: string }>;
@@ -454,7 +466,11 @@ export async function sincronizarLoteMateriasDelAlumno({
   resumen.sort((a, b) => (orden.get(a.materia) ?? 99) - (orden.get(b.materia) ?? 99));
 
   const vistas = new Set<string>();
-  const notasCargadas: NotaCampusInforme[] = [...(notasTardias.cargadas || []), ...(complemento.notasCargadas || [])]
+  const notasCargadas: NotaCampusInforme[] = [
+    ...(hitosAssign.notasCargadas || []),
+    ...(notasTardias.cargadas || []),
+    ...(complemento.notasCargadas || [])
+  ]
     .filter((item): item is NotaCampusInforme => {
       const clave = `${item.nombre}|${item.nota}`;
       if (!item?.nombre || !item?.nota || vistas.has(clave)) return false;
@@ -470,7 +486,11 @@ export async function sincronizarLoteMateriasDelAlumno({
     const clave = String(item.nombre || '').toLowerCase();
     return clave && !cargadasPorNombre.has(clave) && lista.findIndex((otro) => String(otro.nombre).toLowerCase() === clave) === indice;
   });
-  const anexar = (materia: string | undefined, campo: 'notasCargadas' | 'notasNoLeidas' | 'pendientesEntrega', textoLinea: string) => {
+  const anexar = (
+    materia: string | undefined,
+    campo: 'notasCargadas' | 'notasNoLeidas' | 'pendientesEntrega' | 'entregasHitos',
+    textoLinea: string
+  ) => {
     if (!textoLinea) return;
     const nombreMateria = materia || resumen[0]?.materia || 'Cursada';
     let fila = resumen.find((item) => item.materia === nombreMateria);
@@ -482,7 +502,16 @@ export async function sincronizarLoteMateriasDelAlumno({
     if (!lista.includes(textoLinea)) lista.push(textoLinea);
     fila[campo] = lista;
   };
-  for (const item of notasCargadas.filter((n) => !n.yaEstaba)) anexar(item.materia, 'notasCargadas', `${item.nombre}: ${item.nota}`);
+  for (const item of [...(hitosAssign.notasCargadas || []), ...notasCargadas].filter((n) => !n.yaEstaba)) {
+    anexar(item.materia, 'notasCargadas', `${item.nombre}: ${item.nota}`);
+  }
+  for (const linea of hitosAssign.lineasInforme || []) {
+    const materia = linea.match(/»\s*\(([^)]+)\)\s*:/)?.[1]?.trim()
+      || resumen.find((f) => linea.includes(f.materia))?.materia
+      || resumen[0]?.materia
+      || 'Cursada';
+    anexar(materia, 'entregasHitos', linea.replace(/\.$/, ''));
+  }
   for (const item of pendientesEntrega) anexar(item.materia, 'pendientesEntrega', String(item.nombre));
   for (const item of notasNoLeidas) anexar(item.materia, 'notasNoLeidas', String(item.nombre));
 
@@ -492,6 +521,7 @@ export async function sincronizarLoteMateriasDelAlumno({
   const materiasCount = materiasEnCursada ?? nombresPorId.size;
   const lineasInforme = construirLineasInformeSync({
     notasCampus: notasCargadas,
+    lineasEntregasHitos: hitosAssign.lineasInforme || [],
     resumen: resumenParaInforme,
     parcialesNuevos: parcialesResultado.insertadas,
     eventos: eventosInsertadosAvisos + complemento.eventos,

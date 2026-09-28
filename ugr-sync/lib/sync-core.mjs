@@ -60,7 +60,11 @@ import { ajustarClasesAlHorario, clasificarEventosCalendario, esTituloClaseGener
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { cabeceraCookies } from './autenticar.mjs';
 import { extraerEnlacesDeCursada, interpretarCondiciones, textoDeArchivoCampus, urlArchivoDeRecurso } from './metodologia.mjs';
-import { sincronizarEntregasAssignDesdeHtml } from './assign-entregas.mjs';
+import {
+  esUrlAssign,
+  listarTareasAssignConUrl,
+  sincronizarEntregasAssignDesdeHtml
+} from './assign-entregas.mjs';
 
 // Credenciales de UGR: se leen en el momento de conectar directamente de
 // process.env, igual que las variables TURSO_* en src/app/turso.js. Por lo
@@ -292,7 +296,15 @@ function pareceCuestionarioHecho(html) {
 // La nota no está en el índice del curso: está en la página de cada actividad
 // («Ver en UGR»). Se abre con la sesión de quien sincroniza. Los cuestionarios
 // van primero y, si se pide, cada nota se guarda en cuanto se lee.
-async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNombre, guardar = false }) {
+async function leerNotasDeEnlaces({
+  cliente,
+  db,
+  materiaIds,
+  alumnoId,
+  alumnoNombre,
+  guardar = false,
+  procesarEntregasAssign = true
+}) {
   if (!cliente || !materiaIds?.length) return { notas: [], cargadas: [], noLeidas: [], pendientesEntrega: [] };
   const marcas = materiaIds.map(() => '?').join(', ');
   const tareas = await db.execute({
@@ -315,7 +327,14 @@ async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNom
   const lista = [
     ...tareas.rows.map((fila) => ({ ...fila, tabla: 'tareas', fecha: null })),
     ...parciales.rows.map((fila) => ({ ...fila, tabla: 'parciales' }))
-  ].sort((a, b) => Number(!/\/mod\/quiz\//.test(String(a.url))) - Number(!/\/mod\/quiz\//.test(String(b.url))));
+  ].sort((a, b) => {
+    const peso = (url) => {
+      if (esUrlAssign(url)) return 0;
+      if (/\/mod\/quiz\//.test(String(url))) return 2;
+      return 1;
+    };
+    return peso(a.url) - peso(b.url);
+  });
 
   const aConsultar = lista;
 
@@ -331,9 +350,9 @@ async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNom
         if (esQuiz) noLeidas.push({ materia: fila.materia, nombre: fila.nombre });
         return;
       }
-      const esAssign = /\/mod\/assign\//.test(String(fila.url));
+      const esAssign = esUrlAssign(fila.url);
       let resumenEntregas = null;
-      if (esAssign && guardar && alumnoId) {
+      if (esAssign && guardar && alumnoId && procesarEntregasAssign) {
         const syncEnt = await sincronizarEntregasAssignDesdeHtml({
           cliente,
           db,
@@ -345,10 +364,14 @@ async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNom
         });
         resumenEntregas = syncEnt.resumen;
       }
-      const progreso = await notaDePagina(cliente, pagina.html);
-      if (resumenEntregas) {
-        if (resumenEntregas.notaParaTablero != null) progreso.nota = resumenEntregas.notaParaTablero;
-        progreso.entregada = resumenEntregas.entregada;
+      let progreso;
+      if (esAssign && resumenEntregas) {
+        progreso = {
+          nota: resumenEntregas.notaParaTablero ?? null,
+          entregada: resumenEntregas.entregada
+        };
+      } else {
+        progreso = await notaDePagina(cliente, pagina.html);
       }
       if (progreso.nota == null && !progreso.entregada && !resumenEntregas) {
         if (esQuiz && pareceCuestionarioHecho(pagina.html)) noLeidas.push({ materia: fila.materia, nombre: fila.nombre });
@@ -366,20 +389,122 @@ async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNom
         forzar: guardar && progreso.nota != null
       };
       notas.push(item);
-      if (guardar && alumnoId && (item.nota != null || item.entregada)) {
+      if (guardar && alumnoId && item.nota != null) {
         const escrito = await aplicarProgresoCampus({ db, progreso: [item], alumnoId, alumnoNombre });
         cargadas.push(...escrito.cargadas);
         pendientesEntrega.push(...(escrito.pendientesEntrega || []));
+      } else if (guardar && alumnoId && item.entregada && item.nota == null) {
+        const escrito = await aplicarProgresoCampus({ db, progreso: [item], alumnoId, alumnoNombre });
+        pendientesEntrega.push(...(escrito.pendientesEntrega || []));
       }
-    } catch {
-      if (/\/mod\/quiz\//.test(String(fila.url))) noLeidas.push({ materia: fila.materia, nombre: fila.nombre });
+    } catch (error) {
+      if (esUrlAssign(fila.url)) {
+        noLeidas.push({ materia: fila.materia, nombre: fila.nombre, error: String(error?.message || 'assign') });
+      } else if (/\/mod\/quiz\//.test(String(fila.url))) {
+        noLeidas.push({ materia: fila.materia, nombre: fila.nombre });
+      }
     }
   });
   return { notas, cargadas, noLeidas, pendientesEntrega };
 }
 
-export async function cargarNotasDesdeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNombre }) {
-  return leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNombre, guardar: true });
+export async function cargarNotasDesdeEnlaces({
+  cliente,
+  db,
+  materiaIds,
+  alumnoId,
+  alumnoNombre,
+  procesarEntregasAssign = true
+}) {
+  return leerNotasDeEnlaces({
+    cliente,
+    db,
+    materiaIds,
+    alumnoId,
+    alumnoNombre,
+    guardar: true,
+    procesarEntregasAssign
+  });
+}
+
+/** Corre primero en cada lote de materias: entregas múltiples + devoluciones Word. */
+export async function sincronizarHitosAssignEnMaterias({
+  cliente,
+  db,
+  materiaIds,
+  alumnoId,
+  alumnoNombre
+}) {
+  const filas = await listarTareasAssignConUrl(db, materiaIds, alumnoId);
+  const lineasInforme = [];
+  const notasCargadas = [];
+  if (!filas.length || !alumnoId) return { lineasInforme, notasCargadas, tareas: 0 };
+
+  await conPool(filas, 2, async (fila) => {
+    try {
+      const pagina = await cliente.pedir(fila.url);
+      if (!pagina?.html || pagina.es_requiere_login) {
+        lineasInforme.push(`No se pudo abrir el buzón «${fila.nombre}» en UGR Virtual.`);
+        return;
+      }
+      const syncEnt = await sincronizarEntregasAssignDesdeHtml({
+        cliente,
+        db,
+        tareaId: fila.id,
+        alumnoId,
+        alumnoNombre,
+        html: pagina.html,
+        baseUrl: UGR_BASE_URL
+      });
+      const { resumen, entregas } = syncEnt;
+      if (!entregas?.length) {
+        lineasInforme.push(`«${fila.nombre}»: sin hitos de entrega legibles en el campus.`);
+        return;
+      }
+      const partes = entregas
+        .filter((e) => e.indiceEntrega != null)
+        .map((e) => {
+          const etiqueta = `entrega ${e.indiceEntrega}`;
+          if (e.nota != null) return `${etiqueta}: nota ${e.nota}`;
+          if (e.pendiente || e.esActiva) return `${etiqueta}: pendiente`;
+          return etiqueta;
+        });
+      if (partes.length) {
+        lineasInforme.push(`«${fila.nombre}» (${fila.materia}): ${partes.join('; ')}.`);
+      }
+      if (resumen?.notaParaTablero != null) {
+        const item = {
+          tareaId: fila.id,
+          materia: fila.materia,
+          nombre: fila.nombre,
+          nota: String(resumen.notaParaTablero),
+          yaEstaba: false
+        };
+        const escrito = await aplicarProgresoCampus({
+          db,
+          progreso: [{
+            materiaId: fila.materia_id,
+            materiaNombre: fila.materia,
+            nombre: fila.nombre,
+            id: fila.id,
+            tabla: 'tareas',
+            nota: resumen.notaParaTablero,
+            entregada: resumen.entregada,
+            forzar: true
+          }],
+          alumnoId,
+          alumnoNombre
+        });
+        const cargada = escrito.cargadas?.[0];
+        if (cargada) item.yaEstaba = Boolean(cargada.yaEstaba);
+        notasCargadas.push(item);
+      }
+    } catch {
+      lineasInforme.push(`Error al leer entregas de «${fila.nombre}».`);
+    }
+  });
+
+  return { lineasInforme, notasCargadas, tareas: filas.length };
 }
 
 // Cursos en los que el alumno está inscripto ahora. El índice clásico y el
@@ -680,8 +805,12 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
           materiaNombre: coincidencia.materia.nombre,
           nombre: nombreFinal
         });
-        if (!existente.url && tarea.url) {
-          urlsActualizar.push({ id: existente.id, url: tarea.url });
+        if (tarea.url) {
+          const sinUrl = !String(existente.url || '').trim();
+          const mejoraAssign = esUrlAssign(tarea.url) && !esUrlAssign(existente.url);
+          if (sinUrl || mejoraAssign) {
+            urlsActualizar.push({ id: existente.id, url: tarea.url, forzar: mejoraAssign });
+          }
         }
         // La página de la actividad es la fecha que editó el profesor. El índice
         // a veces no trae la apertura, así que no alcanza para dar por buena
@@ -1278,10 +1407,11 @@ export async function actualizarUrlsTareas({ db, urlsActualizar }) {
   if (!Array.isArray(urlsActualizar) || urlsActualizar.length === 0) return 0;
   const updates = urlsActualizar
     .filter(({ id, url }) => id && url)
-    .map(({ id, url }) => ({
-      sql: 'UPDATE tareas SET url = ? WHERE id = ? AND url = ?',
-      args: [url, id, '']
-    }));
+    .map(({ id, url, forzar }) => (
+      forzar
+        ? { sql: 'UPDATE tareas SET url = ? WHERE id = ?', args: [url, id] }
+        : { sql: 'UPDATE tareas SET url = ? WHERE id = ? AND (url IS NULL OR TRIM(url) = ?)', args: [url, id, ''] }
+    ));
   if (updates.length === 0) return 0;
   await db.batch(updates, 'write');
   return updates.length;
