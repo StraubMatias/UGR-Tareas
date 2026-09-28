@@ -23,7 +23,7 @@ import {
 import { asegurarEsquemaCuentasEnServidor } from '../../server/asegurar-esquema-cuentas';
 import { asegurarEsquemaEntregasEnServidor } from '../../server/asegurar-esquema-entregas';
 import { mensajeDesdeInforme } from '../../lib/informe-sync-ugr';
-import { propagarNotaGrupalTrasCargaCampus } from '../../lib/grupos-tareas';
+import { propagarEntregasHitosGrupoTrasSync, propagarNotaGrupalTrasCargaCampus } from '../../lib/grupos-tareas';
 import { sincronizarCursadaDelAlumno, type FaseSyncUgrCursada } from '../../server/sync-ugr-cursada';
 
 async function conectarClienteUgr(
@@ -62,14 +62,29 @@ async function ejecutarFaseSyncUgr({
   });
   const lineasInforme = [...sync.lineasInforme];
   if (fase === 'materias' || fase === 'nucleo' || fase === 'completa') {
+    const tareasGrupoVistas = new Set<string>();
     for (const nota of sync.notasCampus) {
       if (!nota.tareaId) continue;
       const grupo = await propagarNotaGrupalTrasCargaCampus(db, nota.tareaId, alumnoId);
+      const copiados = await propagarEntregasHitosGrupoTrasSync(db, nota.tareaId, alumnoId);
+      if (copiados.length && !tareasGrupoVistas.has(nota.tareaId)) {
+        tareasGrupoVistas.add(nota.tareaId);
+        lineasInforme.push(
+          `Tarea grupal «${nota.nombre || grupo?.tareaNombre || 'grupal'}»: entregas y devoluciones replicadas para ${copiados.join(', ')}.`
+        );
+      }
       if (nota.yaEstaba || !grupo || grupo.integrantesActualizados.length === 0) continue;
       const nombres = grupo.integrantesGrupo.join(', ');
       lineasInforme.push(
         `Tarea grupal «${grupo.tareaNombre}»: al ser trabajo en grupo, la nota ${grupo.nota} quedó para todo el grupo (${nombres}).`
       );
+    }
+    for (const tareaId of sync.tareasEntregasActualizadas || []) {
+      if (tareasGrupoVistas.has(tareaId)) continue;
+      const copiados = await propagarEntregasHitosGrupoTrasSync(db, tareaId, alumnoId);
+      if (!copiados.length) continue;
+      tareasGrupoVistas.add(tareaId);
+      lineasInforme.push(`Trabajo grupal: hitos de entrega replicados para ${copiados.join(', ')}.`);
     }
   }
   const materiasSync = Math.max(sync.materiasInscriptas?.length || 0, 1);

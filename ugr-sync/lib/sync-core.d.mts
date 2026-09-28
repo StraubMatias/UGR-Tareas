@@ -95,4 +95,5 @@ export function sincronizarHitosAssignEnMaterias(opciones: {
   lineasInforme: string[];
   notasCargadas: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean; tareaId?: string }>;
   tareas: number;
+  tareasEntregasActualizadas?: string[];
 }>;
