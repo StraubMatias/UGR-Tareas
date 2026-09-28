@@ -165,7 +165,7 @@ export async function guardarNotaParcialAction(parcialId: string, alumno: string
       } else {
         // Actualizamos la nota
         await db.execute({
-          sql: 'UPDATE notas_parciales SET nota = ? WHERE parcial_id = ? AND alumno_id = ?',
+          sql: 'UPDATE notas_parciales SET nota = ?, cerrada = 0 WHERE parcial_id = ? AND alumno_id = ?',
           args: [validacion.valor, parcialId, alumnoDB.id]
         });
         await registrarAuditoria({ accion: 'guardar_nota_parcial', usuario: usuarioSesion, detalle: `Actualizó nota ${validacion.valor} de ${alumnoDB.nombre} en el parcial ${parcialId}`, ip: await obtenerIPReal() });
@@ -174,7 +174,7 @@ export async function guardarNotaParcialAction(parcialId: string, alumno: string
       // Insertamos nueva nota
       const id = crearId('nota_');
       await db.execute({
-        sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno_id, alumno, nota) VALUES (?, ?, ?, ?, ?)',
+        sql: 'INSERT INTO notas_parciales (id, parcial_id, alumno_id, alumno, nota, cerrada) VALUES (?, ?, ?, ?, ?, 0)',
         args: [id, parcialId, alumnoDB.id, alumnoDB.nombre, validacion.valor]
       });
       await registrarAuditoria({ accion: 'guardar_nota_parcial', usuario: usuarioSesion, detalle: `Cargó nota ${validacion.valor} a ${alumnoDB.nombre} en el parcial ${parcialId}`, ip: await obtenerIPReal() });

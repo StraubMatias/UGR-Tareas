@@ -27,6 +27,7 @@ export interface EstadoCompletoTablero {
   avisos?: AvisoCampusMoodle[];
   invitacionesGrupo?: InvitacionGrupoTablero[];
   invitacionesGrupoEnviadas?: InvitacionGrupoEnviadaTablero[];
+  notasManualesCampus?: number;
 }
 
 export interface AplicarEstadoTableroCallbacks {
@@ -43,6 +44,7 @@ export interface AplicarEstadoTableroCallbacks {
   setAvisos: Dispatch<SetStateAction<AvisoCampusMoodle[]>>;
   setInvitacionesGrupo: Dispatch<SetStateAction<InvitacionGrupoTablero[]>>;
   setInvitacionesGrupoEnviadas: Dispatch<SetStateAction<InvitacionGrupoEnviadaTablero[]>>;
+  setNotasManualesCampus: Dispatch<SetStateAction<number>>;
   setRolUsuario: Dispatch<SetStateAction<string | null>>;
   setOrigenCuenta: Dispatch<SetStateAction<string | null>>;
   setUgrUsuarioCuenta: Dispatch<SetStateAction<string | null>>;
@@ -74,6 +76,7 @@ export function aplicarEstadoTablero(
   cb.setAvisos(estado.avisos || []);
   cb.setInvitacionesGrupo(estado.invitacionesGrupo || []);
   cb.setInvitacionesGrupoEnviadas(estado.invitacionesGrupoEnviadas || []);
+  cb.setNotasManualesCampus(Number(estado.notasManualesCampus) || 0);
   if (estado.rol) cb.setRolUsuario(estado.rol);
   if (estado.origen) cb.setOrigenCuenta(estado.origen);
   if ('ugrUsuario' in estado) cb.setUgrUsuarioCuenta(estado.ugrUsuario || null);

@@ -71,7 +71,9 @@ export default function CampanaNotificaciones({
                         ? 'Nueva tarea cargada'
                         : notificacion.tipo === 'aviso-nuevo'
                           ? 'Aviso en el campus'
-                          : notificacion.tipo === 'apertura'
+                          : notificacion.tipo === 'notas-manuales'
+                            ? 'Sincronizá con UGR para usar las notas del campus'
+                            : notificacion.tipo === 'apertura'
                             ? 'Se habilita mañana'
                             : notificacion.dias === 0
                               ? 'Vence hoy'
@@ -126,7 +128,9 @@ export default function CampanaNotificaciones({
                             ? 'parciales'
                             : notificacion.tipo === 'aviso-nuevo'
                               ? 'horarios'
-                              : 'materias'
+                              : notificacion.tipo === 'notas-manuales'
+                                ? 'alumnos'
+                                : 'materias'
                         );
                       }}
                       className={`w-full text-left px-4 py-3 hover:bg-slate-800/70 transition-colors cursor-pointer ${notificacionesVistas.includes(notificacion.id) ? 'opacity-60' : ''}`}

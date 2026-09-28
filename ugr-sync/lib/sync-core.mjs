@@ -288,19 +288,9 @@ function pareceCuestionarioHecho(html) {
   return /quizreviewsummary|\/mod\/quiz\/review\.php|intento\s+\d+/i.test(html || '');
 }
 
-function esNotaEstable(notaGuardada, cargadaEn, diasEstable = 7) {
-  if (notaGuardada == null || String(notaGuardada).trim() === '') return false;
-  if (!cargadaEn) return false;
-  const tiempo = new Date(cargadaEn).getTime();
-  if (!Number.isFinite(tiempo)) return false;
-  return (Date.now() - tiempo) > diasEstable * 24 * 60 * 60 * 1000;
-}
-
 // La nota no está en el índice del curso: está en la página de cada actividad
 // («Ver en UGR»). Se abre con la sesión de quien sincroniza. Los cuestionarios
 // van primero y, si se pide, cada nota se guarda en cuanto se lee.
-// Para no sobrecargar Moodle ni demorar el sync a fin de cuatrimestre, las notas
-// que ya se cargaron hace más de 7 días se consideran estables y se omiten.
 async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNombre, guardar = false }) {
   if (!cliente || !materiaIds?.length) return { notas: [], cargadas: [], noLeidas: [], pendientesEntrega: [] };
   const marcas = materiaIds.map(() => '?').join(', ');
@@ -326,20 +316,7 @@ async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNom
     ...parciales.rows.map((fila) => ({ ...fila, tabla: 'parciales' }))
   ].sort((a, b) => Number(!/\/mod\/quiz\//.test(String(a.url))) - Number(!/\/mod\/quiz\//.test(String(b.url))));
 
-  const aConsultar = lista.filter((fila) => {
-    if (fila.tabla === 'tareas') {
-      if (esNotaEstable(fila.nota_guardada, fila.nota_cargada_en, 7)) return false;
-    }
-    if (fila.tabla === 'parciales') {
-      if (fila.nota_guardada != null && String(fila.nota_guardada).trim() !== '') {
-        if (fila.fecha) {
-          const fechaParcial = new Date(fila.fecha).getTime();
-          if (Number.isFinite(fechaParcial) && (Date.now() - fechaParcial) > 7 * 24 * 60 * 60 * 1000) return false;
-        }
-      }
-    }
-    return true;
-  });
+  const aConsultar = lista;
 
   const notas = [];
   const cargadas = [];
@@ -367,7 +344,7 @@ async function leerNotasDeEnlaces({ cliente, db, materiaIds, alumnoId, alumnoNom
         fecha: fila.fecha || null,
         nota: progreso.nota,
         entregada: true,
-        forzar: progreso.nota != null
+        forzar: guardar && progreso.nota != null
       };
       notas.push(item);
       if (guardar && alumnoId) {
@@ -744,14 +721,16 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
 
     for (const { tarea, nombreFinal, existente, inicio, fin, notaIntento, entregada } of conFechas) {
       if (alumnoId && (notaIntento != null || entregada || tarea.entregada || tarea.notaCampus != null)) {
+        const notaCampus = notaIntento != null ? notaIntento : tarea.notaCampus ?? null;
         notasIntento.push({
           materiaId: coincidencia.materia.id,
           materiaNombre: coincidencia.materia.nombre,
           nombre: nombreFinal,
           id: existente?.id || null,
           tabla: existente ? 'tareas' : 'nueva',
-          nota: notaIntento != null ? notaIntento : tarea.notaCampus ?? null,
-          entregada: true
+          nota: notaCampus,
+          entregada: true,
+          forzar: notaCampus != null
         });
       }
       if (existente) {
@@ -993,41 +972,6 @@ async function leerCondicionesDeCurso(cliente, cursoId) {
   return null;
 }
 
-async function libretaYaCerrada({ db, materiaId, alumnoId }) {
-  try {
-    const tareas = await db.execute({
-      sql: `SELECT t.id FROM tareas t
-            WHERE t.materia_id = ? AND t.con_nota = 1
-              AND NOT EXISTS (
-                SELECT 1 FROM notas_tareas n
-                WHERE n.tarea_id = t.id AND n.alumno_id = ? AND n.cerrada = 1
-              )`,
-      args: [materiaId, alumnoId]
-    });
-    if (tareas.rows.length > 0) return false;
-    const parciales = await db.execute({
-      sql: `SELECT p.id FROM parciales p
-            WHERE p.materia_id = ?
-              AND NOT EXISTS (
-                SELECT 1 FROM notas_parciales n
-                WHERE n.parcial_id = p.id AND n.alumno_id = ? AND n.cerrada = 1
-              )`,
-      args: [materiaId, alumnoId]
-    });
-    const hayCalificables = tareas.rows.length + parciales.rows.length;
-    if (hayCalificables > 0) return false;
-    const totales = await db.execute({
-      sql: `SELECT
-              (SELECT COUNT(*) FROM tareas WHERE materia_id = ? AND con_nota = 1) AS tareas,
-              (SELECT COUNT(*) FROM parciales WHERE materia_id = ?) AS parciales`,
-      args: [materiaId, materiaId]
-    });
-    return Number(totales.rows[0]?.tareas || 0) + Number(totales.rows[0]?.parciales || 0) > 0;
-  } catch {
-    return false;
-  }
-}
-
 async function completarDesdeCalendario({ cliente, db, mapeos, detectadas, periodoId }) {
   const pendientes = [];
   for (const mapeo of mapeos) {
@@ -1134,10 +1078,6 @@ async function completarDesdeCalendario({ cliente, db, mapeos, detectadas, perio
 async function leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId }) {
   const libretas = await conPool(mapeos, 4, async ({ curso, coincidencia }) => {
     const materiaId = coincidencia.materia.id;
-    const hayNuevas = detectadas.some((item) => item.materiaId === materiaId);
-    if (!hayNuevas && await libretaYaCerrada({ db, materiaId, alumnoId })) {
-      return { materiaId, notas: [] };
-    }
     try {
       const pagina = await cliente.pedir(UGR_RUTAS.libreta(curso.id));
       return { materiaId, notas: extraerNotasDeLibreta(pagina.html) };
@@ -1176,7 +1116,8 @@ async function leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId })
           id: parcial.id,
           fecha: parcial.fecha,
           nota: item.nota,
-          entregada: true
+          entregada: true,
+          forzar: item.nota != null
         });
       }
     }

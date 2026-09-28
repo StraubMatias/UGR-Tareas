@@ -21,6 +21,7 @@ export function useTableroEstadoDatos() {
   const [avisos, setAvisos] = useState<AvisoCampusMoodle[]>([]);
   const [invitacionesGrupo, setInvitacionesGrupo] = useState<InvitacionGrupoTablero[]>([]);
   const [invitacionesGrupoEnviadas, setInvitacionesGrupoEnviadas] = useState<InvitacionGrupoEnviadaTablero[]>([]);
+  const [notasManualesCampus, setNotasManualesCampus] = useState(0);
 
   return {
     materias,
@@ -54,6 +55,8 @@ export function useTableroEstadoDatos() {
     invitacionesGrupo,
     setInvitacionesGrupo,
     invitacionesGrupoEnviadas,
-    setInvitacionesGrupoEnviadas
+    setInvitacionesGrupoEnviadas,
+    notasManualesCampus,
+    setNotasManualesCampus
   };
 }
