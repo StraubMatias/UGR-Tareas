@@ -22,7 +22,6 @@ import {
 } from '../../server/action-internals';
 import { asegurarEsquemaCuentasEnServidor } from '../../server/asegurar-esquema-cuentas';
 import { asegurarEsquemaEntregasEnServidor } from '../../server/asegurar-esquema-entregas';
-import { asegurarEsquemaAvanceCampusEnServidor } from '../../server/asegurar-esquema-avance-campus';
 import { mensajeDesdeInforme } from '../../lib/informe-sync-ugr';
 import { propagarEntregasHitosGrupoTrasSync, propagarNotaGrupalTrasCargaCampus } from '../../lib/grupos-tareas';
 import { sincronizarCursadaDelAlumno, type FaseSyncUgrCursada } from '../../server/sync-ugr-cursada';
@@ -230,7 +229,6 @@ export async function sincronizarCuentaUgrAction(
 
     await asegurarEsquemaCuentasEnServidor();
     await asegurarEsquemaEntregasEnServidor(db);
-    await asegurarEsquemaAvanceCampusEnServidor(db);
 
     const fase = opciones?.fase ?? 'preparar';
     const cliente = await conectarClienteUgr(usarCredencialesServidor, dni, contrasena);

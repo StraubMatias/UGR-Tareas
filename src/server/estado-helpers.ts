@@ -16,16 +16,8 @@ export function armarMaterias(
   filasNotas: Row[],
   filasGrupos: Row[],
   filasPreferencias: Row[] = [],
-  filasEntregas: Row[] = [],
-  filasRecursosCampus: Row[] = []
+  filasEntregas: Row[] = []
 ) {
-  const recursosPorMateria = new Map<string, Row[]>();
-  for (const fila of filasRecursosCampus) {
-    const materiaId = texto(fila.materia_id);
-    const lista = recursosPorMateria.get(materiaId) || [];
-    lista.push(fila);
-    recursosPorMateria.set(materiaId, lista);
-  }
   const entregaIndividualPorTarea = new Map<string, Record<string, boolean>>();
   for (const fila of filasPreferencias) {
     const tareaId = texto(fila.tarea_id);
@@ -158,17 +150,6 @@ export function armarMaterias(
       };
     });
 
-    const recursosCampus = (recursosPorMateria.get(texto(m.id)) || [])
-      .sort((a, b) => Number(a.orden) - Number(b.orden))
-      .map((fila) => ({
-        cmid: texto(fila.cmid),
-        titulo: texto(fila.titulo),
-        url: textoONull(fila.url),
-        modulo: textoONull(fila.modulo),
-        completada: Number(fila.completada) === 1,
-        orden: Number(fila.orden) || 0
-      }));
-
     return {
       id: texto(m.id),
       nombre: texto(m.nombre),
@@ -176,8 +157,7 @@ export function armarMaterias(
       notaMinimaRegularizar: Number(m.nota_minima_regularizar) || 4,
       notaMinimaPromocionar: Number(m.nota_minima_promocionar) || 8,
       reglaPromocion: texto(m.regla_promocion) || 'tp_nota',
-      tareas: tareasConCompletados,
-      recursosCampus: recursosCampus.length ? recursosCampus : undefined
+      tareas: tareasConCompletados
     };
   });
 }

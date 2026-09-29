@@ -34,12 +34,12 @@ export function etiquetaSyncMateriaCompleta(
   const nombre = nombreMateria?.trim();
   if (nombre) {
     return totalPasos <= 1
-      ? `Sincronizando «${nombre}»: tareas, notas, lecturas y avisos…`
-      : `Materia ${paso}/${totalPasos} · «${nombre}» (tareas, notas, lecturas y avisos)…`;
+      ? `Sincronizando «${nombre}»: tareas, notas y avisos…`
+      : `Materia ${paso}/${totalPasos} · «${nombre}» (tareas, notas y avisos)…`;
   }
   return totalPasos <= 1
     ? `Sincronizando tareas, notas y avisos de tus ${totalMaterias} materia${totalMaterias === 1 ? '' : 's'}…`
-    : `Sincronizando materia ${paso}/${totalPasos} (tareas, notas, lecturas y avisos)…`;
+    : `Sincronizando materia ${paso}/${totalPasos} (tareas, notas y avisos)…`;
 }
 
 /** @deprecated Usar etiquetaSyncMateriaCompleta */

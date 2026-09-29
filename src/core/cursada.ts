@@ -60,15 +60,6 @@ export function alumnoEligioEntregaIndividual(tarea: Tarea, alumno: string): boo
   return Boolean(tarea.entregaIndividualPor?.[alumno]);
 }
 
-export interface RecursoAvanceCampus {
-  cmid: string;
-  titulo: string;
-  url?: string | null;
-  modulo?: string | null;
-  completada: boolean;
-  orden: number;
-}
-
 export interface Materia {
   id: string;
   nombre: string;
@@ -77,7 +68,6 @@ export interface Materia {
   notaMinimaPromocionar: number;
   reglaPromocion: string;
   tareas: Tarea[];
-  recursosCampus?: RecursoAvanceCampus[];
 }
 
 export interface Nota {
@@ -578,84 +568,6 @@ export interface ResumenTareas {
   tareasNoCompletadas: Tarea[];
   total: number;
   totalGrupales: number;
-}
-
-export type EstadoSegmentoAvance = 'completada' | 'pendiente' | 'futura' | 'urgente';
-
-export interface SegmentoGradoAvance {
-  id: string;
-  titulo: string;
-  estado: EstadoSegmentoAvance;
-  url?: string | null;
-}
-
-function claveUrlCampus(url?: string | null): string {
-  const texto = String(url || '');
-  const match = texto.match(/view\.php\?id=(\d+)/i);
-  return match ? `cmid:${match[1]}` : texto.toLowerCase();
-}
-
-export function segmentosGradoAvanceMateria(
-  materia: Materia,
-  alumno: string | null | undefined
-): {
-  segmentos: SegmentoGradoAvance[];
-  indiceAhora: number | null;
-  actividadActual: { titulo: string; etiquetaEstado: string } | null;
-} {
-  if (!alumno) return { segmentos: [], indiceAhora: null, actividadActual: null };
-  const tareas = [...(materia.tareas || [])].sort((a, b) => {
-    const fa = String(a.inicio || a.fin || '');
-    const fb = String(b.inicio || b.fin || '');
-    return fa.localeCompare(fb);
-  });
-  const urlsTareas = new Set(tareas.map((t) => claveUrlCampus(t.url)).filter(Boolean));
-  const segmentosTareas: SegmentoGradoAvance[] = tareas.map((t) => {
-    const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
-    let estado: EstadoSegmentoAvance = 'pendiente';
-    if (tareaCompletadaPor(t, alumno) && !tareaFaltaNota(t, alumno)) estado = 'completada';
-    else if (!tareaEstaHabilitada(t.inicio)) estado = 'futura';
-    else if (/🔴|🟠/.test(semaforo.texto)) estado = 'urgente';
-    return { id: t.id, titulo: t.nombre, estado, url: t.url };
-  });
-  const recursos = [...(materia.recursosCampus || [])]
-    .filter((r) => {
-      const clave = claveUrlCampus(r.url);
-      return !clave || !urlsTareas.has(clave);
-    })
-    .sort((a, b) => a.orden - b.orden);
-  const segmentosRecursos: SegmentoGradoAvance[] = recursos.map((r) => ({
-    id: `campus_${r.cmid}`,
-    titulo: r.titulo,
-    estado: r.completada ? 'completada' : 'pendiente',
-    url: r.url
-  }));
-  const segmentos: SegmentoGradoAvance[] = [...segmentosRecursos, ...segmentosTareas];
-  let indiceAhora = segmentos.findIndex((s) => s.estado === 'urgente' || s.estado === 'pendiente');
-  if (indiceAhora < 0) indiceAhora = segmentos.findIndex((s) => s.estado === 'futura');
-  const segActual = indiceAhora >= 0 ? segmentos[indiceAhora] : null;
-  const etiquetas: Record<EstadoSegmentoAvance, string> = {
-    completada: 'Finalizado',
-    pendiente: 'Pendiente',
-    urgente: 'Pendiente · cerca del vencimiento',
-    futura: 'Todavía no habilitada'
-  };
-  const etiquetasLectura: Partial<Record<EstadoSegmentoAvance, string>> = {
-    completada: 'Visto / marcado como hecho en UGR',
-    pendiente: 'Falta ver o marcar en UGR'
-  };
-  return {
-    segmentos,
-    indiceAhora: indiceAhora >= 0 ? indiceAhora : null,
-    actividadActual: segActual
-      ? {
-        titulo: segActual.titulo,
-        etiquetaEstado: segActual.id.startsWith('campus_')
-          ? (etiquetasLectura[segActual.estado] || etiquetas[segActual.estado])
-          : etiquetas[segActual.estado]
-      }
-      : null
-  };
 }
 
 export const obtenerResumenTareasAlumno = (alumno: string, materias: Materia[]): ResumenTareas => {

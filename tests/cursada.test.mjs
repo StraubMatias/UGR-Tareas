@@ -13,8 +13,7 @@ import {
   textoBadgeFaseEntrega,
   tareaUsaEntregasMultiplesCampus,
   notaTableroVisibleParaAlumno,
-  notasCerradasEntregaCampus,
-  segmentosGradoAvanceMateria
+  notasCerradasEntregaCampus
 } from '../src/core/cursada.ts';
 
 test('obtenerGrupoDeAlumno: encuentra el grupo correspondiente o retorna null', () => {
@@ -170,22 +169,6 @@ test('obtenerResumenTareasAlumno: grupal entregada sin nota sigue en Grupales', 
   const resumen = obtenerResumenTareasAlumno('Ana', materias);
   assert.equal(resumen.grupales.length, 1);
   assert.equal(resumen.completadas.length, 0);
-});
-
-test('segmentosGradoAvanceMateria ordena y marca AHORA en la primera pendiente', () => {
-  const materia = {
-    id: 'm1',
-    nombre: 'Demo',
-    tareas: [
-      { id: 't1', nombre: 'Programa', inicio: '2026-01-01', fin: '2026-12-01', completadoPor: ['Ana'], conNota: false, grupal: false },
-      { id: 't2', nombre: 'TP 1', inicio: '2026-09-01', fin: '2026-10-15', completadoPor: [], conNota: false, grupal: false }
-    ]
-  };
-  const { segmentos, indiceAhora, actividadActual } = segmentosGradoAvanceMateria(materia, 'Ana');
-  assert.equal(segmentos.length, 2);
-  assert.equal(segmentos[0].estado, 'completada');
-  assert.equal(indiceAhora, 1);
-  assert.equal(actividadActual?.titulo, 'TP 1');
 });
 
 test('tareaUsaEntregasMultiplesCampus distingue SGSI de EGR', () => {
