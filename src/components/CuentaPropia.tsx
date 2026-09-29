@@ -375,12 +375,7 @@ export default function CuentaPropia({
         }
 
         const lotesAvisos = plan.lotesAvisos;
-        const saltarAvisosTrasCursada = lotesMaterias.length > 0;
-        if (saltarAvisosTrasCursada) {
-          setAvisoParcial('No revisamos los foros de avisos en esta pasada (así evitamos el corte por tiempo); tareas, notas y entregas del campus ya quedaron actualizadas.');
-        }
         for (let indice = 0; indice < lotesAvisos.length; indice += 1) {
-          if (saltarAvisosTrasCursada) break;
           setEtapaManual(etiquetaSyncAvisos(indice, lotesAvisos, totalMaterias));
           try {
             const resultadoAvisos = await llamarUgr({ fase: 'avisos', materiaIds: lotesAvisos[indice] });

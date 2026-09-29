@@ -6,6 +6,8 @@ import {
   tareaPuedeGestionarse,
   textoBadgeFaseEntrega,
   faseEntregaCampus,
+  notaTableroVisibleParaAlumno,
+  notasCerradasEntregaCampus,
   tareaUsaEntregasMultiplesCampus,
   type Materia,
   type Tarea
@@ -46,6 +48,8 @@ export default function EstadoTareaAlumno({
   const semaforo = calcularEstadoSemaforo(tarea.fin, tarea.inicio);
   const badgeFase = propia && tareaUsaEntregasMultiplesCampus(tarea) ? textoBadgeFaseEntrega(tarea, alumno) : null;
   const fasePendiente = propia ? faseEntregaCampus(tarea, alumno) : null;
+  const mostrarNotaTablero = notaTableroVisibleParaAlumno(tarea, alumno);
+  const notasParcialesCampus = notasCerradasEntregaCampus(tarea, alumno);
   const puedeGestionar = tareaPuedeGestionarse(tarea);
   const notasOtros = alumnos.filter((nombre) => nombre !== alumno
     && tarea.notas?.[nombre] !== undefined && tarea.notas?.[nombre] !== null && tarea.notas?.[nombre] !== '');
@@ -125,16 +129,31 @@ export default function EstadoTareaAlumno({
       {tarea.conNota && (
         <div className="estado-tarea-notas space-y-3">
           {propia ? (
-            <label className="flex items-center justify-between gap-3 text-slate-300">
-              <span>{tarea.grupal ? 'Nota del grupo' : 'Tu nota'} (1 a 10)</span>
-              <input type="text" inputMode="decimal" pattern="[0-9]+([.,][0-9]+)?"
-                aria-label={`Nota de ${tarea.nombre}`} placeholder="Nota" disabled readOnly
-                value={notasTareasInputs[`${tarea.id}_${alumno}`] ?? ''}
-                onChange={(e) => handleNotaTareaChangeLocal(tarea.id, alumno, e.target.value)}
-                onBlur={() => handleGuardarNotaTareaOnBlur(tarea.id, alumno)}
-                className="w-20 rounded-lg border border-purple-500/40 bg-slate-950 p-2 text-center text-white disabled:opacity-40" />
-            </label>
-          ) : <p className="text-slate-300">Nota: {tarea.notas?.[alumno] || 'Sin cargar'}</p>}
+            <>
+              <label className="flex items-center justify-between gap-3 text-slate-300">
+                <span>{tarea.grupal ? 'Nota del grupo' : 'Tu nota'} (1 a 10)</span>
+                <input type="text" inputMode="decimal" pattern="[0-9]+([.,][0-9]+)?"
+                  aria-label={`Nota de ${tarea.nombre}`}
+                  placeholder={mostrarNotaTablero ? 'Nota' : '—'}
+                  disabled readOnly
+                  value={mostrarNotaTablero ? (notasTareasInputs[`${tarea.id}_${alumno}`] ?? '') : ''}
+                  onChange={(e) => handleNotaTareaChangeLocal(tarea.id, alumno, e.target.value)}
+                  onBlur={() => handleGuardarNotaTareaOnBlur(tarea.id, alumno)}
+                  className="w-20 rounded-lg border border-purple-500/40 bg-slate-950 p-2 text-center text-white disabled:opacity-40" />
+              </label>
+              {!mostrarNotaTablero && notasParcialesCampus.length > 0 && (
+                <p className="text-xs text-slate-400">
+                  En UGR Virtual:{' '}
+                  {notasParcialesCampus.map((p) => `Entrega ${p.indice} · ${p.nota}`).join(' · ')}
+                  {fasePendiente?.requiereEntrega ? ' · la nota final del trabajo se verá al cerrar todas las entregas' : ''}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-slate-300">
+              Nota: {mostrarNotaTablero ? (tarea.notas?.[alumno] || 'Sin cargar') : 'Parcial en campus'}
+            </p>
+          )}
           {propia && (
             <details>
               <summary className="text-xs text-cyan-300 cursor-pointer">Ver notas de los demás ({notasOtros.length})</summary>

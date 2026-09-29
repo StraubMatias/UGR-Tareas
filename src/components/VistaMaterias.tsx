@@ -13,7 +13,9 @@ import {
   tareaFaltaNota,
   tareaPendienteAlumno,
   tareaPuedeGestionarse,
-  textoBadgeFaseEntrega
+  textoBadgeFaseEntrega,
+  notaTableroVisibleParaAlumno,
+  notasCerradasEntregaCampus
 } from '../core/cursada';
 
 import { useMemo } from 'react';
@@ -335,21 +337,38 @@ export default function VistaMaterias({
                                     ? 'Marcar entregada (individual)'
                                     : 'Marcar como entregada'}
                               </label>
-                              <label className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">
-                                {t.grupal ? 'Nota del grupo (UGR Virtual)' : 'Nota en UGR Virtual'}
-                              </label>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                pattern="[0-9]+([.,][0-9]+)?"
-                                placeholder="-"
-                                disabled={!esAdmin}
-                                readOnly={!esAdmin}
-                                value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
-                                onChange={(e) => usuarioActual && handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
-                                onBlur={() => usuarioActual && handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
-                                className="w-24 bg-[#161c26] border border-purple-500/50 rounded-lg p-2 text-center font-bold text-purple-300 focus:outline-none"
-                              />
+                              {(() => {
+                                const mostrarNota = usuarioActual
+                                  ? notaTableroVisibleParaAlumno(t, usuarioActual)
+                                  : true;
+                                const parciales = usuarioActual
+                                  ? notasCerradasEntregaCampus(t, usuarioActual)
+                                  : [];
+                                return (
+                                  <>
+                                    <label className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">
+                                      {t.grupal ? 'Nota del grupo (UGR Virtual)' : 'Nota en UGR Virtual'}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      pattern="[0-9]+([.,][0-9]+)?"
+                                      placeholder={mostrarNota ? '-' : '—'}
+                                      disabled={!esAdmin}
+                                      readOnly={!esAdmin}
+                                      value={mostrarNota ? (notasTareasInputs[`${t.id}_${usuarioActual}`] || '') : ''}
+                                      onChange={(e) => usuarioActual && handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
+                                      onBlur={() => usuarioActual && handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
+                                      className="w-24 bg-[#161c26] border border-purple-500/50 rounded-lg p-2 text-center font-bold text-purple-300 focus:outline-none"
+                                    />
+                                    {!mostrarNota && parciales.length > 0 && (
+                                      <p className="text-[11px] text-slate-500 mt-2 leading-snug">
+                                        {parciales.map((p) => `Entrega ${p.indice}: ${p.nota}`).join(' · ')}
+                                      </p>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           ) : (
                           <div>

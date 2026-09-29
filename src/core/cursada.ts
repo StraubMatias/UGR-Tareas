@@ -207,10 +207,35 @@ export const fechaEntregaTarea = (tarea: Tarea, alumno: string | null | undefine
   !alumno ? null : tarea.completadoEn?.[alumno] || (tarea.conNota ? tarea.notaCargadaEn?.[alumno] ?? null : null)
 );
 
+/** Con varias entregas en UGR, la nota del tablero aplica al cierre; mientras hay otra fase abierta, va en los hitos. */
+export const notaTableroVisibleParaAlumno = (
+  tarea: Tarea,
+  alumno: string | null | undefined
+): boolean => {
+  if (!alumno || !tareaUsaEntregasMultiplesCampus(tarea)) return true;
+  const fase = faseEntregaCampus(tarea, alumno);
+  if (!fase) return true;
+  return !(fase.requiereEntrega && (fase.indice ?? 0) > 1);
+};
+
+export const notasCerradasEntregaCampus = (
+  tarea: Tarea,
+  alumno: string | null | undefined
+): { indice: number; nota: string }[] => {
+  if (!alumno) return [];
+  const hitos = tarea.entregas?.[alumno as string];
+  if (!hitos?.length) return [];
+  return hitos
+    .filter((h) => h.indiceEntrega != null && !h.esActiva && h.nota != null && h.nota !== '')
+    .sort((a, b) => (a.indiceEntrega ?? 0) - (b.indiceEntrega ?? 0))
+    .map((h) => ({ indice: h.indiceEntrega as number, nota: String(h.nota) }));
+};
+
 export const tareaFaltaNota = (tarea: Tarea, alumno: string | null | undefined): boolean => (
   Boolean(alumno)
   && tarea.conNota
   && tareaCompletadaPor(tarea, alumno)
+  && notaTableroVisibleParaAlumno(tarea, alumno)
   && (tarea.notas?.[alumno as string] === undefined || tarea.notas?.[alumno as string] === null || tarea.notas?.[alumno as string] === '')
 );
 
