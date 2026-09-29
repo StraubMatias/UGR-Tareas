@@ -32,15 +32,14 @@ export function etiquetaSyncMateriaCompleta(
   const paso = indice + 1;
   const totalPasos = pasadas.length;
   const nombre = nombreMateria?.trim();
-  const corto = nombre && nombre.length > 48 ? `${nombre.slice(0, 45)}…` : nombre;
-  if (corto) {
+  if (nombre) {
     return totalPasos <= 1
-      ? `Sincronizando «${corto}»: tareas, notas y avisos…`
-      : `Materia ${paso}/${totalPasos} de ${totalMaterias} · «${corto}» (tareas, notas y avisos)…`;
+      ? `Sincronizando «${nombre}»: tareas, notas, lecturas y avisos…`
+      : `Materia ${paso}/${totalPasos} · «${nombre}» (tareas, notas, lecturas y avisos)…`;
   }
   return totalPasos <= 1
     ? `Sincronizando tareas, notas y avisos de tus ${totalMaterias} materia${totalMaterias === 1 ? '' : 's'}…`
-    : `Sincronizando materia ${paso}/${totalPasos} de ${totalMaterias} (tareas, notas y avisos)…`;
+    : `Sincronizando materia ${paso}/${totalPasos} (tareas, notas, lecturas y avisos)…`;
 }
 
 /** @deprecated Usar etiquetaSyncMateriaCompleta */

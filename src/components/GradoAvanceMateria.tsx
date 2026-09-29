@@ -25,7 +25,7 @@ export default function GradoAvanceMateria({ materia, alumno }: GradoAvanceMater
         Grado de avance
       </p>
       <p className="text-[11px] text-slate-500 leading-snug">
-        Misma idea que en UGR Virtual: cada tramo es una consigna del tablero (tras sincronizar).
+        Consignas del tablero y lecturas del campus (teoría, archivos) según lo que marcaste como hecho en UGR Virtual.
       </p>
       <div className="relative pt-5">
         {indiceAhora != null && segmentos.length > 1 && (
@@ -50,7 +50,7 @@ export default function GradoAvanceMateria({ materia, alumno }: GradoAvanceMater
         <div className="flex items-start gap-2 text-sm text-slate-200">
           <span className="text-lg shrink-0" aria-hidden="true">📄</span>
           <div className="min-w-0">
-            <p className="font-medium truncate">{actividadActual.titulo}</p>
+            <p className="font-medium break-words leading-snug">{actividadActual.titulo}</p>
             <p className="text-xs text-slate-400">{actividadActual.etiquetaEstado}</p>
           </div>
         </div>
