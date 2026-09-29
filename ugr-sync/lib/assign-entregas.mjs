@@ -165,10 +165,19 @@ export function extraerEntregasAssign(html, baseUrl = '') {
     return { entregas: [], intentoActual: null, requiereNuevaEntrega: false };
   }
   const $ = load(html);
-  const regionEnvio = $('[data-region="submission-status"], .submissionstatustable, .submissionstatus, .submissionsummarytable').first();
-  const textoEnvio = limpiarTexto(regionEnvio.text() || '');
+  const regionEnvio = $(
+    '[data-region="submission-status"], .submissionstatus, .submissionsummarytable'
+  ).first();
+  const tablasEnvio = $('.submissionstatustable, [data-region="submission-status"]').filter(
+    (_, el) => !$(el).closest('#region-previous-attempts, [data-region="previous-attempts"]').length
+  );
+  const textoEnvio = limpiarTexto(
+    (regionEnvio.length ? regionEnvio : tablasEnvio.first()).text() || ''
+  );
+  const planoEnvio = limpiarTexto(tablasEnvio.text() || textoEnvio);
   const intentoActual = Number(
-    textoEnvio.match(/este es el intento\s+(\d+)/i)?.[1]
+    planoEnvio.match(/este\s+es\s+el\s+intento\s+(\d+)/i)?.[1]
+    || textoEnvio.match(/este\s+es\s+el\s+intento\s+(\d+)/i)?.[1]
     || textoEnvio.match(/attempt\s+(\d+)/i)?.[1]
   ) || null;
 
@@ -224,31 +233,49 @@ export function extraerEntregasAssign(html, baseUrl = '') {
   }
 
   const numeros = [...porNumero.keys()].sort((a, b) => a - b);
-  let indiceEntrega = 0;
-  const entregas = numeros.map((numero) => {
-    const fila = porNumero.get(numero);
+  const devolucionReal = (fila) => (
+    (fila.archivos?.length > 0) || (fila.comentarioProf?.length > 15) || fila.notaCampus != null
+  );
+  const cerradasConDev = numeros.filter((numero) => {
     const esActiva = intentoActual != null && numero === intentoActual;
-    const devolucionReal = (fila.archivos?.length > 0) || (fila.comentarioProf?.length > 15) || fila.notaCampus != null;
-    const cerradaConDevolucion = !esActiva && devolucionReal;
-    let indice = null;
-    let pendiente = false;
-    if (cerradaConDevolucion) {
-      indiceEntrega += 1;
-      indice = indiceEntrega;
-    } else if (esActiva && requiereNuevaEntrega) {
-      indice = indiceEntrega + 1;
-      pendiente = true;
-    } else if (esActiva) {
-      indice = indiceEntrega + 1;
-      pendiente = /no entregad|sin entregar|not submitted/i.test(fila.estado);
-    }
-    return {
-      ...fila,
-      esActiva,
-      indiceEntrega: indice,
-      pendiente
-    };
-  }).filter((fila) => fila.indiceEntrega != null || fila.esActiva);
+    return !esActiva && devolucionReal(porNumero.get(numero));
+  });
+  let indiceEntrega = 0;
+  const metaPorNumero = new Map();
+  for (const numero of cerradasConDev) {
+    indiceEntrega += 1;
+    metaPorNumero.set(numero, {
+      indiceEntrega: indiceEntrega,
+      pendiente: false,
+      esActiva: false
+    });
+  }
+  if (intentoActual != null && !metaPorNumero.has(intentoActual)) {
+    const filaAct = porNumero.get(intentoActual) || {};
+    const pendiente = requiereNuevaEntrega
+      || /reabiert|reopened/i.test(filaAct.estado || '')
+      || /no entregad|sin entregar|not submitted/i.test(filaAct.estado || '')
+      || !devolucionReal(filaAct);
+    indiceEntrega += 1;
+    metaPorNumero.set(intentoActual, {
+      indiceEntrega: indiceEntrega,
+      pendiente,
+      esActiva: true
+    });
+  }
+  const entregas = numeros
+    .filter((numero) => metaPorNumero.has(numero))
+    .map((numero) => {
+      const fila = porNumero.get(numero);
+      const meta = metaPorNumero.get(numero);
+      return {
+        ...fila,
+        numero,
+        esActiva: meta.esActiva,
+        indiceEntrega: meta.indiceEntrega,
+        pendiente: meta.pendiente
+      };
+    });
 
   return { entregas, intentoActual, requiereNuevaEntrega, estadoActual };
 }
@@ -383,6 +410,11 @@ export async function aplicarEntregasAssignEnDb({
   entregas
 }) {
   if (!tareaId || !alumnoId || !Array.isArray(entregas)) return resumirEntregasParaTablero([]);
+
+  await db.execute({
+    sql: 'DELETE FROM tareas_entregas WHERE tarea_id = ? AND alumno_id = ?',
+    args: [tareaId, alumnoId]
+  });
 
   const escrituras = [];
   const ahora = new Date().toISOString();

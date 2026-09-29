@@ -498,7 +498,7 @@ export async function sincronizarHitosAssignEnMaterias({
               id: fila.id,
               tabla: 'tareas',
               nota: resumen.notaParaTablero,
-              entregada: resumen.entregada,
+              entregada: false,
               forzar: true
             }],
             alumnoId,
@@ -1552,11 +1552,11 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
         });
         entregadaAca = true;
       }
-      if (item.nota != null && !entregadaAca) {
+      if (item.nota != null && !entregadaAca && !item.forzar) {
         pendientesEntrega.push({ materia: item.materiaNombre || '', nombre: item.nombre });
         continue;
       }
-      if (item.nota != null && entregadaAca) {
+      if (item.nota != null && (entregadaAca || item.forzar)) {
         const notaGuardar = textoNota(item.nota);
         const previa = await db.execute({
           sql: 'SELECT nota FROM notas_tareas WHERE tarea_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))',

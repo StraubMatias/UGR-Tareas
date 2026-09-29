@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import {
   calcularEstadoSemaforo, formatearFechaDDMMAAAA, formatearUnidad, etiquetaModoEntregaTarea, obtenerIconoMateria,
-  tareaCompletadaPor, tareaFaltaNota, tareaPuedeGestionarse, textoBadgeFaseEntrega, type Materia, type Tarea
+  tareaCompletadaPor,
+  tareaFaltaNota,
+  tareaPuedeGestionarse,
+  textoBadgeFaseEntrega,
+  faseEntregaCampus,
+  tareaUsaEntregasMultiplesCampus,
+  type Materia,
+  type Tarea
 } from '../core/cursada';
 import EstadoGrupoAlumno from './EstadoGrupoAlumno';
 import type { InvitacionGrupoEnviadaTablero } from './portal/types';
@@ -37,7 +44,8 @@ export default function EstadoTareaAlumno({
   const entregada = tareaCompletadaPor(tarea, alumno);
   const faltaNota = tareaFaltaNota(tarea, alumno);
   const semaforo = calcularEstadoSemaforo(tarea.fin, tarea.inicio);
-  const badgeFase = propia ? textoBadgeFaseEntrega(tarea, alumno) : null;
+  const badgeFase = propia && tareaUsaEntregasMultiplesCampus(tarea) ? textoBadgeFaseEntrega(tarea, alumno) : null;
+  const fasePendiente = propia ? faseEntregaCampus(tarea, alumno) : null;
   const puedeGestionar = tareaPuedeGestionarse(tarea);
   const notasOtros = alumnos.filter((nombre) => nombre !== alumno
     && tarea.notas?.[nombre] !== undefined && tarea.notas?.[nombre] !== null && tarea.notas?.[nombre] !== '');
@@ -70,6 +78,12 @@ export default function EstadoTareaAlumno({
               {tarea.nombre}
             </button>
           </h4>
+          {fasePendiente?.requiereEntrega && fasePendiente.indice != null && (
+            <p className="text-xs text-amber-200/95 mt-1 font-medium">
+              Falta {fasePendiente.etiqueta} en UGR Virtual
+              {tarea.fin ? ` · vence ${formatearFechaDDMMAAAA(tarea.fin)}` : ''}
+            </p>
+          )}
           <p className="estado-tarea-meta">
             <span>
               {etiquetaModoEntregaTarea(tarea, alumno)}
