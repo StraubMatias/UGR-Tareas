@@ -77,4 +77,23 @@ export function actualizarUrlsTareas(opciones: { db: unknown; urlsActualizar: un
 export function actualizarUrlsParciales(opciones: { db: unknown; urlsParcialesActualizar: unknown }): Promise<number>;
 export function insertarEventosCronograma(opciones: { db: unknown; eventos: unknown[] }): Promise<number>;
 export function aplicarComplementoCampus(opciones: { db: unknown; detectado: unknown; alumnoId?: string; alumnoNombre?: string; materiaIds?: string[] }): Promise<{ eventos: number; horarios: number; fechas: number; notas: number; notasCargadas?: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>; pendientesEntrega?: Array<{ materia?: string; nombre?: string }>; parcialesDesdeCronograma?: number; parcialesDesdeCronogramaItems?: Array<{ materiaId?: string; nombre?: string; fecha?: string }> }>;
-export function cargarNotasDesdeEnlaces(opciones: { cliente: unknown; db: unknown; materiaIds?: string[]; alumnoId?: string; alumnoNombre?: string }): Promise<{ notas: unknown[]; cargadas: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>; noLeidas: Array<{ materia?: string; nombre?: string }>; pendientesEntrega?: Array<{ materia?: string; nombre?: string }> }>;
+export function cargarNotasDesdeEnlaces(opciones: {
+  cliente: unknown;
+  db: unknown;
+  materiaIds?: string[];
+  alumnoId?: string;
+  alumnoNombre?: string;
+  procesarEntregasAssign?: boolean;
+}): Promise<{ notas: unknown[]; cargadas: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>; noLeidas: Array<{ materia?: string; nombre?: string }>; pendientesEntrega?: Array<{ materia?: string; nombre?: string }> }>;
+export function sincronizarHitosAssignEnMaterias(opciones: {
+  cliente: unknown;
+  db: unknown;
+  materiaIds?: string[];
+  alumnoId?: string;
+  alumnoNombre?: string;
+}): Promise<{
+  lineasInforme: string[];
+  notasCargadas: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean; tareaId?: string }>;
+  tareas: number;
+  tareasEntregasActualizadas?: string[];
+}>;

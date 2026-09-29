@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { avisoVigenteEnCampana } from '../src/lib/avisos.ts';
+import { novedadNotasManualesPendientes } from '../src/lib/notas-manuales.ts';
 
 test('avisoVigenteEnCampana oculta sin clases ya pasadas', () => {
   const aviso = {
@@ -29,6 +30,13 @@ test('avisoVigenteEnCampana oculta encuentro de hoy y mañana viejo', () => {
     contenido: ''
   };
   assert.equal(avisoVigenteEnCampana(aviso, []), false);
+});
+
+test('novedadNotasManualesPendientes avisa sincronizar', () => {
+  const novedad = novedadNotasManualesPendientes(2);
+  assert.equal(novedad?.tipo, 'notas-manuales');
+  assert.match(novedad?.nombre || '', /2 notas/);
+  assert.equal(novedadNotasManualesPendientes(0), null);
 });
 
 test('prioridad de campana: parcial antes que aviso del campus', () => {

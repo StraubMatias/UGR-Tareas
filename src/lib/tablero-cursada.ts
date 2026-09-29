@@ -63,6 +63,7 @@ export function armarDerivadosTablero({
   novedades,
   avisos,
   invitacionesGrupo = [],
+  notasManualesCampus = 0,
   mesCalendario,
   materiasMisCursadas,
   materiaRankingVisible,
@@ -79,6 +80,7 @@ export function armarDerivadosTablero({
   novedades: NovedadTablero[];
   avisos: AvisoCampusMoodle[];
   invitacionesGrupo?: InvitacionGrupoTablero[];
+  notasManualesCampus?: number;
   mesCalendario: Date;
   materiasMisCursadas: Materia[];
   materiaRankingVisible: string;
@@ -105,7 +107,8 @@ export function armarDerivadosTablero({
     materias,
     parciales,
     inscripciones,
-    cronogramaCursada: cronogramaDeLaCursada
+    cronogramaCursada: cronogramaDeLaCursada,
+    notasManualesCampus
   });
   const horariosProximoParcial = proximoParcial
     ? horarios

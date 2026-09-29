@@ -18,6 +18,7 @@ function filaTieneCambios(fila: ResumenMateriaSync): boolean {
     || (fila.cronogramaNuevo?.length ?? 0) > 0
     || (fila.parcialesNuevos?.length ?? 0) > 0
     || (fila.notasCargadas?.length ?? 0) > 0
+    || (fila.entregasHitos?.length ?? 0) > 0
     || (fila.pendientesEntrega?.length ?? 0) > 0
     || (fila.notasNoLeidas?.length ?? 0) > 0
   );

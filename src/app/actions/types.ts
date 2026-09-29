@@ -10,6 +10,7 @@ export interface ResumenMateriaSync {
   notasCargadas?: string[];
   notasNoLeidas?: string[];
   pendientesEntrega?: string[];
+  entregasHitos?: string[];
 }
 
 export interface MateriaInscriptaSync {

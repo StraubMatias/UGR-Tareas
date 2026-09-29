@@ -1,3 +1,4 @@
+import EntregasHitosTarea from './EntregasHitosTarea';
 import {
   type Materia,
   type Tarea,
@@ -11,7 +12,10 @@ import {
   tareaCompletadaPor,
   tareaFaltaNota,
   tareaPendienteAlumno,
-  tareaPuedeGestionarse
+  tareaPuedeGestionarse,
+  textoBadgeFaseEntrega,
+  notaTableroVisibleParaAlumno,
+  notasCerradasEntregaCampus
 } from '../core/cursada';
 
 import { useMemo } from 'react';
@@ -188,6 +192,7 @@ export default function VistaMaterias({
                       )}
                       {grupo.tareas.map((t) => {
                         const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
+                        const badgeFase = usuarioActual ? textoBadgeFaseEntrega(t, usuarioActual) : null;
                         const diasParaAbrir = obtenerDiasHastaApertura(t.inicio);
                         const grupoPropio = usuarioActual
                           ? t.grupos?.find((g) => g.integrantes?.includes(usuarioActual))
@@ -224,6 +229,11 @@ export default function VistaMaterias({
                             <span className={`text-xs px-3 py-1 rounded-md border ${semaforo.estilo}`}>
                               {semaforo.texto}
                             </span>
+                            {badgeFase && (
+                              <span className="text-xs px-3 py-1 rounded-md border bg-amber-500/15 text-amber-100 border-amber-500/40 font-semibold">
+                                📤 {badgeFase}
+                              </span>
+                            )}
                             {t.conNota && (
                               <span className="text-xs px-3 py-1 rounded-md border bg-purple-500/10 text-purple-300 border-purple-500/30">
                                 {tareaFaltaNota(t, usuarioActual) ? 'Entregada · falta nota' : 'Tarea con nota'}
@@ -291,6 +301,14 @@ export default function VistaMaterias({
                               {t.detalles || 'Sin observaciones adicionales.'}
                             </p>
                           </div>
+
+                          {usuarioActual && t.entregas?.[usuarioActual]?.length ? (
+                            <EntregasHitosTarea
+                              entregas={t.entregas[usuarioActual]}
+                              usuarioActual={usuarioActual}
+                              fechaVence={t.fin}
+                            />
+                          ) : null}
     
                           <div className="flex flex-wrap gap-5 text-xs sm:text-sm text-slate-400 pt-1 font-medium">
                             <span className="flex items-center gap-1.5">
@@ -319,21 +337,38 @@ export default function VistaMaterias({
                                     ? 'Marcar entregada (individual)'
                                     : 'Marcar como entregada'}
                               </label>
-                              <label className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">
-                                {t.grupal ? 'Nota del grupo (UGR Virtual)' : 'Nota en UGR Virtual'}
-                              </label>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                pattern="[0-9]+([.,][0-9]+)?"
-                                placeholder="-"
-                                disabled={!esAdmin}
-                                readOnly={!esAdmin}
-                                value={notasTareasInputs[`${t.id}_${usuarioActual}`] || ''}
-                                onChange={(e) => usuarioActual && handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
-                                onBlur={() => usuarioActual && handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
-                                className="w-24 bg-[#161c26] border border-purple-500/50 rounded-lg p-2 text-center font-bold text-purple-300 focus:outline-none"
-                              />
+                              {(() => {
+                                const mostrarNota = usuarioActual
+                                  ? notaTableroVisibleParaAlumno(t, usuarioActual)
+                                  : true;
+                                const parciales = usuarioActual
+                                  ? notasCerradasEntregaCampus(t, usuarioActual)
+                                  : [];
+                                return (
+                                  <>
+                                    <label className="text-xs sm:text-sm font-bold text-slate-300 block mb-2.5">
+                                      {t.grupal ? 'Nota del grupo (UGR Virtual)' : 'Nota en UGR Virtual'}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      pattern="[0-9]+([.,][0-9]+)?"
+                                      placeholder={mostrarNota ? '-' : '—'}
+                                      disabled={!esAdmin}
+                                      readOnly={!esAdmin}
+                                      value={mostrarNota ? (notasTareasInputs[`${t.id}_${usuarioActual}`] || '') : ''}
+                                      onChange={(e) => usuarioActual && handleNotaTareaChangeLocal(t.id, usuarioActual, e.target.value)}
+                                      onBlur={() => usuarioActual && handleGuardarNotaTareaOnBlur(t.id, usuarioActual)}
+                                      className="w-24 bg-[#161c26] border border-purple-500/50 rounded-lg p-2 text-center font-bold text-purple-300 focus:outline-none"
+                                    />
+                                    {!mostrarNota && parciales.length > 0 && (
+                                      <p className="text-[11px] text-slate-500 mt-2 leading-snug">
+                                        {parciales.map((p) => `Entrega ${p.indice}: ${p.nota}`).join(' · ')}
+                                      </p>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           ) : (
                           <div>
