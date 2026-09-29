@@ -61,8 +61,10 @@ import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { cabeceraCookies } from './autenticar.mjs';
 import { extraerEnlacesDeCursada, interpretarCondiciones, textoDeArchivoCampus, urlArchivoDeRecurso } from './metodologia.mjs';
 import {
+  esTareaBuzonEntregasMultiples,
   esUrlAssign,
   listarTareasAssignConUrl,
+  quitarHitosAssignDeTareasSimples,
   sincronizarEntregasAssignDesdeHtml
 } from './assign-entregas.mjs';
 
@@ -344,6 +346,9 @@ async function leerNotasDeEnlaces({
   const pendientesEntrega = [];
   await conPool(aConsultar, 4, async (fila) => {
     try {
+      if (esUrlAssign(fila.url) && esTareaBuzonEntregasMultiples(fila.nombre) && !procesarEntregasAssign) {
+        return;
+      }
       const pagina = await cliente.pedir(fila.url);
       const esQuiz = /\/mod\/quiz\//.test(String(fila.url));
       if (!pagina?.html || pagina.es_requiere_login) {
@@ -435,6 +440,7 @@ export async function sincronizarHitosAssignEnMaterias({
   alumnoId,
   alumnoNombre
 }) {
+  await quitarHitosAssignDeTareasSimples(db, materiaIds);
   const filas = await listarTareasAssignConUrl(db, materiaIds);
   const lineasInforme = [];
   const notasCargadas = [];
@@ -467,7 +473,7 @@ export async function sincronizarHitosAssignEnMaterias({
         .filter((e) => e.indiceEntrega != null)
         .map((e) => {
           const etiqueta = `entrega ${e.indiceEntrega}`;
-          if (e.nota != null) return `${etiqueta}: nota ${e.nota}`;
+          if (e.nota != null && !e.esActiva) return `${etiqueta}: nota ${e.nota}`;
           if (e.pendiente || e.esActiva) return `${etiqueta}: pendiente`;
           return etiqueta;
         });
@@ -1479,6 +1485,21 @@ function mismaNota(anterior, nueva) {
   return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.001;
 }
 
+function notaNumerica(valor) {
+  const n = Number(String(valor ?? '').replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** El campus a veces muestra un intento viejo (5) y la devolución buena (8): no pisar con la menor. */
+function debeAplicarNotaCampus(anterior, nueva) {
+  if (mismaNota(anterior, nueva)) return false;
+  const a = notaNumerica(anterior);
+  const b = notaNumerica(nueva);
+  if (a == null) return true;
+  if (b == null) return false;
+  return b >= a;
+}
+
 function textoNota(nota) {
   return formatearNotaParaMostrar(nota);
 }
@@ -1517,10 +1538,16 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
         args: [id, alumnoId, alumnoNombre || '']
       });
       let entregadaAca = entrega.rows.length > 0;
-      if (item.nota != null && !entregadaAca && item.forzar) {
+      if (item.nota != null && !entregadaAca && item.forzar && item.entregada) {
         escrituras.push({
           sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, datetime('now'))
-                ON CONFLICT(tarea_id, alumno) DO NOTHING`,
+                ON CONFLICT(tarea_id, alumno) DO UPDATE SET
+                  alumno_id = excluded.alumno_id,
+                  completada_en = CASE
+                    WHEN completadas.completada_en IS NOT NULL AND TRIM(completadas.completada_en) != ''
+                    THEN completadas.completada_en
+                    ELSE excluded.completada_en
+                  END`,
           args: [id, alumnoId, alumnoNombre || '']
         });
         entregadaAca = true;
@@ -1535,12 +1562,16 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
           sql: 'SELECT nota FROM notas_tareas WHERE tarea_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))',
           args: [id, alumnoId, alumnoNombre || '']
         });
+        const notaPrevia = previa.rows[0]?.nota;
+        if (item.forzar && !debeAplicarNotaCampus(notaPrevia, notaGuardar)) {
+          continue;
+        }
         cargadas.push({
           tareaId: id,
           materia: item.materiaNombre || '',
           nombre: item.nombre,
           nota: notaGuardar,
-          yaEstaba: mismaNota(previa.rows[0]?.nota, notaGuardar)
+          yaEstaba: mismaNota(notaPrevia, notaGuardar)
         });
         const guardaCerrada = item.forzar ? '' : 'WHERE notas_tareas.cerrada = 0';
         escrituras.push({

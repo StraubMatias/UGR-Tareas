@@ -466,18 +466,24 @@ export async function sincronizarLoteMateriasDelAlumno({
   const orden = new Map([...nombresPorId.values()].map((nombre, indice) => [nombre, indice]));
   resumen.sort((a, b) => (orden.get(a.materia) ?? 99) - (orden.get(b.materia) ?? 99));
 
-  const vistas = new Set<string>();
-  const notasCargadas: NotaCampusInforme[] = [
+  const mejorNotaPorTarea = new Map<string, NotaCampusInforme>();
+  const notaNum = (v: string) => {
+    const n = Number(String(v).replace(',', '.'));
+    return Number.isFinite(n) ? n : -1;
+  };
+  for (const item of [
     ...(hitosAssign.notasCargadas || []),
     ...(notasTardias.cargadas || []),
     ...(complemento.notasCargadas || [])
-  ]
-    .filter((item): item is NotaCampusInforme => {
-      const clave = `${item.nombre}|${item.nota}`;
-      if (!item?.nombre || !item?.nota || vistas.has(clave)) return false;
-      vistas.add(clave);
-      return true;
-    });
+  ]) {
+    if (!item?.nombre || !item?.nota) continue;
+    const clave = String(item.nombre).toLowerCase();
+    const prev = mejorNotaPorTarea.get(clave);
+    if (!prev || notaNum(String(item.nota)) >= notaNum(String(prev.nota))) {
+      mejorNotaPorTarea.set(clave, item as NotaCampusInforme);
+    }
+  }
+  const notasCargadas: NotaCampusInforme[] = [...mejorNotaPorTarea.values()];
   const cargadasPorNombre = new Set(notasCargadas.map((item) => String(item.nombre).toLowerCase()));
   const notasNoLeidas = (notasTardias.noLeidas || []).filter((item) => item?.nombre && !cargadasPorNombre.has(String(item.nombre).toLowerCase()));
   const pendientesEntrega = [
@@ -503,7 +509,7 @@ export async function sincronizarLoteMateriasDelAlumno({
     if (!lista.includes(textoLinea)) lista.push(textoLinea);
     fila[campo] = lista;
   };
-  for (const item of [...(hitosAssign.notasCargadas || []), ...notasCargadas].filter((n) => !n.yaEstaba)) {
+  for (const item of notasCargadas.filter((n) => !n.yaEstaba)) {
     anexar(item.materia, 'notasCargadas', `${item.nombre}: ${item.nota}`);
   }
   for (const linea of hitosAssign.lineasInforme || []) {

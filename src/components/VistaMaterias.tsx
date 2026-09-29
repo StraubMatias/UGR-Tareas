@@ -301,7 +301,11 @@ export default function VistaMaterias({
                           </div>
 
                           {usuarioActual && t.entregas?.[usuarioActual]?.length ? (
-                            <EntregasHitosTarea entregas={t.entregas[usuarioActual]} usuarioActual={usuarioActual} />
+                            <EntregasHitosTarea
+                              entregas={t.entregas[usuarioActual]}
+                              usuarioActual={usuarioActual}
+                              fechaVence={t.fin}
+                            />
                           ) : null}
     
                           <div className="flex flex-wrap gap-5 text-xs sm:text-sm text-slate-400 pt-1 font-medium">

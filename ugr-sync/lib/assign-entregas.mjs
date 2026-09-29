@@ -12,9 +12,12 @@ export function esUrlAssign(url) {
   return /assign\/view\.php|\/mod\/assign\//i.test(String(url || ''));
 }
 
-/** Buzones Moodle con varias entregas / devoluciones Word (p. ej. SGSI trabajo práctico). */
+/**
+ * Solo buzones con varias entregas explícitas en el nombre (SGSI).
+ * No usar "trabajo práctico" suelto: matchea tareas normales de otras materias (p. ej. EGR).
+ */
 export function esTareaBuzonEntregasMultiples(nombre) {
-  return /entregas?\s+del\s+trabajo|trabajo\s+pr[aá]ctico/i.test(String(nombre || ''));
+  return /entregas?\s+del\s+trabajo/i.test(String(nombre || ''));
 }
 
 function completarUrl(href, baseUrl) {
@@ -355,12 +358,15 @@ export async function enriquecerNotasDesdeDevoluciones(cliente, entregas) {
 }
 
 export function resumirEntregasParaTablero(entregas) {
+  const activa = entregas.find((e) => e.esActiva);
   const conNota = [...entregas]
-    .filter((e) => e.nota != null)
+    .filter((e) => e.nota != null && !e.esActiva)
     .sort((a, b) => (b.indiceEntrega ?? b.numero) - (a.indiceEntrega ?? a.numero));
   const ultimaNota = conNota[0] ?? null;
-  const activa = entregas.find((e) => e.esActiva);
-  const entregada = !(activa?.pendiente || (activa && /reabiert|reopened/i.test(activa.estado || '')));
+  const hayOtraEntregaAbierta = Boolean(
+    activa && (activa.pendiente || /reabiert|reopened/i.test(activa.estado || ''))
+  );
+  const entregada = !hayOtraEntregaAbierta;
   return {
     notaParaTablero: ultimaNota?.nota ?? null,
     notaOrigen: ultimaNota?.notaOrigen ?? null,
@@ -419,15 +425,25 @@ export async function aplicarEntregasAssignEnDb({
   if (escrituras.length) await db.batch(escrituras, 'write');
 
   const resumen = resumirEntregasParaTablero(entregas);
-  if (!resumen.entregada) {
+  const entregasCalificadas = entregas.filter((e) => !e.esActiva && e.nota != null).length;
+  const otraFasePendiente = entregas.some(
+    (e) => e.esActiva && (e.pendiente || /reabiert|reopened/i.test(e.estado || ''))
+  );
+  if (!resumen.entregada && entregasCalificadas > 0 && otraFasePendiente) {
     await db.execute({
       sql: `DELETE FROM completadas WHERE tarea_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))`,
       args: [tareaId, alumnoId, alumnoNombre || '']
     });
-  } else {
+  } else if (resumen.entregada) {
     await db.execute({
       sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, ?)
-            ON CONFLICT(tarea_id, alumno) DO NOTHING`,
+            ON CONFLICT(tarea_id, alumno) DO UPDATE SET
+              alumno_id = excluded.alumno_id,
+              completada_en = CASE
+                WHEN completadas.completada_en IS NOT NULL AND TRIM(completadas.completada_en) != ''
+                THEN completadas.completada_en
+                ELSE excluded.completada_en
+              END`,
       args: [tareaId, alumnoId, alumnoNombre || '', ahora]
     });
   }
@@ -458,6 +474,20 @@ export async function sincronizarEntregasAssignDesdeHtml({
 }
 
 /** Prioridad al inicio del sync: buzones assign con varias entregas y devoluciones Word. */
+/** Quita hitos viejos en tareas que no son buzón «Entregas del trabajo» (p. ej. EGR primera entrega). */
+export async function quitarHitosAssignDeTareasSimples(db, materiaIds) {
+  if (!materiaIds?.length) return;
+  const marcas = materiaIds.map(() => '?').join(', ');
+  await db.execute({
+    sql: `DELETE FROM tareas_entregas WHERE tarea_id IN (
+            SELECT t.id FROM tareas t
+            WHERE t.materia_id IN (${marcas})
+              AND LOWER(t.nombre) NOT LIKE '%entregas del trabajo%'
+          )`,
+    args: [...materiaIds]
+  });
+}
+
 export async function listarTareasAssignConUrl(db, materiaIds) {
   if (!materiaIds?.length) return [];
   const marcas = materiaIds.map(() => '?').join(', ');

@@ -1,5 +1,6 @@
 import type { Row, Value } from '@libsql/client';
 import { formatearNotaParaMostrar } from '../app/validators';
+import { tareaUsaEntregasMultiplesCampus } from '../core/cursada';
 import { texto, textoONull } from './action-internals';
 
 export function consultaPeriodo(periodoId: string | null, sqlConPeriodo: string, sqlSinPeriodo: string) {
@@ -116,30 +117,33 @@ export function armarMaterias(
         notaCargadaEn: Object.fromEntries(
           Object.entries(notaCargadaEn).map(([alumnoNota, valor]) => [alumnoNota, texto(valor)])
         ),
-        entregas: Object.fromEntries(
-          Object.entries(entregasPorTarea.get(tareaId) || {}).map(([alumnoEntrega, filas]) => [
-            alumnoEntrega,
-            filas
-              .sort((a, b) => Number(a.indice_entrega || a.numero) - Number(b.indice_entrega || b.numero))
-              .map((f) => ({
-                numero: Number(f.numero),
-                indiceEntrega: f.indice_entrega == null ? null : Number(f.indice_entrega),
-                esActiva: Number(f.es_activa) === 1,
-                estado: texto(f.estado).length > 120
-                  ? `${texto(f.estado).slice(0, 117)}…`
-                  : texto(f.estado),
-                nota: f.nota == null || f.nota === '' ? null : formatearNotaParaMostrar(texto(f.nota)),
-                notaOrigen: textoONull(f.nota_origen),
-                comentarioProf: textoONull(f.comentario_prof),
-                feedbackUrl: textoONull(f.feedback_url),
-                feedbackNombre: textoONull(f.feedback_nombre),
-                pendiente: Boolean(
-                  Number(f.es_activa) === 1
-                  && (Number(f.indice_entrega) > 0 || /reabiert|reopened|sin calificar/i.test(texto(f.estado)))
-                )
-              }))
-          ])
-        )
+        entregas: tareaUsaEntregasMultiplesCampus({ nombre: texto(t.nombre) })
+          ? Object.fromEntries(
+            Object.entries(entregasPorTarea.get(tareaId) || {}).map(([alumnoEntrega, filas]) => [
+              alumnoEntrega,
+              filas
+                .sort((a, b) => Number(a.indice_entrega || a.numero) - Number(b.indice_entrega || b.numero))
+                .map((f) => {
+                  const esActiva = Number(f.es_activa) === 1;
+                  const tieneNota = f.nota != null && f.nota !== '';
+                  return {
+                    numero: Number(f.numero),
+                    indiceEntrega: f.indice_entrega == null ? null : Number(f.indice_entrega),
+                    esActiva,
+                    estado: texto(f.estado).length > 120
+                      ? `${texto(f.estado).slice(0, 117)}…`
+                      : texto(f.estado),
+                    nota: tieneNota ? formatearNotaParaMostrar(texto(f.nota)) : null,
+                    notaOrigen: textoONull(f.nota_origen),
+                    comentarioProf: textoONull(f.comentario_prof),
+                    feedbackUrl: textoONull(f.feedback_url),
+                    feedbackNombre: textoONull(f.feedback_nombre),
+                    pendiente: esActiva && !tieneNota
+                  };
+                })
+            ])
+          )
+          : undefined
       };
     });
 

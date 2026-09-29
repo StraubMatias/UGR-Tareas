@@ -488,7 +488,14 @@ export async function actualizarProgresoTarea(
       for (const integrante of integrantes) {
         await tx.execute({ sql: 'DELETE FROM completadas WHERE tarea_id = ? AND alumno_id = ?', args: [tareaId, integrante.id] });
         if (!marcada) await tx.execute({
-          sql: 'INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, ?)',
+          sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, ?)
+                ON CONFLICT(tarea_id, alumno) DO UPDATE SET
+                  alumno_id = excluded.alumno_id,
+                  completada_en = CASE
+                    WHEN completadas.completada_en IS NOT NULL AND TRIM(completadas.completada_en) != ''
+                    THEN completadas.completada_en
+                    ELSE excluded.completada_en
+                  END`,
           args: [tareaId, integrante.id, integrante.nombre, fecha]
         });
       }
