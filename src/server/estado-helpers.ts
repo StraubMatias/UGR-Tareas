@@ -122,7 +122,8 @@ export function armarMaterias(
             Object.entries(entregasPorTarea.get(tareaId) || {}).map(([alumnoEntrega, filas]) => [
               alumnoEntrega,
               filas
-                .sort((a, b) => Number(a.indice_entrega || a.numero) - Number(b.indice_entrega || b.numero))
+                .filter((f) => f.indice_entrega != null && f.indice_entrega !== '')
+                .sort((a, b) => Number(a.indice_entrega) - Number(b.indice_entrega))
                 .map((f) => {
                   const esActiva = Number(f.es_activa) === 1;
                   const tieneNota = f.nota != null && f.nota !== '';

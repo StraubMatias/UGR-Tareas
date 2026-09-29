@@ -14,9 +14,9 @@ interface EntregasHitosTareaProps {
 export default function EntregasHitosTarea({ entregas, usuarioActual, fechaVence }: EntregasHitosTareaProps) {
   if (!usuarioActual || !entregas?.length) return null;
 
-  const ordenadas = [...entregas].sort(
-    (a, b) => (a.indiceEntrega ?? a.numero) - (b.indiceEntrega ?? b.numero)
-  );
+  const ordenadas = [...entregas]
+    .filter((e) => e.indiceEntrega != null)
+    .sort((a, b) => (a.indiceEntrega ?? 0) - (b.indiceEntrega ?? 0));
   const fase = faseEntregaDesdeHitos(entregas);
   const diasRestantes = fechaVence ? obtenerDiasHastaTarea(fechaVence) : null;
 
@@ -39,9 +39,7 @@ export default function EntregasHitosTarea({ entregas, usuarioActual, fechaVence
       )}
       <ul className="space-y-2">
         {ordenadas.map((entrega) => {
-          const etiqueta = entrega.indiceEntrega
-            ? `Entrega ${entrega.indiceEntrega}`
-            : `Intento ${entrega.numero}`;
+          const etiqueta = `Entrega ${entrega.indiceEntrega}`;
           const nota = entrega.nota != null && entrega.nota !== '' ? String(entrega.nota) : null;
           return (
             <li
