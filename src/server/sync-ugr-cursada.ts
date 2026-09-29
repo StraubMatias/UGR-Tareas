@@ -136,7 +136,7 @@ type ItemTareaCampus = {
   url?: string;
 };
 
-export type FaseSyncUgrCursada = 'preparar' | 'materias' | 'avisos' | 'nucleo' | 'completa';
+export type FaseSyncUgrCursada = 'preparar' | 'materias' | 'materia' | 'avisos' | 'nucleo' | 'completa';
 
 export type ResultadoSyncUgr = {
   mensaje: string;
@@ -597,19 +597,28 @@ export async function sincronizarCursadaDelAlumno({
   if (fase === 'avisos') {
     return sincronizarAvisosCampusDelAlumno({ alumnoId, cliente, materiaIds: materiaIdsPasada });
   }
-  if (fase === 'materias') {
+  if (fase === 'materias' || fase === 'materia') {
     if (!materiaIdsPasada?.length) {
       throw new Error('Indicá qué materias sincronizar en esta pasada.');
     }
     const periodoId = await periodoDeCursada();
     const { materiaIds: todas } = await nombresMateriasInscriptas(alumnoId, periodoId);
-    return sincronizarLoteMateriasDelAlumno({
+    const lote = await sincronizarLoteMateriasDelAlumno({
       alumnoId,
       alumnoNombre,
       cliente,
       materiaIds: materiaIdsPasada,
       materiasEnCursada: todas.length
     });
+    if (fase === 'materia') {
+      const avisos = await sincronizarAvisosCampusDelAlumno({
+        alumnoId,
+        cliente,
+        materiaIds: materiaIdsPasada
+      });
+      return fusionarResultadosSync(lote, avisos);
+    }
+    return lote;
   }
   if (fase === 'nucleo') {
     const prep = await prepararCursadaCampusDelAlumno({ alumnoId, cliente });

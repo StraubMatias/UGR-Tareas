@@ -570,6 +570,55 @@ export interface ResumenTareas {
   totalGrupales: number;
 }
 
+export type EstadoSegmentoAvance = 'completada' | 'pendiente' | 'futura' | 'urgente';
+
+export interface SegmentoGradoAvance {
+  id: string;
+  titulo: string;
+  estado: EstadoSegmentoAvance;
+  url?: string | null;
+}
+
+export function segmentosGradoAvanceMateria(
+  materia: Materia,
+  alumno: string | null | undefined
+): {
+  segmentos: SegmentoGradoAvance[];
+  indiceAhora: number | null;
+  actividadActual: { titulo: string; etiquetaEstado: string } | null;
+} {
+  if (!alumno) return { segmentos: [], indiceAhora: null, actividadActual: null };
+  const tareas = [...(materia.tareas || [])].sort((a, b) => {
+    const fa = String(a.inicio || a.fin || '');
+    const fb = String(b.inicio || b.fin || '');
+    return fa.localeCompare(fb);
+  });
+  const segmentos: SegmentoGradoAvance[] = tareas.map((t) => {
+    const semaforo = calcularEstadoSemaforo(t.fin, t.inicio);
+    let estado: EstadoSegmentoAvance = 'pendiente';
+    if (tareaCompletadaPor(t, alumno) && !tareaFaltaNota(t, alumno)) estado = 'completada';
+    else if (!tareaEstaHabilitada(t.inicio)) estado = 'futura';
+    else if (/🔴|🟠/.test(semaforo.texto)) estado = 'urgente';
+    return { id: t.id, titulo: t.nombre, estado, url: t.url };
+  });
+  let indiceAhora = segmentos.findIndex((s) => s.estado === 'urgente' || s.estado === 'pendiente');
+  if (indiceAhora < 0) indiceAhora = segmentos.findIndex((s) => s.estado === 'futura');
+  const segActual = indiceAhora >= 0 ? segmentos[indiceAhora] : null;
+  const etiquetas: Record<EstadoSegmentoAvance, string> = {
+    completada: 'Finalizado',
+    pendiente: 'Pendiente',
+    urgente: 'Pendiente · cerca del vencimiento',
+    futura: 'Todavía no habilitada'
+  };
+  return {
+    segmentos,
+    indiceAhora: indiceAhora >= 0 ? indiceAhora : null,
+    actividadActual: segActual
+      ? { titulo: segActual.titulo, etiquetaEstado: etiquetas[segActual.estado] }
+      : null
+  };
+}
+
 export const obtenerResumenTareasAlumno = (alumno: string, materias: Materia[]): ResumenTareas => {
   const todasTareas: Tarea[] = (materias || []).flatMap((materia) => materia.tareas || []);
   const tareasNoCompletadas = todasTareas
