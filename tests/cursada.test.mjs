@@ -11,7 +11,9 @@ import {
   tareaCompletadaPor,
   faseEntregaDesdeHitos,
   textoBadgeFaseEntrega,
-  tareaUsaEntregasMultiplesCampus
+  tareaUsaEntregasMultiplesCampus,
+  notaTableroVisibleParaAlumno,
+  notasCerradasEntregaCampus
 } from '../src/core/cursada.ts';
 
 test('obtenerGrupoDeAlumno: encuentra el grupo correspondiente o retorna null', () => {
@@ -206,4 +208,6 @@ test('faseEntregaDesdeHitos indica Entrega 2 cuando el campus está reabierto', 
   };
   assert.match(textoBadgeFaseEntrega(tarea, 'Ana'), /Entrega 2/);
   assert.equal(tareaCompletadaPor(tarea, 'Ana'), false);
+  assert.equal(notaTableroVisibleParaAlumno(tarea, 'Ana'), false);
+  assert.deepEqual(notasCerradasEntregaCampus(tarea, 'Ana'), [{ indice: 1, nota: '8' }]);
 });

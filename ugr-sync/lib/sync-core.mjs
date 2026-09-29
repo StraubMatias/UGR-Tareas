@@ -489,7 +489,7 @@ export async function sincronizarHitosAssignEnMaterias({
           `«${fila.nombre}»: entrega 1 con devolución en campus; si no ves la nota, abrí la devolución en UGR y volvé a sincronizar.`
         );
       }
-      if (resumen?.notaParaTablero != null) {
+      if (resumen?.notaParaTablero != null && resumen.entregada) {
         const item = {
           tareaId: fila.id,
           materia: fila.materia,
@@ -507,7 +507,7 @@ export async function sincronizarHitosAssignEnMaterias({
               id: fila.id,
               tabla: 'tareas',
               nota: resumen.notaParaTablero,
-              entregada: false,
+              entregada: true,
               forzar: true
             }],
             alumnoId,
@@ -520,6 +520,11 @@ export async function sincronizarHitosAssignEnMaterias({
           const detalle = String(errorNota?.message || 'nota').slice(0, 80);
           lineasInforme.push(`«${fila.nombre}»: entregas guardadas; no pudimos escribir la nota en el tablero (${detalle}).`);
         }
+      } else if (resumen?.notaParaTablero != null && !resumen.entregada) {
+        await db.execute({
+          sql: `DELETE FROM notas_tareas WHERE tarea_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))`,
+          args: [fila.id, alumnoId, alumnoNombre || '']
+        });
       }
     } catch (error) {
       const detalle = String(error?.message || 'error').slice(0, 100);
