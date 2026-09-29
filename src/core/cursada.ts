@@ -121,6 +121,11 @@ export interface HistorialRegistro {
 
 // Funciones corregidas con tipos explícitos
 
+/** Mismo criterio que el sync: un solo link con varias entregas (SGSI), no “Trabajo práctico…” suelto (EGR). */
+export function tareaUsaEntregasMultiplesCampus(tarea: Pick<Tarea, 'nombre'>): boolean {
+  return /entregas?\s+del\s+trabajo/i.test(String(tarea.nombre || ''));
+}
+
 export const entregaActivaEnHitos = (hitos: EntregaHitoTarea[] | undefined): EntregaHitoTarea | null => {
   if (!hitos?.length) return null;
   return hitos.find((h) => h.esActiva) ?? null;
@@ -161,7 +166,7 @@ export const faseEntregaCampus = (
   tarea: Tarea,
   alumno: string | null | undefined
 ): { indice: number | null; etiqueta: string; requiereEntrega: boolean } | null => {
-  if (!alumno) return null;
+  if (!alumno || !tareaUsaEntregasMultiplesCampus(tarea)) return null;
   return faseEntregaDesdeHitos(tarea.entregas?.[alumno as string]);
 };
 
@@ -181,10 +186,17 @@ export const textoBadgeFaseEntrega = (
 
 export const tareaCompletadaPor = (tarea: Tarea, alumno: string | null | undefined): boolean => {
   if (!alumno) return false;
-  const hitos = tarea.entregas?.[alumno as string];
-  if (hitos?.length) {
-    const activa = hitos.find((h) => h.esActiva);
-    if (activa && (activa.pendiente || /reabiert|reopened/i.test(activa.estado || ''))) return false;
+  if (tareaUsaEntregasMultiplesCampus(tarea)) {
+    const hitos = tarea.entregas?.[alumno as string];
+    if (hitos?.length) {
+      const activa = hitos.find((h) => h.esActiva);
+      if (activa && (activa.pendiente || /reabiert|reopened/i.test(activa.estado || ''))) return false;
+      const faseAbierta = hitos.some(
+        (h) => h.esActiva && h.indiceEntrega != null && (h.pendiente || !h.nota)
+      );
+      if (faseAbierta) return false;
+    }
+    return tarea.completadoPor.includes(alumno as string);
   }
   return tarea.completadoPor.includes(alumno as string)
     || (tarea.conNota && Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno as string)

@@ -13,7 +13,8 @@ import {
   extraerNotaDeTextoDevolucion,
   enriquecerNotasDesdeDevoluciones,
   aplicarEntregasAssignEnDb,
-  esTareaBuzonEntregasMultiples
+  esTareaBuzonEntregasMultiples,
+  resumirEntregasParaTablero
 } from '../lib/assign-entregas.mjs';
 import { textoDesdeDocx } from '../lib/docx-texto.mjs';
 
@@ -52,8 +53,9 @@ test('textoDesdeDocx extrae texto y nota', () => {
   assert.equal(extraerNotaDeTextoDevolucion(texto), 8);
 });
 
-test('esTareaBuzonEntregasMultiples detecta trabajo práctico SGSI', () => {
+test('esTareaBuzonEntregasMultiples solo buzones «Entregas del trabajo» (SGSI)', () => {
   assert.equal(esTareaBuzonEntregasMultiples('Entregas del trabajo práctico- Análisis de un caso'), true);
+  assert.equal(esTareaBuzonEntregasMultiples('Trabajo Práctico Final Primer Entrega DIS-A'), false);
   assert.equal(esTareaBuzonEntregasMultiples('Auditorías de SI, UII Tarea nro.1'), false);
 });
 
@@ -84,6 +86,15 @@ test('extraerEntregasAssign no mezcla el intento actual en intentos anteriores (
   assert.ok(!e1.estado.includes('Este es el intento 3'));
   const e2 = entregas.find((e) => e.esActiva);
   assert.equal(e2?.indiceEntrega, 2);
+});
+
+test('resumirEntregasParaTablero usa nota de entrega cerrada, no del intento activo', () => {
+  const resumen = resumirEntregasParaTablero([
+    { numero: 2, indiceEntrega: 1, esActiva: false, nota: 8, pendiente: false, estado: 'Reabierto' },
+    { numero: 3, indiceEntrega: 2, esActiva: true, nota: 5, pendiente: true, estado: 'Reabierto' }
+  ]);
+  assert.equal(resumen.notaParaTablero, 8);
+  assert.equal(resumen.entregada, false);
 });
 
 test('enriquecerNotasDesdeDevoluciones descarga docx y asigna nota', async () => {
@@ -131,16 +142,28 @@ test('aplicarEntregasAssignEnDb destilda si el intento actual está reabierto', 
       tareaId: 't1',
       alumnoId: 'alu',
       alumnoNombre: 'Ana',
-      entregas: [{
-        numero: 3,
-        esActiva: true,
-        indiceEntrega: 2,
-        pendiente: true,
-        estado: 'Reabierto',
-        nota: null,
-        comentarioProf: '',
-        archivos: []
-      }]
+      entregas: [
+        {
+          numero: 2,
+          esActiva: false,
+          indiceEntrega: 1,
+          pendiente: false,
+          estado: 'Calificado',
+          nota: 8,
+          comentarioProf: 'Ok',
+          archivos: []
+        },
+        {
+          numero: 3,
+          esActiva: true,
+          indiceEntrega: 2,
+          pendiente: true,
+          estado: 'Reabierto',
+          nota: null,
+          comentarioProf: '',
+          archivos: []
+        }
+      ]
     });
     assert.equal(resumen.entregada, false);
     assert.equal((await db.execute('SELECT COUNT(*) AS n FROM completadas')).rows[0].n, 0);

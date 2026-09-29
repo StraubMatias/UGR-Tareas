@@ -10,7 +10,8 @@ import {
   calcularEstadoSemaforo,
   tareaCompletadaPor,
   faseEntregaDesdeHitos,
-  textoBadgeFaseEntrega
+  textoBadgeFaseEntrega,
+  tareaUsaEntregasMultiplesCampus
 } from '../src/core/cursada.ts';
 
 test('obtenerGrupoDeAlumno: encuentra el grupo correspondiente o retorna null', () => {
@@ -124,7 +125,7 @@ test('obtenerResumenTareasAlumno: tarea grupal con nota no cuenta en Grupales', 
 test('tareaCompletadaPor destilda si hay entrega activa reabierta', () => {
   const tarea = {
     id: 't1',
-    nombre: 'TP',
+    nombre: 'Entregas del trabajo práctico- caso',
     inicio: null,
     fin: null,
     conNota: true,
@@ -168,6 +169,25 @@ test('obtenerResumenTareasAlumno: grupal entregada sin nota sigue en Grupales', 
   assert.equal(resumen.completadas.length, 0);
 });
 
+test('tareaUsaEntregasMultiplesCampus distingue SGSI de EGR', () => {
+  assert.equal(tareaUsaEntregasMultiplesCampus({ nombre: 'Entregas del trabajo práctico- Análisis' }), true);
+  assert.equal(tareaUsaEntregasMultiplesCampus({ nombre: 'Trabajo Práctico Final Primer Entrega DIS-A' }), false);
+});
+
+test('EGR con nota 8 sigue entregada aunque queden hitos basura en DB', () => {
+  const tarea = {
+    id: 't',
+    nombre: 'Trabajo Práctico Final Primer Entrega DIS-A',
+    conNota: true,
+    completadoPor: ['Ana'],
+    notas: { Ana: '8' },
+    entregas: {
+      Ana: [{ numero: 3, indiceEntrega: 1, esActiva: true, pendiente: true, estado: 'Reabierto', nota: null }]
+    }
+  };
+  assert.equal(tareaCompletadaPor(tarea, 'Ana'), true);
+});
+
 test('faseEntregaDesdeHitos indica Entrega 2 cuando el campus está reabierto', () => {
   const hitos = [
     { numero: 2, indiceEntrega: 1, esActiva: false, estado: 'Reabierto', nota: '8', pendiente: false },
@@ -176,7 +196,14 @@ test('faseEntregaDesdeHitos indica Entrega 2 cuando el campus está reabierto', 
   const fase = faseEntregaDesdeHitos(hitos);
   assert.equal(fase?.etiqueta, 'Entrega 2');
   assert.equal(fase?.requiereEntrega, true);
-  const tarea = { id: 't', nombre: 'TP', entregas: { Ana: hitos }, completadoPor: [], conNota: true };
+  const tarea = {
+    id: 't',
+    nombre: 'Entregas del trabajo práctico- caso',
+    entregas: { Ana: hitos },
+    completadoPor: [],
+    conNota: true,
+    notas: { Ana: '8' }
+  };
   assert.match(textoBadgeFaseEntrega(tarea, 'Ana'), /Entrega 2/);
   assert.equal(tareaCompletadaPor(tarea, 'Ana'), false);
 });
