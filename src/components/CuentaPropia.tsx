@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useProgresoSyncEstimado } from '../hooks/useProgresoSyncEstimado';
 import { sincronizarCuentaUgrAction, sincronizarCuentaSiuAction, type MateriaInscriptaSync, type ResumenMateriaSync } from '../app/actions';
 import { fusionarLineasInforme, fusionarResumenSync, mensajeDesdeInforme } from '../lib/informe-sync-ugr';
-import { etiquetaSyncAvisos, etiquetaSyncMaterias, planPasadasSyncUgr } from '../lib/sync-ugr-orquestacion';
+import { etiquetaSyncMateriaCompleta, planPasadasSyncUgr } from '../lib/sync-ugr-orquestacion';
 import type { OpcionesSincronizarUgr } from '../app/actions';
 import dynamic from 'next/dynamic';
 
@@ -342,14 +342,20 @@ export default function CuentaPropia({
         aplicarResultadoUgr(preparacion);
 
         const plan = planPasadasSyncUgr(preparacion.materiaIdsSync || []);
-        const lotesMaterias = plan.lotesMaterias;
+        const pasadas = plan.pasadasMaterias;
         const totalMaterias = plan.materiaIds.length;
+        const idsSync = preparacion.materiaIdsSync || [];
+        const nombresSync = preparacion.materiasInscriptas?.map((m) => m.materia) || [];
+        const nombrePorId = new Map(idsSync.map((id, i) => [id, nombresSync[i] || '']));
 
-        for (let indice = 0; indice < lotesMaterias.length; indice += 1) {
-          const lote = lotesMaterias[indice];
-          setEtapaManual(etiquetaSyncMaterias(indice, lotesMaterias, totalMaterias));
+        for (let indice = 0; indice < pasadas.length; indice += 1) {
+          const lote = pasadas[indice];
+          const materiaId = lote[0];
+          setEtapaManual(
+            etiquetaSyncMateriaCompleta(indice, pasadas, totalMaterias, nombrePorId.get(materiaId))
+          );
           try {
-            const resultadoLote = await llamarUgr({ fase: 'materias', materiaIds: lote });
+            const resultadoLote = await llamarUgr({ fase: 'materia', materiaIds: lote });
             if (!resultadoLote.exito) {
               if (huboTrabajo) {
                 setAvisoParcial('No se completaron todas las materias; lo ya procesado quedó guardado en el tablero.');
@@ -371,27 +377,6 @@ export default function CuentaPropia({
             setError(`${mensajeSiSeCorta(err)}No se pudo sincronizar.`.trim());
             setFase('error');
             return;
-          }
-        }
-
-        const lotesAvisos = plan.lotesAvisos;
-        for (let indice = 0; indice < lotesAvisos.length; indice += 1) {
-          setEtapaManual(etiquetaSyncAvisos(indice, lotesAvisos, totalMaterias));
-          try {
-            const resultadoAvisos = await llamarUgr({ fase: 'avisos', materiaIds: lotesAvisos[indice] });
-            if (resultadoAvisos.exito) {
-              aplicarResultadoUgr(resultadoAvisos);
-            } else {
-              setAvisoParcial('No pudimos terminar todos los foros de avisos; tareas, fechas y notas ya quedaron guardadas.');
-              onInterrumpida?.();
-              break;
-            }
-          } catch (err) {
-            setAvisoParcial(
-              `${mensajeSiSeCorta(err)}Se interrumpió la lectura de avisos; lo principal del tablero ya quedó actualizado.`.trim()
-            );
-            onInterrumpida?.();
-            break;
           }
         }
 

@@ -1,4 +1,5 @@
 import EntregasHitosTarea from './EntregasHitosTarea';
+import GradoAvanceMateria from './GradoAvanceMateria';
 import {
   type Materia,
   type Tarea,
@@ -162,6 +163,9 @@ export default function VistaMaterias({
 
               {expandida && (
               <div className="p-4 sm:p-6 pt-3 sm:pt-4 space-y-4">
+                {usuarioActual && (
+                  <GradoAvanceMateria materia={m} alumno={usuarioActual} />
+                )}
                 {tareasCompletadas.length > 0 && (
                   <div className="flex justify-end">
                     <button
