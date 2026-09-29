@@ -432,6 +432,17 @@ export async function cargarNotasDesdeEnlaces({
   });
 }
 
+async function fingerprintEntregasAssign(db, tareaId, alumnoId) {
+  const res = await db.execute({
+    sql: `SELECT numero, indice_entrega, es_activa, estado, nota FROM tareas_entregas
+          WHERE tarea_id = ? AND alumno_id = ? ORDER BY numero ASC`,
+    args: [tareaId, alumnoId]
+  });
+  return JSON.stringify(
+    (res.rows || []).map((r) => [r.numero, r.indice_entrega, r.es_activa, r.estado, r.nota])
+  );
+}
+
 /** Corre primero en cada lote de materias: entregas múltiples + devoluciones Word. */
 export async function sincronizarHitosAssignEnMaterias({
   cliente,
@@ -449,6 +460,7 @@ export async function sincronizarHitosAssignEnMaterias({
 
   await conPool(filas, 1, async (fila) => {
     try {
+      const huellaAntes = await fingerprintEntregasAssign(db, fila.id, alumnoId);
       const pagina = await cliente.pedir(fila.url);
       if (!pagina?.html || pagina.es_requiere_login) {
         lineasInforme.push(`No se pudo abrir el buzón «${fila.nombre}» en UGR Virtual.`);
@@ -464,11 +476,15 @@ export async function sincronizarHitosAssignEnMaterias({
         baseUrl: UGR_BASE_URL
       });
       const { resumen, entregas } = syncEnt;
+      const huellaDespues = await fingerprintEntregasAssign(db, fila.id, alumnoId);
+      const huboCambioEntregas = huellaAntes !== huellaDespues;
       if (!entregas?.length) {
-        lineasInforme.push(`«${fila.nombre}»: sin hitos de entrega legibles en el campus.`);
+        if (huboCambioEntregas) {
+          lineasInforme.push(`«${fila.nombre}»: sin hitos de entrega legibles en el campus.`);
+        }
         return;
       }
-      tareasEntregasActualizadas.push(fila.id);
+      if (huboCambioEntregas) tareasEntregasActualizadas.push(fila.id);
       const partes = entregas
         .filter((e) => e.indiceEntrega != null)
         .map((e) => {
@@ -477,14 +493,14 @@ export async function sincronizarHitosAssignEnMaterias({
           if (e.pendiente || e.esActiva) return `${etiqueta}: pendiente`;
           return etiqueta;
         });
-      if (partes.length) {
+      if (huboCambioEntregas && partes.length) {
         lineasInforme.push(`«${fila.nombre}» (${fila.materia}): ${partes.join('; ')}.`);
       }
       const sinNotaConDevolucion = entregas.some(
         (e) => e.indiceEntrega === 1 && !e.esActiva && e.nota == null
           && (e.archivos?.length || (e.comentarioProf?.length > 15))
       );
-      if (sinNotaConDevolucion) {
+      if (huboCambioEntregas && sinNotaConDevolucion) {
         lineasInforme.push(
           `«${fila.nombre}»: entrega 1 con devolución en campus; si no ves la nota, abrí la devolución en UGR y volvé a sincronizar.`
         );

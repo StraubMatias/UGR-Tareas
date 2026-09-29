@@ -196,7 +196,9 @@ function SyncCargando({
   return (
     <div className="py-8 px-1">
       <p className="text-sm font-semibold text-slate-200 text-center">{titulo}</p>
-      <p className="mt-1 text-xs text-slate-400 text-center min-h-[1.25rem]">{etapa || 'Iniciando…'}</p>
+      <p className="mt-1 text-xs text-slate-400 text-center min-h-[1.25rem] break-words leading-snug px-1">
+        {etapa || 'Iniciando…'}
+      </p>
 
       <div
         className="mt-6 w-full h-2.5 rounded-full bg-slate-800/90 border border-slate-700/80 overflow-hidden"
@@ -254,8 +256,13 @@ export default function CuentaPropia({
   } | null>(null);
   const [avisoParcial, setAvisoParcial] = useState('');
   const [etapaManual, setEtapaManual] = useState('');
+  const [progresoUgr, setProgresoUgr] = useState<number | null>(null);
 
-  const { progreso, etapa, marcarCompletado } = useProgresoSyncEstimado(fase === 'cargando', fuente);
+  const { progreso: progresoEstimado, etapa, marcarCompletado } = useProgresoSyncEstimado(
+    fase === 'cargando' && fuente === 'siu',
+    fuente
+  );
+  const progreso = fuente === 'ugr' && progresoUgr != null ? progresoUgr : progresoEstimado;
   const etapaVisible = etapaManual || etapa;
 
   const reiniciarCredenciales = () => {
@@ -267,6 +274,7 @@ export default function CuentaPropia({
     setDetalleSiu(null);
     setAvisoParcial('');
     setEtapaManual('');
+    setProgresoUgr(null);
     setDni('');
     setClave('');
     if (usarCredencialesServidor) {
@@ -291,6 +299,7 @@ export default function CuentaPropia({
     setDetalleSiu(null);
     setAvisoParcial('');
     setEtapaManual('');
+    setProgresoUgr(0);
     setDni('');
     setClave('');
     setFase('cargando');
@@ -344,9 +353,11 @@ export default function CuentaPropia({
         const plan = planPasadasSyncUgr(preparacion.materiaIdsSync || []);
         const pasadas = plan.pasadasMaterias;
         const totalMaterias = plan.materiaIds.length;
+        const totalPasos = plan.totalPasos;
         const idsSync = preparacion.materiaIdsSync || [];
         const nombresSync = preparacion.materiasInscriptas?.map((m) => m.materia) || [];
         const nombrePorId = new Map(idsSync.map((id, i) => [id, nombresSync[i] || '']));
+        setProgresoUgr(Math.round((1 / totalPasos) * 100));
 
         for (let indice = 0; indice < pasadas.length; indice += 1) {
           const lote = pasadas[indice];
@@ -354,6 +365,7 @@ export default function CuentaPropia({
           setEtapaManual(
             etiquetaSyncMateriaCompleta(indice, pasadas, totalMaterias, nombrePorId.get(materiaId))
           );
+          setProgresoUgr(Math.round(((indice + 1) / totalPasos) * 100));
           try {
             const resultadoLote = await llamarUgr({ fase: 'materia', materiaIds: lote });
             if (!resultadoLote.exito) {
@@ -368,6 +380,7 @@ export default function CuentaPropia({
             }
             aplicarResultadoUgr(resultadoLote);
             huboTrabajo = true;
+            setProgresoUgr(Math.round(((indice + 2) / totalPasos) * 100));
           } catch (err) {
             if (huboTrabajo) {
               setAvisoParcial(`${mensajeSiSeCorta(err)}Lo procesado hasta acá quedó guardado. Podés sincronizar de nuevo para el resto.`.trim());
@@ -381,6 +394,7 @@ export default function CuentaPropia({
         }
 
         setEtapaManual('');
+        setProgresoUgr(100);
         const materiasSync = Math.max(materiasAcumuladas.length, 1);
         setMensaje(mensajeDesdeInforme(lineasAcumuladas, materiasSync));
         await marcarCompletado();
