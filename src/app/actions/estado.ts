@@ -21,7 +21,6 @@ import {
 import { armarMaterias, consultaPeriodo } from '../../server/estado-helpers';
 import { asegurarEsquemaGruposEnServidor } from '../../server/asegurar-esquema-grupos';
 import { asegurarEsquemaEntregasEnServidor } from '../../server/asegurar-esquema-entregas';
-import { asegurarEsquemaAvanceCampusEnServidor } from '../../server/asegurar-esquema-avance-campus';
 import { validarNota } from '../validators';
 
 // Una ida a Turso con todas las lecturas del tablero. Antes cada refresco
@@ -67,7 +66,6 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
 
     await asegurarEsquemaGruposEnServidor(db);
     await asegurarEsquemaEntregasEnServidor(db);
-    await asegurarEsquemaAvanceCampusEnServidor(db);
     await registrarUltimoAcceso(usuarioSesion);
 
     let periodoParaCargar = periodoIdSolicitado || null;
@@ -98,8 +96,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       resInvitacionesGrupo,
       resInvitacionesGrupoEnviadas,
       resNotasManualesCampus,
-      resEntregasTareas,
-      resRecursosCampus
+      resEntregasTareas
     ] = await db.batch([
       { sql: 'SELECT id, anio, cuatrimestre, nombre, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC', args: [] },
       consultaPeriodo(
@@ -272,23 +269,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
                 te.estado, te.nota, te.nota_origen, te.comentario_prof, te.feedback_url, te.feedback_nombre
          FROM tareas_entregas te
          LEFT JOIN alumnos a ON a.id = te.alumno_id`
-      ),
-      periodoParaCargar
-        ? {
-          sql: `SELECT ac.materia_id, ac.cmid, ac.modulo, ac.titulo, ac.url, ac.unidad, ac.orden, ac.completada
-                FROM avance_campus_recursos ac
-                JOIN materias m ON m.id = ac.materia_id
-                WHERE ac.alumno_id = ? AND m.periodo_id = ?
-                ORDER BY ac.orden ASC`,
-          args: [texto(cuenta?.id), periodoParaCargar]
-        }
-        : {
-          sql: `SELECT materia_id, cmid, modulo, titulo, url, unidad, orden, completada
-                FROM avance_campus_recursos
-                WHERE alumno_id = ?
-                ORDER BY orden ASC`,
-          args: [texto(cuenta?.id)]
-        }
+      )
     ], 'read');
 
     const materiasArmadas = armarMaterias(
@@ -298,8 +279,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       resNotasTareas.rows,
       resGrupos.rows,
       resPreferenciasGrupo.rows,
-      resEntregasTareas.rows,
-      resRecursosCampus.rows
+      resEntregasTareas.rows
     );
     const inscripciones = resInscripciones.rows.map((fila) => ({
       alumno: texto(fila.alumno),

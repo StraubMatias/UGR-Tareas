@@ -379,14 +379,6 @@ export async function sincronizarLoteMateriasDelAlumno({
     alumnoNombre
   });
 
-  const { sincronizarAvanceCampusEnMaterias } = await import('../../ugr-sync/lib/avance-campus.mjs');
-  await sincronizarAvanceCampusEnMaterias({
-    cliente,
-    db,
-    mapeos: mapeosLote,
-    alumnoId
-  });
-
   const notasTardias = await cargarNotasDesdeEnlaces({
     db,
     cliente,
