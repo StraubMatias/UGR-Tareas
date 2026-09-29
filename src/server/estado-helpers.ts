@@ -139,7 +139,9 @@ export function armarMaterias(
                     comentarioProf: textoONull(f.comentario_prof),
                     feedbackUrl: textoONull(f.feedback_url),
                     feedbackNombre: textoONull(f.feedback_nombre),
-                    pendiente: esActiva && !tieneNota
+                    pendiente: esActiva && (
+                      !tieneNota || /reabiert|reopened|sin calificar/i.test(texto(f.estado))
+                    )
                   };
                 })
             ])
