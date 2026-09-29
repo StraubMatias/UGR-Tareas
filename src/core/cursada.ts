@@ -26,6 +26,20 @@ export interface Tarea {
   entregaIndividualPor?: Record<string, boolean>;
   grupos?: Grupo[];
   cupo_maximo?: number | string;
+  entregas?: Record<string, EntregaHitoTarea[]>;
+}
+
+export interface EntregaHitoTarea {
+  numero: number;
+  indiceEntrega: number | null;
+  esActiva: boolean;
+  estado: string;
+  nota: string | number | null;
+  notaOrigen?: string | null;
+  comentarioProf?: string | null;
+  feedbackUrl?: string | null;
+  feedbackNombre?: string | null;
+  pendiente?: boolean;
 }
 
 export type ModoEntregaTarea = 'individual' | 'grupal_opcional' | 'grupal_obligatorio';
@@ -107,20 +121,121 @@ export interface HistorialRegistro {
 
 // Funciones corregidas con tipos explícitos
 
-export const tareaCompletadaPor = (tarea: Tarea, alumno: string | null | undefined): boolean => (
-  Boolean(alumno)
-  && (tarea.completadoPor.includes(alumno as string)
-    || (tarea.conNota && Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno as string)))
-);
+/** Mismo criterio que el sync: un solo link con varias entregas (SGSI), no “Trabajo práctico…” suelto (EGR). */
+export function tareaUsaEntregasMultiplesCampus(tarea: Pick<Tarea, 'nombre'>): boolean {
+  return /entregas?\s+del\s+trabajo/i.test(String(tarea.nombre || ''));
+}
+
+export const entregaActivaEnHitos = (hitos: EntregaHitoTarea[] | undefined): EntregaHitoTarea | null => {
+  if (!hitos?.length) return null;
+  return hitos.find((h) => h.esActiva) ?? null;
+};
+
+export const entregaActivaDeTarea = (
+  tarea: Tarea,
+  alumno: string | null | undefined
+): EntregaHitoTarea | null => {
+  if (!alumno) return null;
+  return entregaActivaEnHitos(tarea.entregas?.[alumno as string]);
+};
+
+/** Fase de entrega múltiple que Moodle tiene abierta ahora (p. ej. Entrega 2). */
+export const faseEntregaDesdeHitos = (
+  hitos: EntregaHitoTarea[] | undefined
+): { indice: number | null; etiqueta: string; requiereEntrega: boolean } | null => {
+  const activa = entregaActivaEnHitos(hitos);
+  if (!activa) return null;
+  const requiereEntrega = Boolean(
+    activa.pendiente || /reabiert|reopened|sin calificar/i.test(activa.estado || '')
+  );
+  if (activa.indiceEntrega != null) {
+    return {
+      indice: activa.indiceEntrega,
+      etiqueta: `Entrega ${activa.indiceEntrega}`,
+      requiereEntrega
+    };
+  }
+  return {
+    indice: null,
+    etiqueta: `Intento ${activa.numero}`,
+    requiereEntrega
+  };
+};
+
+export const faseEntregaCampus = (
+  tarea: Tarea,
+  alumno: string | null | undefined
+): { indice: number | null; etiqueta: string; requiereEntrega: boolean } | null => {
+  if (!alumno || !tareaUsaEntregasMultiplesCampus(tarea)) return null;
+  return faseEntregaDesdeHitos(tarea.entregas?.[alumno as string]);
+};
+
+export const textoBadgeFaseEntrega = (
+  tarea: Tarea,
+  alumno: string | null | undefined
+): string | null => {
+  const fase = faseEntregaCampus(tarea, alumno);
+  if (!fase) return null;
+  if (fase.indice != null) {
+    return fase.requiereEntrega
+      ? `${fase.etiqueta} — a entregar en UGR`
+      : `${fase.etiqueta} (campus)`;
+  }
+  return fase.requiereEntrega ? `${fase.etiqueta} — reabierto en UGR` : null;
+};
+
+export const tareaCompletadaPor = (tarea: Tarea, alumno: string | null | undefined): boolean => {
+  if (!alumno) return false;
+  if (tareaUsaEntregasMultiplesCampus(tarea)) {
+    const hitos = tarea.entregas?.[alumno as string];
+    if (hitos?.length) {
+      const activa = hitos.find((h) => h.esActiva);
+      if (activa && (activa.pendiente || /reabiert|reopened/i.test(activa.estado || ''))) return false;
+      const faseAbierta = hitos.some(
+        (h) => h.esActiva && h.indiceEntrega != null && (h.pendiente || !h.nota)
+      );
+      if (faseAbierta) return false;
+    }
+    return tarea.completadoPor.includes(alumno as string);
+  }
+  return tarea.completadoPor.includes(alumno as string)
+    || (tarea.conNota && Object.prototype.hasOwnProperty.call(tarea.notas || {}, alumno as string)
+      && tarea.notas?.[alumno as string] !== null && tarea.notas?.[alumno as string] !== '');
+};
 
 export const fechaEntregaTarea = (tarea: Tarea, alumno: string | null | undefined): string | null => (
   !alumno ? null : tarea.completadoEn?.[alumno] || (tarea.conNota ? tarea.notaCargadaEn?.[alumno] ?? null : null)
 );
 
+/** Con varias entregas en UGR, la nota del tablero aplica al cierre; mientras hay otra fase abierta, va en los hitos. */
+export const notaTableroVisibleParaAlumno = (
+  tarea: Tarea,
+  alumno: string | null | undefined
+): boolean => {
+  if (!alumno || !tareaUsaEntregasMultiplesCampus(tarea)) return true;
+  const fase = faseEntregaCampus(tarea, alumno);
+  if (!fase) return true;
+  return !(fase.requiereEntrega && (fase.indice ?? 0) > 1);
+};
+
+export const notasCerradasEntregaCampus = (
+  tarea: Tarea,
+  alumno: string | null | undefined
+): { indice: number; nota: string }[] => {
+  if (!alumno) return [];
+  const hitos = tarea.entregas?.[alumno as string];
+  if (!hitos?.length) return [];
+  return hitos
+    .filter((h) => h.indiceEntrega != null && !h.esActiva && h.nota != null && h.nota !== '')
+    .sort((a, b) => (a.indiceEntrega ?? 0) - (b.indiceEntrega ?? 0))
+    .map((h) => ({ indice: h.indiceEntrega as number, nota: String(h.nota) }));
+};
+
 export const tareaFaltaNota = (tarea: Tarea, alumno: string | null | undefined): boolean => (
   Boolean(alumno)
   && tarea.conNota
   && tareaCompletadaPor(tarea, alumno)
+  && notaTableroVisibleParaAlumno(tarea, alumno)
   && (tarea.notas?.[alumno as string] === undefined || tarea.notas?.[alumno as string] === null || tarea.notas?.[alumno as string] === '')
 );
 

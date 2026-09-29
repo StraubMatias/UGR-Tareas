@@ -762,7 +762,9 @@ export function extraerProgresoDeActividad(html) {
   const hayRevision = $('a[href*="review.php"]').length > 0;
   const hayIntento = /\b(?:intento|attempt)\s+\d+/i.test(plano) && /finalizado|finished|completado|completed/i.test(plano);
   const envio = $('[data-region="activity-header"], .submissionstatustable, .submissionstatus, .submissionsummarytable').text();
-  const enviada = /enviad|entregad|submitted|graded|para calificar/i.test(envio)
+  const reabierta = /reabiert|reopened/i.test(envio);
+  const enviada = !reabierta
+    && /enviad|entregad|submitted|graded|para calificar/i.test(envio)
     && !/no entregad|no enviad|not submitted/i.test(envio);
   const participoForo = esForo && (
     nota != null

@@ -1,5 +1,6 @@
 import { avisoVigenteEnCampana, nombreNotificacionAviso } from './avisos';
 import { materiasQueCursa } from './companeros';
+import { novedadNotasManualesPendientes } from './notas-manuales';
 import type { AvisoCampusMoodle, InvitacionGrupoTablero, NovedadTablero } from '../components/portal/types';
 import type { EventoCronograma, Materia, Parcial } from '../core/cursada';
 import { obtenerDiasHastaFecha, obtenerDiasHastaTarea, tareaCompletadaPor } from '../core/cursada';
@@ -19,6 +20,8 @@ export function pesoNotificacionTablero(item: NovedadTablero): number {
       return 30;
     case 'aviso-nuevo':
       return 40;
+    case 'notas-manuales':
+      return 5;
     default:
       return 50;
   }
@@ -40,7 +43,8 @@ export function armarNotificacionesTablero({
   parciales,
   inscripciones,
   cronogramaCursada,
-  invitacionesGrupo = []
+  invitacionesGrupo = [],
+  notasManualesCampus = 0
 }: {
   usuarioActual: string | null;
   novedades: NovedadTablero[];
@@ -50,6 +54,7 @@ export function armarNotificacionesTablero({
   parciales: Parcial[];
   inscripciones: { alumno: string; materiaId: string }[];
   cronogramaCursada: EventoCronograma[];
+  notasManualesCampus?: number;
 }): NovedadTablero[] {
   if (!usuarioActual) return [];
 
@@ -58,7 +63,10 @@ export function armarNotificacionesTablero({
   const parcialesDeLaCursada = parciales.filter((parcial) => idsCursada.has(parcial.materia_id));
   const nombresDeLaCursada = new Set(materiasDeLaCursada.map((materia) => materia.nombre));
 
+  const avisoNotasManuales = novedadNotasManualesPendientes(notasManualesCampus);
+
   const lista: NovedadTablero[] = [
+    ...(avisoNotasManuales ? [avisoNotasManuales] : []),
     ...invitacionesGrupo.map((inv) => ({
       id: `invitacion-grupo-${inv.id}`,
       tipo: 'invitacion-grupo',
