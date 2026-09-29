@@ -480,6 +480,15 @@ export async function sincronizarHitosAssignEnMaterias({
       if (partes.length) {
         lineasInforme.push(`«${fila.nombre}» (${fila.materia}): ${partes.join('; ')}.`);
       }
+      const sinNotaConDevolucion = entregas.some(
+        (e) => e.indiceEntrega === 1 && !e.esActiva && e.nota == null
+          && (e.archivos?.length || (e.comentarioProf?.length > 15))
+      );
+      if (sinNotaConDevolucion) {
+        lineasInforme.push(
+          `«${fila.nombre}»: entrega 1 con devolución en campus; si no ves la nota, abrí la devolución en UGR y volvé a sincronizar.`
+        );
+      }
       if (resumen?.notaParaTablero != null) {
         const item = {
           tareaId: fila.id,

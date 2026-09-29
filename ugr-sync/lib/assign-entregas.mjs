@@ -40,6 +40,7 @@ export function extraerNotaDeTextoDevolucion(texto) {
     /calificaci[oó]n\s*(?:final)?\s*:?\s*(\d+(?:[.,]\d+)?)\s*(?:\/|\s*de\s*)\s*10\b/i,
     /puntuaci[oó]n\s*:?\s*(\d+(?:[.,]\d+)?)\s*(?:\/|\s*de\s*)\s*10\b/i,
     /(\d+(?:[.,]\d+)?)\s*\/\s*10\b/,
+    /(\d+(?:[.,]\d+)?)\s*\(\s*(?:diez|nueve|ocho|siete|seis|cinco|cuatro|tres|dos|uno)\s*\)/i,
     /obtuvo\s+(?:un\s+)?(\d+(?:[.,]\d+)?)\s*(?:\/|\s*de\s*)\s*10\b/i,
     /nota\s*:?\s*(\d+(?:[.,]\d+)?)\b/i
   ];
@@ -67,18 +68,37 @@ function filaDeTabla($, tabla, rotulos) {
   return salida;
 }
 
+function esArchivoRetroalimentacionProf(href, nombre) {
+  const t = `${href || ''} ${nombre || ''}`;
+  if (/assignsubmission|submission_file|submission_files/i.test(t)) return false;
+  return /assignfeedback|feedback_file|feedback_files/i.test(t)
+    || (/devoluci[oó]n/i.test(nombre || '') && /\.docx?/i.test(t));
+}
+
 function enlacesDevolucion($, alcance, baseUrl) {
   const archivos = [];
   alcance.find('a[href]').each((_, a) => {
     const href = $(a).attr('href') || '';
     const nombre = limpiarTexto($(a).text()) || 'Devolución';
-    if (!/pluginfile\.php|\.docx|\.doc|\.pdf/i.test(href) && !/devoluci[oó]n|retroalimentaci[oó]n|feedback|entrega\s*\d/i.test(nombre)) return;
+    if (!esArchivoRetroalimentacionProf(href, nombre)) return;
     archivos.push({
       url: completarUrl(href, baseUrl),
       nombre
     });
   });
   return archivos;
+}
+
+function comentarioRetroalimentacionValido(texto) {
+  const plano = limpiarTexto(String(texto || '').replace(/<[^>]+>/g, ' '));
+  return plano.length > 15 && !/^https?:\/\//i.test(plano) && !plano.startsWith('Mostrar comentarios');
+}
+
+function feedbackProfesorEnFila(fila) {
+  if (!fila) return false;
+  if (fila.notaCampus != null) return true;
+  if (fila.archivos?.some((a) => esArchivoRetroalimentacionProf(a.url, a.nombre))) return true;
+  return comentarioRetroalimentacionValido(fila.comentarioProf);
 }
 
 export function acortarEstadoCampus(texto) {
@@ -112,7 +132,7 @@ function parsearBloqueIntento($, alcance, numero, baseUrl) {
     const cal = filas.calificación || filas['estado de la calificación'];
     if (cal) notaHtml = parsearNotaPublicada(cal.html) ?? parsearNotaPublicada(cal.texto);
     if (filas['comentarios de retroalimentación']) {
-      comentario = filas['comentarios de retroalimentación'].texto;
+      comentario = limpiarTexto(filas['comentarios de retroalimentación'].texto.replace(/<[^>]+>/g, ' '));
     }
     if (filas['archivos de retroalimentación']) {
       archivos = enlacesDevolucion($, $(tabla).find('td').last(), baseUrl);
@@ -124,7 +144,14 @@ function parsearBloqueIntento($, alcance, numero, baseUrl) {
     const m = textoBloque.match(/estado de la entrega\s+([^\n]+)/i);
     if (m) estadoEntrega = limpiarTexto(m[1]);
   }
+  if (!comentario && estadoEntrega.length > 120) {
+    const extraido = extraerDevolucionDeTextoPlano(estadoEntrega);
+    if (extraido.comentario) comentario = extraido.comentario;
+    if (extraido.archivos.length) archivos = extraido.archivos;
+    if (extraido.estadoCorto) estadoEntrega = extraido.estadoCorto;
+  }
   estadoEntrega = acortarEstadoCampus(estadoEntrega);
+  if (estadoEntrega.length > 120) estadoEntrega = 'Reabierto';
   const tieneDevolucion = archivos.length > 0 || comentario.length > 20;
   return {
     numero,
@@ -134,6 +161,47 @@ function parsearBloqueIntento($, alcance, numero, baseUrl) {
     archivos,
     tieneDevolucion
   };
+}
+
+function extraerDevolucionDeTextoPlano(texto) {
+  const plano = limpiarTexto(texto);
+  const archivos = [];
+  const mDoc = plano.match(/(Devoluci[oó]n[^\s]*\.docx)/i);
+  if (mDoc) archivos.push({ url: '', nombre: mDoc[1] });
+  let comentario = '';
+  const mCom = plano.match(
+    /comentarios de retroalimentaci[oó]n\s+(.+?)(?:\s+archivos de retroalimentaci[oó]n|\s+devoluci[oó]n\s+grupo|$)/i
+  );
+  if (mCom) comentario = limpiarTexto(mCom[1]).slice(0, 4000);
+  const estadoCorto = plano.match(/^(reabierto|entregado|calificado|enviado para calificar)/i)?.[1] || '';
+  return { comentario, archivos, estadoCorto };
+}
+
+function repararMapaIntentos(porNumero) {
+  for (const fila of porNumero.values()) {
+    if ((fila.comentarioProf?.length ?? 0) < 16 && (fila.estado?.length ?? 0) > 80) {
+      const extraido = extraerDevolucionDeTextoPlano(fila.estado);
+      if (extraido.comentario) fila.comentarioProf = extraido.comentario;
+      if (extraido.archivos.length && !fila.archivos?.length) fila.archivos = extraido.archivos;
+      if (extraido.estadoCorto) fila.estado = extraido.estadoCorto;
+    }
+  }
+  const nums = [...porNumero.keys()].sort((a, b) => a - b);
+  for (let i = 1; i < nums.length; i += 1) {
+    const prev = porNumero.get(nums[i - 1]);
+    const cur = porNumero.get(nums[i]);
+    if (!prev || !cur) continue;
+    const fbPrev = (prev.archivos?.length || prev.comentarioProf?.length > 15);
+    const fbCur = (cur.archivos?.length || cur.comentarioProf?.length > 15);
+    if (!fbPrev && fbCur && (prev.estado?.length > 60 || /\.docx/i.test(prev.estado || ''))) {
+      prev.comentarioProf = cur.comentarioProf || prev.comentarioProf;
+      prev.archivos = cur.archivos?.length ? cur.archivos : prev.archivos;
+      prev.estado = acortarEstadoCampus(prev.estado) || 'Reabierto';
+      cur.comentarioProf = '';
+      cur.archivos = [];
+      if (!cur.estado || cur.estado === prev.estado) cur.estado = 'Reabierto';
+    }
+  }
 }
 
 function bloqueIntentoDesdeTitulo($, titulo, baseUrl) {
@@ -165,15 +233,15 @@ export function extraerEntregasAssign(html, baseUrl = '') {
     return { entregas: [], intentoActual: null, requiereNuevaEntrega: false };
   }
   const $ = load(html);
-  const regionEnvio = $(
-    '[data-region="submission-status"], .submissionstatus, .submissionsummarytable'
-  ).first();
   const tablasEnvio = $('.submissionstatustable, [data-region="submission-status"]').filter(
     (_, el) => !$(el).closest('#region-previous-attempts, [data-region="previous-attempts"]').length
   );
-  const textoEnvio = limpiarTexto(
-    (regionEnvio.length ? regionEnvio : tablasEnvio.first()).text() || ''
-  );
+  const regionEnvio = tablasEnvio.first().length
+    ? tablasEnvio.first()
+    : $('[data-region="submission-status"], .submissionstatus, .submissionsummarytable').filter(
+      (_, el) => !$(el).closest('#region-previous-attempts, [data-region="previous-attempts"]').length
+    ).first();
+  const textoEnvio = limpiarTexto(regionEnvio.text() || '');
   const planoEnvio = limpiarTexto(tablasEnvio.text() || textoEnvio);
   const intentoActual = Number(
     planoEnvio.match(/este\s+es\s+el\s+intento\s+(\d+)/i)?.[1]
@@ -186,8 +254,6 @@ export function extraerEntregasAssign(html, baseUrl = '') {
     || textoEnvio.match(/estado de la calificación\s+([^\n]+)/i)?.[1]
     || ''
   );
-  const requiereNuevaEntrega = /reabiert|reopened/i.test(estadoActual)
-    || /reabiert|reopened/i.test(textoEnvio);
 
   const porNumero = new Map();
   const regionAnteriores = $('#region-previous-attempts, [data-region="previous-attempts"]').first();
@@ -197,11 +263,28 @@ export function extraerEntregasAssign(html, baseUrl = '') {
     }
   }
 
+  $('.attempthistory, [id^="attempthistory"]').each((_, region) => {
+    for (const [num, datos] of parsearIntentosEnRegion($, $(region), baseUrl)) {
+      const previo = porNumero.get(num);
+      if (!previo || (feedbackProfesorEnFila(datos) && !feedbackProfesorEnFila(previo))) {
+        porNumero.set(num, datos);
+      }
+    }
+  });
+
   $('[data-region="attempt-summary"]').each((_, region) => {
     for (const [num, datos] of parsearIntentosEnRegion($, $(region), baseUrl)) {
       if (!porNumero.has(num)) porNumero.set(num, datos);
     }
   });
+
+  let requiereNuevaEntrega = /reabiert|reopened/i.test(estadoActual)
+    || /reabiert|reopened/i.test(textoEnvio);
+  if (!requiereNuevaEntrega) {
+    requiereNuevaEntrega = [...porNumero.values()].some(
+      (f) => /reabiert|reopened/i.test(f.estado || '')
+    );
+  }
 
   if (porNumero.size === 0) {
     const archivosPagina = enlacesDevolucion($, $('body'), baseUrl);
@@ -232,14 +315,43 @@ export function extraerEntregasAssign(html, baseUrl = '') {
     });
   }
 
-  const numeros = [...porNumero.keys()].sort((a, b) => a - b);
-  const devolucionReal = (fila) => (
-    (fila.archivos?.length > 0) || (fila.comentarioProf?.length > 15) || fila.notaCampus != null
+  repararMapaIntentos(porNumero);
+
+  let numeros = [...porNumero.keys()].sort((a, b) => a - b);
+  const devolucionReal = (fila) => feedbackProfesorEnFila(fila)
+    || /\.docx/i.test(fila?.estado || '')
+    || /comentarios de retroalimentaci/i.test(fila?.estado || '');
+  const claveDevolucionProf = (fila) => {
+    const doc = fila?.archivos?.find((a) => esArchivoRetroalimentacionProf(a.url, a.nombre));
+    if (doc?.nombre) return doc.nombre.toLowerCase();
+    return comentarioRetroalimentacionValido(fila?.comentarioProf)
+      ? String(fila.comentarioProf).slice(0, 80).toLowerCase()
+      : '';
+  };
+  const intentosCerradosConFeedback = () => {
+    const tope = intentoActual != null ? intentoActual - 1 : Math.max(...numeros, 0);
+    const candidatos = numeros.filter((n) => n <= tope && feedbackProfesorEnFila(porNumero.get(n)));
+    const vistos = new Set();
+    const elegidos = [];
+    for (const num of [...candidatos].sort((a, b) => b - a)) {
+      const clave = claveDevolucionProf(porNumero.get(num));
+      if (!clave || vistos.has(clave)) continue;
+      vistos.add(clave);
+      elegidos.push(num);
+    }
+    return elegidos.sort((a, b) => a - b);
+  };
+  const filaIntentoActual = intentoActual != null ? porNumero.get(intentoActual) : null;
+  /** Moodle a veces deja el intento calificado como «actual» (p. ej. intento 2 con Word de entrega 1). */
+  const intentoActualCierraEntrega = Boolean(
+    intentoActual != null && filaIntentoActual && feedbackProfesorEnFila(filaIntentoActual)
   );
-  const cerradasConDev = numeros.filter((numero) => {
-    const esActiva = intentoActual != null && numero === intentoActual;
-    return !esActiva && devolucionReal(porNumero.get(numero));
-  });
+  const intentoAbierto = intentoActualCierraEntrega ? null : intentoActual;
+
+  let cerradasConDev = intentosCerradosConFeedback();
+  if (intentoActualCierraEntrega && feedbackProfesorEnFila(filaIntentoActual) && !cerradasConDev.includes(intentoActual)) {
+    cerradasConDev = [...cerradasConDev, intentoActual].sort((a, b) => a - b);
+  }
   let indiceEntrega = 0;
   const metaPorNumero = new Map();
   for (const numero of cerradasConDev) {
@@ -250,20 +362,68 @@ export function extraerEntregasAssign(html, baseUrl = '') {
       esActiva: false
     });
   }
-  if (intentoActual != null && !metaPorNumero.has(intentoActual)) {
-    const filaAct = porNumero.get(intentoActual) || {};
+  if (intentoAbierto != null && !metaPorNumero.has(intentoAbierto)) {
+    const filaAct = porNumero.get(intentoAbierto) || {};
     const pendiente = requiereNuevaEntrega
       || /reabiert|reopened/i.test(filaAct.estado || '')
       || /no entregad|sin entregar|not submitted/i.test(filaAct.estado || '')
       || !devolucionReal(filaAct);
     indiceEntrega += 1;
-    metaPorNumero.set(intentoActual, {
+    metaPorNumero.set(intentoAbierto, {
       indiceEntrega: indiceEntrega,
       pendiente,
       esActiva: true
     });
+  } else if (intentoActualCierraEntrega) {
+    indiceEntrega += 1;
+    const numeroFase = Math.max(...numeros, intentoActual) + 1;
+    if (!porNumero.has(numeroFase)) {
+      porNumero.set(numeroFase, {
+        numero: numeroFase,
+        estado: estadoActual || 'Reabierto',
+        notaCampus: null,
+        comentarioProf: '',
+        archivos: [],
+        tieneDevolucion: false
+      });
+      numeros = [...porNumero.keys()].sort((a, b) => a - b);
+    }
+    metaPorNumero.set(numeroFase, {
+      indiceEntrega,
+      pendiente: true,
+      esActiva: true
+    });
+  } else if (intentoActual == null && requiereNuevaEntrega && numeros.length) {
+    const ultimo = Math.max(...numeros);
+    const filaUlt = porNumero.get(ultimo);
+    if (filaUlt && devolucionReal(filaUlt) && !metaPorNumero.has(ultimo)) {
+      indiceEntrega += 1;
+      metaPorNumero.set(ultimo, {
+        indiceEntrega: indiceEntrega,
+        pendiente: false,
+        esActiva: false
+      });
+      indiceEntrega += 1;
+      const numeroFase = ultimo + 1;
+      if (!porNumero.has(numeroFase)) {
+        porNumero.set(numeroFase, {
+          numero: numeroFase,
+          estado: estadoActual || 'Reabierto',
+          notaCampus: null,
+          comentarioProf: '',
+          archivos: [],
+          tieneDevolucion: false
+        });
+        numeros = [...porNumero.keys()].sort((a, b) => a - b);
+      }
+      metaPorNumero.set(numeroFase, {
+        indiceEntrega,
+        pendiente: true,
+        esActiva: true
+      });
+    }
   }
-  const entregas = numeros
+  let entregas = numeros
     .filter((numero) => metaPorNumero.has(numero))
     .map((numero) => {
       const fila = porNumero.get(numero);
@@ -277,13 +437,54 @@ export function extraerEntregasAssign(html, baseUrl = '') {
       };
     });
 
+  entregas = corregirFasesEntregaAssign(entregas);
   return { entregas, intentoActual, requiereNuevaEntrega, estadoActual };
+}
+
+/**
+ * Red de seguridad: un solo hito activo con devolución del profe = entrega N cerrada + N+1 pendiente.
+ */
+export function corregirFasesEntregaAssign(entregas) {
+  if (!Array.isArray(entregas) || !entregas.length) return entregas;
+  const indexadas = entregas.filter((e) => e.indiceEntrega != null);
+  if (!indexadas.length) return entregas;
+  const feedbackProfesor = (e) => feedbackProfesorEnFila(e) || e.nota != null;
+  const maxIndice = Math.max(...indexadas.map((e) => e.indiceEntrega ?? 0));
+  const activa = indexadas.find((e) => e.esActiva);
+  const necesitaSegunda = maxIndice < 2 && activa && activa.indiceEntrega === 1 && feedbackProfesor(activa);
+  if (!necesitaSegunda) return entregas;
+  const e1 = { ...activa, esActiva: false, pendiente: false };
+  const numero2 = Math.max(...entregas.map((e) => e.numero), e1.numero) + 1;
+  const e2 = {
+    numero: numero2,
+    indiceEntrega: 2,
+    esActiva: true,
+    pendiente: true,
+    estado: 'Reabierto',
+    notaCampus: null,
+    comentarioProf: '',
+    archivos: [],
+    tieneDevolucion: false
+  };
+  const sinIndice = entregas.filter((e) => e.indiceEntrega == null);
+  const otras = indexadas.filter((e) => e.numero !== activa.numero);
+  return [...sinIndice, ...otras, e1, e2];
+}
+
+function urlDescargaForzada(url) {
+  try {
+    const u = new URL(url);
+    if (!u.searchParams.has('forcedownload')) u.searchParams.set('forcedownload', '1');
+    return u.toString();
+  } catch {
+    return url;
+  }
 }
 
 export async function descargarArchivoConSesion(cliente, url) {
   if (!cliente?.jar || !url) return null;
   try {
-    let actual = String(url);
+    let actual = urlDescargaForzada(String(url));
     for (let salto = 0; salto < 6; salto += 1) {
       const control = new AbortController();
       const timer = setTimeout(() => control.abort(), 45000);
@@ -419,6 +620,7 @@ export async function aplicarEntregasAssignEnDb({
   const escrituras = [];
   const ahora = new Date().toISOString();
   for (const entrega of entregas) {
+    if (entrega.indiceEntrega == null) continue;
     const id = `te_${tareaId}_${alumnoId}_${entrega.numero}`;
     escrituras.push({
       sql: `INSERT INTO tareas_entregas (
@@ -494,7 +696,8 @@ export async function sincronizarEntregasAssignDesdeHtml({
 }) {
   const { entregas: crudas } = extraerEntregasAssign(html, baseUrl);
   if (!crudas.length) return { entregas: [], resumen: resumirEntregasParaTablero([]) };
-  const enriquecidas = await enriquecerNotasDesdeDevoluciones(cliente, crudas);
+  let enriquecidas = await enriquecerNotasDesdeDevoluciones(cliente, crudas);
+  enriquecidas = corregirFasesEntregaAssign(enriquecidas);
   const resumen = await aplicarEntregasAssignEnDb({
     db,
     tareaId,

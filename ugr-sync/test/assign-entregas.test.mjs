@@ -13,6 +13,7 @@ import {
   extraerNotaDeTextoDevolucion,
   enriquecerNotasDesdeDevoluciones,
   aplicarEntregasAssignEnDb,
+  corregirFasesEntregaAssign,
   esTareaBuzonEntregasMultiples,
   resumirEntregasParaTablero
 } from '../lib/assign-entregas.mjs';
@@ -73,6 +74,50 @@ test('extraerEntregasAssign parsea intentos y reabierto actual', async () => {
   assert.equal(activa?.numero, 3);
   assert.equal(activa?.indiceEntrega, 2);
   assert.equal(activa?.pendiente, true);
+});
+
+test('corregirFasesEntregaAssign separa entrega 1 calificada de entrega 2 pendiente', () => {
+  const mal = [{
+    numero: 2,
+    indiceEntrega: 1,
+    esActiva: true,
+    pendiente: true,
+    estado: 'Reabierto',
+    comentarioProf: 'Esta todo correcto, por favor continúen en su misma línea a disposición',
+    archivos: [{ url: 'https://virtual.ugr.edu.ar/pluginfile.php/1/assignfeedback_file/feedback/8/x.docx', nombre: 'Devolucion Entrega 1.docx' }]
+  }];
+  const bien = corregirFasesEntregaAssign(mal);
+  assert.equal(bien.length, 2);
+  const e1 = bien.find((e) => e.indiceEntrega === 1);
+  const e2 = bien.find((e) => e.indiceEntrega === 2);
+  assert.ok(e1 && !e1.esActiva);
+  assert.ok(e2?.esActiva && e2.pendiente);
+});
+
+test('extraerEntregasAssign: intento actual con devolución cierra entrega 1 y abre entrega 2', async () => {
+  const html = await readFile(join(DIR, 'fixtures/assign-entregas-sgsi-moodle4.html'), 'utf8');
+  const soloIntento2Actual = html.replace('Este es el intento 3', 'Este es el intento 2');
+  const { entregas, intentoActual } = extraerEntregasAssign(soloIntento2Actual);
+  assert.equal(intentoActual, 2);
+  const e1 = entregas.find((e) => e.indiceEntrega === 1);
+  assert.ok(e1);
+  assert.equal(e1.numero, 2);
+  assert.ok(!e1.esActiva);
+  assert.ok(e1.comentarioProf?.includes('correcto'));
+  const e2 = entregas.find((e) => e.indiceEntrega === 2);
+  assert.ok(e2?.esActiva);
+  assert.equal(e2.pendiente, true);
+});
+
+test('extraerEntregasAssign HTML real UGR (attempthistory h4)', async () => {
+  const html = await readFile(join(DIR, 'fixtures/assign-entregas-sgsi-ugr-live.html'), 'utf8');
+  const { entregas, intentoActual } = extraerEntregasAssign(html);
+  assert.equal(intentoActual, 3);
+  const e1 = entregas.find((e) => e.indiceEntrega === 1);
+  const e2 = entregas.find((e) => e.indiceEntrega === 2);
+  assert.ok(e1 && !e1.esActiva);
+  assert.ok(e1.archivos?.some((a) => /assignfeedback/i.test(a.url || '')));
+  assert.ok(e2?.esActiva && e2.pendiente);
 });
 
 test('extraerEntregasAssign no mezcla el intento actual en intentos anteriores (Moodle 4)', async () => {
