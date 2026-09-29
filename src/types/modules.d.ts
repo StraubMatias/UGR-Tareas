@@ -64,6 +64,35 @@ declare module '../../ugr-sync/lib/sync-core.mjs' {
   export function cargarNotasDesdeEnlaces(opciones: { cliente: unknown; db: unknown; materiaIds?: string[]; alumnoId?: string; alumnoNombre?: string }): Promise<{ notas: unknown[]; cargadas: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>; noLeidas: Array<{ materia?: string; nombre?: string }>; pendientesEntrega?: Array<{ materia?: string; nombre?: string }> }>;
 }
 
+declare module '../../ugr-sync/lib/avance-campus.mjs' {
+  import type { MapeoCurso } from '../../ugr-sync/lib/sync-core.mjs';
+  export function extraerItemsAvanceCampusDeHtml(html: string, baseUrl?: string): Array<{
+    cmid: string;
+    modulo: string;
+    titulo: string;
+    url: string;
+    completada: boolean;
+    orden: number;
+    unidad: number | null;
+  }>;
+  export function recolectarItemsAvanceCampusDeCurso(cliente: unknown, cursoId: string | number): Promise<Array<{
+    cmid: string;
+    modulo: string;
+    titulo: string;
+    url: string;
+    completada: boolean;
+    orden: number;
+    unidad: number | null;
+  }>>;
+  export function sincronizarAvanceCampusEnMaterias(opciones: {
+    cliente: unknown;
+    db: unknown;
+    mapeos: MapeoCurso[];
+    alumnoId: string;
+  }): Promise<{ items: number }>;
+  export function urlNormalizadaCampus(url: string): string;
+}
+
 declare module '../../ugr-sync/lib/previa.mjs' {
   import type { MapeoCurso, ResultadoTareasNuevas } from '../../ugr-sync/lib/sync-core.mjs';
   export interface ResultadoPrevia extends ResultadoTareasNuevas {
