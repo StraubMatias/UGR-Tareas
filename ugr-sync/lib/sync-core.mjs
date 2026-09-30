@@ -9,6 +9,7 @@ import { optimizarLecturas } from './lecturas.mjs';
 import { autorEsEquipoDocente, esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from './materias.mjs';
 import { extraerConsignasDeCurso, extraerFechasActividad, extraerNotasDeLibreta, extraerProgresoDeActividad, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from './tareas.mjs';
+import { debeOmitirSyncHitosAssign, priorizarYFiltrarRevisionCampus } from './sync-optimizacion.mjs';
 import {
   analizarAvisosParaCronograma,
   DIAS_HACIA_ATRAS,
@@ -310,13 +311,15 @@ async function leerNotasDeEnlaces({
   if (!cliente || !materiaIds?.length) return { notas: [], cargadas: [], noLeidas: [], pendientesEntrega: [] };
   const marcas = materiaIds.map(() => '?').join(', ');
   const tareas = await db.execute({
-    sql: `SELECT t.id, t.materia_id, t.nombre, t.url, m.nombre AS materia,
-                 nt.nota AS nota_guardada, nt.cargada_en AS nota_cargada_en, nt.cerrada AS nota_cerrada
+    sql: `SELECT t.id, t.materia_id, t.nombre, t.url, t.con_nota, m.nombre AS materia,
+                 nt.nota AS nota_guardada, nt.cargada_en AS nota_cargada_en, nt.cerrada AS nota_cerrada,
+                 c.completada_en AS completada_en
           FROM tareas t JOIN materias m ON m.id = t.materia_id
           LEFT JOIN notas_tareas nt ON nt.tarea_id = t.id AND (nt.alumno_id = ? OR LOWER(nt.alumno) = LOWER(?))
+          LEFT JOIN completadas c ON c.tarea_id = t.id AND (c.alumno_id = ? OR LOWER(c.alumno) = LOWER(?))
           WHERE t.materia_id IN (${marcas}) AND TRIM(COALESCE(t.url, '')) != ''
             AND (COALESCE(t.tipo, '') != 'foro' OR t.con_nota = 1)`,
-    args: [alumnoId || '', alumnoNombre || '', ...materiaIds]
+    args: [alumnoId || '', alumnoNombre || '', alumnoId || '', alumnoNombre || '', ...materiaIds]
   });
   const parciales = await db.execute({
     sql: `SELECT p.id, p.materia_id, p.nombre, p.url, p.fecha, m.nombre AS materia,
@@ -327,18 +330,18 @@ async function leerNotasDeEnlaces({
     args: [alumnoId || '', alumnoNombre || '', ...materiaIds]
   });
   const lista = [
-    ...tareas.rows.map((fila) => ({ ...fila, tabla: 'tareas', fecha: null })),
-    ...parciales.rows.map((fila) => ({ ...fila, tabla: 'parciales' }))
-  ].sort((a, b) => {
-    const peso = (url) => {
-      if (esUrlAssign(url)) return 0;
-      if (/\/mod\/quiz\//.test(String(url))) return 2;
-      return 1;
-    };
-    return peso(a.url) - peso(b.url);
-  });
+    ...tareas.rows.map((fila) => ({
+      ...fila,
+      tabla: 'tareas',
+      fecha: null,
+      esBuzonMulti: esUrlAssign(fila.url) && esTareaBuzonEntregasMultiples(fila.nombre)
+    })),
+    ...parciales.rows.map((fila) => ({ ...fila, tabla: 'parciales', esBuzonMulti: false }))
+  ];
 
-  const aConsultar = lista;
+  const { consultar: aConsultar } = priorizarYFiltrarRevisionCampus(lista, {
+    omitirBuzonMulti: !procesarEntregasAssign
+  });
 
   const notas = [];
   const cargadas = [];
@@ -460,6 +463,12 @@ export async function sincronizarHitosAssignEnMaterias({
 
   await conPool(filas, 1, async (fila) => {
     try {
+      const entregasDb = await db.execute({
+        sql: 'SELECT es_activa, nota, sincronizado_en FROM tareas_entregas WHERE tarea_id = ? AND alumno_id = ?',
+        args: [fila.id, alumnoId]
+      });
+      if (debeOmitirSyncHitosAssign(entregasDb.rows)) return;
+
       const huellaAntes = await fingerprintEntregasAssign(db, fila.id, alumnoId);
       const pagina = await cliente.pedir(fila.url);
       if (!pagina?.html || pagina.es_requiere_login) {
@@ -1268,6 +1277,9 @@ async function completarDesdeCalendario({ cliente, db, mapeos, detectadas, perio
 }
 
 async function leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId }) {
+  const nombreMateriaPorId = new Map(
+    mapeos.map((m) => [m.coincidencia.materia.id, m.coincidencia.materia.nombre || ''])
+  );
   const libretas = await conPool(mapeos, 4, async ({ curso, coincidencia }) => {
     const materiaId = coincidencia.materia.id;
     try {
@@ -1303,6 +1315,7 @@ async function leerProgresoCampus({ cliente, db, mapeos, detectadas, alumnoId })
         progresoAlumno.push({
           alumnoId,
           materiaId: libreta.materiaId,
+          materiaNombre: item.materiaNombre || nombreMateriaPorId.get(libreta.materiaId) || '',
           nombre: item.nombre,
           tabla: 'parciales',
           id: parcial.id,
@@ -1601,7 +1614,7 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
           materia: item.materiaNombre || '',
           nombre: item.nombre,
           nota: notaGuardar,
-          yaEstaba: mismaNota(notaPrevia, notaGuardar)
+          yaEstaba: previa.rows.length > 0 && mismaNota(notaPrevia, notaGuardar)
         });
         const guardaCerrada = item.forzar ? '' : 'WHERE notas_tareas.cerrada = 0';
         escrituras.push({
@@ -1632,7 +1645,7 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
         materia: item.materiaNombre || '',
         nombre: item.nombre,
         nota: textoNota(item.nota),
-        yaEstaba: mismaNota(previaNota.rows[0]?.nota, item.nota)
+        yaEstaba: existe.rows.length > 0 && mismaNota(previaNota.rows[0]?.nota, item.nota)
       });
       if (existe.rows.length > 0) {
         escrituras.push({
