@@ -36,6 +36,13 @@ test('fusionarLineasInforme une sin duplicar', () => {
 
 test('sin cambios el mensaje lo dice claro', () => {
   const msg = mensajeDesdeInforme([], 3);
-  assert.match(msg, /no había nada nuevo/i);
+  assert.match(msg, /no se sincronizó nada nuevo/i);
   assert.match(msg, /3 materias/);
+});
+
+test('no informa cuestionarios sin nota legible', () => {
+  const lineas = construirLineasInformeSync({
+    notasNoLeidas: [{ materia: 'EGR', nombre: 'Cuestionario demo' }]
+  });
+  assert.equal(lineas.length, 0);
 });

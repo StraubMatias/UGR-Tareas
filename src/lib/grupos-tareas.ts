@@ -279,7 +279,27 @@ export async function propagarEntregasHitosGrupoTrasSync(
   for (const m of miembros.rows) {
     const destId = String(m.id);
     if (destId === alumnoFuenteId) continue;
+    let huboCambio = false;
     for (const row of fuente.rows) {
+      const existente = await db.execute({
+        sql: `SELECT indice_entrega, es_activa, estado, nota, nota_origen, comentario_prof,
+                     feedback_url, feedback_nombre, devolucion_texto
+              FROM tareas_entregas WHERE tarea_id = ? AND alumno_id = ? AND numero = ?`,
+        args: [tareaId, destId, row.numero]
+      });
+      const prev = existente.rows[0];
+      const igual = prev
+        && String(prev.indice_entrega) === String(row.indice_entrega)
+        && Number(prev.es_activa) === Number(row.es_activa)
+        && String(prev.estado ?? '') === String(row.estado ?? '')
+        && String(prev.nota ?? '') === String(row.nota ?? '')
+        && String(prev.nota_origen ?? '') === String(row.nota_origen ?? '')
+        && String(prev.comentario_prof ?? '') === String(row.comentario_prof ?? '')
+        && String(prev.feedback_url ?? '') === String(row.feedback_url ?? '')
+        && String(prev.feedback_nombre ?? '') === String(row.feedback_nombre ?? '')
+        && String(prev.devolucion_texto ?? '') === String(row.devolucion_texto ?? '');
+      if (igual) continue;
+      huboCambio = true;
       const id = `te_${tareaId}_${destId}_${row.numero}`;
       await db.execute({
         sql: `INSERT INTO tareas_entregas (
@@ -315,7 +335,7 @@ export async function propagarEntregasHitosGrupoTrasSync(
         ]
       });
     }
-    actualizados.push(String(m.nombre));
+    if (huboCambio) actualizados.push(String(m.nombre));
   }
   return actualizados;
 }

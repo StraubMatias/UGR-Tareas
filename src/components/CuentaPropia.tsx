@@ -2,34 +2,29 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useProgresoSyncEstimado } from '../hooks/useProgresoSyncEstimado';
+import { useProgresoSyncSuave } from '../hooks/useProgresoSyncSuave';
 import { sincronizarCuentaUgrAction, sincronizarCuentaSiuAction, type MateriaInscriptaSync, type ResumenMateriaSync } from '../app/actions';
-import { fusionarLineasInforme, fusionarResumenSync, mensajeDesdeInforme } from '../lib/informe-sync-ugr';
-import { etiquetaSyncAvisos, etiquetaSyncMaterias, planPasadasSyncUgr } from '../lib/sync-ugr-orquestacion';
+import {
+  filaTieneCambiosSync,
+  filtrarLineasInformeSync,
+  fusionarLineasInforme,
+  fusionarResumenSync,
+  mensajeDesdeInforme
+} from '../lib/informe-sync-ugr';
+import { etiquetaSyncMateriaCompleta, planPasadasSyncUgr } from '../lib/sync-ugr-orquestacion';
 import type { OpcionesSincronizarUgr } from '../app/actions';
 import dynamic from 'next/dynamic';
 
 const DetalleSyncSiu = dynamic(() => import('./portal/DetalleSyncSiu'));
 import type { NotaPlanSiu } from '../lib/importar-plan-siu';
 
-function filaTieneCambios(fila: ResumenMateriaSync): boolean {
-  return (
-    fila.nuevas.length > 0
-    || (fila.fechasActualizadas?.length ?? 0) > 0
-    || (fila.cronogramaNuevo?.length ?? 0) > 0
-    || (fila.parcialesNuevos?.length ?? 0) > 0
-    || (fila.notasCargadas?.length ?? 0) > 0
-    || (fila.entregasHitos?.length ?? 0) > 0
-    || (fila.pendientesEntrega?.length ?? 0) > 0
-    || (fila.notasNoLeidas?.length ?? 0) > 0
-  );
-}
-
 export function InformeSyncUgr({ lineas }: { lineas: string[] }) {
-  if (lineas.length === 0) {
+  const visibles = filtrarLineasInformeSync(lineas);
+  if (visibles.length === 0) {
     return (
       <div className="rounded-xl border border-slate-700/80 bg-slate-900/50 px-4 py-5 text-center">
-        <p className="text-sm font-medium text-slate-200">Nada nuevo que cargar</p>
-        <p className="mt-1 text-xs text-slate-500">UGR Virtual no tenía tareas, fechas ni notas nuevas para vos.</p>
+        <p className="text-sm font-medium text-slate-200">No se sincronizó nada nuevo</p>
+        <p className="mt-1 text-xs text-slate-500">El tablero ya estaba al día con UGR Virtual.</p>
       </div>
     );
   }
@@ -37,7 +32,7 @@ export function InformeSyncUgr({ lineas }: { lineas: string[] }) {
     <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-4">
       <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Qué hizo la sincronización</p>
       <ul className="mt-3 space-y-2 text-sm text-emerald-50/95 list-none">
-        {lineas.map((linea) => (
+        {visibles.map((linea) => (
           <li key={linea} className="flex gap-2">
             <span className="text-emerald-400 shrink-0" aria-hidden="true">•</span>
             <span>{linea}</span>
@@ -57,7 +52,7 @@ export function ResumenCursada({
   materiasInscriptas?: MateriaInscriptaSync[];
   informeLineas?: string[];
 }) {
-  const filas = resumen.filter(filaTieneCambios);
+  const filas = resumen.filter(filaTieneCambiosSync);
   const hayCambios = filas.length > 0;
 
   return (
@@ -144,16 +139,6 @@ export function ResumenCursada({
             </div>
           )}
 
-          {(materia.notasNoLeidas?.length ?? 0) > 0 && (
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Sin nota legible</p>
-              <ul className="mt-1.5 space-y-0.5 text-sm text-amber-100">
-                {materia.notasNoLeidas?.map((nombre) => (
-                  <li key={nombre}>{nombre}</li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       ))}
 
@@ -196,7 +181,9 @@ function SyncCargando({
   return (
     <div className="py-8 px-1">
       <p className="text-sm font-semibold text-slate-200 text-center">{titulo}</p>
-      <p className="mt-1 text-xs text-slate-400 text-center min-h-[1.25rem]">{etapa || 'Iniciando…'}</p>
+      <p className="mt-1 text-xs text-slate-400 text-center min-h-[1.25rem] break-words leading-snug px-1">
+        {etapa || 'Iniciando…'}
+      </p>
 
       <div
         className="mt-6 w-full h-2.5 rounded-full bg-slate-800/90 border border-slate-700/80 overflow-hidden"
@@ -207,7 +194,7 @@ function SyncCargando({
         aria-label={titulo}
       >
         <div
-          className={`h-full rounded-full bg-gradient-to-r ${barra} transition-[width] duration-500 ease-out`}
+          className={`h-full rounded-full bg-gradient-to-r ${barra} transition-[width] duration-300 ease-linear`}
           style={{ width: `${progreso}%` }}
         />
       </div>
@@ -254,8 +241,17 @@ export default function CuentaPropia({
   } | null>(null);
   const [avisoParcial, setAvisoParcial] = useState('');
   const [etapaManual, setEtapaManual] = useState('');
+  const [progresoUgr, setProgresoUgr] = useState<number | null>(null);
 
-  const { progreso, etapa, marcarCompletado } = useProgresoSyncEstimado(fase === 'cargando', fuente);
+  const { progreso: progresoEstimado, etapa, marcarCompletado } = useProgresoSyncEstimado(
+    fase === 'cargando' && fuente === 'siu',
+    fuente
+  );
+  const { progreso: progresoUgrSuave, esperarBarraAlCompleto } = useProgresoSyncSuave(
+    fase === 'cargando' && fuente === 'ugr',
+    progresoUgr
+  );
+  const progreso = fuente === 'ugr' && progresoUgr != null ? progresoUgrSuave : progresoEstimado;
   const etapaVisible = etapaManual || etapa;
 
   const reiniciarCredenciales = () => {
@@ -267,6 +263,7 @@ export default function CuentaPropia({
     setDetalleSiu(null);
     setAvisoParcial('');
     setEtapaManual('');
+    setProgresoUgr(null);
     setDni('');
     setClave('');
     if (usarCredencialesServidor) {
@@ -291,6 +288,7 @@ export default function CuentaPropia({
     setDetalleSiu(null);
     setAvisoParcial('');
     setEtapaManual('');
+    setProgresoUgr(0);
     setDni('');
     setClave('');
     setFase('cargando');
@@ -309,7 +307,7 @@ export default function CuentaPropia({
           resumenAcumulado = fusionarResumenSync(resumenAcumulado, resultado.resumen || []);
           if (resultado.materiasInscriptas?.length) materiasAcumuladas = resultado.materiasInscriptas;
           setInformeLineas(lineasAcumuladas);
-          setResumen(resumenAcumulado.filter(filaTieneCambios));
+          setResumen(resumenAcumulado.filter(filaTieneCambiosSync));
           setMateriasInscriptas(materiasAcumuladas);
         };
 
@@ -342,14 +340,23 @@ export default function CuentaPropia({
         aplicarResultadoUgr(preparacion);
 
         const plan = planPasadasSyncUgr(preparacion.materiaIdsSync || []);
-        const lotesMaterias = plan.lotesMaterias;
+        const pasadas = plan.pasadasMaterias;
         const totalMaterias = plan.materiaIds.length;
+        const totalPasos = plan.totalPasos;
+        const idsSync = preparacion.materiaIdsSync || [];
+        const nombresSync = preparacion.materiasInscriptas?.map((m) => m.materia) || [];
+        const nombrePorId = new Map(idsSync.map((id, i) => [id, nombresSync[i] || '']));
+        setProgresoUgr(Math.round((1 / totalPasos) * 100));
 
-        for (let indice = 0; indice < lotesMaterias.length; indice += 1) {
-          const lote = lotesMaterias[indice];
-          setEtapaManual(etiquetaSyncMaterias(indice, lotesMaterias, totalMaterias));
+        for (let indice = 0; indice < pasadas.length; indice += 1) {
+          const lote = pasadas[indice];
+          const materiaId = lote[0];
+          setEtapaManual(
+            etiquetaSyncMateriaCompleta(indice, pasadas, totalMaterias, nombrePorId.get(materiaId))
+          );
+          setProgresoUgr(Math.round(((indice + 1) / totalPasos) * 100));
           try {
-            const resultadoLote = await llamarUgr({ fase: 'materias', materiaIds: lote });
+            const resultadoLote = await llamarUgr({ fase: 'materia', materiaIds: lote });
             if (!resultadoLote.exito) {
               if (huboTrabajo) {
                 setAvisoParcial('No se completaron todas las materias; lo ya procesado quedó guardado en el tablero.');
@@ -362,6 +369,7 @@ export default function CuentaPropia({
             }
             aplicarResultadoUgr(resultadoLote);
             huboTrabajo = true;
+            setProgresoUgr(Math.round(((indice + 2) / totalPasos) * 100));
           } catch (err) {
             if (huboTrabajo) {
               setAvisoParcial(`${mensajeSiSeCorta(err)}Lo procesado hasta acá quedó guardado. Podés sincronizar de nuevo para el resto.`.trim());
@@ -374,28 +382,9 @@ export default function CuentaPropia({
           }
         }
 
-        const lotesAvisos = plan.lotesAvisos;
-        for (let indice = 0; indice < lotesAvisos.length; indice += 1) {
-          setEtapaManual(etiquetaSyncAvisos(indice, lotesAvisos, totalMaterias));
-          try {
-            const resultadoAvisos = await llamarUgr({ fase: 'avisos', materiaIds: lotesAvisos[indice] });
-            if (resultadoAvisos.exito) {
-              aplicarResultadoUgr(resultadoAvisos);
-            } else {
-              setAvisoParcial('No pudimos terminar todos los foros de avisos; tareas, fechas y notas ya quedaron guardadas.');
-              onInterrumpida?.();
-              break;
-            }
-          } catch (err) {
-            setAvisoParcial(
-              `${mensajeSiSeCorta(err)}Se interrumpió la lectura de avisos; lo principal del tablero ya quedó actualizado.`.trim()
-            );
-            onInterrumpida?.();
-            break;
-          }
-        }
-
         setEtapaManual('');
+        setProgresoUgr(100);
+        await esperarBarraAlCompleto();
         const materiasSync = Math.max(materiasAcumuladas.length, 1);
         setMensaje(mensajeDesdeInforme(lineasAcumuladas, materiasSync));
         await marcarCompletado();
