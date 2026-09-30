@@ -246,7 +246,7 @@ test('un parcial cargado como tarea pasa al apartado de parciales', async () => 
   }
 });
 
-test('cargarNotasDesdeEnlaces vuelve a consultar el campus aunque la nota sea antigua', async () => {
+test('cargarNotasDesdeEnlaces omite notas cerradas hace más de una semana y prioriza pendientes', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ugr-cache-notas-'));
   const db = createClient({ url: `file:${join(dir, 'test.db')}` });
   try {
@@ -287,10 +287,11 @@ test('cargarNotasDesdeEnlaces vuelve a consultar el campus aunque la nota sea an
       alumnoNombre: 'Alumno 1'
     });
 
-    assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=1'), true);
+    assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=1'), false);
     assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=2'), true);
     assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=3'), true);
-    assert.equal(urlsPedidas.length, 3);
+    assert.equal(urlsPedidas.length, 2);
+    assert.equal(urlsPedidas[0], 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=3');
   } finally {
     db.close();
     await rm(dir, { recursive: true, force: true });

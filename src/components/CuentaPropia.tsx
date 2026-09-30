@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useProgresoSyncEstimado } from '../hooks/useProgresoSyncEstimado';
 import { sincronizarCuentaUgrAction, sincronizarCuentaSiuAction, type MateriaInscriptaSync, type ResumenMateriaSync } from '../app/actions';
-import { fusionarLineasInforme, fusionarResumenSync, mensajeDesdeInforme } from '../lib/informe-sync-ugr';
+import {
+  filaTieneCambiosSync,
+  filtrarLineasInformeSync,
+  fusionarLineasInforme,
+  fusionarResumenSync,
+  mensajeDesdeInforme
+} from '../lib/informe-sync-ugr';
 import { etiquetaSyncMateriaCompleta, planPasadasSyncUgr } from '../lib/sync-ugr-orquestacion';
 import type { OpcionesSincronizarUgr } from '../app/actions';
 import dynamic from 'next/dynamic';
@@ -11,25 +17,13 @@ import dynamic from 'next/dynamic';
 const DetalleSyncSiu = dynamic(() => import('./portal/DetalleSyncSiu'));
 import type { NotaPlanSiu } from '../lib/importar-plan-siu';
 
-function filaTieneCambios(fila: ResumenMateriaSync): boolean {
-  return (
-    fila.nuevas.length > 0
-    || (fila.fechasActualizadas?.length ?? 0) > 0
-    || (fila.cronogramaNuevo?.length ?? 0) > 0
-    || (fila.parcialesNuevos?.length ?? 0) > 0
-    || (fila.notasCargadas?.length ?? 0) > 0
-    || (fila.entregasHitos?.length ?? 0) > 0
-    || (fila.pendientesEntrega?.length ?? 0) > 0
-    || (fila.notasNoLeidas?.length ?? 0) > 0
-  );
-}
-
 export function InformeSyncUgr({ lineas }: { lineas: string[] }) {
-  if (lineas.length === 0) {
+  const visibles = filtrarLineasInformeSync(lineas);
+  if (visibles.length === 0) {
     return (
       <div className="rounded-xl border border-slate-700/80 bg-slate-900/50 px-4 py-5 text-center">
-        <p className="text-sm font-medium text-slate-200">Nada nuevo que cargar</p>
-        <p className="mt-1 text-xs text-slate-500">UGR Virtual no tenía tareas, fechas ni notas nuevas para vos.</p>
+        <p className="text-sm font-medium text-slate-200">No se sincronizó nada nuevo</p>
+        <p className="mt-1 text-xs text-slate-500">El tablero ya estaba al día con UGR Virtual.</p>
       </div>
     );
   }
@@ -37,7 +31,7 @@ export function InformeSyncUgr({ lineas }: { lineas: string[] }) {
     <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-4">
       <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Qué hizo la sincronización</p>
       <ul className="mt-3 space-y-2 text-sm text-emerald-50/95 list-none">
-        {lineas.map((linea) => (
+        {visibles.map((linea) => (
           <li key={linea} className="flex gap-2">
             <span className="text-emerald-400 shrink-0" aria-hidden="true">•</span>
             <span>{linea}</span>
@@ -57,7 +51,7 @@ export function ResumenCursada({
   materiasInscriptas?: MateriaInscriptaSync[];
   informeLineas?: string[];
 }) {
-  const filas = resumen.filter(filaTieneCambios);
+  const filas = resumen.filter(filaTieneCambiosSync);
   const hayCambios = filas.length > 0;
 
   return (
@@ -144,16 +138,6 @@ export function ResumenCursada({
             </div>
           )}
 
-          {(materia.notasNoLeidas?.length ?? 0) > 0 && (
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Sin nota legible</p>
-              <ul className="mt-1.5 space-y-0.5 text-sm text-amber-100">
-                {materia.notasNoLeidas?.map((nombre) => (
-                  <li key={nombre}>{nombre}</li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       ))}
 
@@ -318,7 +302,7 @@ export default function CuentaPropia({
           resumenAcumulado = fusionarResumenSync(resumenAcumulado, resultado.resumen || []);
           if (resultado.materiasInscriptas?.length) materiasAcumuladas = resultado.materiasInscriptas;
           setInformeLineas(lineasAcumuladas);
-          setResumen(resumenAcumulado.filter(filaTieneCambios));
+          setResumen(resumenAcumulado.filter(filaTieneCambiosSync));
           setMateriasInscriptas(materiasAcumuladas);
         };
 
