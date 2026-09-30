@@ -86,21 +86,36 @@ export function construirLineasInformeSync({
       lineas.push(`${m}Falta marcar entregada «${item.nombre}» en el tablero para registrar la nota.`);
     }
   }
-  for (const item of notasNoLeidas) {
-    if (item?.nombre) {
-      const m = item.materia ? `${item.materia}: ` : '';
-      lineas.push(`${m}No pudimos leer la nota de «${item.nombre}» en UGR Virtual.`);
-    }
-  }
 
-  return lineas;
+  return filtrarLineasInformeSync(lineas);
+}
+
+/** No mostramos avisos de cuestionarios sin nota en el campus (ruido en cada sync). */
+export function esLineaInformeRuido(linea: string): boolean {
+  return /no pudimos leer la nota/i.test(linea);
+}
+
+export function filtrarLineasInformeSync(lineas: string[]): string[] {
+  return lineas.filter((linea) => linea && !esLineaInformeRuido(linea));
+}
+
+export function filaTieneCambiosSync(fila: ResumenMateriaSync): boolean {
+  return (
+    fila.nuevas.length > 0
+    || (fila.fechasActualizadas?.length ?? 0) > 0
+    || (fila.cronogramaNuevo?.length ?? 0) > 0
+    || (fila.parcialesNuevos?.length ?? 0) > 0
+    || (fila.notasCargadas?.length ?? 0) > 0
+    || (fila.entregasHitos?.length ?? 0) > 0
+    || (fila.pendientesEntrega?.length ?? 0) > 0
+  );
 }
 
 export function fusionarLineasInforme(...listas: string[][]): string[] {
   const vistas = new Set<string>();
   const salida: string[] = [];
   for (const lista of listas) {
-    for (const linea of lista) {
+    for (const linea of filtrarLineasInformeSync(lista)) {
       if (!linea || vistas.has(linea)) continue;
       vistas.add(linea);
       salida.push(linea);
@@ -139,13 +154,14 @@ export function fusionarResumenSync(a: ResumenMateriaSync[], b: ResumenMateriaSy
 }
 
 export function mensajeDesdeInforme(lineas: string[], materiasRevisadas: number): string {
-  if (lineas.length === 0) {
+  const limpias = filtrarLineasInformeSync(lineas);
+  if (limpias.length === 0) {
     return materiasRevisadas === 1
-      ? 'Revisamos tu cursada en UGR Virtual: no había nada nuevo que cargar (tareas, fechas ni notas).'
-      : `Revisamos ${materiasRevisadas} materias en UGR Virtual: no había nada nuevo que cargar.`;
+      ? 'No se sincronizó nada nuevo: el tablero ya estaba al día con UGR Virtual.'
+      : `No se sincronizó nada nuevo en ${materiasRevisadas} materias: el tablero ya estaba al día.`;
   }
   const encabezado = materiasRevisadas === 1
     ? 'Sincronización lista. Esto actualizamos:'
     : `Sincronización lista (${materiasRevisadas} materias). Esto actualizamos:`;
-  return `${encabezado}\n${lineas.map((l) => `• ${l}`).join('\n')}`;
+  return `${encabezado}\n${limpias.map((l) => `• ${l}`).join('\n')}`;
 }

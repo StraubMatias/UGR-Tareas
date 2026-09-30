@@ -18,7 +18,7 @@ export interface MateriaInscriptaSync {
   materiaNueva?: boolean;
 }
 
-export type FaseSincronizarUgr = 'preparar' | 'materias' | 'avisos' | 'nucleo';
+export type FaseSincronizarUgr = 'preparar' | 'materias' | 'materia' | 'avisos' | 'nucleo';
 // nucleo: atajo servidor (preparar + todas las materias en una pasada)
 
 export interface OpcionesSincronizarUgr {

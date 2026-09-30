@@ -61,7 +61,7 @@ async function ejecutarFaseSyncUgr({
     materiaIds
   });
   const lineasInforme = [...sync.lineasInforme];
-  if (fase === 'materias' || fase === 'nucleo' || fase === 'completa') {
+  if (fase === 'materias' || fase === 'materia' || fase === 'nucleo' || fase === 'completa') {
     const tareasGrupoVistas = new Set<string>();
     for (const nota of sync.notasCampus) {
       if (!nota.tareaId) continue;
@@ -240,7 +240,7 @@ export async function sincronizarCuentaUgrAction(
       materiaIds: opciones?.materiaIds
     });
     const ahoraIso = new Date().toISOString();
-    if (fase === 'materias' || fase === 'nucleo') {
+    if (fase === 'materias' || fase === 'materia' || fase === 'nucleo') {
       await db.execute({
         sql: `UPDATE alumnos SET sincronizado_en = COALESCE(NULLIF(sincronizado_en, ''), ?), ultimo_acceso = ? WHERE id = ?`,
         args: [ahoraIso, ahoraIso, alumnoId]

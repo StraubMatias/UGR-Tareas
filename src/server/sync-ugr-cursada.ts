@@ -3,6 +3,7 @@ import { PLAN_DE_ESTUDIO } from '../app/plan-utils';
 import type { MateriaInscriptaSync, ResumenMateriaSync } from '../app/actions/types';
 import {
   construirLineasInformeSync,
+  filaTieneCambiosSync,
   fusionarLineasInforme,
   fusionarResumenSync,
   mensajeDesdeInforme,
@@ -45,19 +46,6 @@ export async function inscribirAlumnoEnPeriodo(alumnoId: string, periodoId: stri
     sql: 'DELETE FROM inscripciones WHERE alumno_id = ? AND materia_id IN (SELECT id FROM materias WHERE periodo_id = ?)',
     args: [alumnoId, periodoId]
   });
-}
-
-function filaTieneCambios(fila: ResumenMateriaSync): boolean {
-  return (
-    fila.nuevas.length > 0
-    || (fila.fechasActualizadas?.length ?? 0) > 0
-    || (fila.cronogramaNuevo?.length ?? 0) > 0
-    || (fila.parcialesNuevos?.length ?? 0) > 0
-    || (fila.notasCargadas?.length ?? 0) > 0
-    || (fila.entregasHitos?.length ?? 0) > 0
-    || (fila.pendientesEntrega?.length ?? 0) > 0
-    || (fila.notasNoLeidas?.length ?? 0) > 0
-  );
 }
 
 export function armarMensajeSync({
@@ -115,9 +103,6 @@ export function armarMensajeSync({
   for (const item of pendientesEntrega) {
     if (item?.nombre) partes.push(`Falta entregar «${item.nombre}» en la página para cargar la nota.`);
   }
-  for (const item of notasNoLeidas) {
-    if (item?.nombre) partes.push(`No pude leer la nota de «${item.nombre}».`);
-  }
   const n = materias.length;
   if (partes.length === 0) {
     return n === 1
@@ -136,7 +121,7 @@ type ItemTareaCampus = {
   url?: string;
 };
 
-export type FaseSyncUgrCursada = 'preparar' | 'materias' | 'avisos' | 'nucleo' | 'completa';
+export type FaseSyncUgrCursada = 'preparar' | 'materias' | 'materia' | 'avisos' | 'nucleo' | 'completa';
 
 export type ResultadoSyncUgr = {
   mensaje: string;
@@ -479,13 +464,17 @@ export async function sincronizarLoteMateriasDelAlumno({
     if (!item?.nombre || !item?.nota) continue;
     const clave = String(item.nombre).toLowerCase();
     const prev = mejorNotaPorTarea.get(clave);
-    if (!prev || notaNum(String(item.nota)) >= notaNum(String(prev.nota))) {
-      mejorNotaPorTarea.set(clave, item as NotaCampusInforme);
+    const notaItem = notaNum(String(item.nota));
+    const notaPrev = prev ? notaNum(String(prev.nota)) : -1;
+    const itemInforme = item as NotaCampusInforme;
+    if (!prev || notaItem > notaPrev) {
+      mejorNotaPorTarea.set(clave, itemInforme);
+    } else if (notaItem === notaPrev && prev.yaEstaba && !itemInforme.yaEstaba) {
+      mejorNotaPorTarea.set(clave, itemInforme);
     }
   }
   const notasCargadas: NotaCampusInforme[] = [...mejorNotaPorTarea.values()];
   const cargadasPorNombre = new Set(notasCargadas.map((item) => String(item.nombre).toLowerCase()));
-  const notasNoLeidas = (notasTardias.noLeidas || []).filter((item) => item?.nombre && !cargadasPorNombre.has(String(item.nombre).toLowerCase()));
   const pendientesEntrega = [
     ...(notasTardias.pendientesEntrega || []),
     ...((complemento.pendientesEntrega || []) as Array<{ materia?: string; nombre?: string }>)
@@ -495,7 +484,7 @@ export async function sincronizarLoteMateriasDelAlumno({
   });
   const anexar = (
     materia: string | undefined,
-    campo: 'notasCargadas' | 'notasNoLeidas' | 'pendientesEntrega' | 'entregasHitos',
+    campo: 'notasCargadas' | 'pendientesEntrega' | 'entregasHitos',
     textoLinea: string
   ) => {
     if (!textoLinea) return;
@@ -520,24 +509,21 @@ export async function sincronizarLoteMateriasDelAlumno({
     anexar(materia, 'entregasHitos', linea.replace(/\.$/, ''));
   }
   for (const item of pendientesEntrega) anexar(item.materia, 'pendientesEntrega', String(item.nombre));
-  for (const item of notasNoLeidas) anexar(item.materia, 'notasNoLeidas', String(item.nombre));
 
-  const resumenParaInforme = [...resumen];
-  resumen = resumen.filter(filaTieneCambios);
+  resumen = resumen.filter(filaTieneCambiosSync);
 
   const materiasCount = materiasEnCursada ?? nombresPorId.size;
   const lineasInforme = construirLineasInformeSync({
     notasCampus: notasCargadas,
     lineasEntregasHitos: hitosAssign.lineasInforme || [],
-    resumen: resumenParaInforme,
+    resumen,
     parcialesNuevos: parcialesResultado.insertadas,
     eventos: eventosInsertadosAvisos + complemento.eventos,
     horarios: complemento.horarios,
     fechas: complemento.fechas,
     fechasDetalle,
     condiciones: Number(tareas.condicionesActualizadas || 0),
-    pendientesEntrega,
-    notasNoLeidas
+    pendientesEntrega
   });
 
   return {
@@ -597,19 +583,28 @@ export async function sincronizarCursadaDelAlumno({
   if (fase === 'avisos') {
     return sincronizarAvisosCampusDelAlumno({ alumnoId, cliente, materiaIds: materiaIdsPasada });
   }
-  if (fase === 'materias') {
+  if (fase === 'materias' || fase === 'materia') {
     if (!materiaIdsPasada?.length) {
       throw new Error('Indicá qué materias sincronizar en esta pasada.');
     }
     const periodoId = await periodoDeCursada();
     const { materiaIds: todas } = await nombresMateriasInscriptas(alumnoId, periodoId);
-    return sincronizarLoteMateriasDelAlumno({
+    const lote = await sincronizarLoteMateriasDelAlumno({
       alumnoId,
       alumnoNombre,
       cliente,
       materiaIds: materiaIdsPasada,
       materiasEnCursada: todas.length
     });
+    if (fase === 'materia') {
+      const avisos = await sincronizarAvisosCampusDelAlumno({
+        alumnoId,
+        cliente,
+        materiaIds: materiaIdsPasada
+      });
+      return fusionarResultadosSync(lote, avisos);
+    }
+    return lote;
   }
   if (fase === 'nucleo') {
     const prep = await prepararCursadaCampusDelAlumno({ alumnoId, cliente });
