@@ -13,8 +13,8 @@ export function useProgresoSyncSuave(activo: boolean, objetivo: number | null) {
   const objetivoRef = useRef(0);
 
   useEffect(() => {
-    visibleRef.current = visible;
-  }, [visible]);
+    visibleRef.current = activo ? visible : 0;
+  }, [visible, activo]);
 
   useEffect(() => {
     objetivoRef.current = Math.max(0, Math.min(100, objetivo ?? 0));
@@ -22,11 +22,15 @@ export function useProgresoSyncSuave(activo: boolean, objetivo: number | null) {
 
   useEffect(() => {
     if (!activo) {
-      setVisible(0);
       visibleRef.current = 0;
       objetivoRef.current = 0;
       return undefined;
     }
+
+    const reinicio = window.requestAnimationFrame(() => {
+      setVisible(0);
+      visibleRef.current = 0;
+    });
 
     const intervalo = window.setInterval(() => {
       setVisible((prev) => {
@@ -38,7 +42,10 @@ export function useProgresoSyncSuave(activo: boolean, objetivo: number | null) {
       });
     }, MS_POR_PUNTO);
 
-    return () => window.clearInterval(intervalo);
+    return () => {
+      window.cancelAnimationFrame(reinicio);
+      window.clearInterval(intervalo);
+    };
   }, [activo]);
 
   const esperarBarraAlCompleto = useCallback(async (topeMs = 14_000) => {
@@ -48,5 +55,5 @@ export function useProgresoSyncSuave(activo: boolean, objetivo: number | null) {
     }
   }, []);
 
-  return { progreso: visible, esperarBarraAlCompleto };
+  return { progreso: activo ? visible : 0, esperarBarraAlCompleto };
 }
