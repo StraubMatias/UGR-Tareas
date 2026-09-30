@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useProgresoSyncEstimado } from '../hooks/useProgresoSyncEstimado';
+import { useProgresoSyncSuave } from '../hooks/useProgresoSyncSuave';
 import { sincronizarCuentaUgrAction, sincronizarCuentaSiuAction, type MateriaInscriptaSync, type ResumenMateriaSync } from '../app/actions';
 import {
   filaTieneCambiosSync,
@@ -193,7 +194,7 @@ function SyncCargando({
         aria-label={titulo}
       >
         <div
-          className={`h-full rounded-full bg-gradient-to-r ${barra} transition-[width] duration-500 ease-out`}
+          className={`h-full rounded-full bg-gradient-to-r ${barra} transition-[width] duration-300 ease-linear`}
           style={{ width: `${progreso}%` }}
         />
       </div>
@@ -246,7 +247,11 @@ export default function CuentaPropia({
     fase === 'cargando' && fuente === 'siu',
     fuente
   );
-  const progreso = fuente === 'ugr' && progresoUgr != null ? progresoUgr : progresoEstimado;
+  const { progreso: progresoUgrSuave, esperarBarraAlCompleto } = useProgresoSyncSuave(
+    fase === 'cargando' && fuente === 'ugr',
+    progresoUgr
+  );
+  const progreso = fuente === 'ugr' && progresoUgr != null ? progresoUgrSuave : progresoEstimado;
   const etapaVisible = etapaManual || etapa;
 
   const reiniciarCredenciales = () => {
@@ -379,6 +384,7 @@ export default function CuentaPropia({
 
         setEtapaManual('');
         setProgresoUgr(100);
+        await esperarBarraAlCompleto();
         const materiasSync = Math.max(materiasAcumuladas.length, 1);
         setMensaje(mensajeDesdeInforme(lineasAcumuladas, materiasSync));
         await marcarCompletado();
