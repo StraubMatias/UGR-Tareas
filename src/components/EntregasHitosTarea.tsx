@@ -1,7 +1,8 @@
 import {
   faseEntregaDesdeHitos,
   formatearFechaDDMMAAAA,
-  obtenerDiasHastaTarea,
+  etiquetaDiasRestantes,
+  textoPlazoHastaCierreTarea,
   type EntregaHitoTarea
 } from '../core/cursada';
 
@@ -18,7 +19,8 @@ export default function EntregasHitosTarea({ entregas, usuarioActual, fechaVence
     .filter((e) => e.indiceEntrega != null)
     .sort((a, b) => (a.indiceEntrega ?? 0) - (b.indiceEntrega ?? 0));
   const fase = faseEntregaDesdeHitos(entregas);
-  const diasRestantes = fechaVence ? obtenerDiasHastaTarea(fechaVence) : null;
+  const plazo = fechaVence ? textoPlazoHastaCierreTarea(fechaVence) : null;
+  const diasRestantes = plazo?.dias ?? null;
 
   return (
     <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4 space-y-3">
@@ -31,8 +33,16 @@ export default function EntregasHitosTarea({ entregas, usuarioActual, fechaVence
           {' '}Subí el trabajo en el campus.
           {diasRestantes != null && diasRestantes >= 0 && (
             <span className="block mt-1 text-amber-200/90 text-xs">
-              Vence {formatearFechaDDMMAAAA(fechaVence)}
-              {diasRestantes === 0 ? ' (hoy)' : ` · quedan ${diasRestantes} día${diasRestantes === 1 ? '' : 's'}`}
+              Vence {formatearFechaDDMMAAAA(fechaVence)} (hasta las 23:59)
+              {diasRestantes !== null && diasRestantes < 0
+                ? ' · vencida'
+                : plazo?.detalleHoras
+                  ? ` · quedan ${plazo.detalleHoras}`
+                  : diasRestantes === 0
+                    ? ' · cierra hoy'
+                    : diasRestantes != null
+                      ? ` · ${etiquetaDiasRestantes(diasRestantes).toLowerCase()}`
+                      : ''}
             </span>
           )}
         </p>

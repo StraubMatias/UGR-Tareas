@@ -23,6 +23,8 @@ export interface NotificacionTablero {
   nombre: string;
   materia: string;
   dias?: number | null;
+  /** Solo vencimientos: horas/min cuando faltan menos de 24 h al cierre (23:59 AR). */
+  plazoHoras?: string | null;
   url?: string;
   invitacionId?: string;
   grupoNombre?: string;

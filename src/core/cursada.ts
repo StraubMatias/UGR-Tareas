@@ -273,8 +273,58 @@ export const formatearFechaHora = (fechaStr: string | null | undefined): string 
 
 
 
+const ZONA_CAMPUS = 'America/Argentina/Buenos_Aires';
+const MS_DIA = 24 * 60 * 60 * 1000;
+
+/** Fecha del tablero (YYYY-MM-DD o DD-MM-YYYY) → componentes calendario. */
+export function partesFechaTablero(fechaStr: string | null | undefined): { y: number; m: number; d: number } | null {
+  if (!fechaStr || fechaStr === 'Sin fecha') return null;
+  const partes = String(fechaStr).split('-').map(Number);
+  if (partes.length !== 3 || partes.some((n) => Number.isNaN(n))) return null;
+  const [y, m, d] = partes[0] > 31 ? partes : [partes[2], partes[1], partes[0]];
+  if (y < 1970 || m < 1 || m > 12 || d < 1 || d > 31) return null;
+  return { y, m, d };
+}
+
+/** Cierre de tarea en UGR: fin del día indicado a las 23:59:59 en Argentina (no medianoche del día siguiente). */
+export function instanteCierreCampus(fechaStr: string | null | undefined): number | null {
+  const p = partesFechaTablero(fechaStr);
+  if (!p) return null;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const t = new Date(`${p.y}-${pad(p.m)}-${pad(p.d)}T23:59:59.999-03:00`).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+export function instanteInicioDiaCampus(fechaStr: string | null | undefined): number | null {
+  const p = partesFechaTablero(fechaStr);
+  if (!p) return null;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const t = new Date(`${p.y}-${pad(p.m)}-${pad(p.d)}T00:00:00.000-03:00`).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+export function milisegundosHastaCierreCampus(
+  fechaStr: string | null | undefined,
+  ahoraMs = Date.now()
+): number | null {
+  const cierre = instanteCierreCampus(fechaStr);
+  if (cierre === null) return null;
+  return cierre - ahoraMs;
+}
+
+export function formatearRestanteHorasMinutos(ms: number): string {
+  if (ms <= 0) return '0 min';
+  const totalMin = Math.max(1, Math.ceil(ms / 60_000));
+  if (totalMin < 60) return `${totalMin} min`;
+  const horas = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  return min > 0 ? `${horas} h ${min} min` : `${horas} h`;
+}
+
 export const obtenerTimestamp = (fechaStr: string | null | undefined): number | null => {
   if (!fechaStr || fechaStr === 'Sin fecha') return null;
+  const inicio = instanteInicioDiaCampus(fechaStr);
+  if (inicio !== null) return inicio;
   const fecha = new Date(String(fechaStr).endsWith('Z') ? fechaStr : `${String(fechaStr).replace(' ', 'T')}Z`);
   const timestamp = fecha.getTime();
   return Number.isFinite(timestamp) ? timestamp : null;
@@ -292,15 +342,15 @@ export const multiplicadorPuntosTarea = (tarea: Tarea, alumno: string | null | u
   if (fechaCarga === null) return 1;
 
   if (tarea.fin && tarea.fin !== 'Sin fecha') {
-    const cierre = new Date(`${tarea.fin}T23:59:59.999Z`);
-    if (!Number.isNaN(cierre.getTime()) && fechaCarga >= cierre.getTime()) return 0;
+    const cierre = instanteCierreCampus(tarea.fin);
+    if (cierre !== null && fechaCarga >= cierre) return 0;
   }
 
   if (!tarea.inicio || tarea.inicio === 'Sin fecha') return 1;
-  const apertura = new Date(`${tarea.inicio}T00:00:00`);
-  if (Number.isNaN(apertura.getTime())) return 1;
+  const apertura = instanteInicioDiaCampus(tarea.inicio);
+  if (apertura === null) return 1;
 
-  const diasDesdeApertura = Math.floor((fechaCarga - apertura.getTime()) / (1000 * 60 * 60 * 24));
+  const diasDesdeApertura = Math.floor((fechaCarga - apertura) / (1000 * 60 * 60 * 24));
   return diasDesdeApertura < 7 ? 1 : 0.5;
 };
 
@@ -313,57 +363,32 @@ export const puntosBaseTarea = (tarea: Tarea, alumno: string | null | undefined)
   return Number.parseFloat(notaStr.replace(',', '.'));
 };
 
-export const obtenerFechaParcialEnMs = (fechaStr: string | null): number | null => {
-  if (!fechaStr || fechaStr === 'Sin fecha') return null;
-  const partes = fechaStr.split('-').map(Number);
-  if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
+export const obtenerFechaParcialEnMs = (fechaStr: string | null): number | null => (
+  instanteInicioDiaCampus(fechaStr)
+);
 
-  const [year, month, day] = partes;
-  const fecha = new Date(year, month - 1, day);
-  return Number.isNaN(fecha.getTime()) ? null : fecha.getTime();
+export const obtenerDiasHastaParcial = (fechaStr: string | null, ahoraMs = Date.now()): number | null => {
+  const inicio = instanteInicioDiaCampus(fechaStr || '');
+  if (inicio === null) return null;
+  const diff = inicio - ahoraMs;
+  if (diff <= 0) return 0;
+  return Math.ceil(diff / MS_DIA);
 };
 
-export const obtenerDiasHastaParcial = (fechaStr: string | null): number | null => {
-  const fechaParcialEnMs = obtenerFechaParcialEnMs(fechaStr || '');
-  if (fechaParcialEnMs === null) return null;
-
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.ceil((fechaParcialEnMs - hoy.getTime()) / (1000 * 60 * 60 * 24)));
+export const obtenerDiasHastaFecha = (fechaStr: string | null, ahoraMs = Date.now()): number | null => {
+  const inicio = instanteInicioDiaCampus(fechaStr);
+  if (inicio === null) return null;
+  const diff = inicio - ahoraMs;
+  if (diff <= 0) return 0;
+  return Math.ceil(diff / MS_DIA);
 };
 
-export const obtenerDiasHastaFecha = (fechaStr: string | null): number | null => {
-  if (!fechaStr || fechaStr === 'Sin fecha') return null;
-  const partes = String(fechaStr).split('-').map(Number);
-  if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
-
-  const [year, month, day] = partes[0] > 31
-    ? partes
-    : [partes[2], partes[1], partes[0]];
-  const fechaLimite = new Date(year, month - 1, day);
-  fechaLimite.setHours(0, 0, 0, 0);
-  if (Number.isNaN(fechaLimite.getTime())) return null;
-
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  return Math.ceil((fechaLimite.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
-};
-
-export const obtenerDiasHastaApertura = (fechaStr: string | null): number | null => {
-  if (!fechaStr || fechaStr === 'Sin fecha') return null;
-  const partes = String(fechaStr).split('-').map(Number);
-  if (partes.length !== 3 || partes.some((parte) => Number.isNaN(parte))) return null;
-
-  const [year, month, day] = partes[0] > 31
-    ? partes
-    : [partes[2], partes[1], partes[0]];
-  const fechaApertura = new Date(year, month - 1, day);
-  fechaApertura.setHours(0, 0, 0, 0);
-  if (Number.isNaN(fechaApertura.getTime())) return null;
-
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  return Math.ceil((fechaApertura.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+export const obtenerDiasHastaApertura = (fechaStr: string | null, ahoraMs = Date.now()): number | null => {
+  const inicio = instanteInicioDiaCampus(fechaStr);
+  if (inicio === null) return null;
+  const diff = inicio - ahoraMs;
+  if (diff <= 0) return 0;
+  return Math.ceil(diff / MS_DIA);
 };
 
 export const obtenerTextoApertura = (diasParaAbrir: number | null): string => {
@@ -372,10 +397,30 @@ export const obtenerTextoApertura = (diasParaAbrir: number | null): string => {
   return `Abre en ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'}`;
 };
 
-export const obtenerDiasHastaTarea = (fechaStr: string | null): number | null => {
-  const diasHastaCierre = obtenerDiasHastaFecha(fechaStr);
-  return diasHastaCierre === null ? null : diasHastaCierre - 1;
+/** Días completos hasta el cierre (23:59 Argentina del día `fin`). */
+export const obtenerDiasHastaTarea = (fechaStr: string | null, ahoraMs = Date.now()): number | null => {
+  const ms = milisegundosHastaCierreCampus(fechaStr, ahoraMs);
+  if (ms === null) return null;
+  if (ms < 0) return -1;
+  return Math.floor(ms / MS_DIA);
 };
+
+/** Texto de plazo para hitos: días si faltan ≥24 h; horas/min solo en la última jornada. */
+export function textoPlazoHastaCierreTarea(
+  fechaFin: string | null | undefined,
+  ahoraMs = Date.now()
+): { dias: number | null; detalleHoras: string | null } {
+  const ms = milisegundosHastaCierreCampus(fechaFin, ahoraMs);
+  if (ms === null) return { dias: null, detalleHoras: null };
+  if (ms < 0) return { dias: -1, detalleHoras: null };
+  const dias = Math.floor(ms / MS_DIA);
+  if (dias >= 1) return { dias, detalleHoras: null };
+  return { dias: 0, detalleHoras: formatearRestanteHorasMinutos(ms) };
+}
+
+export const etiquetaDiasRestantes = (dias: number): string => (
+  dias === 1 ? 'Queda 1 día' : `Quedan ${dias} días`
+);
 
 const normalizarTextoMateria = (texto = '') => String(texto)
   .normalize('NFD')
@@ -403,9 +448,9 @@ export const obtenerIconoMateria = (nombreMateria = '') => {
 export const etiquetaMateria = (nombreMateria = '') => `${obtenerIconoMateria(nombreMateria)} ${nombreMateria}`;
 
 export const ordenarParciales = (listaParciales: Parcial[]): Parcial[] => {
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const hoyEnMs = hoy.getTime();
+  const hoyEnMs = instanteInicioDiaCampus(
+    new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_CAMPUS }).format(new Date())
+  ) ?? Date.now();
 
   return [...listaParciales].sort((a: Parcial, b: Parcial) => {
     const fechaA = obtenerFechaParcialEnMs(a.fecha);
@@ -479,7 +524,8 @@ export const calcularEstadoSemaforo = (fechaFinStr: string | null | undefined, f
     return { texto: 'Sin fecha límite', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
   }
 
-  const diasRestantes = obtenerDiasHastaTarea(fechaFinStr);
+  const plazo = textoPlazoHastaCierreTarea(fechaFinStr);
+  const { dias: diasRestantes, detalleHoras } = plazo;
 
   if (diasRestantes === null) {
     return { texto: 'Sin fecha límite', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
@@ -487,15 +533,26 @@ export const calcularEstadoSemaforo = (fechaFinStr: string | null | undefined, f
 
   if (diasRestantes < 0) {
     return { texto: 'Vencida', estilo: 'bg-red-950/80 text-red-400 border-red-800/80 font-bold' };
-  } else if (diasRestantes === 0) {
-    return { texto: '⚠️ Cierra Hoy', estilo: 'bg-red-500/20 text-red-300 border-red-500/40 font-bold animate-pulse' };
-  } else if (diasRestantes <= 2) {
-    return { texto: `🔴 Quedan ${diasRestantes} ${diasRestantes === 1 ? 'día' : 'días'}`, estilo: 'bg-red-500/15 text-red-300 border-red-500/30 font-semibold' };
-  } else if (diasRestantes <= 7) {
-    return { texto: `🟠 Quedan ${diasRestantes} días`, estilo: 'bg-amber-500/15 text-amber-300 border-amber-500/30 font-semibold' };
-  } else {
-    return { texto: `🟢 Quedan ${diasRestantes} días`, estilo: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-semibold' };
   }
+  if (diasRestantes === 0 && detalleHoras) {
+    return {
+      texto: `⚠️ Cierra hoy · quedan ${detalleHoras}`,
+      estilo: 'bg-red-500/20 text-red-300 border-red-500/40 font-bold animate-pulse'
+    };
+  }
+  if (diasRestantes === 0) {
+    return { texto: '⚠️ Cierra hoy', estilo: 'bg-red-500/20 text-red-300 border-red-500/40 font-bold animate-pulse' };
+  }
+  if (diasRestantes <= 2) {
+    return {
+      texto: `🔴 ${etiquetaDiasRestantes(diasRestantes)}`,
+      estilo: 'bg-red-500/15 text-red-300 border-red-500/30 font-semibold'
+    };
+  }
+  if (diasRestantes <= 7) {
+    return { texto: `🟠 ${etiquetaDiasRestantes(diasRestantes)}`, estilo: 'bg-amber-500/15 text-amber-300 border-amber-500/30 font-semibold' };
+  }
+  return { texto: `🟢 ${etiquetaDiasRestantes(diasRestantes)}`, estilo: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-semibold' };
 };
 
 export const tareaPuedeGestionarse = (tarea: Tarea): boolean =>

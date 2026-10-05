@@ -3,7 +3,12 @@ import { materiasQueCursa } from './companeros';
 import { novedadNotasManualesPendientes } from './notas-manuales';
 import type { AvisoCampusMoodle, InvitacionGrupoTablero, NovedadTablero } from '../components/portal/types';
 import type { EventoCronograma, Materia, Parcial } from '../core/cursada';
-import { obtenerDiasHastaFecha, obtenerDiasHastaTarea, tareaCompletadaPor } from '../core/cursada';
+import {
+  obtenerDiasHastaFecha,
+  obtenerDiasHastaTarea,
+  tareaCompletadaPor,
+  textoPlazoHastaCierreTarea
+} from '../core/cursada';
 
 export function pesoNotificacionTablero(item: NovedadTablero): number {
   switch (item.tipo) {
@@ -103,13 +108,17 @@ export function armarNotificacionesTablero({
         const dias = obtenerDiasHastaTarea(tarea.fin);
         return dias !== null && dias >= 0 && dias <= 7 && !tareaCompletadaPor(tarea, usuarioActual);
       })
-      .map(({ tarea, materia: m }) => ({
-        id: `vencimiento-${tarea.id}`,
-        tipo: 'vencimiento',
-        nombre: tarea.nombre,
-        materia: m.nombre,
-        dias: obtenerDiasHastaTarea(tarea.fin)
-      }))),
+      .map(({ tarea, materia: m }) => {
+        const plazo = textoPlazoHastaCierreTarea(tarea.fin);
+        return {
+          id: `vencimiento-${tarea.id}`,
+          tipo: 'vencimiento',
+          nombre: tarea.nombre,
+          materia: m.nombre,
+          dias: plazo.dias,
+          plazoHoras: plazo.detalleHoras
+        };
+      })),
     ...parcialesDeLaCursada
       .map((parcial) => ({
         id: `parcial-${parcial.id}`,
