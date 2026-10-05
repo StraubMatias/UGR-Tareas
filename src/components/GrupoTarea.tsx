@@ -65,7 +65,7 @@ export default function GrupoTarea({
   const [adminNuevoNombre, setAdminNuevoNombre] = useState('');
   const [adminModo, setAdminModo] = useState('existente');
 
-  const grupos = tarea.grupos || [];
+  const grupos = useMemo(() => tarea.grupos ?? [], [tarea.grupos]);
   const cupo = Number(tarea.cupo_maximo) || 0;
   const modo = modoEntregaDeTarea(tarea);
   const sujeto = alumnoContexto || usuarioActual;

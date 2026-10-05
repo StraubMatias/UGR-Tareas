@@ -81,6 +81,15 @@ export function materiasEnComun(
   return new Set([...propias].filter((materiaId) => suyas.has(materiaId)));
 }
 
+export function alumnoCursaMateria(
+  inscripciones: InscripcionAlumno[],
+  alumno: string | null | undefined,
+  materiaId: string
+): boolean {
+  if (!alumno || !materiaId) return false;
+  return materiasQueCursa(inscripciones, alumno).has(materiaId);
+}
+
 export function materiasQueCursa(inscripciones: InscripcionAlumno[], alumno: string): Set<string> {
   const nombre = String(alumno || '').toLowerCase();
   return new Set(

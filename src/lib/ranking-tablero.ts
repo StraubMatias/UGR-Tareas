@@ -11,6 +11,7 @@ import {
   puntosBaseTarea,
   tareaCompletadaPor
 } from '../core/cursada';
+import { materiasQueCursa } from './companeros';
 
 export interface EntradaRankingTablero {
   alumno: string;
@@ -148,7 +149,8 @@ export function calcularDatosComparacionRanking({
   ranking,
   materias,
   notas,
-  parciales
+  parciales,
+  inscripciones = []
 }: {
   usuarioActual: string;
   alumnoComparar: string;
@@ -156,13 +158,27 @@ export function calcularDatosComparacionRanking({
   materias: Materia[];
   notas: Nota[];
   parciales: Parcial[];
+  inscripciones?: { alumno: string; materiaId: string }[];
 }) {
   const usuarioRanking = ranking.find((item) => item.alumno === usuarioActual);
   const comparadoRanking = ranking.find((item) => item.alumno === alumnoComparar);
   if (!usuarioRanking || !comparadoRanking) return null;
 
-  const historialUsuario = historialPorAlumno(usuarioActual, materias, notas, parciales);
-  const historialComparado = historialPorAlumno(alumnoComparar, materias, notas, parciales);
+  const historialUsuario = historialPorAlumno(
+    usuarioActual,
+    materias,
+    notas,
+    parciales,
+    materiasQueCursa(inscripciones, usuarioActual)
+  );
+  const historialComparado = historialPorAlumno(
+    alumnoComparar,
+    materias,
+    notas,
+    parciales,
+    materiasQueCursa(inscripciones, alumnoComparar)
+  );
+
   const diferenciaPuntos = usuarioRanking.puntos - comparadoRanking.puntos;
   const puntosEmpatados = Math.abs(diferenciaPuntos) < 0.0001;
   const ultimaTareaUsuario = historialUsuario.find((registro) => obtenerTimestamp(registro.fecha) !== null);

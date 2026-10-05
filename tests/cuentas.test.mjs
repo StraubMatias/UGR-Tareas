@@ -52,7 +52,7 @@ test('desde la misma conexión entran dos cuentas y la tercera no', () => {
 test('renombrar un alumno conserva el id y mueve el nombre copiado', () => {
   assert.equal(nombreDeUsuarioValido('Ana'), null);
   assert.equal(nombreDeUsuarioValido('ab'), 'El usuario tiene que tener entre 3 y 100 caracteres.');
-  const sql = sentenciasRenombrarAlumno('a_1', '40269153', 'Ana').map((sentencia) => sentencia.sql).join('\n');
+  const sql = sentenciasRenombrarAlumno('a_1', '12345678', 'Ana').map((sentencia) => sentencia.sql).join('\n');
   for (const tabla of ['alumnos', 'completadas', 'notas_parciales', 'notas_tareas', 'progreso_materias', 'auditoria', 'login_intentos']) {
     assert.match(sql, new RegExp(tabla));
   }

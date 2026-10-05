@@ -667,9 +667,14 @@ export const historialPorAlumno = (
   alumno: string,
   materias: Materia[],
   notas: Nota[],
-  parciales: Parcial[]
+  parciales: Parcial[],
+  materiaIdsVisibles?: Set<string> | null
 ): HistorialRegistro[] => {
-  const tareas: HistorialRegistro[] = materias.flatMap((materia) => (materia.tareas || [])
+  const materiasHistorial = materiaIdsVisibles
+    ? materias.filter((materia) => materiaIdsVisibles.has(materia.id))
+    : materias;
+  const idsHistorial = new Set(materiasHistorial.map((m) => m.id));
+  const tareas: HistorialRegistro[] = materiasHistorial.flatMap((materia) => (materia.tareas || [])
     .filter((tarea: Tarea) => tareaCompletadaPor(tarea, alumno))
     .map((tarea: Tarea) => ({
       id: `tarea-${tarea.id}`,
@@ -684,18 +689,19 @@ export const historialPorAlumno = (
 
   const parcialesDelAlumno: HistorialRegistro[] = notas
     .filter((nota: Nota) => nota.alumno === alumno)
-    .map((nota: Nota) => {
+    .flatMap((nota: Nota): HistorialRegistro[] => {
       const parcial = parciales.find((item: Parcial) => item.id === nota.parcial_id);
-      return {
+      if (!parcial || (materiaIdsVisibles && !idsHistorial.has(parcial.materia_id))) return [];
+      return [{
         id: `parcial-${nota.parcial_id}`,
-        materia: materias.find((materia: Materia) => materia.id === parcial?.materia_id)?.nombre || 'Materia',
-        nombre: parcial?.nombre || 'Parcial',
+        materia: materias.find((materia: Materia) => materia.id === parcial.materia_id)?.nombre || 'Materia',
+        nombre: parcial.nombre || 'Parcial',
         unidad: null,
         fecha: nota.cargada_en ?? null,
         fechaCompletada: nota.cargada_en ?? null,
         nota: nota.nota,
         tipo: 'Parcial'
-      };
+      }];
     });
 
   return [...tareas, ...parcialesDelAlumno].sort((a, b) => (obtenerTimestamp(b.fecha) ?? 0) - (obtenerTimestamp(a.fecha) ?? 0));

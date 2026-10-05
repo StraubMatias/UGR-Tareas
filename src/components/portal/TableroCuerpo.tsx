@@ -1,6 +1,7 @@
 'use client';
 
 import { buildPortalVistasCursadaProps } from '../../lib/tablero-portal-view-props';
+import { materiasQueCursa } from '../../lib/companeros';
 import type { TableroPortalViewModel } from '../../hooks/useTableroPortal';
 import VistaAlumnos from '../VistaAlumnos';
 import CuentaPropia from '../CuentaPropia';
@@ -53,7 +54,7 @@ export default function TableroCuerpo({ vm }: { vm: TableroPortalViewModel }) {
           onInterrumpida={() => { void cargarBD(true); }}
         />
         <VistaAlumnos
-          materias={datos.materias}
+          materias={datos.materias.filter((materia) => materiasQueCursa(datos.inscripciones, usuario).has(materia.id))}
           inscripciones={datos.inscripciones}
           alumnos={datos.alumnos}
           registrados={datos.registrados}
