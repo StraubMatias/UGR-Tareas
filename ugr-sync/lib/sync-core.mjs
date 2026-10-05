@@ -268,7 +268,9 @@ function actividadNecesitaDetalleFechas(existente, tarea) {
   if (parcheIndice.inicio || parcheIndice.fin) return true;
   const fin = existente?.fin;
   if (!fin || fin === 'Sin fecha') return true;
-  const cierre = new Date(String(fin).includes('T') ? fin : `${fin}T23:59:59`).getTime();
+  const cierre = new Date(
+    String(fin).includes('T') ? fin : `${fin}T23:59:59.999-03:00`
+  ).getTime();
   if (!Number.isFinite(cierre)) return true;
   const ahora = Date.now();
   const hace7 = 7 * 24 * 60 * 60 * 1000;
