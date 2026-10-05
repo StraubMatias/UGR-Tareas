@@ -350,7 +350,7 @@ export const multiplicadorPuntosTarea = (tarea: Tarea, alumno: string | null | u
   const apertura = instanteInicioDiaCampus(tarea.inicio);
   if (apertura === null) return 1;
 
-  const diasDesdeApertura = Math.floor((fechaCarga - apertura.getTime()) / (1000 * 60 * 60 * 24));
+  const diasDesdeApertura = Math.floor((fechaCarga - apertura) / (1000 * 60 * 60 * 24));
   return diasDesdeApertura < 7 ? 1 : 0.5;
 };
 
