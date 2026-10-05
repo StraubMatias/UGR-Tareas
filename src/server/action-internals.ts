@@ -14,6 +14,13 @@ import {
 } from '../lib/cuentas';
 import { asegurarEsquemaCuentasEnServidor } from './asegurar-esquema-cuentas';
 import type { RespuestaAction } from '../app/actions/types';
+import {
+  generarClaveTemporal,
+  LONGITUD_MINIMA_SESSION_SECRET,
+  validarHoraReloj
+} from '../lib/seguridad';
+
+export { generarClaveTemporal, LONGITUD_MINIMA_SESSION_SECRET, validarHoraReloj };
 
 const scryptAsync = promisify(scrypt);
 
@@ -69,7 +76,14 @@ interface LoginParams {
 export function obtenerSecretoSesion() {
   const secreto = process.env.SESSION_SECRET?.trim();
   if (!secreto) throw new Error('Falta SESSION_SECRET en el entorno.');
+  if (secreto.length < LONGITUD_MINIMA_SESSION_SECRET) {
+    throw new Error(`SESSION_SECRET debe tener al menos ${LONGITUD_MINIMA_SESSION_SECRET} caracteres.`);
+  }
   return secreto;
+}
+
+export function confiarEnEncabezadosProxy(): boolean {
+  return process.env.VERCEL === '1' || process.env.TRUST_PROXY === '1';
 }
 
 export function crearId(prefijo: string): string {
@@ -91,22 +105,23 @@ export function esIPPrivada(ip: string | undefined | null): boolean {
 
 export async function obtenerIPReal() {
   const encabezados = await headers();
-  const xff = encabezados.get('x-forwarded-for')?.split(',')?.map((ip) => ip.trim()) || [];
   const xRealIp = encabezados.get('x-real-ip')?.trim();
+
+  if (!confiarEnEncabezadosProxy()) {
+    return xRealIp && !esIPPrivada(xRealIp) ? xRealIp : 'unknown';
+  }
+
+  const xff = encabezados.get('x-forwarded-for')?.split(',')?.map((ip) => ip.trim()) || [];
   const cfConnectingIp = encabezados.get('cf-connecting-ip')?.trim();
 
-  // Cloudflare: confiar en cf-connecting-ip si está presente
   if (cfConnectingIp && !esIPPrivada(cfConnectingIp)) return cfConnectingIp;
 
-  // x-forwarded-for: tomar la primera IP que no sea privada (la del cliente real)
   for (const ip of xff) {
     if (ip && !esIPPrivada(ip)) return ip;
   }
 
-  // x-real-ip: solo confiar si no es privada
   if (xRealIp && !esIPPrivada(xRealIp)) return xRealIp;
 
-  // Fallback: primera IP de x-forwarded-for o unknown
   return xff[0] || xRealIp || 'unknown';
 }
 

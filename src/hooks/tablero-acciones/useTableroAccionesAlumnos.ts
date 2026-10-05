@@ -9,8 +9,14 @@ export function useTableroAccionesAlumnos(opts: UseTableroAccionesOptions) {
   const handleCrearAlumno = useCallback(async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!nuevoAlumnoNombre.trim()) return;
-    const ok = await conRecargaTablero(() => crearAlumnoAction(nuevoAlumnoNombre), cargarBD);
-    if (ok) setNuevoAlumnoNombre('');
+    const resultado = await crearAlumnoAction(nuevoAlumnoNombre);
+    if (!resultado?.exito) {
+      alert(resultado?.mensaje || 'No se pudo crear el alumno.');
+      return;
+    }
+    if (resultado.mensaje) alert(resultado.mensaje);
+    await cargarBD();
+    setNuevoAlumnoNombre('');
   }, [nuevoAlumnoNombre, cargarBD, setNuevoAlumnoNombre]);
 
   const handleGuardarEdicionAlumno = useCallback(async (e: FormEvent<HTMLFormElement>) => {

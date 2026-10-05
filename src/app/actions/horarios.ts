@@ -12,6 +12,7 @@ import {
   verificarAdmin,
   existeMateria,
   validarLongitud,
+  validarHoraReloj,
   MAX_AULA_LENGTH
 } from '../../server/action-internals';
 
@@ -31,11 +32,16 @@ export async function crearHorarioAction({ materiaId, dia, horaInicio, horaFin, 
     }
     const validacionAula = validarLongitud(aula, MAX_AULA_LENGTH, 'aula');
     if (!validacionAula.valida) return convertirValidacion(validacionAula);
+    const inicio = String(horaInicio || '').trim();
+    const fin = String(horaFin || '').trim();
+    if (!validarHoraReloj(inicio) || !validarHoraReloj(fin)) {
+      return { exito: false, mensaje: 'Las horas tienen que estar en formato HH:MM (24 h).' };
+    }
 
     const id = crearId('horario_');
     await db.execute({
       sql: 'INSERT INTO horarios (id, materia_id, dia, hora_inicio, hora_fin, aula) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [id, materiaId, diaNumerico, horaInicio, horaFin, validacionAula.valor]
+      args: [id, materiaId, diaNumerico, inicio, fin, validacionAula.valor]
     });
     await registrarAuditoria({ accion: 'crear_horario', usuario: usuarioSesion, detalle: `Creó horario para la materia ${materiaId}`, ip: await obtenerIPReal() });
     return { exito: true };
