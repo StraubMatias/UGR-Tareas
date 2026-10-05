@@ -8,6 +8,7 @@ export interface UseTableroAccionesOptions {
   usuarioActual: string | null;
   esAdmin: boolean;
   materias: Materia[];
+  inscripciones: { alumno: string; materiaId: string }[];
   parciales: Parcial[];
   notas: Nota[];
   notasInputs: Record<string, string>;

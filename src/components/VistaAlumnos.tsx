@@ -35,7 +35,7 @@ export default function VistaAlumnos({
 }: Props) {
   const [busqueda, setBusqueda] = useState('');
   const busquedaId = useId();
-  const companeros = alumnosEnEstado(inscripciones, usuarioActual || '', registrados?.length ? registrados : alumnos, esAdmin)
+  const companeros = alumnosEnEstado(inscripciones, usuarioActual || '', registrados?.length ? registrados : alumnos)
     .filter((alumno) => alumno !== usuarioActual);
   const visibles = companeros.filter((alumno) => normalizar(alumno).includes(normalizar(busqueda)));
   const propsCompartidas = {

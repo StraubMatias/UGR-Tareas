@@ -5,12 +5,18 @@ import {
   tareaCompletadaPor
 } from '../core/cursada';
 import { tareaHabilitada as tareaEstaHabilitada } from '../app/validators';
+import { alumnoCursaMateria, type InscripcionAlumno } from './companeros';
 
 export function calcularBadgeEstadoMateria(
   materia: Materia,
   alumno: string,
   parciales: Parcial[],
-  notas: Nota[]): { texto: string; estilo: string } | null {
+  notas: Nota[],
+  inscripciones?: InscripcionAlumno[]
+): { texto: string; estilo: string } | null {
+  if (inscripciones && !alumnoCursaMateria(inscripciones, alumno, materia.id)) {
+    return null;
+  }
     const tareasAbiertas = materia.tareas.filter((tarea) => tareaEstaHabilitada(tarea.inicio));
     const trabajosPracticos = tareasAbiertas.filter((tarea) => tarea.tipo === 'trabajo_practico');
     if (!materia.condiciones && trabajosPracticos.length === 0) return null;

@@ -172,7 +172,7 @@ export default function PortalVistasCursada({
 
   const vistaAlumnosComun = (
     <VistaAlumnos
-      materias={materias}
+      materias={materiasDeLaCursada}
       inscripciones={inscripciones}
       alumnos={alumnos}
       registrados={registrados}
@@ -249,7 +249,8 @@ export default function PortalVistasCursada({
 
       {pestana === 'historial' && (
         <VistaHistorial
-          materias={materias}
+          materias={materiasDeLaCursada}
+          inscripciones={inscripciones}
           notas={notas}
           parciales={parciales}
           usuarioActual={usuarioActual}
@@ -298,6 +299,8 @@ export default function PortalVistasCursada({
         <VistaParciales
           parciales={parciales}
           parcialesAgrupados={parcialesAgrupados}
+          materias={materias}
+          inscripciones={inscripciones}
           esAdmin={esAdmin}
           usuarioActual={usuarioActual}
           alumnos={alumnos}

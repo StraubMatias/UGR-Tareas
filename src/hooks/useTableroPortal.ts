@@ -186,6 +186,7 @@ export function useTableroPortal() {
     usuarioActual: acceso.usuarioActual,
     esAdmin,
     materias: datos.materias,
+    inscripciones: datos.inscripciones,
     parciales: datos.parciales,
     notas: datos.notas,
     notasInputs: datos.notasInputs,

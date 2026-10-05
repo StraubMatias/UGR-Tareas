@@ -9,6 +9,7 @@ import {
   historialPorAlumno,
   obtenerIconoMateria
 } from '../core/cursada';
+import { materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
 
 interface ItemRanking {
   alumno: string;
@@ -30,6 +31,7 @@ interface DatosComparacion {
 
 interface Props {
   materias: Materia[];
+  inscripciones?: InscripcionAlumno[];
   notas: Nota[];
   parciales: Parcial[];
   usuarioActual: string | null;
@@ -47,6 +49,7 @@ interface Props {
 // realizadas, sus notas y el modal de comparación entre dos compañeros.
 export default function VistaHistorial({
   materias,
+  inscripciones = [],
   notas,
   parciales,
   usuarioActual,
@@ -150,7 +153,13 @@ export default function VistaHistorial({
         const estaDesplegado = alumno === usuarioActual
           ? historialPropioAbierto
           : !!alumnosDesplegados[`historial-${alumno}`];
-        const historial = historialPorAlumno(alumno, materias, notas, parciales);
+        const historial = historialPorAlumno(
+          alumno,
+          materias,
+          notas,
+          parciales,
+          materiasQueCursa(inscripciones, alumno)
+        );
         const historialAgrupado = agruparHistorial(historial);
 
         return (
