@@ -76,7 +76,9 @@ export default function CampanaNotificaciones({
                             : notificacion.tipo === 'apertura'
                             ? 'Se habilita mañana'
                             : notificacion.dias === 0
-                              ? 'Vence hoy'
+                              ? notificacion.plazoHoras
+                                ? `Vence hoy · quedan ${notificacion.plazoHoras}`
+                                : 'Vence hoy'
                               : `Vence en ${notificacion.dias} ${notificacion.dias === 1 ? 'día' : 'días'}`;
 
                 if (esInvitacion && notificacion.invitacionId) {
