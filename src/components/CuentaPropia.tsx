@@ -415,11 +415,16 @@ export default function CuentaPropia({
     }
   };
 
+  const ejecutarSyncRef = useRef(ejecutarSync);
+  useEffect(() => {
+    ejecutarSyncRef.current = ejecutarSync;
+  });
+
   const syncServidorIniciado = useRef(false);
   useEffect(() => {
     if (!usarCredencialesServidor || syncServidorIniciado.current) return;
     syncServidorIniciado.current = true;
-    void ejecutarSync('', '');
+    void ejecutarSyncRef.current('', '');
   }, [usarCredencialesServidor]);
 
   const sincronizar = async (evento: FormEvent<HTMLFormElement>) => {

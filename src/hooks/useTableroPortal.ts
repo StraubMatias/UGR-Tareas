@@ -20,6 +20,23 @@ export function useTableroPortal() {
   const acceso = useTableroEstadoAcceso();
   const admin = useTableroAdminForms();
 
+  const {
+    tareaFoco,
+    tareaFocoVisible,
+    setTareaFocoVisible,
+    setPestana,
+    setTareaFoco,
+    notificacionesVistas,
+    setNotificacionesVistas
+  } = ui;
+  const {
+    usuarioActual,
+    setUserPassChange,
+    setNuevoUserChange,
+    setModalPasswordOpen,
+    setMsgPassChange
+  } = acceso;
+
   const esAdmin = acceso.rolUsuario === 'admin';
   const plan = usePlanEstudioDerivados(
     datos.progresoPlan,
@@ -41,24 +58,24 @@ export function useTableroPortal() {
   );
 
   useEffect(() => {
-    if (!ui.tareaFoco || !ui.tareaFocoVisible) return undefined;
+    if (!tareaFoco || !tareaFocoVisible) return undefined;
 
     const temporizadorScroll = setTimeout(() => {
-      const elemento = document.getElementById(`tarea-${ui.tareaFoco!.tareaId}`);
+      const elemento = document.getElementById(`tarea-${tareaFoco.tareaId}`);
       if (elemento) {
         elemento.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 150);
 
     const apagarFoco = setTimeout(() => {
-      ui.setTareaFocoVisible(false);
+      setTareaFocoVisible(false);
     }, 2500);
 
     return () => {
       clearTimeout(temporizadorScroll);
       clearTimeout(apagarFoco);
     };
-  }, [ui.tareaFoco, ui.tareaFocoVisible, ui.setTareaFocoVisible]);
+  }, [tareaFoco, tareaFocoVisible, setTareaFocoVisible]);
 
   useNovedadesConocidas(
     acceso.usuarioActual,
@@ -240,11 +257,11 @@ export function useTableroPortal() {
 
   const navegarA = useCallback(
     (destino: PortalPestana) => {
-      ui.setTareaFoco(null);
-      ui.setPestana(destino);
+      setTareaFoco(null);
+      setPestana(destino);
       window.scrollTo({ top: 0, behavior: 'instant' });
     },
-    [ui.setPestana, ui.setTareaFoco]
+    [setPestana, setTareaFoco]
   );
 
   const derivados = useMemo(
@@ -299,28 +316,28 @@ export function useTableroPortal() {
 
   const marcarNotificacionesVistas = useCallback(
     (ids: string[]) => {
-      if (!acceso.usuarioActual) return;
+      if (!usuarioActual) return;
       marcarNotificacionesVistasEnStorage(
-        acceso.usuarioActual,
-        ui.notificacionesVistas,
+        usuarioActual,
+        notificacionesVistas,
         ids,
-        ui.setNotificacionesVistas
+        setNotificacionesVistas
       );
     },
-    [acceso.usuarioActual, ui.notificacionesVistas, ui.setNotificacionesVistas]
+    [usuarioActual, notificacionesVistas, setNotificacionesVistas]
   );
 
   const abrirModalPassword = useCallback(() => {
-    if (!acceso.usuarioActual) return;
-    acceso.setUserPassChange(acceso.usuarioActual);
-    acceso.setNuevoUserChange(acceso.usuarioActual);
-    acceso.setModalPasswordOpen(true);
-  }, [acceso.usuarioActual, acceso.setModalPasswordOpen, acceso.setNuevoUserChange, acceso.setUserPassChange]);
+    if (!usuarioActual) return;
+    setUserPassChange(usuarioActual);
+    setNuevoUserChange(usuarioActual);
+    setModalPasswordOpen(true);
+  }, [usuarioActual, setModalPasswordOpen, setNuevoUserChange, setUserPassChange]);
 
   const cerrarModalPassword = useCallback(() => {
-    acceso.setModalPasswordOpen(false);
-    acceso.setMsgPassChange({ tipo: '', texto: '' });
-  }, [acceso.setModalPasswordOpen, acceso.setMsgPassChange]);
+    setModalPasswordOpen(false);
+    setMsgPassChange({ tipo: '', texto: '' });
+  }, [setModalPasswordOpen, setMsgPassChange]);
 
   const tableroVacio =
     acceso.origenCuenta === 'propio' && datos.materias.length === 0 && !ui.cargando;
