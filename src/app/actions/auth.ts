@@ -17,6 +17,7 @@ import {
   obtenerAlumno,
   leerCuenta,
   borrarCuentasSinSincronizar,
+  generarClaveTemporal,
   hashearPassword,
   verificarPassword,
   validarLongitud,
@@ -133,6 +134,8 @@ export async function registrarCuentaAction(
     if (usuario.length < 3 || usuario.length > MAX_USUARIO_LENGTH) {
       return { exito: false, mensaje: 'El usuario tiene que tener entre 3 y 100 caracteres.' };
     }
+    const errorUsuario = nombreDeUsuarioValido(usuario);
+    if (errorUsuario) return { exito: false, mensaje: errorUsuario };
     if (password.length < 6 || password.length > MAX_PASSWORD_LENGTH) {
       return { exito: false, mensaje: 'La contraseña tiene que tener entre 6 y 128 caracteres.' };
     }
@@ -160,7 +163,7 @@ export async function registrarCuentaAction(
     });
     if (existente.rows.length > 0) {
       await registrarFalloLogin(claves);
-      return { exito: false, mensaje: 'Ese usuario ya existe.' };
+      return { exito: false, mensaje: 'No se pudo crear la cuenta. Probá con otro usuario.' };
     }
 
     const id = crearId('a_');
@@ -170,7 +173,7 @@ export async function registrarCuentaAction(
         args: [id, usuario, await hashearPassword(password), new Date().toISOString(), ip, new Date().toISOString()]
       });
     } catch (error) {
-      if (esNombreRepetido(error)) return { exito: false, mensaje: 'Ese usuario ya existe.' };
+      if (esNombreRepetido(error)) return { exito: false, mensaje: 'No se pudo crear la cuenta. Probá con otro usuario.' };
       throw error;
     }
     await establecerSesion(usuario, 1);
@@ -213,6 +216,11 @@ export async function cambiarPasswordAction(usuarioInput: string, passActualInpu
       return { exito: false, mensaje: 'La sesión no es válida. Volvé a iniciar sesión.' };
     }
 
+    const clavesLogin = await obtenerClavesLogin(userClean);
+    if (await loginEstaBloqueado(clavesLogin)) {
+      return { exito: false, mensaje: MENSAJE_LOGIN_BLOQUEADO };
+    }
+
     // 1. Verificamos la contraseña actual directamente (sin efectos secundarios de login)
     const res = await db.execute({
       sql: 'SELECT password FROM alumnos WHERE LOWER(nombre) = LOWER(?)',
@@ -223,6 +231,7 @@ export async function cambiarPasswordAction(usuarioInput: string, passActualInpu
     }
     const credencialesValidas = await verificarPassword(passActualClean, textoONull(res.rows[0].password));
     if (!credencialesValidas) {
+      await registrarFalloLogin(clavesLogin);
       return { exito: false, mensaje: 'La contraseña actual es incorrecta.' };
     }
 
@@ -236,6 +245,7 @@ export async function cambiarPasswordAction(usuarioInput: string, passActualInpu
       sql: 'UPDATE alumnos SET password = ?, sesion_version = ? WHERE LOWER(nombre) = LOWER(?)',
       args: [await hashearPassword(passNuevaClean), nuevaVersion, userClean]
     });
+    await limpiarIntentosLogin(clavesLogin);
     await establecerSesion(userClean, nuevaVersion);
     await registrarAuditoria({ accion: 'cambiar_password', usuario: userClean, detalle: 'Cambio de contraseña', ip: await obtenerIPReal() });
 
@@ -265,7 +275,7 @@ export async function actualizarCuentaAction(
       return { exito: false, mensaje: MENSAJE_LOGIN_BLOQUEADO };
     }
     const sesion = await obtenerUsuarioSesion();
-    if (sesion && sesion.toLowerCase() !== usuario.toLowerCase()) {
+    if (!sesion || sesion.toLowerCase() !== usuario.toLowerCase()) {
       return { exito: false, mensaje: 'La sesión no es válida. Volvé a iniciar sesión.' };
     }
 
@@ -360,13 +370,17 @@ export async function crearAlumnoAction(nombre: string): Promise<RespuestaAction
       args: [nombreFormateado]
     });
     if (existente.rows.length > 0) return { exito: false, mensaje: 'Ya existe un alumno con ese nombre.' };
+    const claveInicial = generarClaveTemporal();
     const id = crearId('a_');
     await db.batch([
-      { sql: 'INSERT INTO alumnos (id, nombre, password) VALUES (?, ?, ?)', args: [id, nombreFormateado, await hashearPassword(nombreFormateado)] },
+      { sql: 'INSERT INTO alumnos (id, nombre, password) VALUES (?, ?, ?)', args: [id, nombreFormateado, await hashearPassword(claveInicial)] },
       { sql: 'INSERT OR IGNORE INTO inscripciones (alumno_id, materia_id) SELECT ?, id FROM materias', args: [id] }
     ], 'write');
     await registrarAuditoria({ accion: 'crear_alumno', usuario: usuarioSesion, detalle: `Creó al alumno ${nombreFormateado}`, ip: await obtenerIPReal() });
-    return { exito: true };
+    return {
+      exito: true,
+      mensaje: `Alumno creado. Contraseña inicial (mostrala una sola vez): ${claveInicial}`
+    };
   } catch (error) {
     console.error('Error en crearAlumnoAction:', error);
     return { exito: false, mensaje: 'No se pudo crear el alumno.' };

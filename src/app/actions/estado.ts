@@ -2,7 +2,7 @@
 
 import { db } from '../turso';
 import { actualizarProgresoTarea, ErrorGrupo } from '../../lib/grupos-tareas';
-import { alumnosConLaMismaCursada } from '../../lib/companeros';
+import { alumnosConAlgunaMateriaEnComun, alumnosConLaMismaCursada, alumnosEnEstado } from '../../lib/companeros';
 import type { RespuestaAction } from './types';
 import {
   texto,
@@ -36,11 +36,6 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       ? await db.execute({ sql: 'SELECT 1 FROM inscripciones WHERE alumno_id = ? LIMIT 1', args: [texto(cuenta?.id)] })
       : { rows: [] };
     if (texto(cuenta?.origen) === 'propio' && yaInscripto.rows.length === 0) {
-      const [nombres, inscriptos] = await Promise.all([
-        db.execute('SELECT nombre FROM alumnos ORDER BY nombre ASC'),
-        db.execute(`SELECT a.nombre AS alumno, i.materia_id
-                    FROM inscripciones i JOIN alumnos a ON a.id = i.alumno_id`)
-      ]);
       return {
         usuario: usuarioSesion,
         rol: 'alumno',
@@ -50,17 +45,14 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         periodoActivo: null,
         materias: [],
         alumnos: [usuarioSesion],
-        registrados: nombres.rows.map((fila) => texto(fila.nombre)),
+        registrados: [usuarioSesion],
         parciales: [],
         notas: [],
         horarios: [],
         cronograma: [],
         progresoPlan: [],
         avisos: [],
-        inscripciones: inscriptos.rows.map((fila) => ({
-          alumno: texto(fila.alumno),
-          materiaId: texto(fila.materia_id)
-        }))
+        inscripciones: []
       };
     }
 
@@ -304,6 +296,32 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
     const alumnosVisibles = verTodaLaCursada
       ? todosLosAlumnos
       : companeros;
+    const registradosVisibles = alumnosEnEstado(
+      inscripciones,
+      usuarioSesion,
+      todosLosAlumnos,
+      verTodaLaCursada
+    );
+    const nombresVisibles = new Set(registradosVisibles.map((nombre) => nombre.toLowerCase()));
+    const inscripcionesVisibles = verTodaLaCursada
+      ? inscripciones
+      : inscripciones.filter(
+        (fila) => nombresVisibles.has(fila.alumno.toLowerCase()) && materiasPropias.has(fila.materiaId)
+      );
+    const companerosMateria = new Set(
+      alumnosConAlgunaMateriaEnComun(inscripciones, usuarioSesion).map((nombre) => nombre.toLowerCase())
+    );
+    const parcialPorId = new Map(
+      resParciales.rows.map((fila) => [texto(fila.id), texto(fila.materia_id)])
+    );
+    const puedeVerNotaParcial = (alumno: string, parcialId: string) => {
+      if (verTodaLaCursada) return true;
+      const materiaId = parcialPorId.get(parcialId);
+      if (!materiaId || !materiasPropias.has(materiaId)) return false;
+      const normalizado = alumno.toLowerCase();
+      if (normalizado === usuarioSesion.toLowerCase()) return true;
+      return companerosMateria.has(normalizado);
+    };
 
     return {
       usuario: usuarioSesion,
@@ -320,7 +338,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       periodoActivo: periodoParaCargar,
       materias: materiasVisibles,
       alumnos: alumnosVisibles,
-      registrados: todosLosAlumnos,
+      registrados: registradosVisibles,
       parciales: resParciales.rows.filter((fila) => materiaVisible(texto(fila.materia_id))).map((fila) => ({
         id: texto(fila.id),
         materia_id: texto(fila.materia_id),
@@ -329,12 +347,14 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         detalles: texto(fila.detalles),
         url: texto(fila.url)
       })),
-      notas: resNotasParciales.rows.map((fila) => ({
-        id: texto(fila.id),
-        parcial_id: texto(fila.parcial_id),
-        alumno: texto(fila.alumno),
-        nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota)
-      })),
+      notas: resNotasParciales.rows
+        .filter((fila) => puedeVerNotaParcial(texto(fila.alumno), texto(fila.parcial_id)))
+        .map((fila) => ({
+          id: texto(fila.id),
+          parcial_id: texto(fila.parcial_id),
+          alumno: texto(fila.alumno),
+          nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota)
+        })),
       horarios: resHorarios.rows.filter((fila) => {
         if (!materiaDeLaCursada(texto(fila.materia_id))) return false;
         const duenio = textoONull(fila.alumno_id);
@@ -358,13 +378,19 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         url: texto(fila.url),
         origen: texto(fila.origen)
       })),
-      progresoPlan: resProgreso.rows.map((fila) => ({
-        alumno: textoONull(fila.alumno),
-        materia_codigo: texto(fila.materia_codigo),
-        estado: texto(fila.estado),
-        nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota),
-        actualizado_en: texto(fila.actualizado_en)
-      })),
+      progresoPlan: resProgreso.rows
+        .filter((fila) => {
+          if (verTodaLaCursada) return true;
+          const alumno = textoONull(fila.alumno);
+          return alumno?.toLowerCase() === usuarioSesion.toLowerCase();
+        })
+        .map((fila) => ({
+          alumno: textoONull(fila.alumno),
+          materia_codigo: texto(fila.materia_codigo),
+          estado: texto(fila.estado),
+          nota: fila.nota == null || fila.nota === '' ? null : Number(fila.nota),
+          actualizado_en: texto(fila.actualizado_en)
+        })),
       avisos: resAvisos.rows
         .filter((fila) => materiaDeLaCursada(texto(fila.materia_id)))
         .map((fila) => ({
@@ -381,7 +407,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
           url: texto(fila.url),
           estado: texto(fila.estado)
         })),
-      inscripciones,
+      inscripciones: inscripcionesVisibles,
       invitacionesGrupo: resInvitacionesGrupo.rows.map((fila) => ({
         id: texto(fila.id),
         grupoId: texto(fila.grupo_id),

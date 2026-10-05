@@ -2,6 +2,7 @@
 // detecta cuando la sesión expiró (redirección a /login/index.php) y
 // vuelve a autenticar automáticamente con las credenciales del entorno.
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
+import { urlEgressCampusPermitida } from './egress.mjs';
 import {
   cabeceraCookies,
   cargarSesion,
@@ -52,12 +53,14 @@ export async function crearCliente({ usuario, contrasena, baseUrl = UGR_BASE_URL
       if (respuesta.status < 300 || respuesta.status >= 400) break;
       const destino = respuesta.headers.get('location');
       if (!destino) break;
-      const urlDestino = new URL(destino, actual);
+      const siguiente = urlEgressCampusPermitida(destino, actual);
+      if (!siguiente) break;
+      const urlDestino = new URL(siguiente);
       if (urlDestino.pathname.includes('/login/index.php')) {
         await guardarSesion(jar, rutaSesion);
         return { url: urlDestino.toString(), html: '', es_requiere_login: true, status: respuesta.status };
       }
-      actual = urlDestino.toString();
+      actual = siguiente;
     }
 
     const html = await respuesta.text();
