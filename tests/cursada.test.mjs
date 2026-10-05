@@ -6,6 +6,7 @@ import {
   obtenerAlumnosSinGrupo,
   obtenerResumenGruposTarea,
   obtenerResumenTareasAlumno,
+  historialPorAlumno,
   formatearFechaDDMMAAAA,
   calcularEstadoSemaforo,
   tareaCompletadaPor,
@@ -210,4 +211,40 @@ test('faseEntregaDesdeHitos indica Entrega 2 cuando el campus está reabierto', 
   assert.equal(tareaCompletadaPor(tarea, 'Ana'), false);
   assert.equal(notaTableroVisibleParaAlumno(tarea, 'Ana'), false);
   assert.deepEqual(notasCerradasEntregaCampus(tarea, 'Ana'), [{ indice: 1, nota: '8' }]);
+});
+
+test('historialPorAlumno solo incluye materias del filtro de inscripción', () => {
+  const materias = [
+    {
+      id: 'm1',
+      nombre: 'Uno',
+      tareas: [{
+        id: 't1',
+        nombre: 'TP',
+        inicio: '2020-01-01',
+        fin: '2020-02-01',
+        completadoPor: ['Ana'],
+        conNota: false,
+        notas: {}
+      }]
+    },
+    {
+      id: 'm2',
+      nombre: 'Dos',
+      tareas: [{
+        id: 't2',
+        nombre: 'TP2',
+        inicio: '2020-01-01',
+        fin: '2020-02-01',
+        completadoPor: ['Ana'],
+        conNota: false,
+        notas: {}
+      }]
+    }
+  ];
+  const sinFiltro = historialPorAlumno('Ana', materias, [], []);
+  assert.equal(sinFiltro.length, 2);
+  const soloM1 = historialPorAlumno('Ana', materias, [], [], new Set(['m1']));
+  assert.equal(soloM1.length, 1);
+  assert.equal(soloM1[0].materia, 'Uno');
 });

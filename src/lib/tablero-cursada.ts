@@ -128,13 +128,15 @@ export function armarDerivadosTablero({
   const alumnosDelRanking = materiaRankingVisible
     ? alumnosDeLaMateria(inscripciones, materiaRankingVisible)
     : [];
-  const ranking = calcularRankingTablero({
-    alumnosRanking: alumnosDelRanking.length > 0 ? alumnosDelRanking : alumnos,
-    materiasDelRanking,
-    materias,
-    parciales,
-    notas
-  });
+  const ranking = materiaRankingVisible && materiasDelRanking.length > 0
+    ? calcularRankingTablero({
+      alumnosRanking: alumnosDelRanking,
+      materiasDelRanking,
+      materias,
+      parciales,
+      notas
+    })
+    : [];
   const rankingPodio = ranking.slice(0, 3);
   const restoRanking = ranking.slice(3);
   const alumnosDelHistorial = ordenarAlumnosParaHistorial(usuarioActual, alumnos, ranking);
@@ -170,7 +172,8 @@ export function armarDerivadosTablero({
         ranking,
         materias,
         notas,
-        parciales
+        parciales,
+        inscripciones
       })
       : null
   };
