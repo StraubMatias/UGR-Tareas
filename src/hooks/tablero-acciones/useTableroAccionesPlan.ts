@@ -6,7 +6,7 @@ import type { Materia } from '../../core/cursada';
 import type { UseTableroAccionesOptions } from './types';
 
 export function useTableroAccionesPlan(opts: UseTableroAccionesOptions) {
-  const { cargarBD, parciales, notas, setProgresoPlanEnEdicion } = opts;
+  const { cargarBD, inscripciones, parciales, notas, setProgresoPlanEnEdicion } = opts;
 
   const handleGuardarProgresoPlan = useCallback(async (alumno: string, materiaCodigo: string, estado: string, nota: string | number = '') => {
     const ok = await conRecargaTablero(
@@ -23,8 +23,8 @@ export function useTableroAccionesPlan(opts: UseTableroAccionesOptions) {
   }, [cargarBD, setProgresoPlanEnEdicion]);
 
   const obtenerEstadoMateria = useCallback(
-    (materia: Materia, alumno: string) => calcularBadgeEstadoMateria(materia, alumno, parciales, notas),
-    [parciales, notas]
+    (materia: Materia, alumno: string) => calcularBadgeEstadoMateria(materia, alumno, parciales, notas, inscripciones),
+    [inscripciones, parciales, notas]
   );
 
   return { handleGuardarProgresoPlan, obtenerEstadoMateria };

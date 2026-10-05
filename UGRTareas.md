@@ -2,6 +2,8 @@
 
 La cursada de la Tecnicatura, junta en un solo lugar.
 
+Presentación para la comisión y el portfolio. La especificación técnica está en [`README.md`](README.md).
+
 UGR Virtual sigue siendo donde se entrega y donde la cátedra publica. Este tablero es donde se entiende el cuatrimestre: qué te falta, cuándo cursás, cuándo se toma el parcial, cómo venís para regularizar o promocionar, y qué te queda de la carrera.
 
 ![Ingreso al tablero](docs/capturas/entrar.jpg)
@@ -62,8 +64,14 @@ El plan de la tecnicatura está cargado con códigos y correlativas. Marcás lo 
 
 ## Cómo se entra
 
-Cada alumno crea su usuario y su clave. En el alta se escribe también el DNI y la contraseña de UGR Virtual: el campus los comprueba en el momento y no quedan guardados en esta página.
+Cada alumno crea su **usuario y contraseña del tablero** (no es la misma clave que UGR Virtual). El tablero arranca vacío hasta la primera sincronización.
 
-Si UGR acepta, sincronizar dice a qué materias de la carrera estás inscripto, guarda esa cursada en el período actual y carga las tareas, el cronograma y los parciales que todavía no estaban. El compañero que sincroniza después se anota en las mismas materias y no duplica lo que ya está.
+Cuando quieras cargar la cursada, usás **Sincronizar** y ahí ingresás el DNI y la clave de UGR Virtual (o SIU Guaraní, según elijas). El campus los comprueba en ese momento; **no se guardan** en la base del tablero.
+
+Si UGR acepta, la sync dice a qué materias del plan estás inscripto, guarda esa cursada en el período actual y trae tareas, cronograma y parciales que todavía no estaban. Quien sincroniza después se anota en las mismas materias sin duplicar lo ya cargado.
 
 A partir de ahí, cada sincronización vuelve a mirar el campus: fechas nuevas, parciales y notas que la cátedra haya publicado.
+
+---
+
+Documentación técnica, despliegue y seguridad: [`README.md`](README.md) · [`SECURITY.md`](SECURITY.md)

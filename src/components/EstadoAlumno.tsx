@@ -39,7 +39,7 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
   const propia = alumno === acciones.usuarioActual;
   const suyas = materiasQueCursa(inscripciones, alumno);
   const propiasDelViewer = materiasQueCursa(inscripciones, acciones.usuarioActual || '');
-  const idsCursada = esAdmin || propia
+  const idsCursada = propia
     ? suyas
     : materiasEnComun(inscripciones, acciones.usuarioActual || '', alumno);
   const materiasDelAlumno = materias.filter((materia) => idsCursada.has(materia.id));

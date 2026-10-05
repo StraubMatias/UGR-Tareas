@@ -22,6 +22,9 @@ ugr-sync/
 │   ├── materias.mjs        #   parser de la lista de cursos
 │   ├── tareas.mjs          #   parser del índice de tareas y del overview
 │   ├── normalizar.mjs      #   fechas, tipos y matcheo (cursos, tareas, parciales)
+│   ├── egress.mjs          #   allowlist de host al seguir redirects (solo campus UGR)
+│   ├── sync-optimizacion.mjs # omitir lecturas Moodle cuando el dato ya es estable
+│   ├── assign-entregas.mjs #   hitos de buzones assign (entregas múltiples)
 │   └── sync-core.mjs       #   núcleo: detección, inserción y backfill de enlaces
 ├── scripts/
 │   ├── login.mjs           #   CLI: inicia sesión y guarda la cookie

@@ -39,7 +39,8 @@ function TarjetaMateria({
 }) {
   const [expandida, setExpandida] = useState(false);
   const cursan = alumnosOrdenadosPromocion.filter((alumno) => materiasQueCursa(inscripciones, alumno).has(materia.id));
-  const miEstado = usuarioActual ? obtenerEstadoMateria(materia, usuarioActual) : null;
+  const yoCursa = usuarioActual ? materiasQueCursa(inscripciones, usuarioActual).has(materia.id) : false;
+  const miEstado = yoCursa && usuarioActual ? obtenerEstadoMateria(materia, usuarioActual) : null;
 
   return (
     <section className="bg-[#161c26] border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
@@ -59,7 +60,9 @@ function TarjetaMateria({
             </span>
           )}
           {!expandida && !miEstado && (
-            <span className="ml-auto shrink-0 text-xs text-slate-500">Sin regla</span>
+            <span className="ml-auto shrink-0 text-xs text-slate-500">
+              {yoCursa ? 'Sin regla' : 'No la cursás'}
+            </span>
           )}
         </button>
         {esAdmin && (
@@ -94,7 +97,7 @@ function TarjetaMateria({
               const estado = obtenerEstadoMateria(materia, alumno);
               return (
                 <div key={alumno} className={`flex items-center justify-between gap-3 bg-[#0f141c] border rounded-xl p-3 ${
-                  alumno === usuarioActual ? 'border-emerald-500/60 ring-1 ring-emerald-500/30' : 'border-slate-800'
+                  yoCursa && alumno === usuarioActual ? 'border-emerald-500/60 ring-1 ring-emerald-500/30' : 'border-slate-800'
                 }`}>
                   <span className="text-sm font-semibold text-slate-200 truncate">{alumno}</span>
                   {estado ? (

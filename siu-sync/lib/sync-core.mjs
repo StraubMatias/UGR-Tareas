@@ -230,19 +230,9 @@ export function clasificarImportacionPlanSiu(materiasPlan, progresoExistente = n
   return { cargadas, yaTenias, enCurso };
 }
 
-export function parsearInformeNotas(html) {
-  const notas = [];
-  // TODO: 根据实际页面结构调整
-  return notas;
-}
-
-export function parsearInscripcionesExamenes(html) {
-  const inscripciones = [];
-  // TODO: 根据实际页面结构调整
-  return inscripciones;
-}
-
-// --- 主同步函数 ---
+// --- Sincronización principal ---
+// Plan de estudio: parsearPlanEstudio / parsearHistoriaAcademica.
+// Inscripciones a exámenes en SIU: no implementado (inscripcionesExamenes queda []).
 
 export async function sincronizarSIU({ cliente } = {}) {
   if (!cliente) {
@@ -270,9 +260,6 @@ export async function sincronizarSIU({ cliente } = {}) {
       (materia) => !materia.omitir && materia.codigoMateria && materia.nota != null
     );
     resultados.enCurso = resultados.planEstudio.filter((materia) => materia.enCurso).length;
-
-    const resExamenes = await cliente.pedir(SIU_RUTAS.inscripcionesExamenes);
-    resultados.inscripcionesExamenes = parsearInscripcionesExamenes(resExamenes.html);
   } catch (error) {
     resultados.error = error.message;
     console.error('❌ Error sincronizando SIU:', error.message);

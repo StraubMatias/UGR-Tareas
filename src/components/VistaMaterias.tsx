@@ -18,7 +18,7 @@ import {
   notasCerradasEntregaCampus
 } from '../core/cursada';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { alumnosDeLaMateria, materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
 interface CondicionesEdicion {
   id: string;
@@ -82,6 +82,7 @@ export default function VistaMaterias({
   tareaFocoVisible,
   onIrAEstadoAlumno
 }: Props) {
+  const [verRestoAdmin, setVerRestoAdmin] = useState(false);
   const { materiasCursando, otrasMaterias } = useMemo(() => {
     const ids = materiasQueCursa(inscripciones, usuarioActual || '');
     return {
@@ -89,25 +90,29 @@ export default function VistaMaterias({
       otrasMaterias: materias.filter((m) => !ids.has(m.id))
     };
   }, [materias, inscripciones, usuarioActual]);
+  const mostrarOtrasMaterias = esAdmin && verRestoAdmin;
 
   const renderTarjetaMateria = (m: Materia) => {
           const cursan = alumnosDeLaMateria(inscripciones, m.id);
+          const yoCursa = usuarioActual ? materiasQueCursa(inscripciones, usuarioActual).has(m.id) : false;
           const expandida = !!materiasExpandidas[m.id];
           const mostrarCompletadas = !!materiasDesplegadas[m.id];
-          const tareasPendientes = m.tareas.filter(
-            (t) => tareaPendienteAlumno(t, usuarioActual)
-          );
-          const tareasCompletadas = m.tareas.filter(
-            (t) => tareaCompletadaPor(t, usuarioActual)
-          );
+          const tareasPendientes = yoCursa
+            ? m.tareas.filter((t) => tareaPendienteAlumno(t, usuarioActual))
+            : [];
+          const tareasCompletadas = yoCursa
+            ? m.tareas.filter((t) => tareaCompletadaPor(t, usuarioActual))
+            : [];
           const gruposTareas = agruparTareasPorUnidad(
             mostrarCompletadas ? m.tareas : tareasPendientes
           );
-          const resumenPlegada = tareasPendientes.length > 0
-            ? `${tareasPendientes.length} pendiente${tareasPendientes.length === 1 ? '' : 's'}`
-            : m.tareas.length === 0
-              ? 'Sin tareas'
-              : 'Al día';
+          const resumenPlegada = !yoCursa
+            ? 'No la cursás'
+            : tareasPendientes.length > 0
+              ? `${tareasPendientes.length} pendiente${tareasPendientes.length === 1 ? '' : 's'}`
+              : m.tareas.length === 0
+                ? 'Sin tareas'
+                : 'Al día';
 
           return (
             <div key={m.id} className="bg-[#161c26] border border-slate-800 rounded-2xl shadow-sm overflow-hidden">
@@ -446,19 +451,39 @@ export default function VistaMaterias({
 
   return (
     <div className="space-y-6">
+      {esAdmin && otrasMaterias.length > 0 && (
+        <div className="border-b border-slate-800 pb-3">
+          <button
+            type="button"
+            onClick={() => setVerRestoAdmin((abierto) => !abierto)}
+            className="text-xs font-semibold text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 px-3 py-1.5 rounded-lg cursor-pointer"
+          >
+            {verRestoAdmin
+              ? 'Ocultar materias que no curso'
+              : `Ver las ${otrasMaterias.length} materia(s) que no curso`}
+          </button>
+        </div>
+      )}
       {materias.length === 0 ? (
         <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
-          Todavía no hay materias cargadas.
+          {esAdmin ? 'Todavía no hay materias cargadas.' : 'Todavía no hay materias de tu cursada.'}
         </div>
+      ) : materiasCursando.length === 0 && (!mostrarOtrasMaterias || otrasMaterias.length === 0) ? (
+        <p className="text-sm text-slate-500 italic">Todavía no hay materias de tu cursada.</p>
       ) : (
         <>
           {materiasCursando.map((m) => renderTarjetaMateria(m))}
-          {otrasMaterias.length > 0 && (
+          {mostrarOtrasMaterias && otrasMaterias.length > 0 && (
             <>
               {materiasCursando.length > 0 && (
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 border-t border-slate-800 pt-4">
-                  {esAdmin ? 'Otras materias del período' : 'Más materias'}
+                  {esAdmin ? 'Materias que no curso' : 'Más materias'}
                 </p>
+              )}
+              {esAdmin && materiasCursando.length === 0 && (
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">
+                  Materias que no curso
+                </h3>
               )}
               {otrasMaterias.map((m) => renderTarjetaMateria(m))}
             </>

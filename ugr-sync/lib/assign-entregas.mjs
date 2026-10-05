@@ -1,6 +1,7 @@
 import { load } from 'cheerio';
 import { randomUUID } from 'node:crypto';
 import { cabeceraCookies } from './autenticar.mjs';
+import { urlEgressCampusPermitida } from './egress.mjs';
 import { textoDesdeDocx } from './docx-texto.mjs';
 import { parsearNotaPublicada } from './tareas.mjs';
 
@@ -506,7 +507,9 @@ export async function descargarArchivoConSesion(cliente, url) {
       if (respuesta.status >= 300 && respuesta.status < 400) {
         const destino = respuesta.headers.get('location');
         if (!destino) return null;
-        actual = new URL(destino, actual).toString();
+        const siguiente = urlEgressCampusPermitida(destino, actual);
+        if (!siguiente) return null;
+        actual = siguiente;
         continue;
       }
       if (!respuesta.ok) return null;

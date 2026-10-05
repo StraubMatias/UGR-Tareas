@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { parcialHabilitado as parcialEstaHabilitado } from '../app/validators';
-import { formatearFechaDDMMAAAA, obtenerDiasHastaFecha, obtenerIconoMateria, type Parcial } from '../core/cursada';
+import { formatearFechaDDMMAAAA, obtenerDiasHastaFecha, obtenerIconoMateria, ordenarParciales, type Materia, type Parcial } from '../core/cursada';
+import { materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
+import { agruparParcialesPorMateria } from '../lib/tablero-cursada';
 
 interface GrupoParciales {
   id: string;
@@ -11,6 +13,8 @@ interface GrupoParciales {
 interface Props {
   parciales: Parcial[];
   parcialesAgrupados: GrupoParciales[];
+  materias: Materia[];
+  inscripciones?: InscripcionAlumno[];
   esAdmin: boolean;
   usuarioActual: string | null;
   alumnos: string[];
@@ -28,6 +32,8 @@ interface Props {
 export default function VistaParciales({
   parciales,
   parcialesAgrupados,
+  materias,
+  inscripciones = [],
   esAdmin,
   usuarioActual,
   alumnos,
@@ -40,6 +46,20 @@ export default function VistaParciales({
   handleGuardarNotaOnBlur
 }: Props) {
   const [materiasExpandidas, setMateriasExpandidas] = useState<Record<string, boolean>>({});
+  const [verRestoAdmin, setVerRestoAdmin] = useState(false);
+  const idsCursada = useMemo(
+    () => materiasQueCursa(inscripciones, usuarioActual || ''),
+    [inscripciones, usuarioActual]
+  );
+  const parcialesAgrupadosResto = useMemo(() => {
+    if (!esAdmin) return [];
+    const resto = parciales.filter((parcial) => !idsCursada.has(parcial.materia_id));
+    return agruparParcialesPorMateria(ordenarParciales(resto), materias);
+  }, [esAdmin, parciales, idsCursada, materias]);
+  const cantidadParcialesResto = useMemo(
+    () => parcialesAgrupadosResto.reduce((total, grupo) => total + grupo.parciales.length, 0),
+    [parcialesAgrupadosResto]
+  );
 
   const toggleMateria = (materiaId: string) => {
     setMateriasExpandidas((prev) => ({ ...prev, [materiaId]: !prev[materiaId] }));
@@ -197,44 +217,85 @@ export default function VistaParciales({
     );
   };
 
+  const renderGrupoMateria = (grupo: GrupoParciales) => {
+    const expandida = !!materiasExpandidas[grupo.id];
+    const cantidad = grupo.parciales.length;
+    const resumen = `${cantidad} parcial${cantidad === 1 ? '' : 'es'}`;
+
+    return (
+      <section key={grupo.id} className="bg-[#161c26] border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+        <button
+          type="button"
+          onClick={() => toggleMateria(grupo.id)}
+          aria-expanded={expandida}
+          className="w-full flex items-center gap-2 sm:gap-3 text-left px-3 py-3 sm:px-4 sm:py-3.5 rounded-t-2xl hover:bg-slate-800/40 transition-colors cursor-pointer"
+        >
+          <span className="text-slate-500 text-sm shrink-0" aria-hidden="true">{expandida ? '▼' : '▶'}</span>
+          <span className="text-lg shrink-0" aria-hidden="true">{obtenerIconoMateria(grupo.nombre)}</span>
+          <span className="text-base sm:text-lg font-extrabold text-white truncate">{grupo.nombre}</span>
+          {!expandida && (
+            <span className="ml-auto shrink-0 text-xs font-semibold text-slate-400 bg-slate-800/80 border border-slate-700 px-2 py-0.5 rounded-md">
+              {resumen}
+            </span>
+          )}
+        </button>
+
+        {expandida && (
+          <div className="px-3 sm:px-4 pb-4 pt-1 space-y-4 border-t border-slate-800">
+            {grupo.parciales.map((p) => renderParcial(p))}
+          </div>
+        )}
+      </section>
+    );
+  };
+
+  const hayDeLaCursada = parcialesAgrupados.length > 0;
+  const hayRestoVisible = esAdmin && verRestoAdmin && parcialesAgrupadosResto.length > 0;
+
   return (
     <div className="space-y-4">
-      {parciales.length === 0 ? (
-        <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
-          Aún no se han programado parciales.
+      {esAdmin && cantidadParcialesResto > 0 && (
+        <div className="border-b border-slate-800 pb-3">
+          <button
+            type="button"
+            onClick={() => setVerRestoAdmin((abierto) => !abierto)}
+            className="text-xs font-semibold text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 px-3 py-1.5 rounded-lg cursor-pointer"
+          >
+            {verRestoAdmin
+              ? 'Ocultar parciales de materias que no curso'
+              : `Ver parciales de materias que no curso (${cantidadParcialesResto})`}
+          </button>
         </div>
+      )}
+      {(esAdmin ? parciales.length === 0 : parcialesAgrupados.length === 0) ? (
+        <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
+          {esAdmin ? 'Aún no se han programado parciales.' : 'Todavía no hay parciales de tu cursada.'}
+        </div>
+      ) : !hayDeLaCursada && !hayRestoVisible ? (
+        <p className="text-sm text-slate-500 italic">
+          {esAdmin && cantidadParcialesResto > 0
+            ? 'No hay parciales de tu cursada. Usá el botón de arriba para ver el resto.'
+            : 'Todavía no hay parciales de tu cursada.'}
+        </p>
       ) : (
-        parcialesAgrupados.map((grupo) => {
-          const expandida = !!materiasExpandidas[grupo.id];
-          const cantidad = grupo.parciales.length;
-          const resumen = `${cantidad} parcial${cantidad === 1 ? '' : 'es'}`;
-
-          return (
-            <section key={grupo.id} className="bg-[#161c26] border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-              <button
-                type="button"
-                onClick={() => toggleMateria(grupo.id)}
-                aria-expanded={expandida}
-                className="w-full flex items-center gap-2 sm:gap-3 text-left px-3 py-3 sm:px-4 sm:py-3.5 rounded-t-2xl hover:bg-slate-800/40 transition-colors cursor-pointer"
-              >
-                <span className="text-slate-500 text-sm shrink-0" aria-hidden="true">{expandida ? '▼' : '▶'}</span>
-                <span className="text-lg shrink-0" aria-hidden="true">{obtenerIconoMateria(grupo.nombre)}</span>
-                <span className="text-base sm:text-lg font-extrabold text-white truncate">{grupo.nombre}</span>
-                {!expandida && (
-                  <span className="ml-auto shrink-0 text-xs font-semibold text-slate-400 bg-slate-800/80 border border-slate-700 px-2 py-0.5 rounded-md">
-                    {resumen}
-                  </span>
-                )}
-              </button>
-
-              {expandida && (
-                <div className="px-3 sm:px-4 pb-4 pt-1 space-y-4 border-t border-slate-800">
-                  {grupo.parciales.map((p) => renderParcial(p))}
-                </div>
+        <>
+          {parcialesAgrupados.map((grupo) => renderGrupoMateria(grupo))}
+          {hayRestoVisible && (
+            <>
+              {hayDeLaCursada && (
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide pt-2 border-t border-slate-800">
+                  Parciales de materias que no curso
+                </h3>
               )}
-            </section>
-          );
-        })
+              {!hayDeLaCursada && (
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">
+                  Parciales de materias que no curso
+                </h3>
+              )}
+              {parcialesAgrupadosResto.map((grupo) => renderGrupoMateria(grupo))}
+            </>
+          )}
+        </>
       )}
     </div>
   );
