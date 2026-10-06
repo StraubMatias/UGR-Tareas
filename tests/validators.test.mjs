@@ -58,6 +58,13 @@ test('tareaHabilitada: fecha futura devuelve false', () => {
   assert.equal(tareaHabilitada(fechaFutura(1)), false);
 });
 
+test('tareaHabilitada: hoy con hora futura devuelve false hasta esa hora', () => {
+  const inicioHoy = `${hoyStr}T23:59`;
+  const apertura = new Date(`${hoyStr}T23:59:00.000-03:00`).getTime();
+  assert.equal(tareaHabilitada(inicioHoy, apertura - 60_000), false);
+  assert.equal(tareaHabilitada(inicioHoy, apertura), true);
+});
+
 // --- tareaDentroDelPlazo ---
 
 test('tareaDentroDelPlazo: fecha vacía o inválida devuelve true', () => {

@@ -263,8 +263,9 @@ export const tareaPendienteAlumno = (tarea: Tarea, alumno: string | null | undef
 
 export const formatearFechaDDMMAAAA = (fechaStr: string | null | undefined): string => {
   if (!fechaStr || fechaStr === 'Sin fecha') return 'Sin fecha';
-  if (fechaStr.includes('-')) {
-    const partes = fechaStr.split('-');
+  const solo = fechaSoloTablero(fechaStr);
+  if (solo?.includes('-')) {
+    const partes = solo.split('-');
     if (partes.length === 3 && partes[0].length === 4) {
       return `${partes[2]}-${partes[1]}-${partes[0]}`;
     }
@@ -294,10 +295,16 @@ export const formatearFechaHora = (fechaStr: string | null | undefined): string 
 const ZONA_CAMPUS = 'America/Argentina/Buenos_Aires';
 const MS_DIA = 24 * 60 * 60 * 1000;
 
-/** Fecha del tablero (YYYY-MM-DD o DD-MM-YYYY) → componentes calendario. */
+export function fechaSoloTablero(fechaStr: string | null | undefined): string | null {
+  if (!fechaStr || fechaStr === 'Sin fecha') return null;
+  const solo = String(fechaStr).trim().split(/[T\s]/)[0];
+  return solo || null;
+}
+
+/** Fecha del tablero (YYYY-MM-DD, YYYY-MM-DDTHH:mm o DD-MM-YYYY) → componentes calendario. */
 export function partesFechaTablero(fechaStr: string | null | undefined): { y: number; m: number; d: number } | null {
   if (!fechaStr || fechaStr === 'Sin fecha') return null;
-  const partes = String(fechaStr).split('-').map(Number);
+  const partes = String(fechaSoloTablero(fechaStr)).split('-').map(Number);
   if (partes.length !== 3 || partes.some((n) => Number.isNaN(n))) return null;
   const [y, m, d] = partes[0] > 31 ? partes : [partes[2], partes[1], partes[0]];
   if (y < 1970 || m < 1 || m > 12 || d < 1 || d > 31) return null;
@@ -319,6 +326,28 @@ export function instanteInicioDiaCampus(fechaStr: string | null | undefined): nu
   const pad = (n: number) => String(n).padStart(2, '0');
   const t = new Date(`${p.y}-${pad(p.m)}-${pad(p.d)}T00:00:00.000-03:00`).getTime();
   return Number.isFinite(t) ? t : null;
+}
+
+/** Apertura real en Argentina: con hora si el sync la trajo; si no, inicio del día. */
+export function instanteAperturaCampus(fechaStr: string | null | undefined): number | null {
+  if (!fechaStr || fechaStr === 'Sin fecha') return null;
+  const conHora = String(fechaStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (conHora) {
+    const t = new Date(`${conHora[1]}-${conHora[2]}-${conHora[3]}T${conHora[4]}:${conHora[5]}:00.000-03:00`).getTime();
+    return Number.isFinite(t) ? t : null;
+  }
+  return instanteInicioDiaCampus(fechaStr);
+}
+
+export function formatearHoraAperturaCampus(fechaStr: string | null | undefined): string | null {
+  const ms = instanteAperturaCampus(fechaStr);
+  if (ms === null) return null;
+  return new Intl.DateTimeFormat('es-AR', {
+    timeZone: ZONA_CAMPUS,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(new Date(ms));
 }
 
 export function milisegundosHastaCierreCampus(
@@ -348,10 +377,11 @@ export const obtenerTimestamp = (fechaStr: string | null | undefined): number | 
   return Number.isFinite(timestamp) ? timestamp : null;
 };
 
-export const tareaEstaHabilitada = (fechaInicio: string | null | undefined): boolean => {
+export const tareaEstaHabilitada = (fechaInicio: string | null | undefined, ahoraMs = Date.now()): boolean => {
   if (!fechaInicio || fechaInicio === 'Sin fecha') return true;
-  const dias = obtenerDiasHastaApertura(fechaInicio);
-  return dias === null || dias <= 0;
+  const apertura = instanteAperturaCampus(fechaInicio);
+  if (apertura === null) return true;
+  return ahoraMs >= apertura;
 };
 
 
@@ -365,7 +395,7 @@ export const multiplicadorPuntosTarea = (tarea: Tarea, alumno: string | null | u
   }
 
   if (!tarea.inicio || tarea.inicio === 'Sin fecha') return 1;
-  const apertura = instanteInicioDiaCampus(tarea.inicio);
+  const apertura = instanteAperturaCampus(tarea.inicio);
   if (apertura === null) return 1;
 
   const diasDesdeApertura = Math.floor((fechaCarga - apertura) / (1000 * 60 * 60 * 24));
@@ -402,15 +432,33 @@ export const obtenerDiasHastaFecha = (fechaStr: string | null, ahoraMs = Date.no
 };
 
 export const obtenerDiasHastaApertura = (fechaStr: string | null, ahoraMs = Date.now()): number | null => {
-  const inicio = instanteInicioDiaCampus(fechaStr);
+  const inicio = instanteAperturaCampus(fechaStr);
   if (inicio === null) return null;
-  const diff = inicio - ahoraMs;
-  if (diff <= 0) return 0;
-  return Math.ceil(diff / MS_DIA);
+  if (inicio <= ahoraMs) return 0;
+
+  const hoyCampus = new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_CAMPUS }).format(new Date(ahoraMs));
+  const diaApertura = fechaSoloTablero(fechaStr);
+  if (diaApertura && hoyCampus === diaApertura) return 0;
+
+  const inicioDiaApertura = instanteInicioDiaCampus(fechaStr);
+  const inicioHoy = instanteInicioDiaCampus(hoyCampus);
+  if (inicioDiaApertura === null || inicioHoy === null) {
+    return Math.ceil((inicio - ahoraMs) / MS_DIA);
+  }
+  return Math.max(0, Math.round((inicioDiaApertura - inicioHoy) / MS_DIA));
 };
 
-export const obtenerTextoApertura = (diasParaAbrir: number | null): string => {
+export const obtenerTextoApertura = (
+  diasParaAbrir: number | null,
+  fechaInicioStr: string | null = null,
+  ahoraMs = Date.now()
+): string => {
   if (diasParaAbrir === null) return 'Sin fecha de apertura';
+  const apertura = instanteAperturaCampus(fechaInicioStr);
+  if (diasParaAbrir === 0 && apertura !== null && apertura > ahoraMs) {
+    const hora = formatearHoraAperturaCampus(fechaInicioStr);
+    return hora ? `Abre hoy a las ${hora}` : 'Abre hoy';
+  }
   if (diasParaAbrir === 0) return 'Abre hoy';
   return `Abre en ${diasParaAbrir} ${diasParaAbrir === 1 ? 'día' : 'días'}`;
 };
@@ -528,7 +576,7 @@ export const esForo = (nombreTarea: string | null | undefined): boolean => /\(\s
 export const calcularEstadoSemaforo = (fechaFinStr: string | null | undefined, fechaInicioStr: string | null | undefined = null) => {
   if (fechaInicioStr && !tareaEstaHabilitada(fechaInicioStr)) {
     const diasParaAbrir = obtenerDiasHastaApertura(fechaInicioStr);
-    const textoApertura = obtenerTextoApertura(diasParaAbrir);
+    const textoApertura = obtenerTextoApertura(diasParaAbrir, fechaInicioStr);
     if (diasParaAbrir === null) {
       return { texto: 'Sin fecha de apertura', estilo: 'bg-slate-800 text-slate-400 border-slate-700' };
     }
