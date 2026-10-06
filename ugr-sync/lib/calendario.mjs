@@ -49,9 +49,10 @@ export function extraerEventosCalendario(html) {
     const cuando = partesHora(stamps[0]);
     const cierre = stamps[1] ? partesHora(stamps[1]) : null;
     const enlace = nodo.find('a[href*="/mod/"], a[href*="zoom.us"], a[href*="zoom"]').not('[href*="calendar/view.php"]').first().attr('href') || '';
+    const fechaEvento = parsearTimestampMoodle(stamps[0]);
     eventos.push({
       titulo,
-      fecha: parsearTimestampMoodle(stamps[0]),
+      fecha: fechaEvento ? fechaEvento.split('T')[0] : null,
       horaInicio: cuando?.hora || null,
       horaFin: cierre?.hora || null,
       dia: cuando?.dia || null,
@@ -69,9 +70,10 @@ export function extraerEventosCalendario(html) {
     if (vistos.has(clave)) return;
     vistos.add(clave);
     const cuando = partesHora(stamp);
+    const fechaEvento = parsearTimestampMoodle(stamp);
     eventos.push({
       titulo,
-      fecha: parsearTimestampMoodle(stamp),
+      fecha: fechaEvento ? fechaEvento.split('T')[0] : null,
       horaInicio: null,
       horaFin: null,
       dia: cuando?.dia || null,

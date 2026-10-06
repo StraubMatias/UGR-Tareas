@@ -154,7 +154,7 @@ Ranking y “misma cursada” siguen en `alumnosConLaMismaCursada` (conjunto exa
 
 Grupos: la UI y `gestionarGrupoTareaAction` solo aceptan alumnos con fila en `inscripciones` para la `materia_id` de esa tarea. Salir o borrar el grupo no exige eso.
 
-Filtro **Grupales** en Estado (`tareaGrupalPendienteEnTablero` en `src/core/cursada.ts`): tareas grupales **sin nota** en el tablero del alumno (incluye entregadas pero aún sin calificación). Si la tarea lleva nota y el alumno ya tiene nota, pasa a **Completadas**. Si la tarea no lleva nota (`con_nota = 0`), sale de Grupales cuando figura entregada.
+Filtro **Grupales** en Estado (`tareaGrupalPendienteEnTablero` en `src/core/cursada.ts`): tareas grupales donde el alumno aún no tiene nota en el tablero (puede coincidir con **Sin nota** si ya entregó). Si la tarea lleva nota y el alumno ya tiene nota, pasa a **Completadas**. Si la tarea no lleva nota (`con_nota = 0`), sale de Grupales cuando figura entregada.
 
 Un alumno no escribe entregas ni notas propias. Esas filas las escribe el sync (o el admin, para corregir). El campus es la fuente. `guardarProgresoPlanAction` sí deja que el alumno marque una materia del plan como aprobada o promocionada: eso no sale del campus.
 

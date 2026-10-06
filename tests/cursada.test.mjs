@@ -14,7 +14,10 @@ import {
   textoBadgeFaseEntrega,
   tareaUsaEntregasMultiplesCampus,
   notaTableroVisibleParaAlumno,
-  notasCerradasEntregaCampus
+  notasCerradasEntregaCampus,
+  tareaEstaHabilitada,
+  obtenerDiasHastaApertura,
+  obtenerTextoApertura
 } from '../src/core/cursada.ts';
 
 test('obtenerGrupoDeAlumno: encuentra el grupo correspondiente o retorna null', () => {
@@ -169,7 +172,8 @@ test('obtenerResumenTareasAlumno: grupal entregada sin nota sigue en Grupales', 
   ];
   const resumen = obtenerResumenTareasAlumno('Ana', materias);
   assert.equal(resumen.faltaNota.length, 1);
-  assert.equal(resumen.grupales.length, 0);
+  assert.equal(resumen.grupales.length, 1);
+  assert.equal(resumen.grupales[0].id, 't1');
   assert.equal(resumen.completadas.length, 0);
 });
 
@@ -196,7 +200,8 @@ test('entrega múltiple marcada en Entrega 2 va a Sin nota aunque Entrega 1 teng
   }];
   const resumen = obtenerResumenTareasAlumno('Ana', materias);
   assert.equal(resumen.faltaNota.length, 1);
-  assert.equal(resumen.grupales.length, 0);
+  assert.equal(resumen.grupales.length, 1);
+  assert.equal(resumen.grupales[0].id, 't1');
 });
 
 test('tareaUsaEntregasMultiplesCampus distingue SGSI de EGR', () => {
@@ -275,4 +280,48 @@ test('historialPorAlumno solo incluye materias del filtro de inscripción', () =
   const soloM1 = historialPorAlumno('Ana', materias, [], [], new Set(['m1']));
   assert.equal(soloM1.length, 1);
   assert.equal(soloM1[0].materia, 'Uno');
+});
+
+test('tareaEstaHabilitada respeta la hora de apertura del campus', () => {
+  const dia = '2030-06-15';
+  const inicio = `${dia}T17:34`;
+  const antes = new Date(`${dia}T17:33:00.000-03:00`).getTime();
+  const despues = new Date(`${dia}T17:34:00.000-03:00`).getTime();
+  assert.equal(tareaEstaHabilitada(inicio, antes), false);
+  assert.equal(tareaEstaHabilitada(inicio, despues), true);
+});
+
+test('obtenerResumenTareasAlumno clasifica como futura si abre más tarde el mismo día', () => {
+  const dia = '2030-06-15';
+  const inicio = `${dia}T17:34`;
+  const materias = [{
+    id: 'm1',
+    nombre: 'Gestión',
+    tareas: [{
+      id: 't1',
+      nombre: 'Herramientas de Gestión de Activos',
+      inicio,
+      fin: '2030-07-01',
+      conNota: false,
+      completadoPor: [],
+      notas: {}
+    }]
+  }];
+  const antes = new Date(`${dia}T12:00:00.000-03:00`).getTime();
+  const resumen = obtenerResumenTareasAlumno('Ana', materias);
+  assert.equal(tareaEstaHabilitada(inicio, antes), false);
+  assert.equal(resumen.futuras.length, 1);
+  assert.equal(resumen.pendientes.length, 0);
+});
+
+test('obtenerTextoApertura muestra la hora cuando abre más tarde el mismo día', () => {
+  const dia = '2030-06-15';
+  const inicio = `${dia}T17:34`;
+  const ahora = new Date(`${dia}T10:00:00.000-03:00`).getTime();
+  assert.equal(obtenerDiasHastaApertura(inicio, ahora), 0);
+  assert.equal(obtenerTextoApertura(0, inicio, ahora), 'Abre hoy a las 17:34');
+});
+
+test('formatearFechaDDMMAAAA ignora la hora en inicio con T', () => {
+  assert.equal(formatearFechaDDMMAAAA('2026-10-06T17:34'), '06-10-2026');
 });

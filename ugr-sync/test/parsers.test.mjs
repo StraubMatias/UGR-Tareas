@@ -266,7 +266,7 @@ test('extraerActividadesOverview parsea todas las consignas del overview unifica
   const auditorias = actividades.find((a) => a.id === '199391');
   assert.equal(auditorias.nombre, 'Auditorías de SI, UII Tarea nro.1');
   assert.equal(auditorias.tipo, 'actividad'); // inferirTipoTarea no marca "Tarea" como TP
-  assert.equal(auditorias.inicio, '2025-09-08');
+  assert.equal(auditorias.inicio, '2025-09-08T21:00');
   assert.equal(auditorias.fin, '2025-09-27');
   assert.equal(auditorias.unidad, 2);
   assert.equal(auditorias.conNota, true);
