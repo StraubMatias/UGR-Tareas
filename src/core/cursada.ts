@@ -235,13 +235,27 @@ export const notasCerradasEntregaCampus = (
     .map((h) => ({ indice: h.indiceEntrega as number, nota: String(h.nota) }));
 };
 
-export const tareaFaltaNota = (tarea: Tarea, alumno: string | null | undefined): boolean => (
-  Boolean(alumno)
-  && tarea.conNota
-  && tareaCompletadaPor(tarea, alumno)
-  && notaTableroVisibleParaAlumno(tarea, alumno)
-  && (tarea.notas?.[alumno as string] === undefined || tarea.notas?.[alumno as string] === null || tarea.notas?.[alumno as string] === '')
-);
+const notaTableroVaciaParaAlumno = (tarea: Tarea, alumno: string): boolean => {
+  const nota = tarea.notas?.[alumno];
+  return nota === undefined || nota === null || nota === '';
+};
+
+export const tareaFaltaNota = (tarea: Tarea, alumno: string | null | undefined): boolean => {
+  if (!alumno || !tarea.conNota || !tareaCompletadaPor(tarea, alumno)) return false;
+
+  if (tareaUsaEntregasMultiplesCampus(tarea)) {
+    const fase = faseEntregaCampus(tarea, alumno);
+    if (fase?.requiereEntrega) {
+      const activa = tarea.entregas?.[alumno]?.find((hito) => hito.esActiva);
+      if (activa?.nota != null && String(activa.nota).trim() !== '') return false;
+      return true;
+    }
+    return notaTableroVaciaParaAlumno(tarea, alumno);
+  }
+
+  return notaTableroVisibleParaAlumno(tarea, alumno)
+    && notaTableroVaciaParaAlumno(tarea, alumno);
+};
 
 export const tareaPendienteAlumno = (tarea: Tarea, alumno: string | null | undefined): boolean => (
   !tareaCompletadaPor(tarea, alumno) || tareaFaltaNota(tarea, alumno)
@@ -613,9 +627,11 @@ const alumnoTieneNotaEnTarea = (tarea: Tarea, alumno: string): boolean => {
   return nota !== undefined && nota !== null && String(nota).trim() !== '';
 };
 
-/** Grupales: con nota en el tablero → Completadas; sin nota → acá (aunque ya esté entregada). */
+/** Grupales: armar/unirse al grupo; si ya está en Sin nota o Completadas, no duplicar acá. */
 export const tareaGrupalPendienteEnTablero = (tarea: Tarea, alumno: string | null | undefined): boolean => {
   if (!tarea.grupal || !alumno) return false;
+  if (tareaFaltaNota(tarea, alumno)) return false;
+  if (tarea.conNota && tareaCompletadaPor(tarea, alumno) && alumnoTieneNotaEnTarea(tarea, alumno)) return false;
   if (tarea.conNota) return !alumnoTieneNotaEnTarea(tarea, alumno);
   return !tareaCompletadaPor(tarea, alumno);
 };
