@@ -588,6 +588,37 @@ export async function enriquecerNotasDesdeDevoluciones(cliente, entregas) {
   return salida;
 }
 
+function entregaActivaPendiente(entrega) {
+  const estado = String(entrega.estado || '');
+  const pendiente = entrega.pendiente ?? (
+    Boolean(entrega.esActiva) && (
+      entrega.nota == null || /reabiert|reopened|sin calificar/i.test(estado)
+    )
+  );
+  return Boolean(entrega.esActiva) && (pendiente || /reabiert|reopened/i.test(estado));
+}
+
+/** Índice de entrega (1, 2, …) que UGR tiene abierta y pendiente ahora. */
+export function indiceFasePendienteEntrega(entregas) {
+  if (!Array.isArray(entregas)) return null;
+  const activa = entregas.find((entrega) => entrega.indiceEntrega != null && entregaActivaPendiente(entrega));
+  return activa?.indiceEntrega ?? null;
+}
+
+function indiceFasePendienteDesdeFilasDb(filas) {
+  return indiceFasePendienteEntrega((filas || []).map((fila) => ({
+    indiceEntrega: fila.indice_entrega == null || fila.indice_entrega === ''
+      ? null
+      : Number(fila.indice_entrega),
+    esActiva: Number(fila.es_activa) === 1,
+    estado: fila.estado,
+    nota: fila.nota,
+    pendiente: Number(fila.es_activa) === 1 && (
+      fila.nota == null || /reabiert|reopened|sin calificar/i.test(String(fila.estado || ''))
+    )
+  })));
+}
+
 export function resumirEntregasParaTablero(entregas) {
   const activa = entregas.find((e) => e.esActiva);
   const conNota = [...entregas]
@@ -614,6 +645,12 @@ export async function aplicarEntregasAssignEnDb({
   entregas
 }) {
   if (!tareaId || !alumnoId || !Array.isArray(entregas)) return resumirEntregasParaTablero([]);
+
+  const hitosPrevios = await db.execute({
+    sql: 'SELECT indice_entrega, es_activa, estado, nota FROM tareas_entregas WHERE tarea_id = ? AND alumno_id = ?',
+    args: [tareaId, alumnoId]
+  });
+  const indicePendienteAntes = indiceFasePendienteDesdeFilasDb(hitosPrevios.rows);
 
   await db.execute({
     sql: 'DELETE FROM tareas_entregas WHERE tarea_id = ? AND alumno_id = ?',
@@ -666,7 +703,10 @@ export async function aplicarEntregasAssignEnDb({
   const otraFasePendiente = entregas.some(
     (e) => e.esActiva && (e.pendiente || /reabiert|reopened/i.test(e.estado || ''))
   );
-  if (!resumen.entregada && entregasCalificadas > 0 && otraFasePendiente) {
+  const indicePendienteDespues = indiceFasePendienteEntrega(entregas);
+  const cambioDeFasePendiente = indicePendienteDespues != null
+    && indicePendienteAntes !== indicePendienteDespues;
+  if (!resumen.entregada && entregasCalificadas > 0 && otraFasePendiente && cambioDeFasePendiente) {
     await db.execute({
       sql: `DELETE FROM completadas WHERE tarea_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))`,
       args: [tareaId, alumnoId, alumnoNombre || '']
