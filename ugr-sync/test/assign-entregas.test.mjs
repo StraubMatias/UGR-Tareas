@@ -217,3 +217,64 @@ test('aplicarEntregasAssignEnDb destilda si el intento actual está reabierto', 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('aplicarEntregasAssignEnDb no destilda en resync si la fase pendiente sigue siendo la misma', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ugr-entregas-'));
+  const db = createClient({ url: `file:${join(dir, 'test.db')}` });
+  const entregas = [
+    {
+      numero: 2,
+      esActiva: false,
+      indiceEntrega: 1,
+      pendiente: false,
+      estado: 'Calificado',
+      nota: 10,
+      comentarioProf: 'Ok',
+      archivos: []
+    },
+    {
+      numero: 3,
+      esActiva: true,
+      indiceEntrega: 2,
+      pendiente: true,
+      estado: 'Reabierto',
+      nota: null,
+      comentarioProf: '',
+      archivos: []
+    }
+  ];
+  try {
+    await db.batch([
+      `CREATE TABLE tareas_entregas (
+        id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, numero INTEGER,
+        indice_entrega INTEGER, es_activa INTEGER, estado TEXT, nota TEXT, nota_origen TEXT,
+        comentario_prof TEXT, feedback_url TEXT, feedback_nombre TEXT, devolucion_texto TEXT,
+        sincronizado_en TEXT, UNIQUE(tarea_id, alumno_id, numero)
+      )`,
+      'CREATE TABLE completadas (tarea_id TEXT, alumno_id TEXT, alumno TEXT, completada_en TEXT, UNIQUE(tarea_id, alumno))'
+    ], 'write');
+    await aplicarEntregasAssignEnDb({
+      db,
+      tareaId: 't1',
+      alumnoId: 'alu',
+      alumnoNombre: 'Ana',
+      entregas
+    });
+    await db.execute({
+      sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, ?)`,
+      args: ['t1', 'alu', 'Ana', '2026-10-06T12:00:00.000Z']
+    });
+    await aplicarEntregasAssignEnDb({
+      db,
+      tareaId: 't1',
+      alumnoId: 'alu',
+      alumnoNombre: 'Ana',
+      entregas
+    });
+    const fila = (await db.execute('SELECT completada_en FROM completadas WHERE tarea_id = ?', ['t1'])).rows[0];
+    assert.equal(fila?.completada_en, '2026-10-06T12:00:00.000Z');
+  } finally {
+    db.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

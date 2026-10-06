@@ -168,8 +168,35 @@ test('obtenerResumenTareasAlumno: grupal entregada sin nota sigue en Grupales', 
     }
   ];
   const resumen = obtenerResumenTareasAlumno('Ana', materias);
-  assert.equal(resumen.grupales.length, 1);
+  assert.equal(resumen.faltaNota.length, 1);
+  assert.equal(resumen.grupales.length, 0);
   assert.equal(resumen.completadas.length, 0);
+});
+
+test('entrega múltiple marcada en Entrega 2 va a Sin nota aunque Entrega 1 tenga 10', () => {
+  const materias = [{
+    id: 'm1',
+    nombre: 'SGSI',
+    tareas: [{
+      id: 't1',
+      nombre: 'Entregas del trabajo práctico- caso',
+      inicio: 'Sin fecha',
+      fin: '2026-10-07',
+      conNota: true,
+      grupal: true,
+      completadoPor: ['Ana'],
+      notas: {},
+      entregas: {
+        Ana: [
+          { numero: 2, indiceEntrega: 1, esActiva: false, estado: 'Calificado', nota: '10', pendiente: false },
+          { numero: 3, indiceEntrega: 2, esActiva: true, estado: 'Reabierto', nota: null, pendiente: true }
+        ]
+      }
+    }]
+  }];
+  const resumen = obtenerResumenTareasAlumno('Ana', materias);
+  assert.equal(resumen.faltaNota.length, 1);
+  assert.equal(resumen.grupales.length, 0);
 });
 
 test('tareaUsaEntregasMultiplesCampus distingue SGSI de EGR', () => {
