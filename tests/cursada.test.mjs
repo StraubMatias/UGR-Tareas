@@ -172,7 +172,8 @@ test('obtenerResumenTareasAlumno: grupal entregada sin nota sigue en Grupales', 
   ];
   const resumen = obtenerResumenTareasAlumno('Ana', materias);
   assert.equal(resumen.faltaNota.length, 1);
-  assert.equal(resumen.grupales.length, 0);
+  assert.equal(resumen.grupales.length, 1);
+  assert.equal(resumen.grupales[0].id, 't1');
   assert.equal(resumen.completadas.length, 0);
 });
 
@@ -199,7 +200,8 @@ test('entrega múltiple marcada en Entrega 2 va a Sin nota aunque Entrega 1 teng
   }];
   const resumen = obtenerResumenTareasAlumno('Ana', materias);
   assert.equal(resumen.faltaNota.length, 1);
-  assert.equal(resumen.grupales.length, 0);
+  assert.equal(resumen.grupales.length, 1);
+  assert.equal(resumen.grupales[0].id, 't1');
 });
 
 test('tareaUsaEntregasMultiplesCampus distingue SGSI de EGR', () => {

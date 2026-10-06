@@ -675,10 +675,9 @@ const alumnoTieneNotaEnTarea = (tarea: Tarea, alumno: string): boolean => {
   return nota !== undefined && nota !== null && String(nota).trim() !== '';
 };
 
-/** Grupales: armar/unirse al grupo; si ya está en Sin nota o Completadas, no duplicar acá. */
+/** Grupales: armar/unirse al grupo o ver el equipo; puede coincidir con Sin nota si ya entregaron. */
 export const tareaGrupalPendienteEnTablero = (tarea: Tarea, alumno: string | null | undefined): boolean => {
   if (!tarea.grupal || !alumno) return false;
-  if (tareaFaltaNota(tarea, alumno)) return false;
   if (tarea.conNota && tareaCompletadaPor(tarea, alumno) && alumnoTieneNotaEnTarea(tarea, alumno)) return false;
   if (tarea.conNota) return !alumnoTieneNotaEnTarea(tarea, alumno);
   return !tareaCompletadaPor(tarea, alumno);
