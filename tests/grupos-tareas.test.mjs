@@ -93,6 +93,32 @@ test('aislamiento de tareas, grupos e individuales y validaciones', async (t) =>
   assert.deepEqual((await db.execute('SELECT tarea_id, alumno FROM notas_tareas ORDER BY tarea_id')).rows.map((r) => [r.tarea_id, r.alumno]), [['individual', 'Beto'], ['t', 'Ana']]);
 });
 
+test('con Entrega 2 abierta se puede marcar aunque quede nota de la entrega 1', async (t) => {
+  const db = await preparar(t);
+  await db.batch([
+    'ALTER TABLE tareas ADD COLUMN nombre TEXT',
+    `CREATE TABLE IF NOT EXISTS tareas_entregas (
+      id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, numero INTEGER,
+      indice_entrega INTEGER, es_activa INTEGER, estado TEXT, nota TEXT, nota_origen TEXT,
+      comentario_prof TEXT, feedback_url TEXT, feedback_nombre TEXT, devolucion_texto TEXT,
+      sincronizado_en TEXT, UNIQUE(tarea_id, alumno_id, numero)
+    )`,
+    "UPDATE tareas SET nombre = 'Entregas del trabajo práctico- caso', grupal = 0 WHERE id = 'individual'",
+    `INSERT INTO notas_tareas (id, tarea_id, alumno_id, alumno, nota, cargada_en, cerrada) VALUES ('n1', 'individual', 'a', 'Ana', '10', '2026-01-01T00:00:00.000Z', 0)`,
+    `INSERT INTO tareas_entregas (
+      id, tarea_id, alumno_id, numero, indice_entrega, es_activa, estado, nota, sincronizado_en
+    ) VALUES ('e1', 'individual', 'a', 2, 1, 0, 'Calificado', '10', '2026-01-01')`,
+    `INSERT INTO tareas_entregas (
+      id, tarea_id, alumno_id, numero, indice_entrega, es_activa, estado, nota, sincronizado_en
+    ) VALUES ('e2', 'individual', 'a', 3, 2, 1, 'Reabierto', NULL, '2026-03-01')`
+  ], 'write');
+  await actualizarProgresoTarea(db, 'individual', ana, { alternarEntrega: true });
+  const fila = (await db.execute(
+    "SELECT completada_en FROM completadas WHERE tarea_id = 'individual' AND alumno_id = 'a'"
+  )).rows[0];
+  assert.ok(fila?.completada_en);
+});
+
 test('propagarNotasGrupalesEnMaterias replica nota tras sync de un integrante', async (t) => {
   const db = await preparar(t);
   await db.batch([
