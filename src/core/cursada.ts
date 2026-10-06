@@ -190,11 +190,15 @@ export const tareaCompletadaPor = (tarea: Tarea, alumno: string | null | undefin
     const hitos = tarea.entregas?.[alumno as string];
     if (hitos?.length) {
       const activa = hitos.find((h) => h.esActiva);
-      if (activa && (activa.pendiente || /reabiert|reopened/i.test(activa.estado || ''))) return false;
       const faseAbierta = hitos.some(
         (h) => h.esActiva && h.indiceEntrega != null && (h.pendiente || !h.nota)
       );
-      if (faseAbierta) return false;
+      const campusPideEntrega = Boolean(
+        activa && (activa.pendiente || /reabiert|reopened/i.test(activa.estado || ''))
+      ) || faseAbierta;
+      if (campusPideEntrega) {
+        return tarea.completadoPor.includes(alumno as string);
+      }
     }
     return tarea.completadoPor.includes(alumno as string);
   }
