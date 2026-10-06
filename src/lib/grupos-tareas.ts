@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import type { Client, InValue, Transaction } from '@libsql/client';
-import { tareaHabilitada, validarNota } from '../app/validators.ts';
+import { formatearNotaParaMostrar, tareaHabilitada, validarNota } from '../app/validators.ts';
+import {
+  tareaCompletadaPor,
+  tareaUsaEntregasMultiplesCampus,
+  type EntregaHitoTarea,
+  type Tarea
+} from '../core/cursada.ts';
 
 export class ErrorGrupo extends Error {}
 
 interface TareaFila {
   id: string;
+  nombre?: string | null;
   grupal?: number | bigint | string | null;
   permite_individual?: number | bigint | string | null;
   inicio?: string | null;
@@ -108,6 +115,75 @@ async function tieneProgreso(tx: Transaction, tareaId: string, alumnos: string[]
     if (filas.length) return true;
   }
   return false;
+}
+
+async function hitosEntregaAlumno(
+  tx: Transaction,
+  tareaId: string,
+  alumnoId: string
+): Promise<EntregaHitoTarea[]> {
+  const filas = await consultar<Record<string, unknown>>(tx,
+    `SELECT numero, indice_entrega, es_activa, estado, nota
+     FROM tareas_entregas WHERE tarea_id = ? AND alumno_id = ?
+     ORDER BY CAST(indice_entrega AS INTEGER), numero`,
+    [tareaId, alumnoId]
+  );
+  return filas
+    .filter((fila) => fila.indice_entrega != null && fila.indice_entrega !== '')
+    .map((fila) => {
+      const esActiva = Number(fila.es_activa) === 1;
+      const tieneNota = fila.nota != null && fila.nota !== '';
+      const estado = String(fila.estado ?? '');
+      return {
+        numero: Number(fila.numero),
+        indiceEntrega: Number(fila.indice_entrega),
+        esActiva,
+        estado: estado.length > 120 ? `${estado.slice(0, 117)}…` : estado,
+        nota: tieneNota ? formatearNotaParaMostrar(String(fila.nota)) : null,
+        pendiente: esActiva && (!tieneNota || /reabiert|reopened|sin calificar/i.test(estado))
+      };
+    });
+}
+
+async function tareaEstadoUiParaAlumno(
+  tx: Transaction,
+  tarea: TareaFila,
+  alumno: Persona
+): Promise<Tarea> {
+  const tareaId = tarea.id;
+  const completadas = await consultar<{ alumno: string }>(tx,
+    'SELECT alumno FROM completadas WHERE tarea_id = ?', [tareaId]);
+  const notasRows = await consultar<{ alumno: string; nota: unknown }>(tx,
+    'SELECT alumno, nota FROM notas_tareas WHERE tarea_id = ?', [tareaId]);
+  const notas: Record<string, string | null> = {};
+  for (const fila of notasRows) {
+    notas[fila.alumno] = fila.nota == null ? null : formatearNotaParaMostrar(String(fila.nota));
+  }
+  const hitos = await hitosEntregaAlumno(tx, tareaId, alumno.id);
+  return {
+    id: tareaId,
+    nombre: String(tarea.nombre ?? ''),
+    inicio: tarea.inicio ?? null,
+    fin: null,
+    unidad: null,
+    conNota: Number(tarea.con_nota) === 1,
+    completadoPor: completadas.map((fila) => fila.alumno),
+    notas,
+    entregas: hitos.length ? { [alumno.nombre]: hitos } : undefined
+  };
+}
+
+/** Misma regla que el checkbox en Materias/Estado (tareaCompletadaPor), no solo filas en completadas. */
+async function entregaMarcadaEnUi(
+  tx: Transaction,
+  tarea: TareaFila,
+  alumno: Persona
+): Promise<boolean> {
+  if (!tareaUsaEntregasMultiplesCampus({ nombre: String(tarea.nombre ?? '') })) {
+    return tieneProgreso(tx, tarea.id, [alumno.id]);
+  }
+  const tareaUi = await tareaEstadoUiParaAlumno(tx, tarea, alumno);
+  return tareaCompletadaPor(tareaUi, alumno.nombre);
 }
 
 // Sincroniza entregas y notas existentes entre todos los integrantes actuales del grupo.
@@ -498,7 +574,7 @@ export async function actualizarProgresoTarea(
     const integrantes = await destinatarios(tx, tarea, alumno);
     const fecha = new Date().toISOString();
     if (alternarEntrega) {
-      const marcada = await tieneProgreso(tx, tareaId, [alumno.id]);
+      const marcada = await entregaMarcadaEnUi(tx, tarea, alumno);
       if (marcada) {
         const notas = await consultar<Record<string, unknown>>(tx,
           'SELECT 1 FROM notas_tareas WHERE tarea_id = ? AND alumno_id = ?', [tareaId, alumno.id]
@@ -511,11 +587,7 @@ export async function actualizarProgresoTarea(
           sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, ?)
                 ON CONFLICT(tarea_id, alumno) DO UPDATE SET
                   alumno_id = excluded.alumno_id,
-                  completada_en = CASE
-                    WHEN completadas.completada_en IS NOT NULL AND TRIM(completadas.completada_en) != ''
-                    THEN completadas.completada_en
-                    ELSE excluded.completada_en
-                  END`,
+                  completada_en = excluded.completada_en`,
           args: [tareaId, integrante.id, integrante.nombre, fecha]
         });
       }

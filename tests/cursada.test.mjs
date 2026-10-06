@@ -125,14 +125,13 @@ test('obtenerResumenTareasAlumno: tarea grupal con nota no cuenta en Grupales', 
   assert.equal(resumen.totalGrupales, 1);
 });
 
-test('tareaCompletadaPor destilda si hay entrega activa reabierta', () => {
-  const tarea = {
+test('tareaCompletadaPor con Entrega 2 abierta usa la marcación local del tablero', () => {
+  const base = {
     id: 't1',
     nombre: 'Entregas del trabajo práctico- caso',
     inicio: null,
     fin: null,
     conNota: true,
-    completadoPor: ['Ana'],
     notas: { Ana: 8 },
     entregas: {
       Ana: [{
@@ -145,7 +144,8 @@ test('tareaCompletadaPor destilda si hay entrega activa reabierta', () => {
       }]
     }
   };
-  assert.equal(tareaCompletadaPor(tarea, 'Ana'), false);
+  assert.equal(tareaCompletadaPor({ ...base, completadoPor: [] }, 'Ana'), false);
+  assert.equal(tareaCompletadaPor({ ...base, completadoPor: ['Ana'] }, 'Ana'), true);
 });
 
 test('obtenerResumenTareasAlumno: grupal entregada sin nota sigue en Grupales', () => {
@@ -209,6 +209,7 @@ test('faseEntregaDesdeHitos indica Entrega 2 cuando el campus está reabierto', 
   };
   assert.match(textoBadgeFaseEntrega(tarea, 'Ana'), /Entrega 2/);
   assert.equal(tareaCompletadaPor(tarea, 'Ana'), false);
+  assert.equal(tareaCompletadaPor({ ...tarea, completadoPor: ['Ana'] }, 'Ana'), true);
   assert.equal(notaTableroVisibleParaAlumno(tarea, 'Ana'), false);
   assert.deepEqual(notasCerradasEntregaCampus(tarea, 'Ana'), [{ indice: 1, nota: '8' }]);
 });
