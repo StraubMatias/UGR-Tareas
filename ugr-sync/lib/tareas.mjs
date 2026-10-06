@@ -10,7 +10,7 @@
 import { load } from 'cheerio';
 import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { extraerSesskey } from './materias.mjs';
-import { esNombreConsignaValido, inferirTipoTarea, limpiarTextoParaBusqueda, notaEnEscalaDiez, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
+import { esNombreConsignaValido, fechaCampusParaAlmacenar, inferirTipoTarea, limpiarTextoParaBusqueda, notaEnEscalaDiez, parsearFechaHoraCampus, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
 
 function indiceColumna(encabezados, rotulos) {
   for (let i = 0; i < encabezados.length; i += 1) {
@@ -42,27 +42,29 @@ const ROTULOS_CIERRE = ['cierre', 'cierra', 'cerrará', 'cerrara', 'vencimiento'
 
 // Fecha desde una celda: prioriza timestamp numérico (data-mdl-overview-value o
 // data-timestamp), luego <time datetime="..."> y por último el texto visible.
-function fechaDeCelda($, celda) {
+function fechaDeCelda($, celda, { esCierre = false } = {}) {
   if (!celda || celda.length === 0) return null;
+
+  const guardar = (valor) => fechaCampusParaAlmacenar(valor, { esCierre });
 
   const rawTs = $(celda).attr('data-mdl-overview-value')
     || $(celda).children('span[data-timestamp]').attr('data-timestamp')
     || '';
   if (rawTs && /^\d+$/.test(rawTs)) {
     const parseada = parsearTimestampMoodle(rawTs);
-    if (parseada) return parseada;
+    if (parseada) return guardar(parseada);
   }
 
   const time = $(celda).find('time[datetime]').first();
   if (time.length) {
-    const v = parsearFechaMoodle($(time).attr('datetime'));
-    if (v) return v;
+    const v = parsearFechaHoraCampus($(time).attr('datetime'));
+    if (v) return guardar(v);
   }
 
   const texto = limpiarTexto($(celda).text());
   if (texto && texto !== 'Sin fecha') {
-    const v = parsearFechaMoodle(texto);
-    if (v) return v;
+    const v = parsearFechaHoraCampus(texto);
+    if (v) return guardar(v);
   }
   return null;
 }
@@ -101,8 +103,8 @@ export function extraerTareas(html, baseUrl = '') {
 
       let fin = null;
       let inicio = null;
-      if (celdaVencOverview.length) fin = fechaDeCelda($, celdaVencOverview);
-      else if (celdaVenc && celdaVenc.length) fin = fechaDeCelda($, celdaVenc) || parsearFechaMoodle(celdas[colVenc] || undefined);
+      if (celdaVencOverview.length) fin = fechaDeCelda($, celdaVencOverview, { esCierre: true });
+      else if (celdaVenc && celdaVenc.length) fin = fechaDeCelda($, celdaVenc, { esCierre: true }) || parsearFechaMoodle(celdas[colVenc] || undefined);
 
       if (celdaDispOverview.length) inicio = fechaDeCelda($, celdaDispOverview);
       else if (colDisp !== -1 && filaTds.eq(colDisp).length) {
@@ -115,8 +117,8 @@ export function extraerTareas(html, baseUrl = '') {
       if (!fin || !inicio) {
         const filaHtml = $(fila).html() || '';
         const tiempos = [...filaHtml.matchAll(/<time[^>]*datetime="([^"]+)"/gi)].map((m) => m[1]);
-        if (!inicio) inicio = parsearFechaMoodle(tiempos[0] || undefined);
-        if (!fin) fin = parsearFechaMoodle(tiempos[tiempos.length - 1] || undefined);
+        if (!inicio) inicio = fechaCampusParaAlmacenar(parsearFechaHoraCampus(tiempos[0] || undefined));
+        if (!fin) fin = fechaCampusParaAlmacenar(parsearFechaHoraCampus(tiempos[tiempos.length - 1] || undefined), { esCierre: true });
       }
 
       // En formato overview la celda de nombre trae la unidad en un sub-bloque
@@ -287,7 +289,8 @@ export function extraerActividadesOverview(html, baseUrl = '') {
       const fechaItem = (item) => {
         const celda = $(fila).find(`td[data-mdl-overview-item="${item}"]`).first();
         if (!celda.length) return null;
-        return fechaDeCelda($, celda);
+        const esCierre = item === 'duedate' || item === 'timeclose' || item === 'cutoffdate';
+        return fechaDeCelda($, celda, { esCierre });
       };
       const inicio = fechaItem('allowsubmissionsfromdate') || fechaItem('timeopen') || 'Sin fecha';
       const fin = fechaItem('duedate') || fechaItem('timeclose') || fechaItem('cutoffdate') || 'Sin fecha';
@@ -574,10 +577,16 @@ export function extraerFechasActividad(html) {
     const partes = renglon.match(/^([^:]+):\s*(.+)$/);
     if (!partes) return;
     const rotulo = partes[1].toLowerCase();
-    const valor = parsearFechaMoodle(partes[2]);
-    if (!valor) return;
-    if (ROTULOS_APERTURA.some((r) => rotulo.includes(r))) resultado.inicio = valor;
-    else if (ROTULOS_CIERRE.some((r) => rotulo.includes(r))) resultado.fin = valor;
+    if (ROTULOS_APERTURA.some((r) => rotulo.includes(r))) {
+      const valor = fechaCampusParaAlmacenar(parsearFechaHoraCampus(partes[2]));
+      if (valor) resultado.inicio = valor;
+    } else if (ROTULOS_CIERRE.some((r) => rotulo.includes(r))) {
+      const valor = fechaCampusParaAlmacenar(
+        parsearFechaHoraCampus(partes[2]) || parsearFechaMoodle(partes[2]),
+        { esCierre: true }
+      );
+      if (valor) resultado.fin = valor;
+    }
   });
 
   return resultado;
