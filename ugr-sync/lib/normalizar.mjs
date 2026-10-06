@@ -63,21 +63,72 @@ export function parsearFechaMoodle(texto) {
 
 const ZONA_CAMPUS = 'America/Argentina/Buenos_Aires';
 
+function partesInstanteCampus(ms) {
+  const fecha = new Date(ms);
+  if (Number.isNaN(fecha.getTime())) return null;
+  const partes = new Intl.DateTimeFormat('en-GB', {
+    timeZone: ZONA_CAMPUS,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).formatToParts(fecha);
+  const tomar = (tipo) => partes.find((p) => p.type === tipo)?.value;
+  const y = tomar('year');
+  const m = tomar('month');
+  const d = tomar('day');
+  const h = tomar('hour');
+  const min = tomar('minute');
+  if (!y || !m || !d || h == null || min == null) return null;
+  return { y, m, d, h, min };
+}
+
+export function fechaCampusDesdeInstante(ms) {
+  const partes = partesInstanteCampus(ms);
+  if (!partes) return null;
+  return `${partes.y}-${partes.m}-${partes.d}T${partes.h}:${partes.min}`;
+}
+
+/** Fecha de campus con hora si Moodle la trae (apertura 17:34, etc.). Sin hora → YYYY-MM-DD. */
+export function parsearFechaHoraCampus(texto) {
+  const textoLimpio = String(texto || '').trim();
+  if (!textoLimpio || textoLimpio === 'Sin fecha') return null;
+
+  if (/[+-]\d{2}:\d{2}$|Z$/i.test(textoLimpio)) {
+    const ms = Date.parse(textoLimpio);
+    if (Number.isFinite(ms)) return fechaCampusDesdeInstante(ms);
+  }
+
+  const isoLocal = textoLimpio.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{1,2}):(\d{2})/);
+  if (isoLocal) {
+    return `${isoLocal[1]}T${isoLocal[2].padStart(2, '0')}:${isoLocal[3]}`;
+  }
+
+  const fecha = parsearFechaMoodle(textoLimpio);
+  if (!fecha) return null;
+  const hora = textoLimpio.match(/(?:,\s*|\s)(\d{1,2}):(\d{2})(?:\s|$)/);
+  if (hora) return `${fecha}T${hora[1].padStart(2, '0')}:${hora[2]}`;
+  return fecha;
+}
+
 export function parsearTimestampMoodle(timestampMs) {
   if (!timestampMs && timestampMs !== 0) return null;
   const numero = Number(timestampMs);
   if (Number.isNaN(numero)) return null;
-  // Moodle manda el instante en segundos. El día que ve el alumno es el de
-  // Argentina: en el servidor (UTC) el cierre de las 23:59 cae al día siguiente.
   const ms = numero < 1e11 ? numero * 1000 : numero;
-  const fecha = new Date(ms);
-  if (Number.isNaN(fecha.getTime())) return null;
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: ZONA_CAMPUS,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(fecha);
+  return fechaCampusDesdeInstante(ms);
+}
+
+/** Guarda en DB: cierre solo día; apertura con hora salvo medianoche (inicio del día). */
+export function fechaCampusParaAlmacenar(valor, { esCierre = false } = {}) {
+  if (!valor) return null;
+  const texto = String(valor).trim();
+  if (esCierre) return texto.split(/[T\s]/)[0] || null;
+  const medianoche = texto.match(/^(\d{4}-\d{2}-\d{2})T00:00$/);
+  if (medianoche) return medianoche[1];
+  return texto;
 }
 
 const NUMEROS_ROMANOS = { i: 1, v: 5, x: 10 };

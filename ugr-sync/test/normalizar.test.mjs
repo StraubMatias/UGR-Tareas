@@ -21,6 +21,7 @@ import {
   limpiarTextoParaBusqueda,
   normalizarNombre,
   parsearFechaMoodle,
+  parsearFechaHoraCampus,
   parsearTimestampMoodle,
   parsearUnidadMoodle
 } from '../lib/normalizar.mjs';
@@ -35,16 +36,25 @@ test('parsearFechaMoodle convierte fechas ISO y en español', () => {
   assert.equal(parsearFechaMoodle('texto sin fecha'), null);
 });
 
-test('parsearTimestampMoodle convierte timestamp a YYYY-MM-DD', () => {
+test('parsearTimestampMoodle convierte timestamp a fecha-hora en Argentina', () => {
   const ts = new Date('2026-10-02T23:55:00Z').getTime();
-  assert.equal(parsearTimestampMoodle(ts), '2026-10-02');
+  assert.equal(parsearTimestampMoodle(ts), '2026-10-02T20:55');
   assert.equal(parsearTimestampMoodle(null), null);
   assert.equal(parsearTimestampMoodle('nope'), null);
 });
 
 test('parsearTimestampMoodle usa el día que muestra el campus, no el de UTC', () => {
   // 25/09/2026 23:59 en Argentina es 26/09/2026 02:59 UTC.
-  assert.equal(parsearTimestampMoodle(1790391540), '2026-09-25');
+  assert.equal(parsearTimestampMoodle(1790391540), '2026-09-25T23:59');
+});
+
+test('parsearFechaHoraCampus conserva la hora de apertura del campus', () => {
+  assert.equal(
+    parsearFechaHoraCampus('martes, 6 de octubre de 2026, 17:34'),
+    '2026-10-06T17:34'
+  );
+  assert.equal(parsearFechaHoraCampus('2026-10-06'), '2026-10-06');
+  assert.equal(parsearFechaHoraCampus('2026-10-06T17:34:00+00:00'), '2026-10-06T14:34');
 });
 
 test('parsearUnidadMoodle convierte rótulos de unidad de Moodle a número', () => {

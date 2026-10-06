@@ -1,6 +1,7 @@
 // Validaciones compartidas entre cliente y servidor.
 // Este archivo no lleva 'use client' ni 'use server': se importa desde ambos lados.
-// Mantenerlo sin dependencias externas permite usarlo en los tests (node --test).
+
+import { tareaEstaHabilitada } from '../core/cursada.ts';
 
 export function parcialHabilitado(fecha: string | null | undefined): boolean {
   if (!fecha || fecha === 'Sin fecha') return false;
@@ -11,14 +12,7 @@ export function parcialHabilitado(fecha: string | null | undefined): boolean {
   return !Number.isNaN(fechaParcial.getTime()) && fechaParcial <= hoy;
 }
 
-export function tareaHabilitada(fecha: string | null | undefined): boolean {
-  if (!fecha || fecha === 'Sin fecha') return true;
-
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const fechaInicio = new Date(`${fecha}T00:00:00`);
-  return !Number.isNaN(fechaInicio.getTime()) && fechaInicio <= hoy;
-}
+export const tareaHabilitada = tareaEstaHabilitada;
 
 export function tareaDentroDelPlazo(fecha: string | null | undefined): boolean {
   if (!fecha || fecha === 'Sin fecha') return true;
