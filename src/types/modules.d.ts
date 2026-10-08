@@ -64,6 +64,14 @@ declare module '../../ugr-sync/lib/sync-core.mjs' {
   export function cargarNotasDesdeEnlaces(opciones: { cliente: unknown; db: unknown; materiaIds?: string[]; alumnoId?: string; alumnoNombre?: string }): Promise<{ notas: unknown[]; cargadas: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>; noLeidas: Array<{ materia?: string; nombre?: string }>; pendientesEntrega?: Array<{ materia?: string; nombre?: string }> }>;
 }
 
+declare module '../../ugr-sync/lib/cronograma-oficial.mjs' {
+  export function sincronizarEnlacesZoomHorarios(opciones: {
+    db: unknown;
+    cliente: unknown;
+    mapeos?: unknown[];
+  }): Promise<number>;
+}
+
 declare module '../../ugr-sync/lib/previa.mjs' {
   import type { MapeoCurso, ResultadoTareasNuevas } from '../../ugr-sync/lib/sync-core.mjs';
   export interface ResultadoPrevia extends ResultadoTareasNuevas {
