@@ -112,10 +112,30 @@ export async function ejecutarHigieneCronograma(db) {
     }
   }
 
+  const parcialesBasura = await db.execute(
+    `SELECT id FROM parciales
+     WHERE nombre LIKE '%opcional%'
+        OR nombre LIKE 'Parcial (%'
+        OR (detalles LIKE '%cronograma académico%' AND nombre LIKE 'Parcial%')`
+  );
+  let parcialesEliminados = 0;
+  if (parcialesBasura.rows.length > 0) {
+    const ids = parcialesBasura.rows.map((f) => f.id);
+    for (let i = 0; i < ids.length; i += 80) {
+      const trozo = ids.slice(i, i + 80);
+      await db.execute({
+        sql: `DELETE FROM parciales WHERE id IN (${trozo.map(() => '?').join(',')})`,
+        args: trozo
+      });
+    }
+    parcialesEliminados = ids.length;
+  }
+
   const parciales = await promoverParcialesDesdeCronograma({ db, materiaIds });
 
   return {
     eventosEliminados: idsBorrar.size,
+    parcialesEliminados,
     parcialesInsertados: parciales.insertadas
   };
 }

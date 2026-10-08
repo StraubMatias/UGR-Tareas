@@ -340,10 +340,14 @@ textarea {
     gap: 1rem;
   }
 
-  /* Una sola tarea: ocupa el ancho completo, no media columna vacía */
-  .estado-alumnos .estado-tareas-columnas[data-cantidad-tareas='1'] {
+  /* Una sola tarea en total: ancho completo */
+  .estado-alumnos .estado-tareas-rejilla-global[data-cantidad-tareas='1'] {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.estado-tareas-rejilla-global {
+  padding: 0.25rem 0;
 }
 
 .estado-tarea-slot {
