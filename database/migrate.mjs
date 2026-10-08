@@ -686,6 +686,64 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     await db.execute('CREATE INDEX IF NOT EXISTS idx_tareas_entregas_tarea ON tareas_entregas(tarea_id, alumno_id)');
   });
 
+  await ejecutarMigracion(32, 'enlace de clase (Zoom) en horarios', async () => {
+    await agregarColumnaSiFalta('horarios', 'url_clase', "TEXT NOT NULL DEFAULT ''");
+  });
+
+  await ejecutarMigracion(33, 'restaurar plan manual de comisión 2026 tras PDFs', async () => {
+    const { repararCronogramaComision2026, insertarPlanesCronograma } = await import('./planes-cronograma-comision.mjs');
+    const { ejecutarHigieneCronograma } = await import('./cronograma-higiene.mjs');
+    const materias = await db.execute('SELECT id, nombre FROM materias');
+    const reparado = await repararCronogramaComision2026(db, materias.rows);
+    await insertarPlanesCronograma(db, materias.rows);
+    const higiene = await ejecutarHigieneCronograma(db);
+    console.log(
+      `   Cronograma: ${reparado.oficialBorrados} fila(s) oficial(es) quitadas; plan manual reafirmado (${reparado.manualActualizados}); ${higiene.eventosEliminados} evento(s) UGR de ruido eliminados.`
+    );
+  });
+
+  await ejecutarMigracion(35, 'regla parciales_y_tps en materias con metodología mixta', async () => {
+    await db.execute(`
+      UPDATE materias
+      SET regla_promocion = 'parciales_y_tps'
+      WHERE regla_promocion = 'metodologia'
+        AND condiciones LIKE '%parcial%'
+        AND (condiciones LIKE '%trabajo%práctico%' OR condiciones LIKE '%trabajo%practico%' OR condiciones LIKE '%TP%')
+    `);
+    await db.execute(`
+      UPDATE materias
+      SET regla_promocion = 'parciales_y_tps', nota_minima_regularizar = 6, nota_minima_promocionar = 8
+      WHERE nombre LIKE '%CONCEPTOS DE DESARROLLO%'
+        AND (regla_promocion = 'metodologia' OR regla_promocion = 'tp_nota')
+    `);
+  });
+
+  await ejecutarMigracion(34, 'cronograma: quitar parciales falsos y títulos basura', async () => {
+    const { ejecutarHigieneCronograma } = await import('./cronograma-higiene.mjs');
+    const higiene = await ejecutarHigieneCronograma(db);
+    console.log(
+      `   Cronograma: ${higiene.tiposCorregidos} examen(es) reclasificados; ${higiene.parcialesFantasma} parcial(es) fantasma eliminados; ${higiene.eventosEliminados} evento(s) duplicados.`
+    );
+  });
+
+  await ejecutarMigracion(36, 'cronograma: columnas PDF fusionadas y parciales fuera de plan', async () => {
+    const { repararCronogramaComision2026 } = await import('./planes-cronograma-comision.mjs');
+    const { ejecutarHigieneCronograma } = await import('./cronograma-higiene.mjs');
+    const materias = await db.execute('SELECT id, nombre FROM materias');
+    await repararCronogramaComision2026(db, materias.rows);
+    const higiene = await ejecutarHigieneCronograma(db);
+    console.log(
+      `   Cronograma: ${higiene.eventosEliminados} evento(s) basura; ${higiene.parcialesMalImportados ?? 0} parcial(es) mal importados eliminados.`
+    );
+  });
+
+  await ejecutarMigracion(37, 'horarios: enlaces Zoom/URL de clase (comisión 2026)', async () => {
+    const { aplicarEnlacesZoomComisionEnDb } = await import('../ugr-sync/lib/zoom-enlaces-comision.mjs');
+    const materias = await db.execute('SELECT id, nombre FROM materias');
+    const filas = await aplicarEnlacesZoomComisionEnDb(db, materias.rows);
+    console.log(`   Zoom: ${filas} fila(s) de horario con url_clase actualizada(s).`);
+  });
+
   await db.close?.();
 }
 

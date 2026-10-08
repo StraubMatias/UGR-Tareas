@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { obtenerIconoMateria, type Materia } from '../core/cursada';
 import { materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
+import { reglaPromocionEfectiva } from '../lib/promocion-materia';
 
 interface CondicionesEdicion {
   id: string;
@@ -41,6 +42,7 @@ function TarjetaMateria({
   const cursan = alumnosOrdenadosPromocion.filter((alumno) => materiasQueCursa(inscripciones, alumno).has(materia.id));
   const yoCursa = usuarioActual ? materiasQueCursa(inscripciones, usuarioActual).has(materia.id) : false;
   const miEstado = yoCursa && usuarioActual ? obtenerEstadoMateria(materia, usuarioActual) : null;
+  const reglaVista = reglaPromocionEfectiva(materia);
 
   return (
     <section className="bg-[#161c26] border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
@@ -84,9 +86,10 @@ function TarjetaMateria({
 
       {expandida && (
         <div className="px-4 sm:px-6 pb-5 border-t border-slate-800 pt-4">
-          {materia.reglaPromocion !== 'metodologia' && (
+          {reglaVista !== 'metodologia' && (
             <p className="text-xs text-slate-400 mb-3">
-              Regulariza desde {materia.notaMinimaRegularizar}{['activos_porcentaje', 'tp_porcentaje_nota'].includes(materia.reglaPromocion) ? '%' : ''} · Promociona desde {materia.notaMinimaPromocionar}{materia.reglaPromocion === 'activos_porcentaje' ? '%' : ''}
+              Regulariza desde {materia.notaMinimaRegularizar}{['activos_porcentaje', 'tp_porcentaje_nota'].includes(reglaVista) ? '%' : ''} · Promociona desde {materia.notaMinimaPromocionar}{reglaVista === 'activos_porcentaje' ? '%' : ''}
+              {reglaVista === 'parciales_y_tps' && ' · Cada parcial rendido y cada TP con nota'}
             </p>
           )}
           <p className="text-sm text-slate-300 whitespace-pre-wrap">

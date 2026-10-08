@@ -160,6 +160,37 @@ export function buscarMateriaPorFragmento(materias, fragmento) {
   return materias.find((m) => String(m.nombre || '').includes(f));
 }
 
+/** Vuelve a cargar el plan de comisión 2026 y quita filas `oficial` que lo hayan pisado. */
+export async function repararCronogramaComision2026(db, materias) {
+  let oficialBorrados = 0;
+  let manualActualizados = 0;
+  for (const cronograma of PLANES_CRONOGRAMA_COMISION) {
+    const materia = buscarMateriaPorFragmento(materias, cronograma.materia);
+    if (!materia) continue;
+    const del = await db.execute({
+      sql: "DELETE FROM cronograma_eventos WHERE materia_id = ? AND origen = 'oficial'",
+      args: [materia.id]
+    });
+    oficialBorrados += Number(del.rowsAffected ?? 0);
+    for (const [fecha, modalidad, tipo, titulo, detalles] of cronograma.filas) {
+      if (!String(fecha).startsWith('2026-')) continue;
+      const id = `cronograma_${materia.id}_${fecha}_${titulo}`;
+      await db.execute({
+        sql: `INSERT INTO cronograma_eventos (id, materia_id, fecha, modalidad, tipo, titulo, detalles, url, origen)
+              VALUES (?, ?, ?, ?, ?, ?, ?, '', 'manual')
+              ON CONFLICT(materia_id, fecha, titulo) DO UPDATE SET
+                modalidad = excluded.modalidad,
+                tipo = excluded.tipo,
+                detalles = excluded.detalles,
+                origen = 'manual'`,
+        args: [id, materia.id, fecha, modalidad, tipo, titulo, detalles || '']
+      });
+      manualActualizados += 1;
+    }
+  }
+  return { oficialBorrados, manualActualizados };
+}
+
 export async function insertarPlanesCronograma(db, materias) {
   let insertados = 0;
   for (const cronograma of PLANES_CRONOGRAMA_COMISION) {

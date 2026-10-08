@@ -163,19 +163,37 @@ export default function VistaHorarios({
                         const materia = materias.find((item) => item.id === horario.materia_id);
                         const tema = eventos.tituloClaseEnCursadaPorMateria?.get(horario.materia_id);
                         const titulo = tema || materia?.nombre || 'Materia';
+                        const enlaceClase =
+                          eventos.enlacesClasePorMateria?.get(horario.materia_id)
+                          || horario.url_clase?.trim()
+                          || '';
                         return (
                           <div key={`${claveDia}-${horario.id}`} className="calendar-event calendar-class" title={`${titulo} · ${horario.hora_inicio} - ${horario.hora_fin}`}>
                             <span className="font-bold">{horario.hora_inicio}</span>
                             <span className="block truncate">{titulo}</span>
+                            {enlaceClase && (
+                              <a
+                                href={enlaceClase}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block truncate text-[10px] font-semibold text-blue-300 hover:underline mt-0.5"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                Zoom
+                              </a>
+                            )}
                           </div>
                         );
                       })}
                       {eventos.parciales.map((parcial) => {
                         const materia = materias.find((item) => item.id === parcial.materia_id);
+                        const esRecup = /\brecuperatorio\b/i.test(parcial.nombre);
+                        const etiqueta = esRecup ? 'Recup.' : 'Parcial';
                         return (
                           <div key={parcial.id} className="calendar-event calendar-exam" title={`${parcial.nombre} · ${materia?.nombre || 'Materia'}`}>
-                            <span className="font-bold">Parcial</span> {materia?.nombre || 'Materia'}
-                            {parcial.detalles && <span className="block truncate opacity-75">{parcial.detalles}</span>}
+                            <span className="font-bold">{etiqueta}</span>{' '}
+                            <span className="block truncate">{esRecup ? parcial.nombre : (materia?.nombre || 'Materia')}</span>
+                            {!esRecup && parcial.detalles && <span className="block truncate opacity-75">{parcial.detalles}</span>}
                           </div>
                         );
                       })}
@@ -336,9 +354,10 @@ export default function VistaHorarios({
                       );
                     }
                     for (const parcial of eventos.parciales) {
+                      const esRecupModal = /\brecuperatorio\b/i.test(parcial.nombre);
                       grupoDe(parcial.materia_id, '80').bloques.push(
                         <div key={`modal-${parcial.id}`} className="calendar-modal-event calendar-exam">
-                          <p className="text-sm font-extrabold">Parcial · {parcial.nombre}</p>
+                          <p className="text-sm font-extrabold">{esRecupModal ? parcial.nombre : `Parcial · ${parcial.nombre}`}</p>
                           {parcial.detalles && <p className="mt-2 text-sm opacity-85">{parcial.detalles}</p>}
                         </div>
                       );
