@@ -8,6 +8,7 @@
 // Documentación completa: ugr-sync/docs/GUIA-SINCRONIZACION.md
 import { createInterface } from 'node:readline/promises';
 import { createClient } from '@libsql/client';
+import { cargarCredencialesUGRDesdeArchivos } from '../lib/sync/env-local.mjs';
 import { conectarUGR } from '../lib/sync-core.mjs';
 import {
   faseCronogramasOficiales,
@@ -17,6 +18,7 @@ import {
 } from './lib/flujo-sync-comision.mjs';
 
 process.loadEnvFile?.('.env.local');
+cargarCredencialesUGRDesdeArchivos();
 
 function leerFlags() {
   const autoSi = process.argv.includes('--yes') || process.argv.includes('-y');

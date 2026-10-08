@@ -62,14 +62,7 @@ declare module '../../ugr-sync/lib/sync-core.mjs' {
   export function insertarEventosCronograma(opciones: { db: unknown; eventos: unknown[] }): Promise<number>;
   export function aplicarComplementoCampus(opciones: { db: unknown; detectado: unknown; alumnoId?: string; alumnoNombre?: string; materiaIds?: string[] }): Promise<{ eventos: number; horarios: number; fechas: number; notas: number; notasCargadas?: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>; pendientesEntrega?: Array<{ materia?: string; nombre?: string }>; parcialesDesdeCronograma?: number; parcialesDesdeCronogramaItems?: Array<{ materiaId?: string; nombre?: string; fecha?: string }> }>;
   export function cargarNotasDesdeEnlaces(opciones: { cliente: unknown; db: unknown; materiaIds?: string[]; alumnoId?: string; alumnoNombre?: string }): Promise<{ notas: unknown[]; cargadas: Array<{ materia?: string; nombre?: string; nota?: string; yaEstaba?: boolean }>; noLeidas: Array<{ materia?: string; nombre?: string }>; pendientesEntrega?: Array<{ materia?: string; nombre?: string }> }>;
-}
-
-declare module '../../ugr-sync/lib/cronograma-oficial.mjs' {
-  export function sincronizarEnlacesZoomHorarios(opciones: {
-    db: unknown;
-    cliente: unknown;
-    mapeos?: unknown[];
-  }): Promise<number>;
+  export function sincronizarEnlacesZoomHorarios(opciones: { db: unknown; cliente: unknown; mapeos?: unknown[] }): Promise<number>;
 }
 
 declare module '../../ugr-sync/lib/previa.mjs' {

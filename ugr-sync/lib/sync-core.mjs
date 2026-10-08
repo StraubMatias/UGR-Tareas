@@ -64,7 +64,9 @@ export {
 };
 
 import { ajustarClasesAlHorario, clasificarEventosCalendario, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
-import { textoPareceColumnasFusionadas } from './cronograma-oficial.mjs';
+import { sincronizarEnlacesZoomHorarios, textoPareceColumnasFusionadas } from './cronograma-oficial.mjs';
+
+export { sincronizarEnlacesZoomHorarios };
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { cabeceraCookies } from './autenticar.mjs';
 import { extraerEnlacesDeCursada, interpretarCondiciones, textoDeArchivoCampus, urlArchivoDeRecurso } from './metodologia.mjs';
