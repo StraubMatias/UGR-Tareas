@@ -432,6 +432,17 @@ export const obtenerDiasHastaFecha = (fechaStr: string | null, ahoraMs = Date.no
   return Math.ceil(diff / MS_DIA);
 };
 
+/** Días de calendario (campus): negativo = pasado, 0 = hoy, 1 = mañana. */
+export const diferenciaDiasCalendarioCampus = (fechaStr: string | null, ahoraMs = Date.now()): number | null => {
+  const inicioObjetivo = instanteInicioDiaCampus(fechaStr);
+  const hoyCampus = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(
+    new Date(ahoraMs)
+  );
+  const inicioHoy = instanteInicioDiaCampus(hoyCampus);
+  if (inicioObjetivo === null || inicioHoy === null) return null;
+  return Math.round((inicioObjetivo - inicioHoy) / MS_DIA);
+};
+
 export const obtenerDiasHastaApertura = (fechaStr: string | null, ahoraMs = Date.now()): number | null => {
   const inicio = instanteAperturaCampus(fechaStr);
   if (inicio === null) return null;

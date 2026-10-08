@@ -92,6 +92,11 @@ Flags: `--yes`, `--dry`, `--cronogramas`.
 | `database/migrate.mjs` | Esquema: `tareas`, `parciales`, `cronograma_eventos`, `avisos_moodle`, `horarios.url_clase`, … |
 | `database/cronograma-higiene.mjs` | Borra ruido UGR si hay plan fuerte; promueve parciales desde cronograma |
 | `database/planes-cronograma-comision.mjs` | Plan manual de respaldo (ej. SGSI sin fechas en PDF) |
+| `database/enlaces-clase-comision.json` | Catálogo único Zoom/URL (calendario Next + `zoom-enlaces-comision.mjs`) |
+| `ugr-sync/lib/zoom-cursada.mjs` | Elige enlace por día/hora de `horarios` |
+| `ugr-sync/lib/zoom-enlaces-comision.mjs` | Semilla de enlaces; migración 37 y sync escriben `url_clase` |
+
+Ver también [`docs/CONTEXTO-IA.md`](../../docs/CONTEXTO-IA.md) (handoff calendario / campana / promoción).
 
 ## `detectarTareasNuevas` (corazón del sync)
 

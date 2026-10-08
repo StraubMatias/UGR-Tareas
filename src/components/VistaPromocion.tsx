@@ -88,7 +88,18 @@ function TarjetaMateria({
         <div className="px-4 sm:px-6 pb-5 border-t border-slate-800 pt-4">
           {reglaVista !== 'metodologia' && (
             <p className="text-xs text-slate-400 mb-3">
-              Regulariza desde {materia.notaMinimaRegularizar}{['activos_porcentaje', 'tp_porcentaje_nota'].includes(reglaVista) ? '%' : ''} · Promociona desde {materia.notaMinimaPromocionar}{reglaVista === 'activos_porcentaje' ? '%' : ''}
+              {reglaVista === 'activos_porcentaje' && (
+                <>Regulariza desde {materia.notaMinimaRegularizar}% · Promociona desde {materia.notaMinimaPromocionar}% (tareas y parciales)</>
+              )}
+              {reglaVista === 'tp_porcentaje_nota' && (
+                <>Regulariza con {materia.notaMinimaRegularizar}% de entregas aprobadas · Promociona con cada entrega calificada ≥ {materia.notaMinimaPromocionar}</>
+              )}
+              {reglaVista === 'riesgos_tps' && (
+                <>Al menos 3 actividades prácticas (incluye cuestionarios) · Promociona con notas ≥ {materia.notaMinimaPromocionar}</>
+              )}
+              {!['activos_porcentaje', 'tp_porcentaje_nota', 'riesgos_tps'].includes(reglaVista) && (
+                <>Regulariza desde {materia.notaMinimaRegularizar} · Promociona desde {materia.notaMinimaPromocionar}</>
+              )}
               {reglaVista === 'parciales_y_tps' && ' · Cada parcial rendido y cada TP con nota'}
             </p>
           )}
