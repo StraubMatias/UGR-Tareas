@@ -5,6 +5,7 @@ import {
   esRecordatorioDeActividad,
   extraerEventosCalendario,
   horarioDeclaradoEnTitulo,
+  modalidadEventoDesdeTitulo,
   nombreActividadDeEvento
 } from '../lib/calendario.mjs';
 
@@ -145,4 +146,21 @@ test('un vencimiento sin actividad conocida igual se muestra en el cronograma', 
   assert.equal(fechas.length, 0);
   assert.equal(cronograma.length, 1);
   assert.match(cronograma[0].titulo, /TP que no está cargado/);
+});
+
+test('modalidadEventoDesdeTitulo detecta asincrónico en el título del campus', () => {
+  assert.equal(modalidadEventoDesdeTitulo('Clase asincrónica — Unidad 3'), 'asincrónico');
+  assert.equal(modalidadEventoDesdeTitulo('Encuentro sincrónico miércoles'), 'sincrónico');
+  const { cronograma } = clasificarEventosCalendario({
+    eventos: [{
+      titulo: 'Actividad asincrónica: lectura ISO 27001',
+      fecha: '2026-09-02',
+      horaInicio: null,
+      dia: 2,
+      url: ''
+    }],
+    actividades: [],
+    materiaId: 'm1'
+  });
+  assert.equal(cronograma[0]?.modalidad, 'asincrónico');
 });

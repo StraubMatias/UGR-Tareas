@@ -160,11 +160,11 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       ),
       consultaPeriodo(
         periodoParaCargar,
-        `SELECT h.id, h.materia_id, h.dia, h.hora_inicio, h.hora_fin, h.aula, h.alumno_id
+        `SELECT h.id, h.materia_id, h.dia, h.hora_inicio, h.hora_fin, h.aula, h.url_clase, h.alumno_id
          FROM horarios h JOIN materias m ON m.id = h.materia_id
          WHERE CAST(h.dia AS INTEGER) BETWEEN 1 AND 5 AND m.periodo_id = ?
          ORDER BY h.dia ASC, h.hora_inicio ASC`,
-        `SELECT h.id, h.materia_id, h.dia, h.hora_inicio, h.hora_fin, h.aula, h.alumno_id
+        `SELECT h.id, h.materia_id, h.dia, h.hora_inicio, h.hora_fin, h.aula, h.url_clase, h.alumno_id
          FROM horarios h
          WHERE CAST(h.dia AS INTEGER) BETWEEN 1 AND 5
          ORDER BY h.dia ASC, h.hora_inicio ASC`

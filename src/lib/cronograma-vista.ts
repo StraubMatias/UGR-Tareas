@@ -33,6 +33,7 @@ function claveTituloCronograma(titulo: string) {
 
 function puntajeEvento(evento: EventoCronograma) {
   let puntaje = 0;
+  if (evento.origen === 'oficial') puntaje += 250;
   if (evento.origen === 'manual') puntaje += 200;
   if (evento.url) puntaje += 30;
   if (!esDetalleSoloHorario(evento.detalles)) puntaje += Math.min(evento.detalles.length, 80);
@@ -155,6 +156,16 @@ export function tituloDestacadoCronograma(evento: EventoCronograma) {
   if (evento.tipo === 'sin_clases') return evento.titulo || 'Sin clases';
   if (esTituloClaseGenericaDelCampus(evento.titulo)) return evento.titulo;
   return evento.titulo;
+}
+
+export function esEnlaceZoom(url: string) {
+  return /zoom\.us\/j\//i.test(String(url || '')) || /\/mod\/zoom\//i.test(String(url || ''));
+}
+
+export function etiquetaEnlaceClase(url: string) {
+  if (esEnlaceZoom(url)) return 'Entrar a Zoom ↗';
+  if (/virtual\.ugr\.edu\.ar/i.test(String(url || ''))) return 'Abrir en UGR ↗';
+  return 'Abrir enlace ↗';
 }
 
 export function mostrarEtiquetaTipoCronograma(evento: EventoCronograma) {

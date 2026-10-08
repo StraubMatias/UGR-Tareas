@@ -37,8 +37,22 @@ function completarUrl(href, baseUrl) {
 
 // Rótulos que pueden aparecer en el bloque «Apertura»/«Cierre» de la página de una
 // tarea (div[data-region="activity-dates"]).
-const ROTULOS_APERTURA = ['apertura', 'abre', 'abrirá', 'abrira', 'disponible desde', 'empieza', 'inicio'];
-const ROTULOS_CIERRE = ['cierre', 'cierra', 'cerrará', 'cerrara', 'vencimiento', 'fecha de entrega', 'fecha límite', 'fecha limite', 'hasta'];
+const ROTULOS_APERTURA = [
+  'apertura', 'abre', 'abrió', 'abrio', 'abrirá', 'abrira', 'opened', 'opens',
+  'disponible desde', 'empieza', 'inicio'
+];
+const ROTULOS_CIERRE = [
+  'cierre', 'cierra', 'cerró', 'cerro', 'cerrará', 'cerrara', 'closed', 'closes',
+  'vencimiento', 'fecha de entrega', 'fecha límite', 'fecha limite', 'hasta'
+];
+
+function normalizarRotuloFechaCampus(texto) {
+  return String(texto || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
 
 // Fecha desde una celda: prioriza timestamp numérico (data-mdl-overview-value o
 // data-timestamp), luego <time datetime="..."> y por último el texto visible.
@@ -576,7 +590,7 @@ export function extraerFechasActividad(html) {
     const renglon = limpiarTexto($(el).text());
     const partes = renglon.match(/^([^:]+):\s*(.+)$/);
     if (!partes) return;
-    const rotulo = partes[1].toLowerCase();
+    const rotulo = normalizarRotuloFechaCampus(partes[1]);
     if (ROTULOS_APERTURA.some((r) => rotulo.includes(r))) {
       const valor = fechaCampusParaAlmacenar(parsearFechaHoraCampus(partes[2]));
       if (valor) resultado.inicio = valor;
