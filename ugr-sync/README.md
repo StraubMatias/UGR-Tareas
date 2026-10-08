@@ -21,6 +21,8 @@ ugr-sync/
 │   ├── sync/                    # trozos del núcleo (conexión, cursos, avisos, cronograma DB)
 │   ├── sync-core.mjs            # detección de tareas, notas, complemento campus
 │   ├── cronograma-oficial.mjs   # PDF/Word + Zoom
+│   ├── zoom-enlaces-comision.mjs  # catálogo JSON → horarios.url_clase
+│   ├── zoom-cursada.mjs         # emparejar enlace ↔ horario semanal
 │   ├── constantes.mjs, red.mjs, autenticar.mjs, …
 │   └── parsers: materias, tareas, calendario, avisos, …
 ├── scripts/

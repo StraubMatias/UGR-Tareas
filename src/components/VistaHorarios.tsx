@@ -16,6 +16,7 @@ interface EventosDia {
   cronograma: EventoCronograma[];
   enlacesClasePorMateria?: Map<string, string>;
   tituloClaseEnCursadaPorMateria?: Map<string, string>;
+  detallesClaseEnCursadaPorMateria?: Map<string, string>;
 }
 
 interface Props {
@@ -48,16 +49,18 @@ function enlaceSincronicoHorario(
   return String(horario.url_clase || '').trim() || enlacesPorMateria?.get(horario.materia_id)?.trim() || '';
 }
 
-function BotonLinkSincronico({ url }: { url: string }) {
+function BotonLinkSincronico({ url, compact = false }: { url: string; compact?: boolean }) {
   return (
     <a
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-bold text-cyan-200 hover:bg-cyan-500/20 hover:underline mt-1"
+      className={`inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 font-bold text-cyan-200 hover:bg-cyan-500/20 hover:underline ${
+        compact ? 'px-1.5 py-0.5 text-[9px] mt-0.5' : 'px-2 py-1 text-[11px] mt-1'
+      }`}
       onClick={(e) => e.stopPropagation()}
     >
-      Link sincrónico ↗
+      {compact ? 'Sincrónico ↗' : 'Link sincrónico ↗'}
     </a>
   );
 }
@@ -182,15 +185,19 @@ export default function VistaHorarios({
                         <div className="mt-2 space-y-1.5">
                       {eventos.horarios.map((horario) => {
                         const materia = materias.find((item) => item.id === horario.materia_id);
-                        const tema = eventos.tituloClaseEnCursadaPorMateria?.get(horario.materia_id);
-                        const titulo = tema || materia?.nombre || 'Materia';
+                        const nombreCorto = materia?.nombre || 'Materia';
                         const enlaceClase = enlaceSincronicoHorario(horario, eventos.enlacesClasePorMateria);
+                        const rango = `${horario.hora_inicio}–${horario.hora_fin}`;
                         return (
-                          <div key={`${claveDia}-${horario.id}`} className="calendar-event calendar-class" title={`${titulo} · ${horario.hora_inicio} - ${horario.hora_fin}`}>
-                            <span className="font-bold">{horario.hora_inicio}</span>
-                            <span className="block truncate">Cursada {horario.hora_inicio}–{horario.hora_fin}</span>
-                            <span className="block truncate opacity-90">{tema || materia?.nombre}</span>
-                            {enlaceClase && <BotonLinkSincronico url={enlaceClase} />}
+                          <div
+                            key={`${claveDia}-${horario.id}`}
+                            className="calendar-event calendar-class"
+                            title={`${nombreCorto} · ${rango}`}
+                          >
+                            <span className="block truncate text-[10px] font-extrabold leading-tight sm:text-[11px]">
+                              {etiquetaMateria(nombreCorto)} · {rango}
+                            </span>
+                            {enlaceClase && <BotonLinkSincronico url={enlaceClase} compact />}
                           </div>
                         );
                       })}
@@ -349,13 +356,15 @@ export default function VistaHorarios({
                     for (const horario of eventos.horarios) {
                       const enlaceClase = enlaceSincronicoHorario(horario, enlacesClase);
                       const tema = eventos.tituloClaseEnCursadaPorMateria?.get(horario.materia_id);
+                      const detalles = eventos.detallesClaseEnCursadaPorMateria?.get(horario.materia_id);
                       grupoDe(horario.materia_id, horario.hora_inicio).bloques.push(
                         <div key={`modal-${horario.id}`} className="calendar-modal-event calendar-class">
                           <p className="text-sm font-extrabold">Cursada · {horario.hora_inicio} – {horario.hora_fin}</p>
-                          {tema && <p className="mt-1 text-sm opacity-90">{tema}</p>}
-                          {horario.aula && horario.aula !== 'Virtual' && <p className="mt-1 text-xs opacity-75">Aula {horario.aula}</p>}
+                          {tema && <p className="mt-2 text-sm font-semibold text-slate-100">{tema}</p>}
+                          {detalles && <p className="mt-1 text-sm opacity-85">{detalles}</p>}
+                          {horario.aula && horario.aula !== 'Virtual' && <p className="mt-2 text-xs opacity-75">Aula {horario.aula}</p>}
                           {enlaceClase && (
-                            <div className="mt-2">
+                            <div className="mt-3">
                               <BotonLinkSincronico url={enlaceClase} />
                             </div>
                           )}

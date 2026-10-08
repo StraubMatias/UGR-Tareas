@@ -1,54 +1,11 @@
 /**
- * Enlaces oficiales de clase (UGR Virtual) por materia de comisión 2026.
- * El sync los usa como semilla y resuelve el join zoom.us con sesión Moodle.
+ * Enlaces oficiales de clase (UGR Virtual) — comisión 2026.
+ * Catálogo: `database/enlaces-clase-comision.json` (misma fuente que el calendario en Next).
  */
+import catalogo from '../../database/enlaces-clase-comision.json' with { type: 'json' };
 
-/** @type {Array<{ materia: string, titulo: string, urlCampus: string, dia?: number, horaInicio?: string }>} */
-export const ENLACES_ZOOM_COMISION = [
-  {
-    materia: 'SISTEMAS DE GESTIÓN DE SEGURIDAD',
-    titulo: 'Enlace a la clase sincrónica de los Miércoles a las 19 Hs',
-    urlCampus: 'https://virtual.ugr.edu.ar/mod/zoom/view.php?id=280032',
-    dia: 3,
-    horaInicio: '19:00'
-  },
-  {
-    materia: 'SISTEMAS DE GESTIÓN DE SEGURIDAD',
-    titulo: 'Encuentro sincrónico de los jueves a las 20:30 Hs',
-    urlCampus: 'https://virtual.ugr.edu.ar/mod/zoom/view.php?id=342068',
-    dia: 4,
-    horaInicio: '20:30'
-  },
-  {
-    materia: 'AUDITORÍAS DE SEGURIDAD',
-    titulo: 'Encuentros Auditorías de S.I., martes 18hs.',
-    urlCampus: 'https://virtual.ugr.edu.ar/mod/url/view.php?id=337190',
-    dia: 2,
-    horaInicio: '18:00'
-  },
-  {
-    materia: 'EVALUACIÓN Y GESTIÓN DE RIESGOS',
-    titulo: 'Clase Sincrónica Semanal - Viernes 18:00 hs',
-    urlCampus: 'https://virtual.ugr.edu.ar/mod/zoom/view.php?id=240182',
-    dia: 5,
-    horaInicio: '18:00'
-  },
-  {
-    materia: 'GESTIÓN DE ACTIVOS',
-    titulo: 'Link de Clase Sincrónica',
-    urlCampus: 'https://virtual.ugr.edu.ar/mod/zoom/view.php?id=306536'
-  },
-  {
-    materia: 'CONCEPTOS DE DESARROLLO',
-    titulo: 'Sala Virtual',
-    urlCampus: 'https://virtual.ugr.edu.ar/mod/zoom/view.php?id=336084'
-  },
-  {
-    materia: 'INTRODUCCIÓN A LA CRIPTOGRAFÍA',
-    titulo: 'Enlace zoom - clases sincronicas',
-    urlCampus: 'https://virtual.ugr.edu.ar/mod/zoom/view.php?id=215547'
-  }
-];
+/** @type {typeof catalogo} */
+export const ENLACES_ZOOM_COMISION = catalogo;
 
 function normalizarNombreMateria(nombre) {
   return String(nombre || '')
@@ -89,6 +46,7 @@ export function enlacesZoomConocidosParaMateria(nombreMateria) {
     urlJoin: '',
     dia: entrada.dia ?? null,
     horaInicio: entrada.horaInicio ?? null,
-    horaFin: entrada.horaFin ?? null
+    horaFin: entrada.horaFin ?? null,
+    profesorClave: entrada.profesorClave ?? null
   }));
 }
