@@ -2,11 +2,8 @@
 
 import { useId, useState } from 'react';
 import {
-  acentoVisualMateria,
-  obtenerIconoMateria,
   obtenerResumenTareasAlumno,
   ordenarTareas,
-  tituloVisibleMateria,
   type Materia,
   type Tarea
 } from '../core/cursada';
@@ -105,71 +102,33 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                 {resumen.total === 0 ? 'Todavía no hay tareas cargadas.' : filtro === 'pendientes' ? 'No hay entregas abiertas pendientes. Podés consultar las notas, tareas futuras y grupos en los otros filtros.' : filtro === 'grupales' ? 'No hay trabajos grupales activos. Los que ya tienen nota cargada están en Completadas.' : 'No hay tareas en esta categoría.'}
               </p>
             ) : (
-              <div className="estado-tareas-por-materia space-y-6">
-                {bloquesPorMateria.map(({ materia, tareas }) => {
-                  const acento = acentoVisualMateria(materia.id);
-                  const titulo = tituloVisibleMateria(materia.nombre);
-                  return (
-                    <section
-                      key={materia.id}
-                      className="estado-materia-bloque rounded-2xl border border-slate-800/80 overflow-hidden"
-                      style={{
-                        borderLeftWidth: '4px',
-                        borderLeftColor: acento.borde,
-                        background: `linear-gradient(135deg, ${acento.fondo} 0%, rgba(15, 23, 32, 0.35) 55%)`
-                      }}
-                      aria-label={titulo}
-                    >
-                      <header
-                        className="estado-materia-bloque-cabecera flex flex-wrap items-center gap-2 gap-y-1 px-4 py-3 border-b border-slate-800/60"
-                        style={{ color: acento.texto }}
-                      >
-                        <span className="text-2xl leading-none shrink-0" aria-hidden="true">
-                          {obtenerIconoMateria(materia.nombre)}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <h4 className="estado-materia-bloque-titulo text-sm sm:text-base font-semibold text-slate-100 leading-snug">
-                            {titulo}
-                          </h4>
-                          {titulo !== materia.nombre && (
-                            <p className="text-[11px] text-slate-500 truncate mt-0.5" title={materia.nombre}>
-                              {materia.nombre}
-                            </p>
-                          )}
-                        </div>
-                        <span className="estado-materia-bloque-contador text-xs font-medium tabular-nums px-2.5 py-1 rounded-full border border-slate-700/50 bg-slate-900/40 text-slate-300">
-                          {tareas.length} {tareas.length === 1 ? 'tarea' : 'tareas'}
-                        </span>
-                      </header>
-                      <div
-                        className="estado-tareas-contenedor estado-tareas-columnas px-3 pt-3 pb-3 sm:px-4"
-                        data-cantidad-tareas={tareas.length}
-                      >
-                        {tareas.map((tarea) => (
-                          <div key={tarea.id} className="estado-tarea-slot">
-                            <EstadoTareaAlumno
-                              tarea={tarea}
-                              alumno={alumno}
-                              materia={materia}
-                              unidad={tarea.unidad}
-                              ocultarContextoMateria
-                              alumnos={alumnosDeLaMateria(inscripciones, materia.id)}
-                              usuarioActual={acciones.usuarioActual}
-                              irATareaEnMaterias={acciones.irATareaEnMaterias}
-                              toggleTareaDesdeCliente={acciones.toggleTareaDesdeCliente}
-                              notasTareasInputs={acciones.notasTareasInputs}
-                              handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
-                              handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
-                              recargarTablero={acciones.recargarTablero}
-                              invitacionesGrupoEnviadas={acciones.invitacionesGrupoEnviadas}
-                              esAdmin={esAdmin}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  );
-                })}
+              <div
+                className="estado-tareas-contenedor estado-tareas-columnas estado-tareas-rejilla-global"
+                data-cantidad-tareas={seleccionadas.length}
+              >
+                {bloquesPorMateria.flatMap(({ materia, tareas }) =>
+                  tareas.map((tarea) => (
+                    <div key={tarea.id} className="estado-tarea-slot">
+                      <EstadoTareaAlumno
+                        tarea={tarea}
+                        alumno={alumno}
+                        materia={materia}
+                        unidad={tarea.unidad}
+                        ocultarContextoMateria={false}
+                        alumnos={alumnosDeLaMateria(inscripciones, materia.id)}
+                        usuarioActual={acciones.usuarioActual}
+                        irATareaEnMaterias={acciones.irATareaEnMaterias}
+                        toggleTareaDesdeCliente={acciones.toggleTareaDesdeCliente}
+                        notasTareasInputs={acciones.notasTareasInputs}
+                        handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
+                        handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
+                        recargarTablero={acciones.recargarTablero}
+                        invitacionesGrupoEnviadas={acciones.invitacionesGrupoEnviadas}
+                        esAdmin={esAdmin}
+                      />
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </div>

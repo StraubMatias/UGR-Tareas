@@ -71,7 +71,7 @@ export function parsearTextoCronogramaOficial(texto) {
       modalidad = 'sin_clases';
     } else if (/2\s*do\s+llamado|1\s*er\s+llamado|llamado\s+turno/i.test(norm)) {
       tipo = 'examen_final';
-    } else if (/\bparcial\b/.test(norm)) {
+    } else if (/\bparcial\b/.test(norm) && !/opcional/.test(norm) && !/unidades?\s+\d/.test(norm)) {
       tipo = 'examen';
     } else if (/\bconsulta\b/.test(norm)) {
       tipo = 'consulta';

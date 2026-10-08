@@ -25,9 +25,9 @@ test('parsearTextoCronogramaOficial lee fechas del PDF de Activos', () => {
   const sin = filas.find((f) => f.fecha === '2026-09-14');
   assert.ok(sin);
   assert.equal(sin.tipo, 'sin_clases');
-  const parcial = filas.find((f) => f.fecha === '2026-09-28');
-  assert.ok(parcial);
-  assert.equal(parcial.tipo, 'examen');
+  const conParcialOpcional = filas.find((f) => f.fecha === '2026-09-28');
+  assert.ok(conParcialOpcional);
+  assert.equal(conParcialOpcional.tipo, 'clase', 'parcial opcional en texto de clase no es examen del cronograma');
 });
 
 test('extraerRecursoCronogramaDeHtml elige el título más útil', () => {

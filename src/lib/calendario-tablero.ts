@@ -1,9 +1,14 @@
 import type { EventoCronograma, Horario, Materia, Parcial } from '../core/cursada';
-import { ocultarExamenesCronogramaDuplicados, presentarCronogramaDelDia } from './cronograma-vista';
+import {
+  eventoCancelaCursadaSincronicaDelDia,
+  esModalidadAsincronica,
+  ocultarExamenesCronogramaDuplicados,
+  presentarCronogramaDelDia
+} from './cronograma-vista.ts';
 
 /** Eventos sincrónicos del plan suelen venir con la fecha del PDF; se alinean al día de cursada semanal. */
 export function debeAlinearEventoAlHorario(evento: EventoCronograma) {
-  if (evento.modalidad === 'asincrónico') return false;
+  if (esModalidadAsincronica(evento.modalidad)) return false;
   if (evento.tipo === 'entrega' || evento.tipo === 'exposición') return false;
   if (evento.tipo === 'examen_final') return false;
   return true;
@@ -123,7 +128,7 @@ export function eventosDelDiaCalendario(
   );
   const materiasSinCursadaDia = new Set(
     eventosCronogramaDia
-      .filter((evento) => evento.modalidad !== 'sincrónico' || evento.tipo === 'sin_clases')
+      .filter((evento) => eventoCancelaCursadaSincronicaDelDia(evento))
       .map((evento) => evento.materia_id)
   );
 

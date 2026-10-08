@@ -7,7 +7,7 @@ import {
   type Tarea
 } from '../core/cursada';
 import type { ReactNode } from 'react';
-import { etiquetaEnlaceClase, esEnlaceZoom, mostrarEtiquetaTipoCronograma, tituloDestacadoCronograma } from '../lib/cronograma-vista';
+import { etiquetaEnlaceClase, esEnlaceZoom, esModalidadAsincronica, mostrarEtiquetaTipoCronograma, tituloDestacadoCronograma } from '../lib/cronograma-vista';
 
 interface EventosDia {
   parciales: Parcial[];
@@ -186,7 +186,7 @@ export default function VistaHorarios({
                       ))}
                       {eventos.cronograma.map((evento) => {
                         const materia = materias.find((item) => item.id === evento.materia_id);
-                        const esAsincronico = evento.modalidad === 'asincrónico';
+                        const esAsincronico = esModalidadAsincronica(evento.modalidad);
                         const esSinClases = esEventoDeSinClases(evento);
                         const esFinal = evento.tipo === 'examen_final';
                         const esParcial = evento.tipo === 'examen';
@@ -353,7 +353,7 @@ export default function VistaHorarios({
                       );
                     }
                     for (const evento of eventos.cronograma) {
-                      const esAsincronico = evento.modalidad === 'asincrónico';
+                      const esAsincronico = esModalidadAsincronica(evento.modalidad);
                       const esSinClases = esEventoDeSinClases(evento);
                       const esFinal = evento.tipo === 'examen_final';
                       const esParcial = evento.tipo === 'examen';

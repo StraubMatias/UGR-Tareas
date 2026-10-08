@@ -1,5 +1,20 @@
 import type { EventoCronograma, Horario, Parcial } from '../core/cursada';
 
+export function esModalidadAsincronica(modalidad: string) {
+  const m = String(modalidad || '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase();
+  return m === 'asincronico';
+}
+
+/** Día sin cursada fija: sin clases o actividad asincrónica del plan (no el turno Zoom del campus). */
+export function eventoCancelaCursadaSincronicaDelDia(evento: EventoCronograma) {
+  if (evento.tipo === 'sin_clases' || evento.modalidad === 'sin_clases') return true;
+  if (!esModalidadAsincronica(evento.modalidad)) return false;
+  return evento.tipo === 'clase' || evento.tipo === 'entrega' || evento.tipo === 'exposición' || evento.tipo === 'consulta';
+}
+
 /** Títulos del campus que solo repiten el enlace/turno de Zoom, sin contenido del plan. */
 export function esTituloClaseGenericaDelCampus(titulo: string) {
   const t = String(titulo || '').trim();
@@ -12,6 +27,8 @@ export function esTituloClaseGenericaDelCampus(titulo: string) {
   if (/^clase sincr[oó]nica semanal/i.test(t)) return true;
   if (/^sala virtual\b/i.test(t)) return true;
   if (/^enlace zoom\b/i.test(t)) return true;
+  if (/^encuentro sincr[oó]nico\b/i.test(t)) return true;
+  if (/^link de acceso a encuentros sincr[oó]nicos\b/i.test(t)) return true;
   return false;
 }
 
@@ -142,7 +159,7 @@ export function presentarCronogramaDelDia(
 
   const tituloClaseEnCursadaPorMateria = new Map<string, string>();
   const eventosPresentados = visibles.filter((evento) => {
-    if (evento.tipo !== 'clase' || evento.modalidad === 'asincrónico') return true;
+    if (evento.tipo !== 'clase' || esModalidadAsincronica(evento.modalidad)) return true;
     if (!materiasConCursada.has(evento.materia_id)) return true;
     const titulo = tituloDestacadoCronograma(evento);
     if (titulo) tituloClaseEnCursadaPorMateria.set(evento.materia_id, titulo);

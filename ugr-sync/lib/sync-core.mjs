@@ -1023,9 +1023,11 @@ function esEventoCronogramaParcial(evento) {
   const tipo = String(evento?.tipo || '').toLowerCase();
   const titulo = String(evento?.titulo || '').trim();
   if (!titulo || tipo === 'sin_clases' || tipo === 'examen_final') return false;
+  if (tipo === 'clase' || tipo === 'consulta' || tipo === 'entrega' || tipo === 'exposición') return false;
   if (esExamenFinalDelCronograma(titulo)) return false;
-  if (tipo === 'examen') return true;
-  return pareceParcialCuatrimestre(titulo) && !/^unidad\s+\d/i.test(titulo);
+  if (/parcial\s*\(\s*opcional/i.test(titulo)) return false;
+  if (tipo !== 'examen') return false;
+  return true;
 }
 
 function nombreParcialDesdeEventoCronograma(evento) {

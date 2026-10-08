@@ -198,6 +198,8 @@ export function esTituloClaseGenericaDelCampus(titulo) {
   if (/^clase sincr[oó]nica semanal/i.test(t)) return true;
   if (/^sala virtual\b/i.test(t)) return true;
   if (/^enlace zoom\b/i.test(t)) return true;
+  if (/^encuentro sincr[oó]nico\b/i.test(t)) return true;
+  if (/^link de acceso a encuentros sincr[oó]nicos\b/i.test(t)) return true;
   return false;
 }
 
