@@ -40,6 +40,7 @@ export interface EntregaHitoTarea {
   feedbackUrl?: string | null;
   feedbackNombre?: string | null;
   pendiente?: boolean;
+  sincronizadoEn?: string | null;
 }
 
 export type ModoEntregaTarea = 'individual' | 'grupal_opcional' | 'grupal_obligatorio';
@@ -386,8 +387,12 @@ export const tareaEstaHabilitada = (fechaInicio: string | null | undefined, ahor
 };
 
 
-export const multiplicadorPuntosTarea = (tarea: Tarea, alumno: string | null | undefined): number => {
-  const fechaCarga = obtenerTimestamp(fechaEntregaTarea(tarea, alumno));
+export const multiplicadorPuntosTarea = (
+  tarea: Tarea,
+  alumno: string | null | undefined,
+  fechaCargaOverride?: string | null
+): number => {
+  const fechaCarga = obtenerTimestamp(fechaCargaOverride ?? fechaEntregaTarea(tarea, alumno));
   if (fechaCarga === null) return 1;
 
   if (tarea.fin && tarea.fin !== 'Sin fecha') {
@@ -403,14 +408,101 @@ export const multiplicadorPuntosTarea = (tarea: Tarea, alumno: string | null | u
   return diasDesdeApertura < 7 ? 1 : 0.5;
 };
 
+/** Nota en escala 1–10; si vino sobre 100 del campus, normaliza. */
+export const parseNotaEscalaDiez = (valor: string | number | null | undefined): number | null => {
+  const n = Number.parseFloat(String(valor ?? '').replace(',', '.'));
+  if (!Number.isFinite(n)) return null;
+  if (n >= 1 && n <= 10) return n;
+  if (n > 10 && n <= 100) {
+    const enDiez = n / 10;
+    if (enDiez >= 1 && enDiez <= 10) return Math.round(enDiez * 100) / 100;
+  }
+  return null;
+};
+
+/** Puntos de ranking por nota de parcial (sin multiplicador tardío; escala 1–10). */
+export const puntosDeNotaParcial = (nota: string | number | null | undefined): number => (
+  parseNotaEscalaDiez(nota) ?? 0
+);
+
 export const puntosBaseTarea = (tarea: Tarea, alumno: string | null | undefined): number => {
   if (!tarea.conNota) {
     return tarea.nombre.toLowerCase().includes('foro') ? 1 : 2;
   }
-  const notaStr = String(alumno ? tarea.notas?.[alumno] ?? '' : '');
-  if (!notaStr || Number.isNaN(Number.parseFloat(notaStr))) return 0;
-  return Number.parseFloat(notaStr.replace(',', '.'));
+  return parseNotaEscalaDiez(alumno ? tarea.notas?.[alumno] : null) ?? 0;
 };
+
+/** Tarea entregada y, si lleva nota, con nota válida cargada (sin fase abierta sin calificar). */
+export const tareaCuentaParaRanking = (tarea: Tarea, alumno: string | null | undefined): boolean => {
+  if (!alumno || !tareaCompletadaPor(tarea, alumno)) return false;
+  if (tarea.conNota && tareaFaltaNota(tarea, alumno)) return false;
+  return true;
+};
+
+export interface AporteRankingTarea {
+  nombre: string;
+  fechaCarga: string | null;
+  puntos: number;
+  puntosBase: number;
+  tipo: 'Nota de tarea' | 'Foro' | 'Actividad';
+}
+
+function fechaCargaHitoEntrega(tarea: Tarea, alumno: string, indiceEntrega: number): string | null {
+  const hitos = tarea.entregas?.[alumno];
+  const hito = hitos?.find((h) => h.indiceEntrega === indiceEntrega && !h.esActiva);
+  return hito?.sincronizadoEn ?? fechaEntregaTarea(tarea, alumno);
+}
+
+/** Líneas de puntos de ranking por tarea (varias entregas cerradas suman por separado). */
+export const aportesRankingDeTarea = (tarea: Tarea, alumno: string | null | undefined): AporteRankingTarea[] => {
+  if (!alumno) return [];
+
+  if (tarea.conNota && tareaUsaEntregasMultiplesCampus(tarea)) {
+    const cerradas = notasCerradasEntregaCampus(tarea, alumno);
+    if (cerradas.length) {
+      return cerradas.flatMap(({ indice, nota }) => {
+        const base = parseNotaEscalaDiez(nota) ?? 0;
+        if (base < 1 || base > 10) return [];
+        const fechaCarga = fechaCargaHitoEntrega(tarea, alumno, indice);
+        const puntos = base * multiplicadorPuntosTarea(tarea, alumno, fechaCarga);
+        if (puntos <= 0) return [];
+        const etiquetaEntrega = `Entrega ${indice}`;
+        return [{
+          nombre: `${tarea.nombre} (${etiquetaEntrega})`,
+          fechaCarga,
+          puntos,
+          puntosBase: base,
+          tipo: 'Nota de tarea'
+        }];
+      });
+    }
+  }
+
+  if (!tareaCuentaParaRanking(tarea, alumno)) return [];
+  const base = puntosBaseTarea(tarea, alumno);
+  const tipo: AporteRankingTarea['tipo'] = tarea.conNota
+    ? 'Nota de tarea'
+    : (tarea.nombre.toLowerCase().includes('foro') ? 'Foro' : 'Actividad');
+  if (tarea.conNota) {
+    if (base < 1 || base > 10) return [];
+  } else if (base < 1 || base > 2) {
+    return [];
+  }
+  const puntos = base * multiplicadorPuntosTarea(tarea, alumno);
+  if (puntos <= 0) return [];
+  return [{
+    nombre: tarea.nombre,
+    fechaCarga: fechaEntregaTarea(tarea, alumno),
+    puntos,
+    puntosBase: base,
+    tipo
+  }];
+};
+
+/** Puntos finales de una tarea en el ranking (nota × multiplicador de entrega; parciales van aparte). */
+export const puntosRankingDeTarea = (tarea: Tarea, alumno: string | null | undefined): number => (
+  aportesRankingDeTarea(tarea, alumno).reduce((total, aporte) => total + aporte.puntos, 0)
+);
 
 export const obtenerFechaParcialEnMs = (fechaStr: string | null): number | null => (
   instanteInicioDiaCampus(fechaStr)
@@ -777,17 +869,35 @@ export const historialPorAlumno = (
     : materias;
   const idsHistorial = new Set(materiasHistorial.map((m) => m.id));
   const tareas: HistorialRegistro[] = materiasHistorial.flatMap((materia) => (materia.tareas || [])
-    .filter((tarea: Tarea) => tareaCompletadaPor(tarea, alumno))
-    .map((tarea: Tarea) => ({
-      id: `tarea-${tarea.id}`,
-      materia: materia.nombre,
-      nombre: tarea.nombre,
-      unidad: tarea.unidad,
-      fecha: fechaEntregaTarea(tarea, alumno),
-      fechaCompletada: fechaEntregaTarea(tarea, alumno),
-      nota: tarea.conNota ? (tarea.notas?.[alumno] ?? null) : null,
-      tipo: tarea.conNota ? 'Tarea con nota' : (tarea.nombre.toLowerCase().includes('foro') ? 'Foro' : 'Actividad')
-    })));
+    .filter((tarea: Tarea) => tareaCompletadaPor(tarea, alumno) || aportesRankingDeTarea(tarea, alumno).length > 0)
+    .flatMap((tarea: Tarea) => {
+      if (tarea.conNota && tareaUsaEntregasMultiplesCampus(tarea)) {
+        const cerradas = notasCerradasEntregaCampus(tarea, alumno);
+        if (cerradas.length) {
+          return cerradas.map(({ indice, nota }) => ({
+            id: `tarea-${tarea.id}-e${indice}`,
+            materia: materia.nombre,
+            nombre: `${tarea.nombre} (Entrega ${indice})`,
+            unidad: tarea.unidad,
+            fecha: fechaCargaHitoEntrega(tarea, alumno, indice),
+            fechaCompletada: fechaCargaHitoEntrega(tarea, alumno, indice),
+            nota,
+            tipo: 'Tarea con nota' as const
+          }));
+        }
+      }
+      if (!tareaCompletadaPor(tarea, alumno)) return [];
+      return [{
+        id: `tarea-${tarea.id}`,
+        materia: materia.nombre,
+        nombre: tarea.nombre,
+        unidad: tarea.unidad,
+        fecha: fechaEntregaTarea(tarea, alumno),
+        fechaCompletada: fechaEntregaTarea(tarea, alumno),
+        nota: tarea.conNota ? (tarea.notas?.[alumno] ?? null) : null,
+        tipo: tarea.conNota ? 'Tarea con nota' : (tarea.nombre.toLowerCase().includes('foro') ? 'Foro' : 'Actividad')
+      }];
+    }));
 
   const parcialesDelAlumno: HistorialRegistro[] = notas
     .filter((nota: Nota) => nota.alumno === alumno)

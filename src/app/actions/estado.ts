@@ -122,9 +122,10 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
          JOIN tareas t ON t.id = n.tarea_id
          JOIN materias m ON m.id = t.materia_id
          LEFT JOIN alumnos a ON a.id = n.alumno_id
-         WHERE m.periodo_id = ?`,
+         WHERE m.periodo_id = ? AND COALESCE(n.cerrada, 0) = 1`,
         `SELECT n.tarea_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota, n.cargada_en
-         FROM notas_tareas n LEFT JOIN alumnos a ON a.id = n.alumno_id`
+         FROM notas_tareas n LEFT JOIN alumnos a ON a.id = n.alumno_id
+         WHERE COALESCE(n.cerrada, 0) = 1`
       ),
       {
         sql: `SELECT g.id, g.tarea_id, g.nombre, a.nombre AS alumno
@@ -154,9 +155,10 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
          JOIN parciales p ON p.id = n.parcial_id
          JOIN materias m ON m.id = p.materia_id
          LEFT JOIN alumnos a ON a.id = n.alumno_id
-         WHERE m.periodo_id = ?`,
+         WHERE m.periodo_id = ? AND COALESCE(n.cerrada, 0) = 1`,
         `SELECT n.id, n.parcial_id, COALESCE(a.nombre, n.alumno) AS alumno, n.nota
-         FROM notas_parciales n LEFT JOIN alumnos a ON a.id = n.alumno_id`
+         FROM notas_parciales n LEFT JOIN alumnos a ON a.id = n.alumno_id
+         WHERE COALESCE(n.cerrada, 0) = 1`
       ),
       consultaPeriodo(
         periodoParaCargar,
@@ -251,14 +253,16 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       consultaPeriodo(
         periodoParaCargar,
         `SELECT te.tarea_id, COALESCE(a.nombre, '') AS alumno, te.numero, te.indice_entrega, te.es_activa,
-                te.estado, te.nota, te.nota_origen, te.comentario_prof, te.feedback_url, te.feedback_nombre
+                te.estado, te.nota, te.nota_origen, te.comentario_prof, te.feedback_url, te.feedback_nombre,
+                te.sincronizado_en
          FROM tareas_entregas te
          JOIN tareas t ON t.id = te.tarea_id
          JOIN materias m ON m.id = t.materia_id
          LEFT JOIN alumnos a ON a.id = te.alumno_id
          WHERE m.periodo_id = ?`,
         `SELECT te.tarea_id, COALESCE(a.nombre, '') AS alumno, te.numero, te.indice_entrega, te.es_activa,
-                te.estado, te.nota, te.nota_origen, te.comentario_prof, te.feedback_url, te.feedback_nombre
+                te.estado, te.nota, te.nota_origen, te.comentario_prof, te.feedback_url, te.feedback_nombre,
+                te.sincronizado_en
          FROM tareas_entregas te
          LEFT JOIN alumnos a ON a.id = te.alumno_id`
       )

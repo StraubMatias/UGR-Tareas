@@ -1,6 +1,6 @@
 import type { Row, Value } from '@libsql/client';
-import { formatearNotaParaMostrar } from '../app/validators';
-import { tareaUsaEntregasMultiplesCampus } from '../core/cursada';
+import { formatearNotaParaMostrar } from '../app/validators.ts';
+import { tareaUsaEntregasMultiplesCampus } from '../core/cursada.ts';
 import { texto, textoONull } from './action-internals';
 
 export function consultaPeriodo(periodoId: string | null, sqlConPeriodo: string, sqlSinPeriodo: string) {
@@ -139,6 +139,7 @@ export function armarMaterias(
                     comentarioProf: textoONull(f.comentario_prof),
                     feedbackUrl: textoONull(f.feedback_url),
                     feedbackNombre: textoONull(f.feedback_nombre),
+                    sincronizadoEn: textoONull(f.sincronizado_en),
                     pendiente: esActiva && (
                       !tieneNota || /reabiert|reopened|sin calificar/i.test(texto(f.estado))
                     )
