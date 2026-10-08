@@ -1,14 +1,13 @@
-import type { Materia, Nota, Parcial, Tarea } from '../core/cursada';
-import {
-  obtenerDiasHastaTarea,
-  tareaCompletadaPor
-} from '../core/cursada';
+import type { Materia, Nota, Parcial } from '../core/cursada';
 import { tareaHabilitada as tareaEstaHabilitada } from '../app/validators';
 import { alumnoCursaMateria, type InscripcionAlumno } from './companeros';
 import {
   evaluarParcialesCuatrimestre,
+  evaluarPromocionActivosPorcentaje,
   evaluarPromocionParcialesYTps,
+  evaluarPromocionRiesgosTps,
   evaluarPromocionSoloTps,
+  evaluarPromocionTpPorcentajeNota,
   reglaPromocionEfectiva
 } from './promocion-materia';
 
@@ -24,29 +23,11 @@ export function calcularBadgeEstadoMateria(
   }
     const tareasAbiertas = materia.tareas.filter((tarea) => tareaEstaHabilitada(tarea.inicio));
     const trabajosPracticos = materia.tareas.filter((tarea) => tarea.tipo === 'trabajo_practico');
-    const trabajosPracticosAbiertos = tareasAbiertas.filter((tarea) => tarea.tipo === 'trabajo_practico');
     if (!materia.condiciones && trabajosPracticos.length === 0) return null;
     const estado = (texto: string, estilo: string) => ({ texto, estilo });
     const enCurso = estado('En curso', 'text-amber-300 bg-amber-500/10 border-amber-500/30');
     const regla = reglaPromocionEfectiva(materia);
     if (regla === 'metodologia') return enCurso;
-    const desaprueba = estado('Desaprueba', 'text-red-300 bg-red-500/10 border-red-500/30');
-    const regulariza = estado('Regulariza', 'text-blue-300 bg-blue-500/10 border-blue-500/30');
-    const promociona = estado('Promociona', 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30');
-    const notaDe = (registro: string | number | null | undefined) => Number.parseFloat(String(registro ?? '').replace(',', '.'));
-    const notaDeTarea = (tarea: Tarea) => notaDe(tarea.notas?.[alumno]);
-    const tareaAprobada = (tarea: Tarea) => {
-      if (tarea.conNota || tarea.tipo === 'trabajo_practico') {
-        const nota = notaDeTarea(tarea);
-        return Number.isFinite(nota) && nota >= 6;
-      }
-      return tareaCompletadaPor(tarea, alumno);
-    };
-    const tareaCerrada = (tarea: Tarea) => {
-      const dias = obtenerDiasHastaTarea(tarea.fin);
-      return Boolean(tarea.fin && tarea.fin !== 'Sin fecha' && dias !== null && dias < 0);
-    };
-    const todasCerradas = (tareas: Tarea[]) => tareas.length > 0 && tareas.every(tareaCerrada);
 
     if (regla === 'parciales_y_tps') {
       return evaluarPromocionParcialesYTps(materia, alumno, parciales, notas, trabajosPracticos);
@@ -65,44 +46,20 @@ export function calcularBadgeEstadoMateria(
     }
 
     if (regla === 'activos_porcentaje') {
-      const total = tareasAbiertas.length;
-      if (total === 0) return estado('Sin actividades', 'text-slate-400 bg-slate-800/60 border-slate-700');
-      const completadas = tareasAbiertas.filter(tareaAprobada).length;
-      const porcentaje = (completadas / total) * 100;
-      if (porcentaje >= materia.notaMinimaPromocionar) return promociona;
-      if (porcentaje >= materia.notaMinimaRegularizar) return regulariza;
-      return tareasAbiertas.every(tareaCerrada) ? desaprueba : enCurso;
+      return evaluarPromocionActivosPorcentaje(materia, alumno, parciales, notas, materia.tareas);
     }
 
     if (regla === 'tp_porcentaje_nota') {
-      const total = trabajosPracticosAbiertos.length;
-      if (total === 0) return estado('Sin TPs abiertos', 'text-slate-400 bg-slate-800/60 border-slate-700');
-      const completados = trabajosPracticosAbiertos.filter(tareaAprobada).length;
-      const porcentaje = (completados / total) * 100;
-      const notasValidas = trabajosPracticosAbiertos.map(notaDeTarea).filter((nota) => Number.isFinite(nota));
-      const notasConPromo = notasValidas.filter((nota) => nota >= materia.notaMinimaPromocionar);
-      if (notasConPromo.length > 0 && notasConPromo.length === notasValidas.length && porcentaje >= materia.notaMinimaPromocionar) {
-        return promociona;
-      }
-      if (porcentaje >= materia.notaMinimaRegularizar || (notasValidas.length > 0 && notasValidas.every((n) => n >= materia.notaMinimaRegularizar))) {
-        return regulariza;
-      }
-      return trabajosPracticosAbiertos.every(tareaCerrada) ? desaprueba : enCurso;
+      return evaluarPromocionTpPorcentajeNota(materia, alumno, trabajosPracticos);
+    }
+
+    if (regla === 'riesgos_tps') {
+      return evaluarPromocionRiesgosTps(materia, alumno, materia.tareas);
     }
 
     if (trabajosPracticos.length === 0) return tareasAbiertas.length === 0
       ? estado('Sin TPs abiertos', 'text-slate-400 bg-slate-800/60 border-slate-700')
       : estado('Sin TPs cargados', 'text-slate-400 bg-slate-800/60 border-slate-700');
-    const notasCargadas = trabajosPracticos
-      .map(notaDeTarea)
-      .filter((nota): nota is number => Number.isFinite(nota));
-    if (regla === 'riesgos_tps') {
-      const completados = trabajosPracticos.filter(tareaAprobada).length;
-      if (completados < 3) return todasCerradas(trabajosPracticos) ? desaprueba : enCurso;
-      if (notasCargadas.length > 0 && notasCargadas.every((nota) => nota >= materia.notaMinimaPromocionar)) return promociona;
-      if (notasCargadas.length > 0 && notasCargadas.every((nota) => nota >= materia.notaMinimaRegularizar)) return regulariza;
-      return enCurso;
-    }
     const soloTps = evaluarPromocionSoloTps(materia, alumno, trabajosPracticos, parciales, notas);
     if (soloTps) return soloTps;
     return enCurso;
