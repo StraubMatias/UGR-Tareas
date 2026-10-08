@@ -1,5 +1,5 @@
 import type { Materia, Nota, Parcial, Tarea } from '../core/cursada.ts';
-import { obtenerDiasHastaFecha, tareaCompletadaPor } from '../core/cursada.ts';
+import { obtenerDiasHastaFecha, tareaCompletadaPor, tareaEstaHabilitada } from '../core/cursada.ts';
 
 const ZONA_CAMPUS = 'America/Argentina/Buenos_Aires';
 import { esParcialRecuperatorio } from './recuperatorios-calendario.ts';
@@ -179,6 +179,148 @@ function notaDeTarea(tarea: Tarea, alumno: string) {
 function tareaCerrada(tarea: Tarea) {
   const dias = obtenerDiasHastaFecha(tarea.fin);
   return Boolean(tarea.fin && tarea.fin !== 'Sin fecha' && dias !== null && dias < 0);
+}
+
+const NOTA_APROBACION_ACTIVIDAD = 6;
+
+function tareaCuentaActividadActivos(tarea: Tarea) {
+  return Boolean(tarea.inicio && tarea.inicio !== 'Sin fecha' && tareaEstaHabilitada(tarea.inicio));
+}
+
+function actividadActivosCumplida(tarea: Tarea, alumno: string) {
+  if (tarea.conNota || tarea.tipo === 'trabajo_practico') {
+    const n = notaDeTarea(tarea, alumno);
+    return n !== null && n >= NOTA_APROBACION_ACTIVIDAD;
+  }
+  return tareaCompletadaPor(tarea, alumno);
+}
+
+/** 75% / 90% de actividades (tareas + parciales como una actividad más). */
+export function evaluarPromocionActivosPorcentaje(
+  materia: Materia,
+  alumno: string,
+  parciales: Parcial[],
+  notas: Nota[],
+  tareas: Tarea[]
+): EstadoPromocion {
+  const umbralReg = materia.notaMinimaRegularizar;
+  const umbralPromo = materia.notaMinimaPromocionar;
+  const enCurso = { texto: 'En curso', estilo: estilos.enCurso };
+  const parcialesMateria = parcialesCuatrimestreOrdenados(parciales, materia.id);
+  const tareasMateria = tareas.filter(tareaCuentaActividadActivos);
+  const total = parcialesMateria.length + tareasMateria.length;
+  if (total === 0) {
+    return { texto: 'Sin actividades', estilo: estilos.neutro };
+  }
+
+  let cumplidas = 0;
+  for (const parcial of parcialesMateria) {
+    const fila = notas.find((n) => n.parcial_id === parcial.id && n.alumno === alumno);
+    const valor = fila ? notaDe(fila.nota) : null;
+    if (valor !== null && valor < NOTA_APROBACION_ACTIVIDAD) {
+      return { texto: 'Desaprueba', estilo: estilos.desaprueba };
+    }
+    if (valor !== null && valor >= NOTA_APROBACION_ACTIVIDAD) cumplidas += 1;
+  }
+
+  for (const tarea of tareasMateria) {
+    const valor = notaDeTarea(tarea, alumno);
+    if (tarea.conNota || tarea.tipo === 'trabajo_practico') {
+      if (valor !== null && valor < NOTA_APROBACION_ACTIVIDAD) {
+        return { texto: 'Desaprueba', estilo: estilos.desaprueba };
+      }
+      if (valor !== null && valor >= NOTA_APROBACION_ACTIVIDAD) cumplidas += 1;
+    } else if (tareaCompletadaPor(tarea, alumno)) {
+      cumplidas += 1;
+    }
+  }
+
+  const porcentaje = (cumplidas / total) * 100;
+  if (porcentaje >= umbralPromo) return { texto: 'Promociona', estilo: estilos.promociona };
+  if (porcentaje >= umbralReg) return { texto: 'Regulariza', estilo: estilos.regulariza };
+  const todoCerrado = tareasMateria.every(tareaCerrada)
+    && parcialesMateria.every((p) => parcialYaRendido(p, alumno, notas));
+  if (todoCerrado && porcentaje < umbralReg) {
+    return { texto: 'Desaprueba', estilo: estilos.desaprueba };
+  }
+  return enCurso;
+}
+
+/** Proyecto SGSI: 75% de entregas con ≥6; promoción progresiva con cada entrega calificada ≥8. */
+export function evaluarPromocionTpPorcentajeNota(materia: Materia, alumno: string, trabajosPracticos: Tarea[]) {
+  const umbralRegPct = materia.notaMinimaRegularizar;
+  const minNotaPromo = materia.notaMinimaPromocionar;
+  const enCurso = { texto: 'En curso', estilo: estilos.enCurso };
+  const total = trabajosPracticos.length;
+  if (total === 0) return { texto: 'Sin TPs cargados', estilo: estilos.neutro };
+
+  const notas: number[] = [];
+  for (const tarea of trabajosPracticos) {
+    const valor = notaDeTarea(tarea, alumno);
+    if (valor === null) continue;
+    if (valor < NOTA_APROBACION_ACTIVIDAD) {
+      return { texto: 'Desaprueba', estilo: estilos.desaprueba };
+    }
+    notas.push(valor);
+  }
+
+  const aprobados = trabajosPracticos.filter((tarea) => {
+    const valor = notaDeTarea(tarea, alumno);
+    return valor !== null && valor >= NOTA_APROBACION_ACTIVIDAD;
+  }).length;
+  const porcentaje = (aprobados / total) * 100;
+
+  if (notas.length > 0 && notas.every((n) => n >= minNotaPromo)) {
+    return { texto: 'Promociona', estilo: estilos.promociona };
+  }
+  if (porcentaje >= umbralRegPct) {
+    return { texto: 'Regulariza', estilo: estilos.regulariza };
+  }
+  if (trabajosPracticos.every(tareaCerrada) && porcentaje < umbralRegPct) {
+    return { texto: 'Desaprueba', estilo: estilos.desaprueba };
+  }
+  return enCurso;
+}
+
+function esActividadObligatoriaRiesgos(tarea: Tarea) {
+  if (tarea.tipo === 'trabajo_practico') return true;
+  if (!tarea.conNota) return false;
+  const nombre = String(tarea.nombre || '').toLowerCase();
+  return /cuestionario|quiz|trabajo\s+pr[aá]ctico|tp\b|actividad\s+pr[aá]ctica/.test(nombre)
+    || tarea.tipo === 'quiz';
+}
+
+/** Al menos 3 actividades prácticas; cuestionarios con nota cuentan; promoción progresiva ≥8. */
+export function evaluarPromocionRiesgosTps(materia: Materia, alumno: string, tareas: Tarea[]) {
+  const minReg = materia.notaMinimaRegularizar;
+  const minPromo = materia.notaMinimaPromocionar;
+  const enCurso = { texto: 'En curso', estilo: estilos.enCurso };
+  const actividades = tareas.filter(esActividadObligatoriaRiesgos);
+  if (actividades.length === 0) return { texto: 'Sin actividades', estilo: estilos.neutro };
+
+  const notas: number[] = [];
+  let aprobados = 0;
+  for (const tarea of actividades) {
+    const valor = notaDeTarea(tarea, alumno);
+    if (valor !== null) {
+      if (valor < minReg) return { texto: 'Desaprueba', estilo: estilos.desaprueba };
+      notas.push(valor);
+      if (valor >= minReg) aprobados += 1;
+    } else if (tareaCompletadaPor(tarea, alumno)) {
+      aprobados += 1;
+    }
+  }
+
+  if (notas.length > 0 && notas.every((n) => n >= minPromo)) {
+    return { texto: 'Promociona', estilo: estilos.promociona };
+  }
+  if (aprobados >= 3) {
+    return { texto: 'Regulariza', estilo: estilos.regulariza };
+  }
+  if (actividades.every(tareaCerrada) && aprobados < 3) {
+    return { texto: 'Desaprueba', estilo: estilos.desaprueba };
+  }
+  return enCurso;
 }
 
 export function evaluarPromocionParcialesYTps(
