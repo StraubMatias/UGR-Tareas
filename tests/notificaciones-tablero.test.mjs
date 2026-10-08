@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { avisoVigenteEnCampana } from '../src/lib/avisos.ts';
 import { novedadNotasManualesPendientes } from '../src/lib/notas-manuales.ts';
+import { diferenciaDiasCalendarioCampus } from '../src/core/cursada.ts';
 
 test('avisoVigenteEnCampana oculta sin clases ya pasadas', () => {
   const aviso = {
@@ -37,6 +38,13 @@ test('novedadNotasManualesPendientes avisa sincronizar', () => {
   assert.equal(novedad?.tipo, 'notas-manuales');
   assert.match(novedad?.nombre || '', /2 notas/);
   assert.equal(novedadNotasManualesPendientes(0), null);
+});
+
+test('diferenciaDiasCalendarioCampus distingue ayer, hoy y mañana', () => {
+  const ref = new Date('2026-10-08T15:00:00-03:00').getTime();
+  assert.equal(diferenciaDiasCalendarioCampus('2026-10-07', ref), -1);
+  assert.equal(diferenciaDiasCalendarioCampus('2026-10-08', ref), 0);
+  assert.equal(diferenciaDiasCalendarioCampus('2026-10-09', ref), 1);
 });
 
 test('prioridad de campana: parcial antes que aviso del campus', () => {

@@ -108,7 +108,8 @@ export function armarDerivadosTablero({
     parciales,
     inscripciones,
     cronogramaCursada: cronogramaDeLaCursada,
-    notasManualesCampus
+    notasManualesCampus,
+    notas
   });
   const horariosProximoParcial = proximoParcial
     ? horarios

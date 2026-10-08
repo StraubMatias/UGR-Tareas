@@ -41,6 +41,27 @@ interface Props {
 // como de un aviso aprobado del campus (origen 'ugr'):
 const esEventoDeSinClases = (evento: EventoCronograma) => Boolean(evento) && (evento.tipo === 'sin_clases' || evento.modalidad === 'sin_clases');
 
+function enlaceSincronicoHorario(
+  horario: Horario,
+  enlacesPorMateria?: Map<string, string>
+) {
+  return String(horario.url_clase || '').trim() || enlacesPorMateria?.get(horario.materia_id)?.trim() || '';
+}
+
+function BotonLinkSincronico({ url }: { url: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-bold text-cyan-200 hover:bg-cyan-500/20 hover:underline mt-1"
+      onClick={(e) => e.stopPropagation()}
+    >
+      Link sincrónico ↗
+    </a>
+  );
+}
+
 // Vista "Horarios / Calendario mensual": grilla del mes con cursadas, parciales,
 // entregas y cronograma, más el modal de detalle por día.
 export default function VistaHorarios({
@@ -163,25 +184,13 @@ export default function VistaHorarios({
                         const materia = materias.find((item) => item.id === horario.materia_id);
                         const tema = eventos.tituloClaseEnCursadaPorMateria?.get(horario.materia_id);
                         const titulo = tema || materia?.nombre || 'Materia';
-                        const enlaceClase =
-                          eventos.enlacesClasePorMateria?.get(horario.materia_id)
-                          || horario.url_clase?.trim()
-                          || '';
+                        const enlaceClase = enlaceSincronicoHorario(horario, eventos.enlacesClasePorMateria);
                         return (
                           <div key={`${claveDia}-${horario.id}`} className="calendar-event calendar-class" title={`${titulo} · ${horario.hora_inicio} - ${horario.hora_fin}`}>
                             <span className="font-bold">{horario.hora_inicio}</span>
-                            <span className="block truncate">{titulo}</span>
-                            {enlaceClase && (
-                              <a
-                                href={enlaceClase}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block truncate text-[10px] font-semibold text-blue-300 hover:underline mt-0.5"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                Zoom
-                              </a>
-                            )}
+                            <span className="block truncate">Cursada {horario.hora_inicio}–{horario.hora_fin}</span>
+                            <span className="block truncate opacity-90">{tema || materia?.nombre}</span>
+                            {enlaceClase && <BotonLinkSincronico url={enlaceClase} />}
                           </div>
                         );
                       })}
@@ -338,17 +347,17 @@ export default function VistaHorarios({
                     };
                     const enlacesClase = eventos.enlacesClasePorMateria ?? new Map<string, string>();
                     for (const horario of eventos.horarios) {
-                      const enlaceClase = enlacesClase.get(horario.materia_id);
+                      const enlaceClase = enlaceSincronicoHorario(horario, enlacesClase);
                       const tema = eventos.tituloClaseEnCursadaPorMateria?.get(horario.materia_id);
                       grupoDe(horario.materia_id, horario.hora_inicio).bloques.push(
                         <div key={`modal-${horario.id}`} className="calendar-modal-event calendar-class">
-                          <p className="text-sm font-extrabold">Cursada · {horario.hora_inicio} - {horario.hora_fin}</p>
+                          <p className="text-sm font-extrabold">Cursada · {horario.hora_inicio} – {horario.hora_fin}</p>
                           {tema && <p className="mt-1 text-sm opacity-90">{tema}</p>}
                           {horario.aula && horario.aula !== 'Virtual' && <p className="mt-1 text-xs opacity-75">Aula {horario.aula}</p>}
                           {enlaceClase && (
-                            <a href={enlaceClase} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-2">
-                              Ver en UGR ↗
-                            </a>
+                            <div className="mt-2">
+                              <BotonLinkSincronico url={enlaceClase} />
+                            </div>
                           )}
                         </div>
                       );

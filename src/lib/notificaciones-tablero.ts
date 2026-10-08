@@ -2,13 +2,15 @@ import { avisoVigenteEnCampana, nombreNotificacionAviso } from './avisos';
 import { materiasQueCursa } from './companeros';
 import { novedadNotasManualesPendientes } from './notas-manuales';
 import type { AvisoCampusMoodle, InvitacionGrupoTablero, NovedadTablero } from '../components/portal/types';
-import type { EventoCronograma, Materia, Parcial } from '../core/cursada';
+import type { EventoCronograma, Materia, Nota, Parcial } from '../core/cursada';
 import {
+  diferenciaDiasCalendarioCampus,
   obtenerDiasHastaFecha,
   obtenerDiasHastaTarea,
   tareaCompletadaPor,
   textoPlazoHastaCierreTarea
 } from '../core/cursada';
+import { parcialYaRendido } from './promocion-materia';
 
 export function pesoNotificacionTablero(item: NovedadTablero): number {
   switch (item.tipo) {
@@ -32,6 +34,28 @@ export function pesoNotificacionTablero(item: NovedadTablero): number {
   }
 }
 
+function parcialRecordatorioVigente(
+  parcial: Parcial,
+  usuario: string,
+  notas: Nota[],
+  ahoraMs = Date.now()
+) {
+  if (parcialYaRendido(parcial, usuario, notas)) return false;
+  const dias = diferenciaDiasCalendarioCampus(parcial.fecha, ahoraMs);
+  if (dias === null || dias < 0 || dias > 1) return false;
+  if (dias === 0) {
+    const hora = Number(
+      new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        hour: 'numeric',
+        hour12: false
+      }).format(new Date(ahoraMs))
+    );
+    if (hora >= 22) return false;
+  }
+  return true;
+}
+
 export function ordenarNotificacionesTablero(lista: NovedadTablero[]): NovedadTablero[] {
   return [...lista].sort((a, b) => (
     pesoNotificacionTablero(a) - pesoNotificacionTablero(b)
@@ -49,7 +73,8 @@ export function armarNotificacionesTablero({
   inscripciones,
   cronogramaCursada,
   invitacionesGrupo = [],
-  notasManualesCampus = 0
+  notasManualesCampus = 0,
+  notas = []
 }: {
   usuarioActual: string | null;
   novedades: NovedadTablero[];
@@ -60,6 +85,7 @@ export function armarNotificacionesTablero({
   inscripciones: { alumno: string; materiaId: string }[];
   cronogramaCursada: EventoCronograma[];
   notasManualesCampus?: number;
+  notas?: Nota[];
 }): NovedadTablero[] {
   if (!usuarioActual) return [];
 
@@ -120,12 +146,13 @@ export function armarNotificacionesTablero({
         };
       })),
     ...parcialesDeLaCursada
+      .filter((parcial) => parcialRecordatorioVigente(parcial, usuarioActual, notas))
       .map((parcial) => ({
         id: `parcial-${parcial.id}`,
         tipo: 'parcial',
         nombre: parcial.nombre,
         materia: materiasDeLaCursada.find((m) => m.id === parcial.materia_id)?.nombre || 'Materia',
-        dias: obtenerDiasHastaFecha(parcial.fecha)
+        dias: diferenciaDiasCalendarioCampus(parcial.fecha)
       }))
       .filter(({ dias }) => dias === 0 || dias === 1),
     ...materiasDeLaCursada.flatMap((materia) => materia.tareas
