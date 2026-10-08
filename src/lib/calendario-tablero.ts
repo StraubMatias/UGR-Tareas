@@ -1,5 +1,6 @@
-import type { EventoCronograma, Horario, Materia, Parcial } from '../core/cursada';
+import type { EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
 import { ocultarExamenesCronogramaDuplicados, presentarCronogramaDelDia } from './cronograma-vista';
+import { personalizarParcialesDelDia } from './recuperatorios-calendario';
 
 /** Eventos sincrónicos del plan suelen venir con la fecha del PDF; se alinean al día de cursada semanal. */
 export function debeAlinearEventoAlHorario(evento: EventoCronograma) {
@@ -96,12 +97,18 @@ export function eventosDelDiaCalendario(
     parcialesDeLaCursada,
     tareasCalendario,
     horariosDeLaCursada,
-    cronogramaDeLaCursada
+    cronogramaDeLaCursada,
+    alumnoCalendario = null,
+    notasCalendario = [],
+    materiasCalendario = []
   }: {
     parcialesDeLaCursada: Parcial[];
     tareasCalendario: Array<{ tarea: Materia['tareas'][number]; materia: Materia }>;
     horariosDeLaCursada: Horario[];
     cronogramaDeLaCursada: EventoCronograma[];
+    alumnoCalendario?: string | null;
+    notasCalendario?: Nota[];
+    materiasCalendario?: Materia[];
   }
 ) {
   if (!fecha || !fechaDentroDelCronograma(fecha)) {
@@ -145,7 +152,15 @@ export function eventosDelDiaCalendario(
     return deHoraYMedia.length > 0 ? deHoraYMedia : grupo;
   }).sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio)) || String(a.materia_id).localeCompare(String(b.materia_id)));
 
-  const parciales = parcialesDeLaCursada.filter((parcial) => obtenerClaveDiaCalendario(parcial.fecha) === claveDia);
+  const parcialesBrutos = parcialesDeLaCursada.filter((parcial) => obtenerClaveDiaCalendario(parcial.fecha) === claveDia);
+  const parciales = personalizarParcialesDelDia(
+    parcialesBrutos,
+    parcialesDeLaCursada,
+    alumnoCalendario,
+    notasCalendario,
+    materiasCalendario,
+    claveDia
+  );
   const tareas = tareasCalendario.filter(({ tarea }) => obtenerClaveDiaCalendario(tarea.fin) === claveDia);
   const cronogramaSinDuplicarParciales = ocultarExamenesCronogramaDuplicados(eventosCronogramaDia, parciales);
   const presentacion = presentarCronogramaDelDia(
@@ -155,13 +170,18 @@ export function eventosDelDiaCalendario(
     tareas.map(({ tarea }) => ({ nombre: tarea.nombre }))
   );
   const { eventos: cronograma, enlaceClasePorMateria } = presentacion;
+  const enlacesClasePorMateria = new Map(enlaceClasePorMateria);
+  for (const horario of horariosReales) {
+    const url = String(horario.url_clase || '').trim();
+    if (url) enlacesClasePorMateria.set(horario.materia_id, url);
+  }
 
   return {
     parciales,
     tareas,
     horarios: horariosReales,
     cronograma,
-    enlacesClasePorMateria: enlaceClasePorMateria,
+    enlacesClasePorMateria,
     tituloClaseEnCursadaPorMateria: presentacion.tituloClaseEnCursadaPorMateria
   };
 }

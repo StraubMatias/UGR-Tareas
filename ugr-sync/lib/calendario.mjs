@@ -2,7 +2,13 @@
 // que ve el alumno. Ahí están las clases sincrónicas y los vencimientos, con la
 // fecha en hora de Argentina.
 import { load } from 'cheerio';
-import { coincidirNombreTarea, esExamenFinalDelCronograma, pareceEvaluacion } from './normalizar.mjs';
+import {
+  coincidirNombreTarea,
+  esExamenFinalDelCronograma,
+  pareceEvaluacion,
+  pareceParcialCuatrimestre,
+  tituloPareceClaseDePlan
+} from './normalizar.mjs';
 import { parsearTimestampMoodle } from './normalizar.mjs';
 
 const ZONA_CAMPUS = 'America/Argentina/Buenos_Aires';
@@ -176,7 +182,14 @@ function horarioDeEvento(evento) {
 }
 
 function pareceClase(titulo) {
-  return /clase|encuentro|sincr|zoom|sala virtual|revisi[oó]n/i.test(titulo);
+  return /clase|encuentro|sincr|asincr|zoom|sala virtual|revisi[oó]n/i.test(titulo);
+}
+
+/** Modalidad para cronograma: el calendario de Moodle casi nunca dice «asincrónico» en el título. */
+export function modalidadEventoDesdeTitulo(titulo) {
+  const plano = sinAcento(titulo);
+  if (/\basincron|\ba distancia\b/.test(plano)) return 'asincrónico';
+  return 'sincrónico';
 }
 
 /** Enlace/turno de Zoom sin tema de la clase; el horario semanal ya lo muestra el tablero. */
@@ -191,6 +204,8 @@ export function esTituloClaseGenericaDelCampus(titulo) {
   if (/^clase sincr[oó]nica semanal/i.test(t)) return true;
   if (/^sala virtual\b/i.test(t)) return true;
   if (/^enlace zoom\b/i.test(t)) return true;
+  if (/^encuentro sincr[oó]nico\b/i.test(t)) return true;
+  if (/^link de acceso a encuentros sincr[oó]nicos\b/i.test(t)) return true;
   return false;
 }
 
@@ -207,7 +222,9 @@ function tipoCronograma(titulo) {
   const t = String(titulo || '');
   if (/consulta|revisi[oó]n/i.test(t)) return 'consulta';
   if (esExamenFinalDelCronograma(t)) return 'examen_final';
-  if (pareceEvaluacion(t) && !/^unidad\s+\d/i.test(t)) return 'examen';
+  if (tituloPareceClaseDePlan(t)) return 'clase';
+  if (pareceParcialCuatrimestre(t)) return 'examen';
+  if (pareceEvaluacion(t) && /\bparcial\b/i.test(t) && !/^unidad\s+\d/i.test(t)) return 'examen';
   return 'clase';
 }
 
@@ -305,7 +322,7 @@ function eventoCronograma(evento, materiaId) {
   return {
     materiaId,
     fecha: evento.fecha,
-    modalidad: 'sincrónico',
+    modalidad: modalidadEventoDesdeTitulo(evento.titulo),
     tipo: tipoCronograma(evento.titulo),
     titulo: tituloConHorario(evento).slice(0, 200),
     detalles: evento.horaInicio

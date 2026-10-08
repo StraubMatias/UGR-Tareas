@@ -1,7 +1,15 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { obtenerIconoMateria, obtenerResumenTareasAlumno, type Materia, type Tarea } from '../core/cursada';
+import {
+  obtenerResumenTareasAlumno,
+  ordenarTareas,
+  acentoVisualMateria,
+  obtenerIconoMateria,
+  tituloVisibleMateria,
+  type Materia,
+  type Tarea
+} from '../core/cursada';
 import { alumnosDeLaMateria, materiasEnComun, materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
 import type { InvitacionGrupoEnviadaTablero } from './portal/types';
 import EstadoTareaAlumno from './EstadoTareaAlumno';
@@ -56,7 +64,12 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
   const seleccionadas = filtro === 'grupales' ? resumen.grupales : resumen[filtro];
   const ids = new Set(seleccionadas.map((tarea) => tarea.id));
   const filtros = ([...ESTADOS, ['grupales', 'Grupales']] as [ClaveFiltro, string][]);
-
+  const bloquesPorMateria = materiasDelAlumno
+    .map((materia) => ({
+      materia,
+      tareas: ordenarTareas((materia.tareas || []).filter((tarea) => ids.has(tarea.id)))
+    }))
+    .filter((bloque) => bloque.tareas.length > 0);
   return (
     <section className={`rounded-2xl border overflow-hidden ${propia ? 'border-cyan-500/40 bg-[#131e29]' : 'border-slate-800 bg-[#131b25]'}`}>
       <h3>
@@ -90,37 +103,63 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
               <p role="status" className="rounded-xl border border-slate-800 p-6 text-center text-sm text-slate-300">
                 {resumen.total === 0 ? 'Todavía no hay tareas cargadas.' : filtro === 'pendientes' ? 'No hay entregas abiertas pendientes. Podés consultar las notas, tareas futuras y grupos en los otros filtros.' : filtro === 'grupales' ? 'No hay trabajos grupales activos. Los que ya tienen nota cargada están en Completadas.' : 'No hay tareas en esta categoría.'}
               </p>
-                                                ) : (
-              <div className="estado-tareas-contenedor flex flex-wrap gap-2">
-                {materiasDelAlumno
-                  .flatMap((materia) => 
-                    (materia.tareas || [])
-                      .filter((tarea) => ids.has(tarea.id))
-                      .map((tarea) => ({ tarea, materia }))
-                  )
-                  .map(({ tarea, materia }) => (
-                    <div key={tarea.id} className="w-full sm:w-[calc(50%-0.5rem)] bg-slate-800/20 rounded-lg p-3 border border-slate-700/30">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2 pb-2 border-b border-slate-700/30 border-l-2 border-l-cyan-500/50 pl-2 flex items-center gap-1.5 min-w-0">
-                        <span className="text-sm normal-case shrink-0" aria-hidden="true">{obtenerIconoMateria(materia.nombre)}</span>
-                        <span className="truncate">{materia.nombre}</span>
-                      </p>
-                      <EstadoTareaAlumno tarea={tarea} alumno={alumno}
-                        materia={materia}
-                        unidad={tarea.unidad}
-                        ocultarContextoMateria
-                        alumnos={alumnosDeLaMateria(inscripciones, materia.id)}
-                        usuarioActual={acciones.usuarioActual}
-                        irATareaEnMaterias={acciones.irATareaEnMaterias}
-                        toggleTareaDesdeCliente={acciones.toggleTareaDesdeCliente}
-                        notasTareasInputs={acciones.notasTareasInputs}
-                        handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
-                        handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
-                        recargarTablero={acciones.recargarTablero}
-                        invitacionesGrupoEnviadas={acciones.invitacionesGrupoEnviadas}
-                        esAdmin={esAdmin}
-          />
-                    </div>
-                  ))}
+            ) : (
+              <div className="estado-tareas-por-materia" data-cantidad-bloques={bloquesPorMateria.length}>
+                {bloquesPorMateria.map(({ materia, tareas }) => {
+                  const acento = acentoVisualMateria(materia.id);
+                  const bloqueAnchoCompleto = tareas.length > 1;
+                  return (
+                    <section
+                      key={materia.id}
+                      className={`estado-materia-bloque rounded-xl border overflow-hidden${bloqueAnchoCompleto ? ' estado-materia-bloque-ancho-completo' : ''}`}
+                      style={{
+                        borderColor: acento.borde,
+                        background: acento.fondo
+                      }}
+                    >
+                      <header
+                        className="estado-materia-bloque-cabecera flex items-center gap-2 px-3.5 py-2.5 border-b border-slate-800/80"
+                        style={{ color: acento.texto }}
+                      >
+                        <span className="text-lg leading-none" aria-hidden="true">
+                          {obtenerIconoMateria(materia.nombre)}
+                        </span>
+                        <h4 className="estado-materia-bloque-titulo text-sm font-semibold text-slate-100 m-0 min-w-0 break-words">
+                          {tituloVisibleMateria(materia.nombre)}
+                        </h4>
+                        <span className="ml-auto text-xs text-slate-500 shrink-0">
+                          {tareas.length} {tareas.length === 1 ? 'tarea' : 'tareas'}
+                        </span>
+                      </header>
+                      <div
+                        className="estado-tareas-contenedor estado-tareas-columnas p-3 sm:p-3.5"
+                        data-cantidad-tareas={tareas.length}
+                      >
+                        {tareas.map((tarea) => (
+                          <div key={tarea.id} className="estado-tarea-slot">
+                            <EstadoTareaAlumno
+                              tarea={tarea}
+                              alumno={alumno}
+                              materia={materia}
+                              unidad={tarea.unidad}
+                              ocultarContextoMateria
+                              alumnos={alumnosDeLaMateria(inscripciones, materia.id)}
+                              usuarioActual={acciones.usuarioActual}
+                              irATareaEnMaterias={acciones.irATareaEnMaterias}
+                              toggleTareaDesdeCliente={acciones.toggleTareaDesdeCliente}
+                              notasTareasInputs={acciones.notasTareasInputs}
+                              handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
+                              handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
+                              recargarTablero={acciones.recargarTablero}
+                              invitacionesGrupoEnviadas={acciones.invitacionesGrupoEnviadas}
+                              esAdmin={esAdmin}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
               </div>
             )}
           </div>

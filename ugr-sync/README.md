@@ -15,23 +15,22 @@ No depende de la interfaz de la app: se puede usar desde el CLI, desde el botón
 
 ```
 ugr-sync/
-├── lib/                    # librería (sin dependencias de la app)
-│   ├── constantes.mjs      #   URL y rutas del campus
-│   ├── autenticar.mjs      #   login de Moodle + persistencia de la sesión
-│   ├── red.mjs             #   cliente HTTP con cookies y re-login automático
-│   ├── materias.mjs        #   parser de la lista de cursos
-│   ├── tareas.mjs          #   parser del índice de tareas y del overview
-│   ├── normalizar.mjs      #   fechas, tipos y matcheo (cursos, tareas, parciales)
-│   ├── egress.mjs          #   allowlist de host al seguir redirects (solo campus UGR)
-│   ├── sync-optimizacion.mjs # omitir lecturas Moodle cuando el dato ya es estable
-│   ├── assign-entregas.mjs #   hitos de buzones assign (entregas múltiples)
-│   └── sync-core.mjs       #   núcleo: detección, inserción y backfill de enlaces
+├── docs/
+│   └── GUIA-SINCRONIZACION.md   # mapa completo del sync (léelo primero)
+├── lib/
+│   ├── sync/                    # trozos del núcleo (conexión, cursos, avisos, cronograma DB)
+│   ├── sync-core.mjs            # detección de tareas, notas, complemento campus
+│   ├── cronograma-oficial.mjs   # PDF/Word + Zoom
+│   ├── constantes.mjs, red.mjs, autenticar.mjs, …
+│   └── parsers: materias, tareas, calendario, avisos, …
 ├── scripts/
-│   ├── login.mjs           #   CLI: inicia sesión y guarda la cookie
-│   └── sync.mjs            #   CLI: detecta/inserta tareas y completa enlaces
-└── test/                   # tests (node:test) + fixtures HTML reales de Moodle
-    └── fixtures/
+│   ├── sync.mjs                 # CLI comisión
+│   ├── sincronizar-cronogramas.mjs
+│   └── lib/flujo-sync-comision.mjs
+└── test/
 ```
+
+**Guía detallada:** [docs/GUIA-SINCRONIZACION.md](./docs/GUIA-SINCRONIZACION.md)
 
 ## Cómo se usa
 
@@ -46,7 +45,8 @@ npm run ugr:sync
 
 # 2b. Variantes
 npm run ugr:sync -- --dry   # solo muestra, no escribe nada
-npm run ugr:sync -- --yes   # inserta tareas Y publica avisos sin preguntar
+npm run ugr:sync -- --yes   # inserta tareas, avisos y cronogramas PDF/Zoom sin preguntar
+npm run ugr:cronogramas     # solo cronograma oficial + Zoom + higiene
 ```
 
 Correr los tests del módulo:

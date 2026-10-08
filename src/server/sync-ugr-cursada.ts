@@ -407,6 +407,16 @@ export async function sincronizarLoteMateriasDelAlumno({
     materiaIds
   });
 
+  if (mapeosLote.length > 0) {
+    const coreUgr = await import('../../ugr-sync/lib/sync-core.mjs') as Record<string, unknown>;
+    const sincronizarEnlacesZoomHorarios = coreUgr.sincronizarEnlacesZoomHorarios as (opciones: {
+      db: typeof db;
+      cliente: unknown;
+      mapeos: typeof mapeosLote;
+    }) => Promise<number>;
+    await sincronizarEnlacesZoomHorarios({ db, cliente, mapeos: mapeosLote });
+  }
+
   const eventosInsertadosAvisos = 0;
   const eventosAvisos: ItemEventoCampus[] = [];
 

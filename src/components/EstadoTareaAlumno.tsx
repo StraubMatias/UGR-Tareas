@@ -56,7 +56,7 @@ export default function EstadoTareaAlumno({
   const recargar = recargarTablero || (() => undefined);
 
   return (
-    <div className="estado-tarea min-w-0 rounded-xl border border-slate-800 bg-[#111a24] p-4 space-y-3">
+    <div className="estado-tarea min-w-0 h-full rounded-xl border border-slate-800 bg-[#111a24] p-3.5 sm:p-4 space-y-3 shadow-sm shadow-black/20">
       {materia && !ocultarContextoMateria && (
         <div className="estado-tarea-contexto border-b border-slate-800">
           <p className="estado-tarea-materia"><span aria-hidden="true">{obtenerIconoMateria(materia.nombre)}</span> {materia.nombre}</p>

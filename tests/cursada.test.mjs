@@ -17,7 +17,8 @@ import {
   notasCerradasEntregaCampus,
   tareaEstaHabilitada,
   obtenerDiasHastaApertura,
-  obtenerTextoApertura
+  obtenerTextoApertura,
+  tituloVisibleMateria
 } from '../src/core/cursada.ts';
 
 test('obtenerGrupoDeAlumno: encuentra el grupo correspondiente o retorna null', () => {
@@ -324,4 +325,11 @@ test('obtenerTextoApertura muestra la hora cuando abre más tarde el mismo día'
 
 test('formatearFechaDDMMAAAA ignora la hora en inicio con T', () => {
   assert.equal(formatearFechaDDMMAAAA('2026-10-06T17:34'), '06-10-2026');
+});
+
+test('tituloVisibleMateria omite el código del campus', () => {
+  assert.equal(
+    tituloVisibleMateria('(V.TUCS.2.12.1) GESTIÓN DE ACTIVOS DE LA INFORMACIÓN'),
+    'GESTIÓN DE ACTIVOS DE LA INFORMACIÓN'
+  );
 });
