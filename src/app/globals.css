@@ -304,6 +304,23 @@ textarea {
   gap: 1.25rem;
 }
 
+@media (min-width: 40rem) {
+  .estado-alumnos .estado-bloques-materia-compactos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .estado-alumnos .estado-bloques-materia-compactos[data-cantidad-bloques='1'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.estado-materia-bloque .estado-tareas-columnas[data-cantidad-tareas='1'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .estado-materia-bloque-titulo {
   letter-spacing: -0.02em;
 }

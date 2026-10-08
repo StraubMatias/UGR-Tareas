@@ -1,5 +1,6 @@
 import { esTituloClaseGenericaDelCampus } from '../ugr-sync/lib/calendario.mjs';
 import { promoverParcialesDesdeCronograma } from '../ugr-sync/lib/sync-core.mjs';
+import { reassertPlanManualComision2026 } from './restaurar-plan-manual-2026.mjs';
 
 function tituloBaseCronograma(titulo) {
   return String(titulo || '')
@@ -15,8 +16,8 @@ function esRecordatorioAperturaCierre(titulo) {
 
 function puntajeFilaCronograma(fila) {
   let puntaje = 0;
-  if (fila.origen === 'oficial') puntaje += 250;
-  if (fila.origen === 'manual') puntaje += 200;
+  if (fila.origen === 'manual') puntaje += 300;
+  if (fila.origen === 'oficial') puntaje += 120;
   if (fila.url) puntaje += 30;
   const det = String(fila.detalles || '').trim();
   if (det && !/^horario del campus:/i.test(det)) puntaje += Math.min(det.length, 80);
@@ -29,8 +30,9 @@ function puntajeFilaCronograma(fila) {
  * y promueve parciales desde filas tipo examen del cronograma.
  */
 export async function ejecutarHigieneCronograma(db) {
-  const materias = await db.execute('SELECT id FROM materias');
+  const materias = await db.execute('SELECT id, nombre FROM materias');
   const materiaIds = materias.rows.map((f) => f.id);
+  const plan2026 = await reassertPlanManualComision2026(db, materias.rows);
 
   const todas = await db.execute(
     'SELECT id, materia_id, fecha, titulo, detalles, url, origen, tipo FROM cronograma_eventos'
@@ -136,6 +138,7 @@ export async function ejecutarHigieneCronograma(db) {
   return {
     eventosEliminados: idsBorrar.size,
     parcialesEliminados,
-    parcialesInsertados: parciales.insertadas
+    parcialesInsertados: parciales.insertadas,
+    planManual2026: plan2026
   };
 }

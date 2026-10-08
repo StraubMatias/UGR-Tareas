@@ -4,6 +4,9 @@ import { useId, useState } from 'react';
 import {
   obtenerResumenTareasAlumno,
   ordenarTareas,
+  acentoVisualMateria,
+  obtenerIconoMateria,
+  tituloVisibleMateria,
   type Materia,
   type Tarea
 } from '../core/cursada';
@@ -67,6 +70,8 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
       tareas: ordenarTareas((materia.tareas || []).filter((tarea) => ids.has(tarea.id)))
     }))
     .filter((bloque) => bloque.tareas.length > 0);
+  const modoCompacto = bloquesPorMateria.length >= 2
+    && bloquesPorMateria.every((bloque) => bloque.tareas.length === 1);
 
   return (
     <section className={`rounded-2xl border overflow-hidden ${propia ? 'border-cyan-500/40 bg-[#131e29]' : 'border-slate-800 bg-[#131b25]'}`}>
@@ -103,32 +108,63 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
               </p>
             ) : (
               <div
-                className="estado-tareas-contenedor estado-tareas-columnas estado-tareas-rejilla-global"
-                data-cantidad-tareas={seleccionadas.length}
+                className={`estado-tareas-por-materia${modoCompacto ? ' estado-bloques-materia-compactos' : ''}`}
+                data-cantidad-bloques={bloquesPorMateria.length}
               >
-                {bloquesPorMateria.flatMap(({ materia, tareas }) =>
-                  tareas.map((tarea) => (
-                    <div key={tarea.id} className="estado-tarea-slot">
-                      <EstadoTareaAlumno
-                        tarea={tarea}
-                        alumno={alumno}
-                        materia={materia}
-                        unidad={tarea.unidad}
-                        ocultarContextoMateria={false}
-                        alumnos={alumnosDeLaMateria(inscripciones, materia.id)}
-                        usuarioActual={acciones.usuarioActual}
-                        irATareaEnMaterias={acciones.irATareaEnMaterias}
-                        toggleTareaDesdeCliente={acciones.toggleTareaDesdeCliente}
-                        notasTareasInputs={acciones.notasTareasInputs}
-                        handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
-                        handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
-                        recargarTablero={acciones.recargarTablero}
-                        invitacionesGrupoEnviadas={acciones.invitacionesGrupoEnviadas}
-                        esAdmin={esAdmin}
-                      />
-                    </div>
-                  ))
-                )}
+                {bloquesPorMateria.map(({ materia, tareas }) => {
+                  const acento = acentoVisualMateria(materia.id);
+                  return (
+                    <section
+                      key={materia.id}
+                      className="estado-materia-bloque rounded-xl border overflow-hidden"
+                      style={{
+                        borderColor: acento.borde,
+                        background: acento.fondo
+                      }}
+                    >
+                      <header
+                        className="estado-materia-bloque-cabecera flex items-center gap-2 px-3.5 py-2.5 border-b border-slate-800/80"
+                        style={{ color: acento.texto }}
+                      >
+                        <span className="text-lg leading-none" aria-hidden="true">
+                          {obtenerIconoMateria(materia.nombre)}
+                        </span>
+                        <h4 className="estado-materia-bloque-titulo text-sm font-semibold text-slate-100 m-0 min-w-0 break-words">
+                          {tituloVisibleMateria(materia.nombre)}
+                        </h4>
+                        <span className="ml-auto text-xs text-slate-500 shrink-0">
+                          {tareas.length} {tareas.length === 1 ? 'tarea' : 'tareas'}
+                        </span>
+                      </header>
+                      <div
+                        className="estado-tareas-contenedor estado-tareas-columnas p-3 sm:p-3.5"
+                        data-cantidad-tareas={tareas.length}
+                      >
+                        {tareas.map((tarea) => (
+                          <div key={tarea.id} className="estado-tarea-slot">
+                            <EstadoTareaAlumno
+                              tarea={tarea}
+                              alumno={alumno}
+                              materia={materia}
+                              unidad={tarea.unidad}
+                              ocultarContextoMateria
+                              alumnos={alumnosDeLaMateria(inscripciones, materia.id)}
+                              usuarioActual={acciones.usuarioActual}
+                              irATareaEnMaterias={acciones.irATareaEnMaterias}
+                              toggleTareaDesdeCliente={acciones.toggleTareaDesdeCliente}
+                              notasTareasInputs={acciones.notasTareasInputs}
+                              handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
+                              handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
+                              recargarTablero={acciones.recargarTablero}
+                              invitacionesGrupoEnviadas={acciones.invitacionesGrupoEnviadas}
+                              esAdmin={esAdmin}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
               </div>
             )}
           </div>
