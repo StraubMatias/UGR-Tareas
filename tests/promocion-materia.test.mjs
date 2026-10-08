@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import {
   reglaPromocionEfectiva,
   evaluarPromocionParcialesYTps,
-  evaluarParcialesCuatrimestre
+  evaluarParcialesCuatrimestre,
+  evaluarPromocionActivosPorcentaje,
+  evaluarPromocionTpPorcentajeNota,
+  evaluarPromocionRiesgosTps
 } from '../src/lib/promocion-materia.ts';
 
 const materiaConceptos = {
@@ -69,6 +72,52 @@ test('desaprueba con parcial 4 aunque TPs estén bien', () => {
   ];
   const estado = evaluarPromocionParcialesYTps(materiaConceptos, 'Ana', parciales, notas, tps);
   assert.equal(estado.texto, 'Desaprueba');
+});
+
+test('activos: parcial y tareas suman al porcentaje 75/90', () => {
+  const materia = {
+    id: 'act',
+    nombre: 'ACTIVOS',
+    notaMinimaRegularizar: 75,
+    notaMinimaPromocionar: 90,
+    reglaPromocion: 'activos_porcentaje',
+    tareas: [
+      { id: 't1', nombre: 'T1', inicio: '2026-08-01', fin: '2026-12-01', conNota: true, notas: { Ana: 8 }, completadoPor: [] },
+      { id: 't2', nombre: 'T2', inicio: '2026-08-01', fin: '2026-12-01', conNota: true, notas: { Ana: 8 }, completadoPor: [] },
+      { id: 't3', nombre: 'T3', inicio: '2026-08-01', fin: '2026-12-01', conNota: true, notas: {}, completadoPor: [] }
+    ]
+  };
+  const parciales = [{ id: 'p1', materia_id: 'act', nombre: '1er', fecha: '2026-09-01' }];
+  const notas = [{ parcial_id: 'p1', alumno: 'Ana', nota: 7 }];
+  const r = evaluarPromocionActivosPorcentaje(materia, 'Ana', parciales, notas, materia.tareas);
+  assert.equal(r.texto, 'Regulariza');
+});
+
+test('SGSI: promociona con entregas calificadas en 8 aunque falten sin nota', () => {
+  const materia = {
+    id: 'sgi',
+    notaMinimaRegularizar: 75,
+    notaMinimaPromocionar: 8,
+    reglaPromocion: 'tp_porcentaje_nota',
+    tareas: []
+  };
+  const tps = [
+    { id: 'e1', nombre: 'E1', tipo: 'trabajo_practico', conNota: true, notas: { Ana: 10 }, inicio: 'x', fin: 'x', completadoPor: [] },
+    { id: 'e2', nombre: 'E2', tipo: 'trabajo_practico', conNota: true, notas: {}, inicio: 'x', fin: 'x', completadoPor: [] },
+    { id: 'e3', nombre: 'E3', tipo: 'trabajo_practico', conNota: true, notas: {}, inicio: 'x', fin: 'x', completadoPor: [] },
+    { id: 'e4', nombre: 'E4', tipo: 'trabajo_practico', conNota: true, notas: {}, inicio: 'x', fin: 'x', completadoPor: [] }
+  ];
+  assert.equal(evaluarPromocionTpPorcentajeNota(materia, 'Ana', tps).texto, 'Promociona');
+});
+
+test('riesgos: cuestionarios con nota cuentan para promocionar', () => {
+  const materia = { id: 'egr', notaMinimaRegularizar: 6, notaMinimaPromocionar: 8, reglaPromocion: 'riesgos_tps', tareas: [] };
+  const tareas = [
+    { id: 'q1', nombre: 'Cuestionario 1', conNota: true, notas: { Ana: 9 }, inicio: 'x', fin: 'x', completadoPor: [] },
+    { id: 'q2', nombre: 'Cuestionario 2', conNota: true, notas: { Ana: 8 }, inicio: 'x', fin: 'x', completadoPor: [] },
+    { id: 'tp', nombre: 'TP final', tipo: 'trabajo_practico', conNota: true, notas: { Ana: 8 }, inicio: 'x', fin: 'x', completadoPor: [] }
+  ];
+  assert.equal(evaluarPromocionRiesgosTps(materia, 'Ana', tareas).texto, 'Promociona');
 });
 
 test('solo regulariza si parcial rendido tiene 7', () => {

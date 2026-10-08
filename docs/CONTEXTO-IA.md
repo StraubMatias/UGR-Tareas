@@ -64,9 +64,16 @@ El cronograma mensual es la vista principal de cursada:
 
 ## Promoción y estado de materia
 
-- Reglas en `materias.regla_promocion` + `promocion-materia.ts` (p. ej. `parciales_y_tps`, `ciberdelitos_parciales`, solo TPs).
-- `parcialYaRendido`: hay nota **o** la fecha del parcial es anterior a hoy (zona `America/Argentina/Buenos_Aires`); el mismo día sin nota aún no cuenta rendido.
-- UI: `estado-materia-ui.ts`, `VistaPromocion.tsx`.
+- Reglas en `materias.regla_promocion` + `promocion-materia.ts` (evaluadores por regla en `estado-materia-ui.ts`).
+- `parcialYaRendido`: hay nota **o** fecha del parcial anterior a hoy (zona campus); el mismo día sin nota no cuenta rendido.
+- **Progresiva:** lo ya calificado cuenta; pendientes sin nota no bloquean promoción hasta que haya nota &lt; mínimo.
+- Reglas habituales comisión:
+  - `parciales_y_tps` — Conceptos y metodología mixta (6 / 8).
+  - `ciberdelitos_parciales` — solo parciales.
+  - `activos_porcentaje` — **tareas + parciales** en el mismo % (75 regulariza, 90 promociona).
+  - `tp_porcentaje_nota` — SGSI: 75% de entregas del proyecto con ≥6; **Promociona** si cada entrega **calificada** tiene ≥8.
+  - `riesgos_tps` — ≥3 actividades (TP + **cuestionarios con nota**); promoción si todas las notas cargadas ≥8.
+- UI: `VistaPromocion.tsx` (texto de umbrales por regla).
 
 ---
 
