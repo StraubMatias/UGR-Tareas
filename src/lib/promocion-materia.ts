@@ -34,7 +34,7 @@ function claveHoyCampus(ahoraMs = Date.now()) {
 }
 
 /** Cuenta como rendido si hay nota o si la fecha del parcial ya pasó (no el mismo día sin nota). */
-function parcialYaRendido(parcial: Parcial, alumno: string, notas: Nota[]) {
+export function parcialYaRendido(parcial: Parcial, alumno: string, notas: Nota[]) {
   const fila = notas.find((n) => n.parcial_id === parcial.id && n.alumno === alumno);
   if (fila && notaDe(fila.nota) !== null) return true;
   const clave = claveFecha(parcial.fecha);
