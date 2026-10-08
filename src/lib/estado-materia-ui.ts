@@ -8,6 +8,7 @@ import { alumnoCursaMateria, type InscripcionAlumno } from './companeros';
 import {
   evaluarParcialesCuatrimestre,
   evaluarPromocionParcialesYTps,
+  evaluarPromocionSoloTps,
   reglaPromocionEfectiva
 } from './promocion-materia';
 
@@ -22,7 +23,8 @@ export function calcularBadgeEstadoMateria(
     return null;
   }
     const tareasAbiertas = materia.tareas.filter((tarea) => tareaEstaHabilitada(tarea.inicio));
-    const trabajosPracticos = tareasAbiertas.filter((tarea) => tarea.tipo === 'trabajo_practico');
+    const trabajosPracticos = materia.tareas.filter((tarea) => tarea.tipo === 'trabajo_practico');
+    const trabajosPracticosAbiertos = tareasAbiertas.filter((tarea) => tarea.tipo === 'trabajo_practico');
     if (!materia.condiciones && trabajosPracticos.length === 0) return null;
     const estado = (texto: string, estilo: string) => ({ texto, estilo });
     const enCurso = estado('En curso', 'text-amber-300 bg-amber-500/10 border-amber-500/30');
@@ -73,34 +75,35 @@ export function calcularBadgeEstadoMateria(
     }
 
     if (regla === 'tp_porcentaje_nota') {
-      const total = trabajosPracticos.length;
+      const total = trabajosPracticosAbiertos.length;
       if (total === 0) return estado('Sin TPs abiertos', 'text-slate-400 bg-slate-800/60 border-slate-700');
-      const completados = trabajosPracticos.filter(tareaAprobada).length;
+      const completados = trabajosPracticosAbiertos.filter(tareaAprobada).length;
       const porcentaje = (completados / total) * 100;
-      const notasValidas = trabajosPracticos.map(notaDeTarea).filter((nota) => Number.isFinite(nota));
-      if (porcentaje >= materia.notaMinimaPromocionar && notasValidas.length === total && notasValidas.every((nota) => nota >= materia.notaMinimaPromocionar)) {
+      const notasValidas = trabajosPracticosAbiertos.map(notaDeTarea).filter((nota) => Number.isFinite(nota));
+      const notasConPromo = notasValidas.filter((nota) => nota >= materia.notaMinimaPromocionar);
+      if (notasConPromo.length > 0 && notasConPromo.length === notasValidas.length && porcentaje >= materia.notaMinimaPromocionar) {
         return promociona;
       }
-      if (porcentaje >= materia.notaMinimaRegularizar) return regulariza;
-      return trabajosPracticos.every(tareaCerrada) ? desaprueba : enCurso;
+      if (porcentaje >= materia.notaMinimaRegularizar || (notasValidas.length > 0 && notasValidas.every((n) => n >= materia.notaMinimaRegularizar))) {
+        return regulariza;
+      }
+      return trabajosPracticosAbiertos.every(tareaCerrada) ? desaprueba : enCurso;
     }
 
     if (trabajosPracticos.length === 0) return tareasAbiertas.length === 0
       ? estado('Sin TPs abiertos', 'text-slate-400 bg-slate-800/60 border-slate-700')
       : estado('Sin TPs cargados', 'text-slate-400 bg-slate-800/60 border-slate-700');
-    const notasTp = trabajosPracticos.map((tarea) => {
-      const valor = tarea.notas?.[alumno];
-      return valor === undefined ? null : notaDe(valor);
-    });
-    const notasCargadas = notasTp.filter((nota): nota is number => nota !== null && Number.isFinite(nota));
+    const notasCargadas = trabajosPracticos
+      .map(notaDeTarea)
+      .filter((nota): nota is number => Number.isFinite(nota));
     if (regla === 'riesgos_tps') {
       const completados = trabajosPracticos.filter(tareaAprobada).length;
       if (completados < 3) return todasCerradas(trabajosPracticos) ? desaprueba : enCurso;
-      if (notasCargadas.length === trabajosPracticos.length && notasCargadas.every((nota) => nota >= materia.notaMinimaPromocionar)) return promociona;
-      return regulariza;
+      if (notasCargadas.length > 0 && notasCargadas.every((nota) => nota >= materia.notaMinimaPromocionar)) return promociona;
+      if (notasCargadas.length > 0 && notasCargadas.every((nota) => nota >= materia.notaMinimaRegularizar)) return regulariza;
+      return enCurso;
     }
-    if (notasTp.length !== notasCargadas.length) return todasCerradas(trabajosPracticos) ? desaprueba : enCurso;
-    const promedio = notasCargadas.reduce((total, nota) => total + nota, 0) / notasCargadas.length;
-    if (notasCargadas.some((nota) => nota < materia.notaMinimaRegularizar) || promedio < materia.notaMinimaRegularizar) return desaprueba;
-    return notasCargadas.every((nota) => nota >= materia.notaMinimaPromocionar) && promedio >= materia.notaMinimaPromocionar ? promociona : regulariza;
+    const soloTps = evaluarPromocionSoloTps(materia, alumno, trabajosPracticos, parciales, notas);
+    if (soloTps) return soloTps;
+    return enCurso;
 }

@@ -407,6 +407,11 @@ export async function sincronizarLoteMateriasDelAlumno({
     materiaIds
   });
 
+  if (mapeosLote.length > 0) {
+    const { sincronizarEnlacesZoomHorarios } = await import('../../ugr-sync/lib/cronograma-oficial.mjs');
+    await sincronizarEnlacesZoomHorarios({ db, cliente, mapeos: mapeosLote });
+  }
+
   const eventosInsertadosAvisos = 0;
   const eventosAvisos: ItemEventoCampus[] = [];
 

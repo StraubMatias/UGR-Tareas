@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parsearTextoCronogramaOficial, extraerRecursoCronogramaDeHtml } from '../lib/cronograma-oficial.mjs';
+import {
+  parsearTextoCronogramaOficial,
+  extraerRecursoCronogramaDeHtml,
+  textoPareceColumnasFusionadas
+} from '../lib/cronograma-oficial.mjs';
 
 test('parsearTextoCronogramaOficial lee fechas del PDF de Activos', () => {
   const texto = `
@@ -37,6 +41,31 @@ MODULO II 5 – Turno examen Septiembre
   assert.equal(oct7.tipo, 'clase');
   assert.match(oct7.titulo, /modulo\s*ii/i);
   assert.ok(!/turno\s+examen/i.test(oct7.titulo));
+});
+
+test('no interpreta 9/2026 como fecha de cronograma', () => {
+  const texto = `
+05/10/2026
+Herramientas de inventariado de hardware.
+9/2026 consideración de personas y roles. Inventarios de cloud e IA.
+  `;
+  const filas = parsearTextoCronogramaOficial(texto);
+  assert.equal(filas.length, 1);
+  assert.equal(filas[0].fecha, '2026-10-05');
+  assert.match(filas[0].titulo, /inventariado/i);
+  assert.ok(!/consideraci[oó]n de personas/i.test(filas[0].titulo));
+});
+
+test('recorta columnas fusionadas en una fila del PDF', () => {
+  const texto = `
+05/10/2026 Rodríguez 6 UNIDAD 3 IMPLICANCIAS GEOPOLÍTICAS 7 UNIDAD 4 PROTECCIÓN DE DATOS 8 1er. Examen
+  `;
+  const filas = parsearTextoCronogramaOficial(texto);
+  assert.equal(filas.length, 1);
+  assert.equal(filas[0].tipo, 'clase');
+  assert.ok(textoPareceColumnasFusionadas('UNIDAD 3 x UNIDAD 4 y'));
+  assert.match(filas[0].titulo, /unidad\s+4/i);
+  assert.ok(!/unidad\s+3/i.test(filas[0].titulo));
 });
 
 test('extraerRecursoCronogramaDeHtml elige el título más útil', () => {
