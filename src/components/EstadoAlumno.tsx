@@ -141,26 +141,30 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                           {tareas.length} {tareas.length === 1 ? 'tarea' : 'tareas'}
                         </span>
                       </header>
-                      <div className="estado-tareas-contenedor estado-tareas-columnas px-3 pt-3 pb-1 sm:px-4">
+                      <div
+                        className="estado-tareas-contenedor estado-tareas-columnas px-3 pt-3 pb-3 sm:px-4"
+                        data-cantidad-tareas={tareas.length}
+                      >
                         {tareas.map((tarea) => (
-                          <EstadoTareaAlumno
-                            key={tarea.id}
-                            tarea={tarea}
-                            alumno={alumno}
-                            materia={materia}
-                            unidad={tarea.unidad}
-                            ocultarContextoMateria
-                            alumnos={alumnosDeLaMateria(inscripciones, materia.id)}
-                            usuarioActual={acciones.usuarioActual}
-                            irATareaEnMaterias={acciones.irATareaEnMaterias}
-                            toggleTareaDesdeCliente={acciones.toggleTareaDesdeCliente}
-                            notasTareasInputs={acciones.notasTareasInputs}
-                            handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
-                            handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
-                            recargarTablero={acciones.recargarTablero}
-                            invitacionesGrupoEnviadas={acciones.invitacionesGrupoEnviadas}
-                            esAdmin={esAdmin}
-                          />
+                          <div key={tarea.id} className="estado-tarea-slot">
+                            <EstadoTareaAlumno
+                              tarea={tarea}
+                              alumno={alumno}
+                              materia={materia}
+                              unidad={tarea.unidad}
+                              ocultarContextoMateria
+                              alumnos={alumnosDeLaMateria(inscripciones, materia.id)}
+                              usuarioActual={acciones.usuarioActual}
+                              irATareaEnMaterias={acciones.irATareaEnMaterias}
+                              toggleTareaDesdeCliente={acciones.toggleTareaDesdeCliente}
+                              notasTareasInputs={acciones.notasTareasInputs}
+                              handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
+                              handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
+                              recargarTablero={acciones.recargarTablero}
+                              invitacionesGrupoEnviadas={acciones.invitacionesGrupoEnviadas}
+                              esAdmin={esAdmin}
+                            />
+                          </div>
                         ))}
                       </div>
                     </section>
