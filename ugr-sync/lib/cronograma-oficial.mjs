@@ -10,10 +10,12 @@ import { cabeceraCookies } from './autenticar.mjs';
 import { textoDesdeDocx } from './docx-texto.mjs';
 import { esTituloClaseGenericaDelCampus, extraerEventosCalendario } from './calendario.mjs';
 import {
+  elegirEnlaceZoomParaFilaHorario,
   elegirEnlaceZoomParaHorarios,
   inferirHorarioDesdeHtmlZoom,
   inferirHorarioDesdeTituloZoom
 } from './zoom-cursada.mjs';
+import { enlacesZoomConocidosParaMateria } from './zoom-enlaces-comision.mjs';
 
 function limpiarTexto(texto) {
   return String(texto || '').replace(/\s+/g, ' ').trim();
@@ -370,6 +372,56 @@ export function extraerUrlZoomJoinDesdeHtml(html) {
   return preferida || '';
 }
 
+function idModuloCampus(url) {
+  return String(url || '').match(/[?&]id=(\d+)/)?.[1] || '';
+}
+
+/** Resuelve join de Zoom o URL externa desde mod/zoom o mod/url del campus. */
+export async function resolverUrlClaseDesdeCampus(cliente, urlCampus) {
+  const url = String(urlCampus || '').trim();
+  if (!url) return '';
+  try {
+    const pagina = await cliente.pedir(url);
+    const join = extraerUrlZoomJoinDesdeHtml(pagina.html);
+    if (join) return join;
+    const $ = load(pagina.html);
+    const externa = $('a[href*="zoom.us/j/"], a[href*="zoom.us/s/"]').first().attr('href')
+      || $('a[href*="zoom.us"]').not('[href*="virtual.ugr"]').first().attr('href');
+    if (externa) return new URL(externa, UGR_BASE_URL).toString();
+    if (/mod\/url\/view\.php/i.test(url)) {
+      const redir = pagina.html.match(/https:\/\/[^"'<>\s]*zoom\.us\/[^"'<>\s]+/i)?.[0];
+      if (redir) return redir;
+    }
+  } catch {
+    // Sin sesión o página caída: al menos el enlace al campus.
+  }
+  return url;
+}
+
+async function completarJoinEnEnlaces(cliente, enlaces) {
+  for (const enlace of enlaces) {
+    if (enlace.urlJoin && /zoom\.us\/j\//i.test(enlace.urlJoin)) continue;
+    enlace.urlJoin = await resolverUrlClaseDesdeCampus(cliente, enlace.urlCampus);
+    if (!enlace.dia || !enlace.horaInicio) {
+      const horarioPagina = inferirHorarioDesdeHtmlZoom('', enlace.titulo);
+      enlace.dia = enlace.dia ?? horarioPagina.dia;
+      enlace.horaInicio = enlace.horaInicio ?? horarioPagina.horaInicio;
+    }
+  }
+  return enlaces;
+}
+
+function fusionarEnlacesZoom(remotos, semilla) {
+  const mapa = new Map();
+  for (const enlace of [...semilla, ...remotos]) {
+    const clave = idModuloCampus(enlace.urlCampus) || enlace.urlCampus;
+    if (!clave) continue;
+    const previo = mapa.get(clave);
+    mapa.set(clave, previo ? { ...previo, ...enlace, urlJoin: enlace.urlJoin || previo.urlJoin } : enlace);
+  }
+  return [...mapa.values()];
+}
+
 function agregarEnlaceZoomCandidato(mapa, { titulo, urlCampus, dia = null, horaInicio = null, horaFin = null }) {
   if (!urlCampus) return;
   const clave = urlCampus.split('?')[0];
@@ -390,10 +442,11 @@ function agregarEnlaceZoomCandidato(mapa, { titulo, urlCampus, dia = null, horaI
 
 function recolectarEnlacesZoomDeHtml(html, mapa) {
   const $ = load(html || '');
-  $('a[href*="/mod/zoom/view.php"]').each((_, a) => {
+  $('a[href*="/mod/zoom/view.php"], a[href*="/mod/url/view.php"]').each((_, a) => {
     const titulo = limpiarTexto($(a).text() || $(a).attr('title') || '');
     const href = $(a).attr('href');
     if (!href || /reuniones de zoom/i.test(titulo)) return;
+    if (/\/mod\/url\//i.test(href) && !/clase|sincr|zoom|encuentro|sala/i.test(titulo)) return;
     const urlCampus = new URL(href, UGR_BASE_URL).toString();
     agregarEnlaceZoomCandidato(mapa, { titulo, urlCampus, dia: inferirDiaDesdeTituloZoom(titulo) });
   });
@@ -435,10 +488,10 @@ export async function extraerEnlacesZoomDelCurso(cliente, cursoId) {
   await enriquecerEnlacesZoomDesdeCalendario(cliente, cursoId, mapa);
   const enlaces = [...mapa.values()];
 
+  await completarJoinEnEnlaces(cliente, enlaces);
   for (const enlace of enlaces) {
     try {
       const zoom = await cliente.pedir(enlace.urlCampus);
-      enlace.urlJoin = extraerUrlZoomJoinDesdeHtml(zoom.html) || enlace.urlCampus;
       const horarioPagina = inferirHorarioDesdeHtmlZoom(zoom.html, enlace.titulo);
       if (horarioPagina.dia) enlace.dia = enlace.dia ?? horarioPagina.dia;
       if (horarioPagina.horaInicio) enlace.horaInicio = enlace.horaInicio ?? horarioPagina.horaInicio;
@@ -446,10 +499,24 @@ export async function extraerEnlacesZoomDelCurso(cliente, cursoId) {
       enlace.inicio = horarioPagina.inicio ?? enlace.inicio;
       enlace.fin = horarioPagina.fin ?? enlace.fin;
     } catch {
-      enlace.urlJoin = enlace.urlJoin || enlace.urlCampus;
+      // join ya resuelto en completarJoinEnEnlaces
     }
   }
   return enlaces;
+}
+
+/** Enlaces del curso + catálogo comisión 2026 para esta materia. */
+export async function extraerEnlacesZoomParaMateria(cliente, cursoId, nombreMateria) {
+  const semilla = enlacesZoomConocidosParaMateria(nombreMateria);
+  let remotos = [];
+  try {
+    remotos = await extraerEnlacesZoomDelCurso(cliente, cursoId);
+  } catch {
+    remotos = [];
+  }
+  const fusionados = fusionarEnlacesZoom(remotos, semilla);
+  await completarJoinEnEnlaces(cliente, fusionados);
+  return fusionados;
 }
 
 export async function actualizarEnlacesZoomEnHorarios(db, materiaId, enlacesZoom) {
@@ -460,11 +527,12 @@ export async function actualizarEnlacesZoomEnHorarios(db, materiaId, enlacesZoom
   });
   if (horarios.rows.length === 0) return 0;
 
-  const urlElegida = elegirEnlaceZoomParaHorarios(enlacesZoom, horarios.rows);
-  if (!urlElegida) return 0;
+  const fallback = elegirEnlaceZoomParaHorarios(enlacesZoom, horarios.rows);
 
   let actualizados = 0;
   for (const fila of horarios.rows) {
+    const urlElegida = elegirEnlaceZoomParaFilaHorario(enlacesZoom, fila) || fallback;
+    if (!urlElegida) continue;
     await db.execute({
       sql: 'UPDATE horarios SET url_clase = ? WHERE id = ?',
       args: [urlElegida, fila.id]
@@ -537,11 +605,18 @@ export async function sincronizarEnlacesZoomHorarios({ db, cliente, mapeos }) {
     const curso = mapeo?.curso;
     const materiaId = mapeo?.coincidencia?.materia?.id;
     if (!curso?.id || !materiaId) continue;
+    const nombreMateria = mapeo?.coincidencia?.materia?.nombre || '';
     try {
-      const enlacesZoom = await extraerEnlacesZoomDelCurso(cliente, curso.id);
+      const enlacesZoom = await extraerEnlacesZoomParaMateria(cliente, curso.id, nombreMateria);
       horariosActualizados += await actualizarEnlacesZoomEnHorarios(db, materiaId, enlacesZoom);
     } catch {
-      // Un curso sin módulo Zoom no frena el resto.
+      const soloSemilla = enlacesZoomConocidosParaMateria(nombreMateria);
+      if (soloSemilla.length > 0) {
+        for (const enlace of soloSemilla) {
+          enlace.urlJoin = enlace.urlCampus;
+        }
+        horariosActualizados += await actualizarEnlacesZoomEnHorarios(db, materiaId, soloSemilla);
+      }
     }
   }
   return horariosActualizados;

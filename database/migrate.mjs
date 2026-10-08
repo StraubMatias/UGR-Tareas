@@ -737,6 +737,13 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     );
   });
 
+  await ejecutarMigracion(37, 'horarios: enlaces Zoom/URL de clase (comisión 2026)', async () => {
+    const { aplicarEnlacesZoomComisionEnDb } = await import('../ugr-sync/lib/zoom-enlaces-comision.mjs');
+    const materias = await db.execute('SELECT id, nombre FROM materias');
+    const filas = await aplicarEnlacesZoomComisionEnDb(db, materias.rows);
+    console.log(`   Zoom: ${filas} fila(s) de horario con url_clase actualizada(s).`);
+  });
+
   await db.close?.();
 }
 

@@ -161,7 +161,43 @@ export function puntuarEnlaceZoomContraCursada(enlace, referencia) {
   return puntaje;
 }
 
-/** Un solo join URL para todos los horarios de la materia. */
+function referenciaDesdeFilaHorario(fila) {
+  const dia = Number(fila?.dia);
+  const inicio = minutosDesdeHora(fila?.hora_inicio);
+  const fin = minutosDesdeHora(fila?.hora_fin || fila?.hora_inicio);
+  if (dia < 1 || dia > 7 || inicio === null) return null;
+  return { dia, inicio, fin };
+}
+
+/** Mejor enlace para una fila concreta de horario (p. ej. mié 19 vs jue 20:30). */
+export function elegirEnlaceZoomParaFilaHorario(enlaces, filaHorario) {
+  const candidatos = (enlaces || []).filter((e) => e?.urlJoin);
+  if (candidatos.length === 0) return '';
+  if (candidatos.length === 1) return candidatos[0].urlJoin;
+
+  const referencia = referenciaDesdeFilaHorario(filaHorario);
+  if (!referencia) return elegirEnlaceZoomParaHorarios(enlaces, [filaHorario]);
+
+  let mejor = candidatos[0];
+  let mejorPuntaje = puntuarEnlaceZoomContraCursada(mejor, referencia);
+  for (const enlace of candidatos.slice(1)) {
+    const p = puntuarEnlaceZoomContraCursada(enlace, referencia);
+    if (p > mejorPuntaje) {
+      mejorPuntaje = p;
+      mejor = enlace;
+    }
+  }
+  if (mejorPuntaje < 40) {
+    const porDia = candidatos.find((e) => {
+      const d = e.dia ?? inferirHorarioDesdeTituloZoom(e.titulo || '').dia;
+      return d === referencia.dia;
+    });
+    if (porDia?.urlJoin) return porDia.urlJoin;
+  }
+  return mejor.urlJoin || '';
+}
+
+/** Un solo join URL para todos los horarios de la materia (misma franja repetida). */
 export function elegirEnlaceZoomParaHorarios(enlaces, filasHorario) {
   const candidatos = (enlaces || []).filter((e) => e?.urlJoin);
   if (candidatos.length === 0) return '';
