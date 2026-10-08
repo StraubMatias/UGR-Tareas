@@ -298,6 +298,16 @@ textarea {
   color: #b8f3f0;
 }
 
+.estado-tareas-por-materia {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.estado-materia-bloque-titulo {
+  letter-spacing: -0.02em;
+}
+
 .estado-tareas-contenedor {
   container-type: inline-size;
   list-style: none;
