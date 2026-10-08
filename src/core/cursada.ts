@@ -513,6 +513,29 @@ export const obtenerIconoMateria = (nombreMateria = '') => {
 
 export const etiquetaMateria = (nombreMateria = '') => `${obtenerIconoMateria(nombreMateria)} ${nombreMateria}`;
 
+/** Quita el código (V.TUCS…) del nombre largo del campus para encabezados. */
+export function tituloVisibleMateria(nombreMateria = ''): string {
+  const sinCodigo = String(nombreMateria).replace(/^\s*\([^)]+\)\s*/i, '').trim();
+  return sinCodigo || String(nombreMateria).trim();
+}
+
+const ACENTOS_MATERIA_ESTADO = [
+  { borde: 'rgba(34, 211, 238, 0.55)', fondo: 'rgba(34, 211, 238, 0.06)', texto: '#a5f3fc' },
+  { borde: 'rgba(129, 140, 248, 0.55)', fondo: 'rgba(129, 140, 248, 0.07)', texto: '#c7d2fe' },
+  { borde: 'rgba(52, 211, 153, 0.5)', fondo: 'rgba(52, 211, 153, 0.06)', texto: '#a7f3d0' },
+  { borde: 'rgba(251, 191, 36, 0.5)', fondo: 'rgba(251, 191, 36, 0.06)', texto: '#fde68a' },
+  { borde: 'rgba(244, 114, 182, 0.5)', fondo: 'rgba(244, 114, 182, 0.06)', texto: '#fbcfe8' },
+  { borde: 'rgba(96, 165, 250, 0.5)', fondo: 'rgba(96, 165, 250, 0.06)', texto: '#bfdbfe' }
+] as const;
+
+export function acentoVisualMateria(materiaId: string) {
+  let hash = 0;
+  for (let i = 0; i < materiaId.length; i += 1) {
+    hash = (hash * 31 + materiaId.charCodeAt(i)) | 0;
+  }
+  return ACENTOS_MATERIA_ESTADO[Math.abs(hash) % ACENTOS_MATERIA_ESTADO.length];
+}
+
 export const ordenarParciales = (listaParciales: Parcial[]): Parcial[] => {
   const hoyEnMs = instanteInicioDiaCampus(
     new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_CAMPUS }).format(new Date())
