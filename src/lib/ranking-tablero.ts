@@ -6,12 +6,42 @@ import {
   fechaEntregaTarea,
   formatearFechaHora,
   historialPorAlumno,
-  multiplicadorPuntosTarea,
   obtenerTimestamp,
-  puntosBaseTarea,
-  tareaCompletadaPor
-} from '../core/cursada';
-import { materiasQueCursa } from './companeros';
+  aportesRankingDeTarea,
+  puntosDeNotaParcial,
+  tareaCuentaParaRanking
+} from '../core/cursada.ts';
+import { materiasQueCursa } from './companeros.ts';
+import { esParcialRecuperatorio } from './recuperatorios-calendario.ts';
+function parcialesRankingDelAlumno({
+  alumno,
+  notas,
+  parciales,
+  materiasDelRanking
+}: {
+  alumno: string;
+  notas: Nota[];
+  parciales: Parcial[];
+  materiasDelRanking: Materia[];
+}) {
+  const idsMateria = new Set(materiasDelRanking.map((m) => m.id));
+  const mejorPorParcial = new Map<string, { parcial: Parcial; puntos: number }>();
+
+  notas
+    .filter((nota) => nota.alumno === alumno)
+    .forEach((nota) => {
+      const parcial = parciales.find((item) => item.id === nota.parcial_id);
+      if (!parcial || esParcialRecuperatorio(parcial) || !idsMateria.has(parcial.materia_id)) return;
+      const puntos = puntosDeNotaParcial(nota.nota);
+      if (puntos <= 0) return;
+      const prev = mejorPorParcial.get(parcial.id);
+      if (!prev || puntos > prev.puntos) {
+        mejorPorParcial.set(parcial.id, { parcial, puntos });
+      }
+    });
+
+  return [...mejorPorParcial.values()];
+}
 
 export interface EntradaRankingTablero {
   alumno: string;
@@ -51,63 +81,48 @@ export function calcularRankingTablero({
 }): EntradaRankingTablero[] {
   return alumnosRanking
     .map((alumno) => {
-      const tareasCompletadas = materiasDelRanking.flatMap((materia) => materia.tareas)
-        .filter((tarea) => tareaCompletadaPor(tarea, alumno));
+      const tareasDelRanking = materiasDelRanking.flatMap((materia) => materia.tareas);
+      const tareasCompletadas = tareasDelRanking.filter(
+        (tarea) => tareaCuentaParaRanking(tarea, alumno) || aportesRankingDeTarea(tarea, alumno).length > 0
+      );
       const foros = tareasCompletadas.filter((tarea) => !tarea.conNota && esForo(tarea.nombre)).length;
       const actividades = tareasCompletadas.filter((tarea) => !tarea.conNota && !esForo(tarea.nombre)).length;
-      const notasTareasAlumno = tareasCompletadas
-        .filter((tarea) => tarea.conNota)
-        .filter((tarea) => {
-          const nota = puntosBaseTarea(tarea, alumno);
-          return Number.isFinite(nota) && nota >= 1 && nota <= 10;
-        })
-        .map((tarea) => puntosBaseTarea(tarea, alumno) * multiplicadorPuntosTarea(tarea, alumno));
-      const puntosActividades = tareasCompletadas
-        .filter((tarea) => !tarea.conNota)
-        .reduce((total, tarea) => total + puntosBaseTarea(tarea, alumno) * multiplicadorPuntosTarea(tarea, alumno), 0);
-      const notasAlumno = notas
-        .filter((nota) => nota.alumno === alumno)
-        .filter((nota) => {
-          const parcial = parciales.find((item) => item.id === nota.parcial_id);
-          return materiasDelRanking.some((materia) => materia.id === parcial?.materia_id);
-        })
-        .map((nota) => Number.parseFloat(String(nota.nota).replace(',', '.')))
-        .filter((nota) => Number.isFinite(nota) && nota >= 0 && nota <= 10);
+      const lineasTareas = tareasDelRanking.flatMap((tarea) => aportesRankingDeTarea(tarea, alumno));
+      const puntosTareas = lineasTareas.map((linea) => linea.puntos);
+      const parcialesRanking = parcialesRankingDelAlumno({
+        alumno,
+        notas,
+        parciales,
+        materiasDelRanking
+      });
+      const puntosParciales = parcialesRanking.map((item) => item.puntos);
       const tareasConPuntaje = materiasDelRanking.flatMap((materia) => materia.tareas
-        .filter((tarea) => tareaCompletadaPor(tarea, alumno))
-        .map((tarea) => ({
+        .flatMap((tarea) => aportesRankingDeTarea(tarea, alumno).map((aporte) => ({
           alumno,
           materia: materia.nombre,
-          nombre: tarea.nombre,
-          fechaCarga: fechaEntregaTarea(tarea, alumno),
-          puntos: puntosBaseTarea(tarea, alumno) * multiplicadorPuntosTarea(tarea, alumno),
-          puntosBase: puntosBaseTarea(tarea, alumno),
-          tipo: tarea.conNota ? 'Nota de tarea' : esForo(tarea.nombre) ? 'Foro' : 'Actividad'
-        }))
-        .filter((tarea) => tarea.puntosBase >= (tarea.tipo === 'Nota de tarea' ? 1 : 0) && tarea.puntosBase <= (tarea.tipo === 'Nota de tarea' ? 10 : 2)));
-      const parcialesConPuntaje = notas
-        .filter((nota) => nota.alumno === alumno)
-        .map((nota) => {
-          const parcial = parciales.find((item) => item.id === nota.parcial_id);
-          const valor = Number.parseFloat(String(nota.nota).replace(',', '.'));
-          return {
-            nombre: parcial?.nombre || 'Parcial',
-            materia: materias.find((materia) => materia.id === parcial?.materia_id)?.nombre || 'Materia',
-            puntos: valor / 10,
-            nota: valor
-          };
-        })
-        .filter((parcial) => materiasDelRanking.some((materia) => materia.nombre === parcial.materia))
-        .filter((parcial) => Number.isFinite(parcial.nota) && parcial.nota >= 0 && parcial.nota <= 10);
-      const ultimaCompletadaEn = tareasCompletadas
-        .map((tarea) => fechaEntregaTarea(tarea, alumno))
+          nombre: aporte.nombre,
+          fechaCarga: aporte.fechaCarga,
+          puntos: aporte.puntos,
+          puntosBase: aporte.puntosBase,
+          tipo: aporte.tipo
+        }))));
+      const parcialesConPuntaje = parcialesRanking.map(({ parcial, puntos }) => ({
+        nombre: parcial.nombre || 'Parcial',
+        materia: materias.find((materia) => materia.id === parcial.materia_id)?.nombre || 'Materia',
+        puntos,
+        nota: puntos
+      }));
+      const ultimaCompletadaEn = [
+        ...lineasTareas.map((linea) => linea.fechaCarga),
+        ...tareasCompletadas.map((tarea) => fechaEntregaTarea(tarea, alumno))
+      ]
         .map(obtenerTimestamp)
-        .filter((fecha) => fecha !== null)
-        .sort((a, b) => b - a)[0] || Number.MAX_SAFE_INTEGER;
+        .filter((fecha): fecha is number => fecha !== null)
+        .sort((a, b) => b - a)[0] ?? Number.MAX_SAFE_INTEGER;
 
       return {
         alumno,
-        puntos: puntosActividades + notasAlumno.reduce((total, nota) => total + nota / 10, 0) + notasTareasAlumno.reduce((total, nota) => total + nota, 0),
+        puntos: puntosTareas.reduce((total, p) => total + p, 0) + puntosParciales.reduce((total, p) => total + p, 0),
         foros,
         actividades,
         tareasConPuntaje,
