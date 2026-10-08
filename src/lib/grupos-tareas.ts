@@ -575,7 +575,7 @@ export async function asignarGrupo(
       await sincronizarProgresoGrupo(tx, tarea, destino);
     }
     const grupoFinal = salir ? null : destino;
-    if (grupoFinal && tareaUsaEntregasMultiplesCampus({ nombre: tarea.nombre })) {
+    if (grupoFinal && tareaUsaEntregasMultiplesCampus({ nombre: String(tarea.nombre ?? '') })) {
       await replicarHitosEntregaGrupo(db, tareaId, grupoFinal);
     }
     return { grupoId: grupoFinal };
