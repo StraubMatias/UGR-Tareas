@@ -122,7 +122,10 @@ export function armarDerivadosTablero({
     parcialesDeLaCursada,
     tareasCalendario,
     horariosDeLaCursada,
-    cronogramaDeLaCursada
+    cronogramaDeLaCursada,
+    alumnoCalendario: usuarioActual,
+    notasCalendario: notas,
+    materiasCalendario: materiasDeLaCursada
   });
   const materiasDelRanking = materiasMisCursadas.filter((materia) => materia.id === materiaRankingVisible);
   const alumnosDelRanking = materiaRankingVisible

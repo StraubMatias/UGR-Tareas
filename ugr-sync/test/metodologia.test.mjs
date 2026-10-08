@@ -59,12 +59,12 @@ test('interpretarCondiciones guarda la cursada y la promoción de criptografía'
     No hayan rendido alguno de los parciales.
   `;
   const condiciones = interpretarCondiciones(texto);
-  assert.match(condiciones.condiciones, /Para regularizar: los trabajos prácticos con 6 y cada parcial con 6/);
-  assert.match(condiciones.condiciones, /Para promocionar: los trabajos prácticos con 8 y cada parcial con 8/);
+  assert.match(condiciones.condiciones, /Para regularizar: parciales y trabajos prácticos con 6/);
+  assert.match(condiciones.condiciones, /Para promocionar: parciales y trabajos prácticos con 8/);
   assert.doesNotMatch(condiciones.condiciones, /Condición de libre/);
   assert.equal(condiciones.regularizar, 6);
   assert.equal(condiciones.promocionar, 8);
-  assert.equal(condiciones.regla, 'metodologia');
+  assert.equal(condiciones.regla, 'parciales_y_tps');
 });
 
 test('interpretarCondiciones usa el porcentaje de actividades cuando la metodología lo dice', () => {

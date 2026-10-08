@@ -23,6 +23,8 @@ import {
   fechaDeEvaluacion,
   pareceEvaluacion,
   pareceParcialCuatrimestre,
+  actividadEsParcialDeCursada,
+  tituloPareceClaseDePlan,
   esExamenFinalDelCronograma,
   parcialYaSeRindio,
   esNombreConsignaValido,
@@ -715,7 +717,7 @@ export async function moverTareasQueSonParciales({ db, materiaIds }) {
       horarios = { rows: [] };
     }
     for (const tarea of tareas.rows) {
-      if (!pareceEvaluacion(tarea.nombre)) continue;
+      if (!actividadEsParcialDeCursada(tarea)) continue;
       const fecha = fechaDeEvaluacion(tarea, horarios.rows);
       if (!fecha) continue;
       let parcial = coincidirParcial({ parciales: parciales.rows, nombre: tarea.nombre, fin: fecha });
@@ -1026,8 +1028,9 @@ function esEventoCronogramaParcial(evento) {
   if (tipo === 'clase' || tipo === 'consulta' || tipo === 'entrega' || tipo === 'exposición') return false;
   if (esExamenFinalDelCronograma(titulo)) return false;
   if (/parcial\s*\(\s*opcional/i.test(titulo)) return false;
+  if (tituloPareceClaseDePlan(titulo)) return false;
   if (tipo !== 'examen') return false;
-  return true;
+  return pareceParcialCuatrimestre(titulo);
 }
 
 function nombreParcialDesdeEventoCronograma(evento) {

@@ -172,10 +172,13 @@ export default function VistaHorarios({
                       })}
                       {eventos.parciales.map((parcial) => {
                         const materia = materias.find((item) => item.id === parcial.materia_id);
+                        const esRecup = /\brecuperatorio\b/i.test(parcial.nombre);
+                        const etiqueta = esRecup ? 'Recup.' : 'Parcial';
                         return (
                           <div key={parcial.id} className="calendar-event calendar-exam" title={`${parcial.nombre} · ${materia?.nombre || 'Materia'}`}>
-                            <span className="font-bold">Parcial</span> {materia?.nombre || 'Materia'}
-                            {parcial.detalles && <span className="block truncate opacity-75">{parcial.detalles}</span>}
+                            <span className="font-bold">{etiqueta}</span>{' '}
+                            <span className="block truncate">{esRecup ? parcial.nombre : (materia?.nombre || 'Materia')}</span>
+                            {!esRecup && parcial.detalles && <span className="block truncate opacity-75">{parcial.detalles}</span>}
                           </div>
                         );
                       })}
@@ -336,9 +339,10 @@ export default function VistaHorarios({
                       );
                     }
                     for (const parcial of eventos.parciales) {
+                      const esRecupModal = /\brecuperatorio\b/i.test(parcial.nombre);
                       grupoDe(parcial.materia_id, '80').bloques.push(
                         <div key={`modal-${parcial.id}`} className="calendar-modal-event calendar-exam">
-                          <p className="text-sm font-extrabold">Parcial · {parcial.nombre}</p>
+                          <p className="text-sm font-extrabold">{esRecupModal ? parcial.nombre : `Parcial · ${parcial.nombre}`}</p>
                           {parcial.detalles && <p className="mt-2 text-sm opacity-85">{parcial.detalles}</p>}
                         </div>
                       );

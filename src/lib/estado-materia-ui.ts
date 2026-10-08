@@ -1,11 +1,15 @@
 import type { Materia, Nota, Parcial, Tarea } from '../core/cursada';
 import {
-  obtenerDiasHastaFecha,
   obtenerDiasHastaTarea,
   tareaCompletadaPor
 } from '../core/cursada';
 import { tareaHabilitada as tareaEstaHabilitada } from '../app/validators';
 import { alumnoCursaMateria, type InscripcionAlumno } from './companeros';
+import {
+  evaluarParcialesCuatrimestre,
+  evaluarPromocionParcialesYTps,
+  reglaPromocionEfectiva
+} from './promocion-materia';
 
 export function calcularBadgeEstadoMateria(
   materia: Materia,
@@ -22,7 +26,8 @@ export function calcularBadgeEstadoMateria(
     if (!materia.condiciones && trabajosPracticos.length === 0) return null;
     const estado = (texto: string, estilo: string) => ({ texto, estilo });
     const enCurso = estado('En curso', 'text-amber-300 bg-amber-500/10 border-amber-500/30');
-    if (materia.reglaPromocion === 'metodologia') return enCurso;
+    const regla = reglaPromocionEfectiva(materia);
+    if (regla === 'metodologia') return enCurso;
     const desaprueba = estado('Desaprueba', 'text-red-300 bg-red-500/10 border-red-500/30');
     const regulariza = estado('Regulariza', 'text-blue-300 bg-blue-500/10 border-blue-500/30');
     const promociona = estado('Promociona', 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30');
@@ -41,32 +46,23 @@ export function calcularBadgeEstadoMateria(
     };
     const todasCerradas = (tareas: Tarea[]) => tareas.length > 0 && tareas.every(tareaCerrada);
 
-    if (materia.reglaPromocion === 'ciberdelitos_parciales') {
-      const parcialesMateria = parciales.filter((parcial) => {
-        const dias = obtenerDiasHastaFecha(parcial.fecha);
-        return parcial.materia_id === materia.id
-          && parcial.fecha !== 'Sin fecha'
-          && dias !== null
-          && dias <= 0;
-      });
-      const notasParciales = parcialesMateria.map((parcial) => {
-        const registro = notas.find((nota) => nota.parcial_id === parcial.id && nota.alumno === alumno);
-        return registro ? notaDe(registro.nota) : null;
-      });
-      const notasValidasParciales = notasParciales.filter((nota): nota is number => nota !== null && Number.isFinite(nota));
-      if (notasParciales.length < 2 || notasValidasParciales.length !== notasParciales.length) {
-        return notasParciales.length === 2 && parcialesMateria.every((parcial) => {
-          const dias = obtenerDiasHastaFecha(parcial.fecha);
-          return dias !== null && dias < 0;
-        })
-          ? desaprueba
-          : enCurso;
-      }
-      if (notasValidasParciales.some((nota) => nota < materia.notaMinimaRegularizar)) return desaprueba;
-      return notasValidasParciales.every((nota) => nota >= materia.notaMinimaPromocionar) ? promociona : regulariza;
+    if (regla === 'parciales_y_tps') {
+      return evaluarPromocionParcialesYTps(materia, alumno, parciales, notas, trabajosPracticos);
     }
 
-    if (materia.reglaPromocion === 'activos_porcentaje') {
+    if (regla === 'ciberdelitos_parciales') {
+      const resultado = evaluarParcialesCuatrimestre(
+        parciales,
+        materia.id,
+        alumno,
+        notas,
+        materia.notaMinimaRegularizar,
+        materia.notaMinimaPromocionar
+      );
+      return resultado.estado || enCurso;
+    }
+
+    if (regla === 'activos_porcentaje') {
       const total = tareasAbiertas.length;
       if (total === 0) return estado('Sin actividades', 'text-slate-400 bg-slate-800/60 border-slate-700');
       const completadas = tareasAbiertas.filter(tareaAprobada).length;
@@ -76,7 +72,7 @@ export function calcularBadgeEstadoMateria(
       return tareasAbiertas.every(tareaCerrada) ? desaprueba : enCurso;
     }
 
-    if (materia.reglaPromocion === 'tp_porcentaje_nota') {
+    if (regla === 'tp_porcentaje_nota') {
       const total = trabajosPracticos.length;
       if (total === 0) return estado('Sin TPs abiertos', 'text-slate-400 bg-slate-800/60 border-slate-700');
       const completados = trabajosPracticos.filter(tareaAprobada).length;
@@ -97,7 +93,7 @@ export function calcularBadgeEstadoMateria(
       return valor === undefined ? null : notaDe(valor);
     });
     const notasCargadas = notasTp.filter((nota): nota is number => nota !== null && Number.isFinite(nota));
-    if (materia.reglaPromocion === 'riesgos_tps') {
+    if (regla === 'riesgos_tps') {
       const completados = trabajosPracticos.filter(tareaAprobada).length;
       if (completados < 3) return todasCerradas(trabajosPracticos) ? desaprueba : enCurso;
       if (notasCargadas.length === trabajosPracticos.length && notasCargadas.every((nota) => nota >= materia.notaMinimaPromocionar)) return promociona;
@@ -108,4 +104,3 @@ export function calcularBadgeEstadoMateria(
     if (notasCargadas.some((nota) => nota < materia.notaMinimaRegularizar) || promedio < materia.notaMinimaRegularizar) return desaprueba;
     return notasCargadas.every((nota) => nota >= materia.notaMinimaPromocionar) && promedio >= materia.notaMinimaPromocionar ? promociona : regulariza;
 }
-

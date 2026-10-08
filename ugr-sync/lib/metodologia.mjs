@@ -172,6 +172,14 @@ export function interpretarCondiciones(texto) {
       regla: 'ciberdelitos_parciales'
     };
   }
+  if (/parcial/.test(n) && mencionaPracticos(n) && regularizar && promocionar) {
+    return {
+      condiciones: resumirCondiciones({ condiciones, regularizar, promocionar, regla: 'parciales_y_tps' }),
+      regularizar,
+      promocionar,
+      regla: 'parciales_y_tps'
+    };
+  }
   if (!regularizar && !promocionar) return null;
   const resultado = {
     condiciones,
@@ -189,6 +197,9 @@ export function resumirCondiciones({ condiciones, regularizar, promocionar, regl
   }
   if (regla === 'ciberdelitos_parciales') {
     return `Para regularizar: los dos parciales con ${regularizar}. Para promocionar: los dos parciales con ${promocionar}.`;
+  }
+  if (regla === 'parciales_y_tps') {
+    return `Para regularizar: parciales y trabajos prácticos con ${regularizar}. Para promocionar: parciales y trabajos prácticos con ${promocionar}.`;
   }
   const n = limpiarTextoParaBusqueda(condiciones);
   const regular = n.split('promocion')[0] || n;

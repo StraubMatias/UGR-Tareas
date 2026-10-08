@@ -16,6 +16,9 @@ import {
   agruparResumenSync,
   armarMensajeCursada,
   separarEvaluaciones,
+  actividadEsParcialDeCursada,
+  tituloPareceClaseDePlan,
+  unidadDesdeNombreSeccion,
   inferirTipoTarea,
   limpiarNombreCursoParaBusqueda,
   limpiarTextoParaBusqueda,
@@ -348,6 +351,15 @@ test('fechasACorregir actualiza el plazo que el campus cambió y no borra una fe
     fechasACorregir({ inicio: '2026-10-28', fin: '2026-10-28' }, { inicio: '2026-10-28', fin: '2026-10-28' }),
     {}
   );
+});
+
+test('pruebas de software en clase no son parcial', () => {
+  assert.equal(
+    actividadEsParcialDeCursada({ nombre: 'Pruebas de software: caja blanca y caja negra', unidad: 3 }),
+    false
+  );
+  assert.equal(tituloPareceClaseDePlan('MODULO II'), true);
+  assert.equal(unidadDesdeNombreSeccion('Evaluaciones'), 'Evaluaciones');
 });
 
 test('separarEvaluaciones manda el examen con fecha a parciales y el trabajo a tareas', () => {

@@ -60,18 +60,23 @@ export function parsearTextoCronogramaOficial(texto) {
     const iso = `${y}-${m}-${d}`;
     const fin = fechas[i + 1]?.index ?? normalizado.length;
     const post = normalizado.slice(fechas[i].index, fin);
-    const previo = normalizado.slice(Math.max(0, fechas[i].index - 280), fechas[i].index);
-    const bloque = `${previo}\n${post}`;
-    const norm = sinAcento(bloque);
+    const fragmento = fragmentoInmediatoTrasFecha(post);
+    const norm = sinAcento(fragmento);
+    const previoCorto = normalizado.slice(Math.max(0, fechas[i].index - 200), fechas[i].index);
+    const lineaPrevia = previoCorto
+      .split('\n')
+      .map((linea) => limpiarTexto(linea))
+      .filter(Boolean)
+      .pop() || '';
 
     let tipo = 'clase';
     let modalidad = 'sincrónico';
-    if (/sin\s*clases|no\s+hay\s+clases|semana\s+turno\s+de\s+examen|turno\s+de\s+examen\s+septiembre/i.test(norm)) {
+    if (/sin\s*clases|no\s+hay\s+clases/i.test(norm) && /turno|septiembre|mesas|examen/i.test(norm)) {
       tipo = 'sin_clases';
       modalidad = 'sin_clases';
     } else if (/2\s*do\s+llamado|1\s*er\s+llamado|llamado\s+turno/i.test(norm)) {
       tipo = 'examen_final';
-    } else if (/\bparcial\b/.test(norm) && !/opcional/.test(norm) && !/unidades?\s+\d/.test(norm)) {
+    } else if (/\bparcial\b/.test(norm) && !/opcional/.test(norm) && !/unidades?\s+\d/.test(norm) && !/prueba(s)?\s+de\s+software/i.test(norm)) {
       tipo = 'examen';
     } else if (/\bconsulta\b/.test(norm)) {
       tipo = 'consulta';
@@ -81,8 +86,26 @@ export function parsearTextoCronogramaOficial(texto) {
       modalidad = 'asincrónico';
     }
 
-    const titulo = extraerTituloBloque(post, tipo);
-    const detalles = extraerDetallesBloque(post, titulo);
+    const prevNorm = sinAcento(lineaPrevia);
+    if (/sin\s*clases/i.test(prevNorm) && /turno|septiembre|mesas|examen/i.test(prevNorm)) {
+      tipo = 'sin_clases';
+      modalidad = 'sin_clases';
+    }
+
+    let tituloSemilla = '';
+    if (
+      tipo === 'sin_clases'
+      && /sin\s*clases/i.test(norm)
+      && lineaPrevia
+      && !/sin\s*clases|turno\s+de\s+examen/i.test(sinAcento(lineaPrevia))
+    ) {
+      tipo = 'clase';
+      modalidad = 'sincrónico';
+      tituloSemilla = lineaPrevia.replace(/^\d+\s+\w+\s+/i, '').trim() || lineaPrevia;
+    }
+
+    const titulo = tituloSemilla || extraerTituloBloque(fragmento, tipo);
+    const detalles = extraerDetallesBloque(fragmento, titulo);
     filas.push({ fecha: iso, modalidad, tipo, titulo, detalles });
   }
 
@@ -93,6 +116,37 @@ export function parsearTextoCronogramaOficial(texto) {
     vistos.add(clave);
     return true;
   });
+}
+
+/** Solo las primeras líneas tras la fecha (evita arrastrar semanas posteriores del PDF). */
+function fragmentoInmediatoTrasFecha(post) {
+  const lineas = String(post || '').split('\n');
+  const acumulado = [];
+  let pasoFecha = false;
+  for (const linea of lineas) {
+    const t = linea.trim();
+    if (!pasoFecha) {
+      if (/\b\d{1,2}\/\d{2}(?:\/\d{4})?\b/.test(t)) pasoFecha = true;
+      continue;
+    }
+    if (!t) {
+      if (acumulado.length > 0) break;
+      continue;
+    }
+    if (/\b\d{1,2}\/\d{2}(?:\/\d{4})?\b/.test(t)) break;
+    acumulado.push(t);
+    if (acumulado.join(' ').length > 360 || acumulado.length >= 5) break;
+  }
+  return acumulado.join('\n');
+}
+
+function lineasUtilesTrasFecha(bloque) {
+  const sinFecha = bloque
+    .replace(/^\s*\d{1,2}\/\d{2}(?:\/\d{4})?\s*/, '')
+    .split('\n')
+    .map((parte) => limpiarTexto(parte))
+    .filter((parte) => parte && !/^\d+$/.test(parte));
+  return sinFecha.filter((parte) => !/^(lunes|martes|mi[eé]rcoles|miercoles|jueves|viernes|s[aá]bado|domingo)$/i.test(parte));
 }
 
 function extraerTituloBloque(bloque, tipo) {
@@ -107,17 +161,13 @@ function extraerTituloBloque(bloque, tipo) {
     if (m) return limpiarTexto(m[0].replace(/^[^Pp]*/, ''));
   }
 
-  const despuesFechaCorta = bloque.match(/\b\d{1,2}\/\d{2}\b(?!\d)\s*([\s\S]{20,400})/);
-  if (despuesFechaCorta) {
-    const linea = limpiarTexto(
-      despuesFechaCorta[1]
-        .split('\n')
-        .map((parte) => parte.trim())
-        .filter((parte) => parte && !/^\d+$/.test(parte))[0] || ''
-    );
-    if (linea.length > 12) {
-      const oracion = linea.split(/(?<=[.!?])\s+/)[0] || linea;
-      return oracion.length > 200 ? `${oracion.slice(0, 197)}…` : oracion;
+  const lineas = lineasUtilesTrasFecha(bloque);
+  if (lineas.length > 0) {
+    const primera = lineas[0];
+    if (primera.length >= 3 && primera.length <= 120) return primera;
+    if (primera.length > 120) {
+      const corta = primera.split(/(?<=[.!?])\s+/)[0] || primera;
+      return corta.length > 200 ? `${corta.slice(0, 197)}…` : corta;
     }
   }
 
@@ -305,6 +355,14 @@ export async function actualizarEnlacesZoomEnHorarios(db, materiaId, enlacesZoom
  */
 export async function aplicarCronogramaOficialEnDb(db, materiaId, filas, { reemplazarManual = false } = {}) {
   if (!filas?.length) return { insertados: 0, eliminadosUgr: 0, eliminadosManual: 0 };
+
+  const manualPrevio = await db.execute({
+    sql: "SELECT COUNT(*) AS n FROM cronograma_eventos WHERE materia_id = ? AND origen = 'manual' AND fecha LIKE '2026-%'",
+    args: [materiaId]
+  });
+  if (Number(manualPrevio.rows[0]?.n ?? 0) >= 8) {
+    return { insertados: 0, eliminadosUgr: 0, eliminadosManual: 0, omitido: true };
+  }
 
   let eliminadosUgr = 0;
   let eliminadosManual = 0;

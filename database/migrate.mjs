@@ -702,6 +702,30 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     );
   });
 
+  await ejecutarMigracion(35, 'regla parciales_y_tps en materias con metodología mixta', async () => {
+    await db.execute(`
+      UPDATE materias
+      SET regla_promocion = 'parciales_y_tps'
+      WHERE regla_promocion = 'metodologia'
+        AND condiciones LIKE '%parcial%'
+        AND (condiciones LIKE '%trabajo%práctico%' OR condiciones LIKE '%trabajo%practico%' OR condiciones LIKE '%TP%')
+    `);
+    await db.execute(`
+      UPDATE materias
+      SET regla_promocion = 'parciales_y_tps', nota_minima_regularizar = 6, nota_minima_promocionar = 8
+      WHERE nombre LIKE '%CONCEPTOS DE DESARROLLO%'
+        AND (regla_promocion = 'metodologia' OR regla_promocion = 'tp_nota')
+    `);
+  });
+
+  await ejecutarMigracion(34, 'cronograma: quitar parciales falsos y títulos basura', async () => {
+    const { ejecutarHigieneCronograma } = await import('./cronograma-higiene.mjs');
+    const higiene = await ejecutarHigieneCronograma(db);
+    console.log(
+      `   Cronograma: ${higiene.tiposCorregidos} examen(es) reclasificados; ${higiene.parcialesFantasma} parcial(es) fantasma eliminados; ${higiene.eventosEliminados} evento(s) duplicados.`
+    );
+  });
+
   await db.close?.();
 }
 
