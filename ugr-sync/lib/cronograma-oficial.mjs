@@ -29,15 +29,11 @@ function slugId(texto) {
 }
 
 function inferirAnioReferencia(texto) {
-  const textoStr = String(texto || '');
-  const candidatos = [...textoStr.matchAll(/\b(20\d{2})\b/g)].map((m) => Number(m[1]));
-  if (candidatos.includes(2026)) return 2026;
   const actual = new Date().getFullYear();
+  const candidatos = [...String(texto || '').matchAll(/\b(20\d{2})\b/g)].map((m) => Number(m[1]));
   const enRango = candidatos.filter((a) => a >= actual - 1 && a <= actual + 2);
-  if (enRango.length > 0) {
-    return enRango.sort((a, b) => enRango.filter((x) => x === b).length - enRango.filter((x) => x === a).length)[0];
-  }
-  return actual >= 2025 && actual <= 2027 ? 2026 : actual;
+  if (enRango.length > 0) return enRango.sort((a, b) => enRango.filter((x) => x === b).length - enRango.filter((x) => x === a).length)[0];
+  return actual;
 }
 
 /** @param {string} texto */
@@ -308,19 +304,10 @@ export async function actualizarEnlacesZoomEnHorarios(db, materiaId, enlacesZoom
  * @param {Array<{ fecha: string, modalidad: string, tipo: string, titulo: string, detalles: string }>} filas
  */
 export async function aplicarCronogramaOficialEnDb(db, materiaId, filas, { reemplazarManual = false } = {}) {
-  if (!filas?.length) return { insertados: 0, eliminadosUgr: 0, eliminadosManual: 0, omitido: false };
-
-  const manualPrevio = await db.execute({
-    sql: "SELECT COUNT(*) AS n FROM cronograma_eventos WHERE materia_id = ? AND origen = 'manual' AND fecha LIKE '2026-%'",
-    args: [materiaId]
-  });
-  const tienePlanManual2026 = Number(manualPrevio.rows[0]?.n ?? 0) >= 8;
-  if (tienePlanManual2026) {
-    return { insertados: 0, eliminadosUgr: 0, eliminadosManual: 0, omitido: true };
-  }
+  if (!filas?.length) return { insertados: 0, eliminadosUgr: 0, eliminadosManual: 0 };
 
   let eliminadosUgr = 0;
-  const eliminadosManual = 0;
+  let eliminadosManual = 0;
 
   if (filas.length >= 5) {
     const ugr = await db.execute({
@@ -328,15 +315,17 @@ export async function aplicarCronogramaOficialEnDb(db, materiaId, filas, { reemp
       args: [materiaId]
     });
     eliminadosUgr = Number(ugr.rowsAffected ?? 0);
-  }
-
-  const filas2026 = filas.filter((f) => String(f.fecha || '').startsWith('2026-'));
-  if (filas2026.length < 3) {
-    return { insertados: 0, eliminadosUgr, eliminadosManual: 0, omitido: true };
+    if (reemplazarManual) {
+      const manual = await db.execute({
+        sql: "DELETE FROM cronograma_eventos WHERE materia_id = ? AND origen = 'manual'",
+        args: [materiaId]
+      });
+      eliminadosManual = Number(manual.rowsAffected ?? 0);
+    }
   }
 
   const cambios = [];
-  for (const fila of filas2026) {
+  for (const fila of filas) {
     const titulo = String(fila.titulo).slice(0, 200);
     const id = `oficial_${materiaId}_${fila.fecha}_${slugId(titulo)}`;
     cambios.push({
@@ -351,7 +340,7 @@ export async function aplicarCronogramaOficialEnDb(db, materiaId, filas, { reemp
     });
   }
   if (cambios.length > 0) await db.batch(cambios, 'write');
-  return { insertados: cambios.length, eliminadosUgr, eliminadosManual, omitido: false };
+  return { insertados: cambios.length, eliminadosUgr, eliminadosManual };
 }
 
 /**

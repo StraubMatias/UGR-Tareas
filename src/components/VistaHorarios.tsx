@@ -7,7 +7,7 @@ import {
   type Tarea
 } from '../core/cursada';
 import type { ReactNode } from 'react';
-import { etiquetaEnlaceClase, esEnlaceZoom, esModalidadAsincronica, mostrarEtiquetaTipoCronograma, tituloDestacadoCronograma } from '../lib/cronograma-vista';
+import { mostrarEtiquetaTipoCronograma, tituloDestacadoCronograma } from '../lib/cronograma-vista';
 
 interface EventosDia {
   parciales: Parcial[];
@@ -186,7 +186,7 @@ export default function VistaHorarios({
                       ))}
                       {eventos.cronograma.map((evento) => {
                         const materia = materias.find((item) => item.id === evento.materia_id);
-                        const esAsincronico = esModalidadAsincronica(evento.modalidad);
+                        const esAsincronico = evento.modalidad === 'asincrónico';
                         const esSinClases = esEventoDeSinClases(evento);
                         const esFinal = evento.tipo === 'examen_final';
                         const esParcial = evento.tipo === 'examen';
@@ -320,17 +320,16 @@ export default function VistaHorarios({
                     };
                     const enlacesClase = eventos.enlacesClasePorMateria ?? new Map<string, string>();
                     for (const horario of eventos.horarios) {
-                      const enlaceClase = horario.url_clase || enlacesClase.get(horario.materia_id);
+                      const enlaceClase = enlacesClase.get(horario.materia_id);
                       const tema = eventos.tituloClaseEnCursadaPorMateria?.get(horario.materia_id);
-                      const claseEnlace = enlaceClase && esEnlaceZoom(enlaceClase) ? 'calendar-zoom-link' : 'calendar-campus-link';
                       grupoDe(horario.materia_id, horario.hora_inicio).bloques.push(
                         <div key={`modal-${horario.id}`} className="calendar-modal-event calendar-class">
                           <p className="text-sm font-extrabold">Cursada · {horario.hora_inicio} - {horario.hora_fin}</p>
-                          {tema && <p className="mt-1 text-sm opacity-90 leading-snug">{tema}</p>}
+                          {tema && <p className="mt-1 text-sm opacity-90">{tema}</p>}
                           {horario.aula && horario.aula !== 'Virtual' && <p className="mt-1 text-xs opacity-75">Aula {horario.aula}</p>}
                           {enlaceClase && (
-                            <a href={enlaceClase} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 text-xs font-bold mt-2 px-2.5 py-1 rounded-md ${claseEnlace}`}>
-                              {etiquetaEnlaceClase(enlaceClase)}
+                            <a href={enlaceClase} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-2">
+                              Ver en UGR ↗
                             </a>
                           )}
                         </div>
@@ -353,7 +352,7 @@ export default function VistaHorarios({
                       );
                     }
                     for (const evento of eventos.cronograma) {
-                      const esAsincronico = esModalidadAsincronica(evento.modalidad);
+                      const esAsincronico = evento.modalidad === 'asincrónico';
                       const esSinClases = esEventoDeSinClases(evento);
                       const esFinal = evento.tipo === 'examen_final';
                       const esParcial = evento.tipo === 'examen';
@@ -394,8 +393,8 @@ export default function VistaHorarios({
                           )}
                           {evento.detalles && <p className="mt-2 text-sm opacity-85">{evento.detalles}</p>}
                           {evento.url && !enlacesClase.has(evento.materia_id) && (
-                            <a href={evento.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-blue-300 hover:text-blue-200 hover:underline mt-2">
-                              {etiquetaEnlaceClase(evento.url)}
+                            <a href={evento.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 hover:underline mt-2">
+                              Ver en UGR ↗
                             </a>
                           )}
                         </div>

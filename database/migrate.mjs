@@ -690,6 +690,18 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     await agregarColumnaSiFalta('horarios', 'url_clase', "TEXT NOT NULL DEFAULT ''");
   });
 
+  await ejecutarMigracion(33, 'restaurar plan manual de comisión 2026 tras PDFs', async () => {
+    const { repararCronogramaComision2026, insertarPlanesCronograma } = await import('./planes-cronograma-comision.mjs');
+    const { ejecutarHigieneCronograma } = await import('./cronograma-higiene.mjs');
+    const materias = await db.execute('SELECT id, nombre FROM materias');
+    const reparado = await repararCronogramaComision2026(db, materias.rows);
+    await insertarPlanesCronograma(db, materias.rows);
+    const higiene = await ejecutarHigieneCronograma(db);
+    console.log(
+      `   Cronograma: ${reparado.oficialBorrados} fila(s) oficial(es) quitadas; plan manual reafirmado (${reparado.manualActualizados}); ${higiene.eventosEliminados} evento(s) UGR de ruido eliminados.`
+    );
+  });
+
   await db.close?.();
 }
 

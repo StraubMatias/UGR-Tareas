@@ -70,9 +70,6 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
       tareas: ordenarTareas((materia.tareas || []).filter((tarea) => ids.has(tarea.id)))
     }))
     .filter((bloque) => bloque.tareas.length > 0);
-  const modoCompacto = bloquesPorMateria.length >= 2
-    && bloquesPorMateria.every((bloque) => bloque.tareas.length === 1);
-
   return (
     <section className={`rounded-2xl border overflow-hidden ${propia ? 'border-cyan-500/40 bg-[#131e29]' : 'border-slate-800 bg-[#131b25]'}`}>
       <h3>
@@ -107,16 +104,14 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                 {resumen.total === 0 ? 'Todavía no hay tareas cargadas.' : filtro === 'pendientes' ? 'No hay entregas abiertas pendientes. Podés consultar las notas, tareas futuras y grupos en los otros filtros.' : filtro === 'grupales' ? 'No hay trabajos grupales activos. Los que ya tienen nota cargada están en Completadas.' : 'No hay tareas en esta categoría.'}
               </p>
             ) : (
-              <div
-                className={`estado-tareas-por-materia${modoCompacto ? ' estado-bloques-materia-compactos' : ''}`}
-                data-cantidad-bloques={bloquesPorMateria.length}
-              >
+              <div className="estado-tareas-por-materia" data-cantidad-bloques={bloquesPorMateria.length}>
                 {bloquesPorMateria.map(({ materia, tareas }) => {
                   const acento = acentoVisualMateria(materia.id);
+                  const bloqueAnchoCompleto = tareas.length > 1;
                   return (
                     <section
                       key={materia.id}
-                      className="estado-materia-bloque rounded-xl border overflow-hidden"
+                      className={`estado-materia-bloque rounded-xl border overflow-hidden${bloqueAnchoCompleto ? ' estado-materia-bloque-ancho-completo' : ''}`}
                       style={{
                         borderColor: acento.borde,
                         background: acento.fondo

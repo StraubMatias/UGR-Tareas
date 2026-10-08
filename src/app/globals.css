@@ -305,20 +305,30 @@ textarea {
 }
 
 @media (min-width: 40rem) {
-  .estado-alumnos .estado-bloques-materia-compactos {
+  .estado-alumnos .estado-tareas-por-materia {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem;
     align-items: stretch;
   }
 
-  .estado-alumnos .estado-bloques-materia-compactos[data-cantidad-bloques='1'] {
+  .estado-alumnos .estado-tareas-por-materia[data-cantidad-bloques='1'] {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .estado-alumnos .estado-materia-bloque-ancho-completo {
+    grid-column: 1 / -1;
   }
 }
 
-.estado-materia-bloque .estado-tareas-columnas[data-cantidad-tareas='1'] {
+.estado-materia-bloque .estado-tareas-columnas {
   grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 40rem) {
+  .estado-materia-bloque-ancho-completo .estado-tareas-columnas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .estado-materia-bloque-titulo {
@@ -352,14 +362,9 @@ textarea {
 }
 
 @media (min-width: 40rem) {
-  .estado-alumnos .estado-tareas-columnas {
+  .estado-alumnos .estado-materia-bloque-ancho-completo .estado-tareas-columnas {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem;
-  }
-
-  /* Una sola tarea en total: ancho completo */
-  .estado-alumnos .estado-tareas-rejilla-global[data-cantidad-tareas='1'] {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 
