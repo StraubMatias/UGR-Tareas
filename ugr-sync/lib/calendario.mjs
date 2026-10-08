@@ -176,7 +176,14 @@ function horarioDeEvento(evento) {
 }
 
 function pareceClase(titulo) {
-  return /clase|encuentro|sincr|zoom|sala virtual|revisi[oó]n/i.test(titulo);
+  return /clase|encuentro|sincr|asincr|zoom|sala virtual|revisi[oó]n/i.test(titulo);
+}
+
+/** Modalidad para cronograma: el calendario de Moodle casi nunca dice «asincrónico» en el título. */
+export function modalidadEventoDesdeTitulo(titulo) {
+  const plano = sinAcento(titulo);
+  if (/\basincron|\ba distancia\b/.test(plano)) return 'asincrónico';
+  return 'sincrónico';
 }
 
 /** Enlace/turno de Zoom sin tema de la clase; el horario semanal ya lo muestra el tablero. */
@@ -305,7 +312,7 @@ function eventoCronograma(evento, materiaId) {
   return {
     materiaId,
     fecha: evento.fecha,
-    modalidad: 'sincrónico',
+    modalidad: modalidadEventoDesdeTitulo(evento.titulo),
     tipo: tipoCronograma(evento.titulo),
     titulo: tituloConHorario(evento).slice(0, 200),
     detalles: evento.horaInicio

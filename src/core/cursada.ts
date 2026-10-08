@@ -94,6 +94,7 @@ export interface Horario {
   hora_inicio: string;
   hora_fin: string;
   aula: string;
+  url_clase?: string;
 }
 
 export interface EventoCronograma {

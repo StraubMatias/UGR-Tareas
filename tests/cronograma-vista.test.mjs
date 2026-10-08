@@ -66,6 +66,28 @@ test('presentarCronogramaDelDia oculta enlaces de clase si ya hay cursada', () =
   assert.equal(enlaceClasePorMateria.get('ciber'), 'https://virtual.ugr.edu.ar/mod/zoom/view.php?id=1');
 });
 
+test('presentarCronogramaDelDia deja visible la clase asincrónica del plan', () => {
+  const eventos = [
+    {
+      id: 'async-1',
+      materia_id: 'sgsi',
+      fecha: '2026-10-07',
+      modalidad: 'asincrónico',
+      tipo: 'clase',
+      titulo: 'Unidad 3: CIS Controls v8',
+      detalles: 'Controles básicos, fundamentales y organizativos.',
+      url: '',
+      origen: 'manual'
+    }
+  ];
+  const horarios = [
+    { id: 'h1', materia_id: 'sgsi', dia: 3, hora_inicio: '19:00', hora_fin: '20:30', aula: 'Virtual' }
+  ];
+  const { eventos: visibles } = presentarCronogramaDelDia(eventos, horarios, [], []);
+  assert.equal(visibles.length, 1);
+  assert.match(visibles[0].titulo, /CIS Controls/);
+});
+
 test('esTituloClaseGenericaDelCampus distingue plan de enlace', () => {
   assert.equal(esTituloClaseGenericaDelCampus('Link de Clase Sincrónica'), true);
   assert.equal(esTituloClaseGenericaDelCampus('Unidad 3: regulación internacional'), false);

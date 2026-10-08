@@ -1,26 +1,9 @@
-// Núcleo de la sincronización con UGR Virtual, compartido entre el CLI
-// (ugr-sync/scripts/sync.mjs) y la acción de servidor del panel (src/app/actions/sync.ts).
-// Toda la lógica de descubrimiento de cursos, mapeo a materias locales y
-// detección de tareas nuevas vive acá; las inserciones en la base se hacen con
-// el objeto `db` que cada llamador provee (libsql client o wrapper de turso).
+// Núcleo de sincronización UGR Virtual (CLI + server actions).
+// Módulos extraídos: ./sync/* (conexión, cursos, avisos, cronograma DB, pool, env).
+// Mapa completo: ugr-sync/docs/GUIA-SINCRONIZACION.md
 import { randomUUID } from 'node:crypto';
-import { crearCliente } from './red.mjs';
-import { optimizarLecturas } from './lecturas.mjs';
-import { autorEsEquipoDocente, esEquipoDocente, extraerDocentesDeCurso, normalizarNombrePersona } from './docentes.mjs';
-import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from './materias.mjs';
 import { extraerConsignasDeCurso, extraerFechasActividad, extraerNotasDeLibreta, extraerProgresoDeActividad, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from './tareas.mjs';
 import { debeOmitirSyncHitosAssign, priorizarYFiltrarRevisionCampus } from './sync-optimizacion.mjs';
-import {
-  analizarAvisosParaCronograma,
-  DIAS_HACIA_ATRAS,
-  avisoEsRelevante,
-  extraerDiscusionesDeForo,
-  extraerForosDelIndice,
-  extraerPostsDeHilo,
-  fechaHoyLocal,
-  filtrarEventosDeAviso,
-  sumarDias
-} from './avisos.mjs';
 import {
   claveTareaParaEmparejar,
   coincidirActividadMoodle,
@@ -57,7 +40,28 @@ export {
   separarEvaluaciones,
   describirActualizacionFechas
 };
-import { ajustarClasesAlHorario, clasificarEventosCalendario, esTituloClaseGenericaDelCampus, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
+import { conectarUGR, conectarUGRCon } from './sync/conexion.mjs';
+import { conPool } from './sync/pool.mjs';
+import { listarCursosDelCampus, mapeosInscripcionesCampus, asegurarMateriasDeLaCursada } from './sync/cursos-campus.mjs';
+import { detectarAvisosMoodle } from './sync/avisos-detectar.mjs';
+import { insertarAvisosDetectados, aprobarAvisos, rechazarAvisos } from './sync/avisos-db.mjs';
+import { insertarEventosCronograma } from './sync/cronograma-db.mjs';
+
+export {
+  conectarUGR,
+  conectarUGRCon,
+  conPool,
+  listarCursosDelCampus,
+  mapeosInscripcionesCampus,
+  asegurarMateriasDeLaCursada,
+  detectarAvisosMoodle,
+  insertarAvisosDetectados,
+  aprobarAvisos,
+  rechazarAvisos,
+  insertarEventosCronograma
+};
+
+import { ajustarClasesAlHorario, clasificarEventosCalendario, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { cabeceraCookies } from './autenticar.mjs';
 import { extraerEnlacesDeCursada, interpretarCondiciones, textoDeArchivoCampus, urlArchivoDeRecurso } from './metodologia.mjs';
@@ -68,183 +72,6 @@ import {
   quitarHitosAssignDeTareasSimples,
   sincronizarEntregasAssignDesdeHtml
 } from './assign-entregas.mjs';
-
-// Credenciales de UGR: se leen en el momento de conectar directamente de
-// process.env, igual que las variables TURSO_* en src/app/turso.js. Por lo
-// tanto funcionan donde quiera que corra la app:
-//   * en Vercel / plataformas: llegan solas por las Environment Variables que
-//     el despliegue inyecta en process.env; no hace falta ningún archivo;
-//   * en desarrollo local: Next las carga de .env.local al iniciar; si el
-//     proceso arrancó antes de que existieran, justo antes de conectar se
-//     recarga el archivo con ruta absoluta (idempotente y barato si las claves
-//     ya están cargadas), sin depender del cwd ni del momento del arranque.
-// La lectura es dinámica — process.env[nombre] con el nombre en una variable —
-// a propósito: Turbopack no puede «inlinar» ese acceso en el bundle, así que en
-// el runtime siempre se consulta el entorno real.
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-let candidatasEnvLocalCacheadas = null;
-let rutaCredencialesUGR = null;
-let ultimoArchivoEnvLocal = null;
-
-// Nombres de archivos de entorno probados, en orden de prioridad. En Vercel u
-// otras plataformas no existe ninguno: las variables llegan solas por
-// process.env (igual que TURSO_*). El listado es solo el respaldo para
-// desarrollo local y para `vercel dev` (que escribe .vercel/.env.*).
-const NOMBRES_ARCHIVOS_ENV = [
-  '.env.local',
-  '.env',
-  '.env.production.local',
-  '.env.production',
-  '.vercel/.env.production.local',
-  '.vercel/.env.development.local'
-];
-
-// Lista de ubicaciones plausibles para los .env*: primero el directorio de
-// trabajo actual (caso normal) y después subiendo desde el módulo compilado
-// hacia la raíz del proyecto (cubre un server lanzado desde otro cwd o un
-// bundle compilado dentro de .next/). Se deduplica con un Set.
-function candidatosEnvLocal() {
-  if (!candidatasEnvLocalCacheadas) {
-    const lista = new Set();
-    const agregarDesde = (directorio) => {
-      for (const nombre of NOMBRES_ARCHIVOS_ENV) {
-        lista.add(join(/*turbopackIgnore: true*/ directorio, nombre));
-      }
-    };
-    agregarDesde(process.cwd());
-    try {
-      let directorio = dirname(fileURLToPath(import.meta.url));
-      for (let nivel = 0; nivel < 10; nivel += 1) {
-        agregarDesde(directorio);
-        if (existsSync(join(directorio, 'package.json'))) break;
-        directorio = dirname(directorio);
-      }
-    } catch {
-      // import.meta.url no resoluble: nos quedamos con las rutas del cwd.
-    }
-    candidatasEnvLocalCacheadas = [...lista];
-  }
-  return candidatasEnvLocalCacheadas;
-}
-
-// Parser mínimo de KEY=VALOR: ignora vacíos y comentarios, y quita comillas
-// simples o dobles simples. Suficiente para .env.local del proyecto.
-function parsearEnvLocal(texto) {
-  const campos = new Map();
-  for (const linea of texto.split(/\r?\n/)) {
-    const limpia = linea.trim();
-    if (!limpia || limpia.startsWith('#')) continue;
-    const igual = limpia.indexOf('=');
-    if (igual <= 0) continue;
-    let valor = limpia.slice(igual + 1).trim();
-    if (
-      (valor.startsWith('"') && valor.endsWith('"')) ||
-      (valor.startsWith("'") && valor.endsWith("'"))
-    ) {
-      valor = valor.slice(1, -1);
-    }
-    campos.set(limpia.slice(0, igual).trim(), valor);
-  }
-  return campos;
-}
-
-function aplicarVariables(mapa) {
-  for (const [clave, valor] of mapa) {
-    // El archivo nunca pisa variables que ya vienen del entorno real.
-    if (process.env[clave] === undefined) process.env[clave] = valor;
-  }
-}
-
-// Indirección a propósito: `process.env[nombre]` con el nombre en una variable
-// de runtime no puede ser reemplazado por el bundler en compilación, así la
-// lectura ocurre siempre contra el entorno real.
-function variableEntorno(nombre) {
-  // Trim como en turso.js, para tolerar espacios accidentales al pegar valores.
-  return (process.env[nombre] || '').trim();
-}
-
-// Recarga las credenciales en el momento de usarlas. Si ya están en el
-// entorno, no toca nada. Prueba los candidatos en orden y usa el primero que
-// exista Y traiga las claves: si el .env.local más cercano no las tiene
-// (p. ej. un cwd con un archivo suelto sin UGRVIRTUAL_*), sigue con el de la
-// raíz del proyecto en lugar de rendirse.
-function cargarCredencialesUGR() {
-  if (tieneCredencialesUGR()) return;
-  for (const ruta of candidatosEnvLocal()) {
-    if (!existsSync(/* turbopackIgnore: true */ ruta)) continue;
-    ultimoArchivoEnvLocal = ruta;
-    if (cargarVariablesDe(ruta)) return;
-  }
-}
-
-function tieneCredencialesUGR() {
-  return Boolean(variableEntorno('UGRVIRTUAL_USER') && variableEntorno('UGRVIRTUAL_PASSWORD'));
-}
-
-// Carga un .env.local concreto: primero con process.loadEnvFile (Node >= 20.12)
-// y, si falta o falla, parseando el archivo a mano. Devuelve true cuando las
-// credenciales UGR quedaron disponibles tras ese archivo.
-function cargarVariablesDe(ruta) {
-  try {
-    if (typeof process.loadEnvFile === 'function') process.loadEnvFile(/* turbopackIgnore: true */ ruta);
-  } catch {
-    // Parseo manual por debajo si loadEnvFile falla o no existe.
-  }
-  if (tieneCredencialesUGR()) {
-    rutaCredencialesUGR = ruta;
-    return true;
-  }
-  try {
-    aplicarVariables(parsearEnvLocal(readFileSync(/* turbopackIgnore: true */ ruta, 'utf8')));
-  } catch {
-    return false;
-  }
-  if (tieneCredencialesUGR()) {
-    rutaCredencialesUGR = ruta;
-    return true;
-  }
-  return false;
-}
-
-// También al importar el módulo (por ejemplo para el CLI y para arranques en
-// los que .env.local ya está presente), por delante de cualquier uso.
-cargarCredencialesUGR();
-
-// Crea el cliente HTTP con las credenciales del entorno.
-export async function conectarUGR() {
-  cargarCredencialesUGR();
-  const usuario = variableEntorno('UGRVIRTUAL_USER');
-  const contrasena = variableEntorno('UGRVIRTUAL_PASSWORD');
-  if (!usuario || !contrasena) {
-    if (process.env.VERCEL === '1') {
-      // En Vercel no hay .env.local en el despliegue: las credenciales tienen
-      // que estar en el panel y llegar por process.env, como las de Turso.
-      throw new Error(
-        'Faltan UGRVIRTUAL_USER / UGRVIRTUAL_PASSWORD en el entorno de Vercel ' +
-        '(las variables de entorno no llegaron al proceso del server). ' +
-        'Añadí ambas en Vercel → Project Settings → Environment Variables ' +
-        '(entorno Production) y hacé un nuevo deploy.'
-      );
-    }
-    const fuente = rutaCredencialesUGR || ultimoArchivoEnvLocal || 'ningún .env.local encontrado';
-    throw new Error(
-      `Faltan UGRVIRTUAL_USER / UGRVIRTUAL_PASSWORD (revisé ${fuente}). ` +
-      'Agregalas a .env.local en la raíz del proyecto y reiniciá `npm run dev`.'
-    );
-  }
-  return optimizarLecturas(await crearCliente({ usuario, contrasena }));
-}
-
-// Sesión propia del alumno. No usa ni pisa la cookie del sincronizador de la comisión.
-export async function conectarUGRCon({ usuario, contrasena, rutaSesion }) {
-  if (!usuario || !contrasena) {
-    throw new Error('Faltan las credenciales de UGR Virtual de esta cuenta.');
-  }
-  return optimizarLecturas(await crearCliente({ usuario, contrasena, rutaSesion }));
-}
 
 async function notaDePagina(cliente, html) {
   if (!html) return { nota: null, entregada: false };
@@ -266,6 +93,8 @@ async function notaDePagina(cliente, html) {
 function actividadNecesitaDetalleFechas(existente, tarea) {
   const parcheIndice = fechasACorregir(existente, tarea);
   if (parcheIndice.inicio || parcheIndice.fin) return true;
+  const inicio = existente?.inicio;
+  if (!inicio || inicio === 'Sin fecha') return true;
   const fin = existente?.fin;
   if (!fin || fin === 'Sin fecha') return true;
   const cierre = new Date(
@@ -562,186 +391,6 @@ export async function sincronizarHitosAssignEnMaterias({
   return { lineasInforme, notasCargadas, tareas: filas.length, tareasEntregasActualizadas };
 }
 
-// Cursos en los que el alumno está inscripto ahora. El índice clásico y el
-// calendario suelen listar solo las 5 de la comisión; las extras de la carrera
-// (otro cuatrimestre, electivas) viven en «Mis cursos» y en el AJAX de Moodle 4.
-const VENTANA_CURSADA_SEG = 240 * 24 * 3600;
-
-function pareceCursandoTodavia(curso, ahoraSeg) {
-  const acceso = Number(curso?.timeaccess || 0);
-  const fin = Number(curso?.enddate || 0);
-  if (acceso && acceso >= ahoraSeg - VENTANA_CURSADA_SEG) return true;
-  if (fin && fin >= ahoraSeg - VENTANA_CURSADA_SEG) return true;
-  if (!acceso && !fin) return true;
-  return false;
-}
-
-export async function listarCursosDelCampus(cliente) {
-  const paginas = [];
-  for (const ruta of [UGR_RUTAS.cursos, UGR_RUTAS.misCursos, UGR_RUTAS.dashboard]) {
-    try {
-      paginas.push(await cliente.pedir(ruta));
-    } catch {
-      // Una de las vistas puede faltar según el tema; las otras alcanzan.
-    }
-  }
-  const porId = new Map();
-  const incorporar = (lista, { soloRecientes } = {}) => {
-    const ahoraSeg = Math.floor(Date.now() / 1000);
-    for (const curso of lista || []) {
-      if (!curso?.id || esCursoOrganizativo(curso.nombre)) continue;
-      const id = String(curso.id);
-      if (soloRecientes && !porId.has(id) && !pareceCursandoTodavia(curso, ahoraSeg)) continue;
-      const existente = porId.get(id);
-      if (existente && !(existente.nombreIncompleto && !curso.nombreIncompleto)) continue;
-      porId.set(id, curso);
-    }
-  };
-  for (const pagina of paginas) incorporar(extraerCursos(pagina?.html));
-
-  const sesskey = paginas.map((pagina) => extraerSesskey(pagina?.html)).find(Boolean);
-  const userid = paginas.map((pagina) => extraerUserid(pagina?.html)).find(Boolean);
-  if (sesskey && userid) {
-    try {
-      const cuerpo = JSON.stringify([{
-        index: 0,
-        methodname: 'core_enrol_get_users_courses',
-        args: { userid: Number(userid), returnusercount: false }
-      }]);
-      const pagina = await cliente.pedir(UGR_RUTAS.ajax(sesskey), {
-        method: 'POST',
-        cuerpo,
-        tipoCuerpo: 'application/json'
-      });
-      incorporar(extraerCursosDeAjax(JSON.parse(pagina.html || '[]')));
-    } catch {
-      // Si este webservice no está, quedan Mis cursos y el timeline.
-    }
-    try {
-      const cuerpo = JSON.stringify([{
-        index: 0,
-        methodname: 'core_course_get_recent_courses',
-        args: { userid: Number(userid), limit: 20 }
-      }]);
-      const pagina = await cliente.pedir(UGR_RUTAS.ajax(sesskey), {
-        method: 'POST',
-        cuerpo,
-        tipoCuerpo: 'application/json'
-      });
-      incorporar(extraerCursosDeAjax(JSON.parse(pagina.html || '[]')));
-    } catch {
-      // Los cursos recientes son un respaldo: el timeline sigue valiendo.
-    }
-  }
-  if (sesskey) {
-    const ajax = await conPool(['inprogress', 'future', 'past'], 4, async (classification) => {
-      try {
-        const cuerpo = JSON.stringify([{
-          index: 0,
-          methodname: 'core_course_get_enrolled_courses_by_timeline_classification',
-          args: {
-            offset: 0,
-            limit: 0,
-            classification,
-            sort: 'fullname',
-            customfieldname: '',
-            customfieldvalue: '',
-            searchvalue: ''
-          }
-        }]);
-        const pagina = await cliente.pedir(UGR_RUTAS.ajax(sesskey), {
-          method: 'POST',
-          cuerpo,
-          tipoCuerpo: 'application/json'
-        });
-        return { classification, cursos: extraerCursosDeAjax(JSON.parse(pagina.html || '[]')) };
-      } catch {
-        return { classification, cursos: [] };
-      }
-    });
-    for (const { classification, cursos: extra } of ajax) {
-      incorporar(extra, { soloRecientes: classification === 'past' });
-    }
-  }
-
-  const cursos = [...porId.values()];
-  await conPool(cursos, 4, async (curso) => {
-    if (!curso.nombreIncompleto) return;
-    try {
-      const paginaCurso = await cliente.pedir(UGR_RUTAS.curso(curso.id));
-      const nombreCompleto = extraerNombreCursoDesdePagina(paginaCurso.html, curso.id);
-      if (nombreCompleto) curso.nombre = nombreCompleto;
-    } catch {
-      // Si falla la resolución, nos quedamos con el nombre parcial.
-    }
-  });
-  return cursos.filter((curso) => !esCursoOrganizativo(curso.nombre));
-}
-
-/** Cursos del campus mapeados a las materias en las que el alumno está inscripto en el período. */
-export async function mapeosInscripcionesCampus({ cliente, db, alumnoId, periodoId }) {
-  const cursos = await listarCursosDelCampus(cliente);
-  const res = await db.execute({
-    sql: `SELECT m.id, m.nombre FROM inscripciones i
-          JOIN materias m ON m.id = i.materia_id
-          WHERE i.alumno_id = ? AND m.periodo_id = ?`,
-    args: [alumnoId, periodoId]
-  });
-  const materias = res.rows.map((fila) => ({ id: String(fila.id), nombre: String(fila.nombre) }));
-  const mapeos = cursos.flatMap((curso) => {
-    const coincidencia = coincidirMateria(curso.nombre, materias);
-    return coincidencia ? [{ curso, coincidencia }] : [];
-  });
-  return { cursos, mapeos, materiaIds: materias.map((m) => m.id) };
-}
-
-// Crea en el período actual las materias de la carrera que el campus muestra
-// y que todavía no existían (una extra de otro cuatrimestre, por ejemplo) y
-// devuelve el mapeo curso → materia para cargarles las tareas.
-export async function asegurarMateriasDeLaCursada({ db, cursos, materias = [], plan = [], periodoId } = {}) {
-  const cursando = emparejarCursosConMaterias(cursos, materias, plan);
-  const altas = [];
-  const nombresNuevos = new Set();
-  for (const item of cursando) {
-    if (!item.nueva || !periodoId) continue;
-    const nombre = String(item.nombre || '').toUpperCase();
-    const clave = limpiarTextoParaBusqueda(nombre);
-    if (!clave || nombresNuevos.has(clave)) continue;
-    if (materias.some((materia) => limpiarTextoParaBusqueda(materia?.nombre) === clave)) continue;
-    nombresNuevos.add(clave);
-    altas.push({
-      sql: 'INSERT INTO materias (id, nombre, periodo_id) VALUES (?, ?, ?)',
-      args: [`m_${randomUUID()}`, nombre, periodoId]
-    });
-  }
-  if (altas.length > 0) await db.batch(altas, 'write');
-
-  const vigentes = periodoId
-    ? await db.execute({ sql: 'SELECT id, nombre FROM materias WHERE periodo_id = ? ORDER BY nombre', args: [periodoId] })
-    : { rows: materias };
-  const mapeos = [];
-  const materiaIds = [];
-  const nombresPorId = new Map();
-  for (const item of cursando) {
-    const clave = limpiarTextoParaBusqueda(item.nombre);
-    const fila = (vigentes.rows || []).find((materia) => {
-      if (item.materiaId && String(materia.id) === String(item.materiaId)) return true;
-      return clave && limpiarTextoParaBusqueda(materia.nombre) === clave;
-    });
-    const materiaId = fila?.id ? String(fila.id) : '';
-    if (!materiaId) continue;
-    const nombre = String(fila.nombre || item.nombre);
-    if (!materiaIds.includes(materiaId)) {
-      materiaIds.push(materiaId);
-      nombresPorId.set(materiaId, nombre);
-    }
-    mapeos.push({
-      curso: item.curso,
-      coincidencia: { materia: { id: materiaId, nombre }, score: 100 }
-    });
-  }
-  return { cursando, mapeos, materiaIds, nombresPorId, materiasNuevas: altas.length, nombresNuevos };
-}
 
 // Recorre los cursos del campus, los mapea contra las materias locales y
 // devuelve las tareas nuevas que todavía no existen en la base.
@@ -1181,7 +830,7 @@ async function completarDesdeCalendario({ cliente, db, mapeos, detectadas, perio
     const materiaId = mapeo?.coincidencia?.materia?.id;
     if (!materiaId) continue;
     const ya = await db.execute({
-      sql: 'SELECT 1 FROM cronograma_eventos WHERE materia_id = ? LIMIT 1',
+      sql: "SELECT 1 FROM cronograma_eventos WHERE materia_id = ? AND origen IN ('manual', 'oficial') LIMIT 1",
       args: [materiaId]
     });
     if (ya.rows.length > 0) continue;
@@ -1805,306 +1454,5 @@ export async function actualizarUrlsParciales({ db, urlsParcialesActualizar }) {
   return updates.length;
 }
 
-// Ejecuta `fn` sobre `items` respetando un máximo de `concurrency` llamadas
-// simultáneas. Mantiene el orden de los resultados. Útil para las decenas de
-// pedidos HTTP del sync de avisos sin saturar el campus.
-export async function conPool(items, concurrency = 4, fn) {
-  const resultados = new Array(items.length);
-  let indice = 0;
-  async function trabajador() {
-    for (;;) {
-      const actual = indice;
-      indice += 1;
-      if (actual >= items.length) return;
-      resultados[actual] = await fn(items[actual], actual);
-    }
-  }
-  const hilos = Math.max(1, Math.min(Number(concurrency) || 1, items.length));
-  await Promise.all(Array.from({ length: hilos }, () => trabajador()));
-  return resultados;
-}
 
-// Recorre los foros de avisos de los cursos mapeados y extrae los hilos nuevos
-// publicados desde DIAS_HACIA_ATRAS días hacia atrás en adelante (el típico
-// aviso del jueves que anuncia un encuentro del martes siguiente entra en la
-// ventana). Devuelve { avisosDetectados, eventosSugeridos }; nada se inserta
-// acá.
-export async function detectarAvisosMoodle({ db, cliente, mapeos, hoy, diasAtras = DIAS_HACIA_ATRAS }) {
-  const fechaBase = hoy || fechaHoyLocal();
-  const diasVentana = Math.max(1, Number(diasAtras) || DIAS_HACIA_ATRAS);
-  // Los hilos publicados antes de la ventana ya fueron procesados (o no
-  // anuncian nada del día actual en adelante) y no se vuelven a proponer:
-  // avisos_moodle guarda el histórico por curso + hilo.
-  const fechaMinima = sumarDias(fechaBase, -diasVentana);
 
-  // La vista previa persiste pendientes. Deben reaparecer al confirmar o
-  // reabrir el modal; solo una decisión definitiva excluye el hilo.
-  const resConocidos = await db.execute("SELECT curso_id, hilo_id FROM avisos_moodle WHERE estado IN ('aceptado', 'rechazado')");
-  const conocidos = new Set(
-    resConocidos.rows.map((fila) => `${fila.curso_id}:${fila.hilo_id}`)
-  );
-
-  const avisosDetectados = [];
-  const eventosSugeridos = [];
-  // Cache de la comprobación «¿el autor es del equipo docente?» por
-  // (curso, autorId): evita volver a pedir el perfil de un mismo autor en
-  // varios hilos detectados en el mismo sync.
-  const cachePerfilDocente = new Map();
-
-  // 1) Índice de foros de todos los cursos en paralelo (concurrencia 4) y,
-  // dentro de cada curso, las páginas de los foros «de avisos» (Avisos,
-  // Consultas, …) con la misma concurrencia. Antes se encadenaba un pedido por
-  // curso y luego otro por foro: ese ida-y-vuelta era gran parte de la lentitud.
-  // En el mismo worker se baja la página del curso para identificar al equipo
-  // docente (los avisos que llegan a la campana son solo del profesorado).
-  const cursosConForos = await conPool(mapeos || [], 4, async ({ curso, coincidencia }) => {
-    try {
-      const [paginaForos, paginaCurso] = await Promise.all([
-        cliente.pedir(UGR_RUTAS.forosDeCurso(curso.id)).catch(() => null),
-        cliente.pedir(UGR_RUTAS.curso(curso.id)).catch(() => null)
-      ]);
-      const docentes = paginaCurso
-        ? extraerDocentesDeCurso(paginaCurso.html, UGR_BASE_URL)
-        : [];
-      const foros = extraerForosDelIndice(paginaForos?.html || '', UGR_BASE_URL)
-        .filter((foro) => foro.esAvisos);
-      const conDiscusiones = await conPool(foros, 4, async (foro) => {
-        try {
-          const paginaForo = await cliente.pedir(foro.url);
-          return { foro, discusiones: extraerDiscusionesDeForo(paginaForo.html, UGR_BASE_URL) };
-        } catch {
-          return { foro, discusiones: [] };
-        }
-      });
-      return {
-        curso,
-        coincidencia,
-        docentes,
-        foros: conDiscusiones.filter(({ discusiones }) => discusiones.length > 0)
-      };
-    } catch {
-      return null;
-    }
-  });
-
-  for (const resultado of cursosConForos) {
-    if (!resultado) continue;
-    const { curso, coincidencia, foros, docentes } = resultado;
-
-    for (const { foro, discusiones } of foros) {
-      // 2) Hilos nuevos dentro de la ventana: los ya conocidos no se vuelven a
-      // proponer, y los que no se actualizaron en los últimos `diasVentana`
-      // días no se leen siquiera (evita pedir el post de hilos viejos la
-      // primera vez que corre el sync).
-      const nuevas = discusiones.filter((d) =>
-        !conocidos.has(`${curso.id}:${d.id}`)
-        && (!d.actualizado || d.actualizado >= fechaMinima)
-      );
-
-      // 3) Primer post de cada hilo nuevo, en paralelo (concurrencia 4).
-      const posts = await conPool(nuevas, 4, async (d) => {
-        try {
-          const pagina = await cliente.pedir(d.url);
-          return extraerPostsDeHilo(pagina.html, UGR_BASE_URL);
-        } catch {
-          return [];
-        }
-      });
-
-      for (let i = 0; i < nuevas.length; i += 1) {
-        const discusion = nuevas[i];
-        const delHilo = posts[i] || [];
-        // El anuncio puede ser el post que abre el hilo o un recordatorio
-        // posterior del docente. Se queda el primero de la ventana que sea
-        // suyo y que le sirva a la cursada.
-        let post = null;
-        let analisis = [];
-        for (const candidato of delHilo) {
-          if (!candidato.fecha || candidato.fecha < fechaMinima) continue;
-          const esDeDocente = await autorEsEquipoDocente({
-            autor: candidato.autor,
-            autorId: candidato.autorId,
-            cursoId: curso.id,
-            docentes,
-            cliente,
-            cache: cachePerfilDocente
-          });
-          if (!esDeDocente) continue;
-          const eventos = filtrarEventosDeAviso(candidato, analizarAvisosParaCronograma({
-            titulo: candidato.titulo,
-            contenido: candidato.contenido,
-            materiaNombre: coincidencia.materia.nombre,
-            hoy: fechaBase,
-            fechaPublicacion: candidato.fecha
-          }));
-          if (eventos.length === 0 && !avisoEsRelevante(candidato)) continue;
-          post = candidato;
-          analisis = eventos;
-          break;
-        }
-        if (!post) continue;
-        const id = `aviso_${curso.id}_${discusion.id}`;
-
-        avisosDetectados.push({
-          id,
-          idMoodle: `moodle_avisos_${curso.id}_${discusion.id}`,
-          cursoId: curso.id,
-          cursoNombre: curso.nombre,
-          materiaId: coincidencia.materia.id,
-          materiaNombre: coincidencia.materia.nombre,
-          foroId: foro.id,
-          foroNombre: foro.nombre,
-          hiloId: discusion.id,
-          titulo: post.titulo,
-          autor: post.autor,
-          fecha: post.fecha,
-          contenido: post.contenido,
-          contenidoHtml: post.contenidoHtml,
-          url: post.urlHilo || discusion.url
-        });
-
-        for (const analizado of analisis) {
-          eventosSugeridos.push({
-            avisoId: id,
-            avisoIdMoodle: `moodle_avisos_${curso.id}_${discusion.id}`,
-            materiaId: coincidencia.materia.id,
-            url: post.urlHilo || discusion.url,
-            ...analizado
-          });
-        }
-      }
-    }
-  }
-
-  return { avisosDetectados, eventosSugeridos };
-}
-
-// Registra las sugerencias de avisos (estado 'pendiente'). No se publican
-// solas: solo el admin las aprueba. Si un hilo ya existía (aceptado o
-// rechazado) no se re-sugiere ni se le cambia el estado.
-export async function insertarAvisosDetectados({ db, avisos }) {
-  if (!Array.isArray(avisos) || avisos.length === 0) return 0;
-  const insertar = avisos.map((a) => ({
-    sql: `INSERT INTO avisos_moodle
-          (id, curso_id, curso_nombre, materia_id, materia_nombre, foro_id, foro_nombre, hilo_id, titulo, autor, fecha, contenido, url, estado, creado_en)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', datetime('now'))
-          ON CONFLICT(curso_id, hilo_id) DO UPDATE SET
-            titulo = excluded.titulo,
-            autor = excluded.autor,
-            contenido = excluded.contenido,
-            fecha = excluded.fecha,
-            url = excluded.url`,
-    args: [
-      a.id,
-      a.cursoId,
-      a.cursoNombre,
-      a.materiaId || null,
-      a.materiaNombre || '',
-      a.foroId,
-      a.foroNombre,
-      a.hiloId,
-      a.titulo,
-      a.autor || '',
-      a.fecha,
-      a.contenido || '',
-      a.url || ''
-    ]
-  }));
-  await db.batch(insertar, 'write');
-  return insertar.length;
-}
-
-// Aprueba avisos (estado 'pendiente' → 'aceptado'). Solo después de esto el
-// aviso se muestra en la campana de notificaciones.
-export async function aprobarAvisos({ db, ids }) {
-  if (!Array.isArray(ids) || ids.length === 0) return 0;
-  const updates = ids
-    .filter(Boolean)
-    .map((id) => ({
-      sql: "UPDATE avisos_moodle SET estado = 'aceptado' WHERE id = ?",
-      args: [id]
-    }));
-  if (updates.length === 0) return 0;
-  await db.batch(updates, 'write');
-  return updates.length;
-}
-
-// Rechaza avisos sugeridos (no se publican y no se vuelven a proponer).
-export async function rechazarAvisos({ db, ids }) {
-  if (!Array.isArray(ids) || ids.length === 0) return 0;
-  const updates = ids
-    .filter(Boolean)
-    .map((id) => ({
-      sql: "UPDATE avisos_moodle SET estado = 'rechazado' WHERE id = ?",
-      args: [id]
-    }));
-  if (updates.length === 0) return 0;
-  await db.batch(updates, 'write');
-  return updates.length;
-}
-
-function tituloSinRango(titulo) {
-  return String(titulo || '').replace(/\s*\(\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}\)/g, '').replace(/\s+/g, ' ').trim();
-}
-
-// Agrega eventos sugeridos al cronograma (origen 'ugr', con el enlace al hilo
-// para «Ver en UGR»). Si la misma clase ya estaba con el horario largo del
-// campus, se corrige esa fila en vez de dejar las dos.
-export async function insertarEventosCronograma({ db, eventos }) {
-  if (!Array.isArray(eventos) || eventos.length === 0) return 0;
-  const validos = eventos.filter((e) => e && e.materiaId && e.fecha && e.titulo);
-  const materiaIds = [...new Set(validos.map((e) => e.materiaId))];
-  const exactos = new Set();
-  const porBase = new Map();
-  const manualEnFecha = new Set();
-  for (const materiaId of materiaIds) {
-    const res = await db.execute({
-      sql: 'SELECT id, fecha, titulo, origen, tipo FROM cronograma_eventos WHERE materia_id = ?',
-      args: [materiaId]
-    });
-    for (const fila of res.rows) {
-      exactos.add(`${materiaId}|${fila.fecha}|${fila.titulo}`);
-      porBase.set(`${materiaId}|${fila.fecha}|${tituloSinRango(fila.titulo)}`, fila);
-      if (fila.origen === 'manual' && fila.tipo !== 'sin_clases') {
-        manualEnFecha.add(`${materiaId}|${fila.fecha}`);
-      }
-    }
-  }
-  const cambios = [];
-  for (const e of validos) {
-    const titulo = String(e.titulo).slice(0, 200);
-    if (/^(se abre|se cierra)\b/i.test(titulo.trim())) continue;
-    if (manualEnFecha.has(`${e.materiaId}|${e.fecha}`) && esTituloClaseGenericaDelCampus(titulo)) continue;
-    const clave = `${e.materiaId}|${e.fecha}|${titulo}`;
-    if (exactos.has(clave)) continue;
-    const previa = porBase.get(`${e.materiaId}|${e.fecha}|${tituloSinRango(titulo)}`);
-    if (previa && tituloSinRango(previa.titulo) === tituloSinRango(titulo) && previa.titulo !== titulo) {
-      cambios.push({
-        sql: 'UPDATE cronograma_eventos SET titulo = ?, detalles = ? WHERE id = ?',
-        args: [titulo, e.detalles || '', previa.id]
-      });
-      exactos.add(clave);
-      continue;
-    }
-    exactos.add(clave);
-    porBase.set(`${e.materiaId}|${e.fecha}|${tituloSinRango(titulo)}`, { id: '', fecha: e.fecha, titulo });
-    cambios.push({
-      sql: `INSERT OR IGNORE INTO cronograma_eventos
-            (id, materia_id, fecha, modalidad, tipo, titulo, detalles, url, origen)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ugr')`,
-      args: [
-        `cronograma_${e.materiaId}_${e.fecha}_${titulo.slice(0, 60)}_${randomUUID().slice(0, 8)}`,
-        e.materiaId,
-        e.fecha,
-        e.modalidad || 'sincrónico',
-        e.tipo || 'clase',
-        titulo,
-        e.detalles || '',
-        e.url || ''
-      ]
-    });
-  }
-  if (cambios.length === 0) return 0;
-  await db.batch(cambios, 'write');
-  return cambios.length;
-}

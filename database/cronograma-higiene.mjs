@@ -15,6 +15,7 @@ function esRecordatorioAperturaCierre(titulo) {
 
 function puntajeFilaCronograma(fila) {
   let puntaje = 0;
+  if (fila.origen === 'oficial') puntaje += 250;
   if (fila.origen === 'manual') puntaje += 200;
   if (fila.url) puntaje += 30;
   const det = String(fila.detalles || '').trim();
@@ -45,18 +46,18 @@ export async function ejecutarHigieneCronograma(db) {
     tipo: r.tipo
   }));
 
-  const manualEnFecha = new Set();
-  const manualPorMateria = new Map();
+  const planEnFecha = new Set();
+  const planPorMateria = new Map();
   for (const f of filas) {
-    if (f.origen !== 'manual') continue;
-    manualPorMateria.set(f.materia_id, (manualPorMateria.get(f.materia_id) || 0) + 1);
+    if (f.origen !== 'manual' && f.origen !== 'oficial') continue;
+    planPorMateria.set(f.materia_id, (planPorMateria.get(f.materia_id) || 0) + 1);
     if (f.tipo === 'sin_clases' || f.tipo === 'clase' || f.tipo === 'consulta' || f.tipo === 'examen'
       || f.tipo === 'entrega' || f.tipo === 'exposición') {
-      manualEnFecha.add(`${f.materia_id}|${f.fecha}`);
+      planEnFecha.add(`${f.materia_id}|${f.fecha}`);
     }
   }
-  const materiaConPlanManual = new Set(
-    [...manualPorMateria.entries()].filter(([, n]) => n >= 8).map(([id]) => id)
+  const materiaConPlanFuerte = new Set(
+    [...planPorMateria.entries()].filter(([, n]) => n >= 8).map(([id]) => id)
   );
 
   const idsBorrar = new Set();
@@ -67,11 +68,11 @@ export async function ejecutarHigieneCronograma(db) {
       idsBorrar.add(f.id);
       continue;
     }
-    if (manualEnFecha.has(`${f.materia_id}|${f.fecha}`) && esTituloClaseGenericaDelCampus(f.titulo)) {
+    if (planEnFecha.has(`${f.materia_id}|${f.fecha}`) && esTituloClaseGenericaDelCampus(f.titulo)) {
       idsBorrar.add(f.id);
       continue;
     }
-    if (materiaConPlanManual.has(f.materia_id) && esTituloClaseGenericaDelCampus(f.titulo)) {
+    if (materiaConPlanFuerte.has(f.materia_id) && esTituloClaseGenericaDelCampus(f.titulo)) {
       idsBorrar.add(f.id);
     }
   }
@@ -92,7 +93,7 @@ export async function ejecutarHigieneCronograma(db) {
     for (const f of ordenadas.slice(1)) {
       if (f.id === ganadora.id) continue;
       const ambasGenericas = esTituloClaseGenericaDelCampus(f.titulo) && esTituloClaseGenericaDelCampus(ganadora.titulo);
-      const pierdeUgr = f.origen === 'ugr' && (ganadora.origen === 'manual' || ambasGenericas);
+      const pierdeUgr = f.origen === 'ugr' && (ganadora.origen === 'manual' || ganadora.origen === 'oficial' || ambasGenericas);
       if (pierdeUgr || (f.origen === 'ugr' && ganadora.origen === 'ugr' && ambasGenericas)) {
         idsBorrar.add(f.id);
       }

@@ -686,6 +686,10 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     await db.execute('CREATE INDEX IF NOT EXISTS idx_tareas_entregas_tarea ON tareas_entregas(tarea_id, alumno_id)');
   });
 
+  await ejecutarMigracion(32, 'enlace de clase (Zoom) en horarios', async () => {
+    await agregarColumnaSiFalta('horarios', 'url_clase', "TEXT NOT NULL DEFAULT ''");
+  });
+
   await db.close?.();
 }
 

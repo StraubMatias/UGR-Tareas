@@ -519,6 +519,13 @@ test('extraerNotasDeLibreta toma el ítem y la nota de la libreta del alumno', (
   assert.equal(notas.find((n) => n.id === '215115')?.nota, 10);
 });
 
+test('extraerFechasActividad entiende Abrió (cuestionario ya abierto en UGR)', () => {
+  const html = `<div data-region="activity-dates" class="activity-dates">
+    <div><strong>Abrió:</strong> martes, 6 de octubre de 2026, 17:34</div>
+  </div>`;
+  assert.deepEqual(extraerFechasActividad(html), { inicio: '2026-10-06T17:34', fin: null });
+});
+
 test('extraerFechasActividad entiende Abre y Cierra, los rótulos actuales de Moodle', () => {
   const html = `<div data-region="activity-dates">
     <div>Abre: jueves, 10 de septiembre de 2026, 00:00</div>

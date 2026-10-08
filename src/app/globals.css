@@ -609,6 +609,25 @@ textarea {
   padding: 0.8rem 0.9rem;
 }
 
+.calendar-zoom-link {
+  background: rgba(37, 99, 235, 0.22);
+  color: #93c5fd;
+}
+
+.calendar-zoom-link:hover {
+  background: rgba(37, 99, 235, 0.35);
+  color: #dbeafe;
+}
+
+.calendar-campus-link {
+  color: #93c5fd;
+}
+
+.calendar-campus-link:hover {
+  color: #dbeafe;
+  text-decoration: underline;
+}
+
 @media (max-width: 640px) {
   html,
   body {
