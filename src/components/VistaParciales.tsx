@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { parcialHabilitado as parcialEstaHabilitado } from '../app/validators';
 import { formatearFechaDDMMAAAA, obtenerDiasHastaFecha, obtenerIconoMateria, ordenarParciales, type Materia, type Parcial } from '../core/cursada';
-import { materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
+import { alumnosDeLaMateria, materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
 import { agruparParcialesPorMateria } from '../lib/tablero-cursada';
 
 interface GrupoParciales {
@@ -180,7 +180,9 @@ export default function VistaParciales({
 
           {notasDesplegadas[p.id] && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
-              {alumnos.filter((alum) => alum !== usuarioActual).map((alum) => {
+              {alumnosDeLaMateria(inscripciones, p.materia_id)
+                .filter((alum) => alum !== usuarioActual)
+                .map((alum) => {
                 const claveInput = `${p.id}_${alum}`;
                 const valorNota = notasInputs[claveInput] || '';
 

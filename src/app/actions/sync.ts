@@ -23,7 +23,11 @@ import {
 import { asegurarEsquemaCuentasEnServidor } from '../../server/asegurar-esquema-cuentas';
 import { asegurarEsquemaEntregasEnServidor } from '../../server/asegurar-esquema-entregas';
 import { mensajeDesdeInforme } from '../../lib/informe-sync-ugr';
-import { propagarEntregasHitosGrupoTrasSync, propagarNotaGrupalTrasCargaCampus } from '../../lib/grupos-tareas';
+import {
+  propagarEntregasHitosGrupoTrasSync,
+  propagarNotaGrupalTrasCargaCampus,
+  replicarHitosEntregaGrupo
+} from '../../lib/grupos-tareas';
 import { sincronizarCursadaDelAlumno, type FaseSyncUgrCursada } from '../../server/sync-ugr-cursada';
 
 async function conectarClienteUgr(
@@ -67,10 +71,19 @@ async function ejecutarFaseSyncUgr({
       if (!nota.tareaId) continue;
       const grupo = await propagarNotaGrupalTrasCargaCampus(db, nota.tareaId, alumnoId);
       const copiados = await propagarEntregasHitosGrupoTrasSync(db, nota.tareaId, alumnoId);
-      if (copiados.length && !tareasGrupoVistas.has(nota.tareaId)) {
+      const grupoFila = await db.execute({
+        sql: 'SELECT grupo_id FROM integrantes_tareas WHERE tarea_id = ? AND alumno_id = ?',
+        args: [nota.tareaId, alumnoId]
+      });
+      const grupoId = grupoFila.rows[0]?.grupo_id;
+      const copiadosGrupo = grupoId
+        ? await replicarHitosEntregaGrupo(db, nota.tareaId, String(grupoId))
+        : [];
+      const todosCopiados = [...new Set([...copiados, ...copiadosGrupo])];
+      if (todosCopiados.length && !tareasGrupoVistas.has(nota.tareaId)) {
         tareasGrupoVistas.add(nota.tareaId);
         lineasInforme.push(
-          `Tarea grupal «${nota.nombre || grupo?.tareaNombre || 'grupal'}»: entregas y devoluciones replicadas para ${copiados.join(', ')}.`
+          `Tarea grupal «${nota.nombre || grupo?.tareaNombre || 'grupal'}»: entregas y devoluciones replicadas para ${todosCopiados.join(', ')}.`
         );
       }
       if (nota.yaEstaba || !grupo || grupo.integrantesActualizados.length === 0) continue;
@@ -82,9 +95,18 @@ async function ejecutarFaseSyncUgr({
     for (const tareaId of sync.tareasEntregasActualizadas || []) {
       if (tareasGrupoVistas.has(tareaId)) continue;
       const copiados = await propagarEntregasHitosGrupoTrasSync(db, tareaId, alumnoId);
-      if (!copiados.length) continue;
+      const grupoFila = await db.execute({
+        sql: 'SELECT grupo_id FROM integrantes_tareas WHERE tarea_id = ? AND alumno_id = ?',
+        args: [tareaId, alumnoId]
+      });
+      const grupoId = grupoFila.rows[0]?.grupo_id;
+      const copiadosGrupo = grupoId
+        ? await replicarHitosEntregaGrupo(db, tareaId, String(grupoId))
+        : [];
+      const todosCopiados = [...new Set([...copiados, ...copiadosGrupo])];
+      if (!todosCopiados.length) continue;
       tareasGrupoVistas.add(tareaId);
-      lineasInforme.push(`Trabajo grupal: hitos de entrega replicados para ${copiados.join(', ')}.`);
+      lineasInforme.push(`Trabajo grupal: hitos de entrega replicados para ${todosCopiados.join(', ')}.`);
     }
   }
   const materiasSync = Math.max(sync.materiasInscriptas?.length || 0, 1);
