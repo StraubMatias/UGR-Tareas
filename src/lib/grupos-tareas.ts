@@ -416,6 +416,41 @@ export async function propagarEntregasHitosGrupoTrasSync(
   return actualizados;
 }
 
+/** Integrante del grupo con más hitos de entrega (prioriza los que tienen nota). */
+async function elegirFuenteHitosGrupo(
+  db: Client,
+  tareaId: string,
+  grupoId: string
+): Promise<string | null> {
+  const filas = await db.execute({
+    sql: `SELECT te.alumno_id AS id,
+                 COUNT(*) AS total,
+                 SUM(CASE WHEN te.nota IS NOT NULL AND TRIM(te.nota) != '' THEN 1 ELSE 0 END) AS con_nota
+          FROM tareas_entregas te
+          JOIN integrantes_tareas i ON i.alumno_id = te.alumno_id AND i.grupo_id = ? AND i.tarea_id = ?
+          WHERE te.tarea_id = ?
+          GROUP BY te.alumno_id
+          ORDER BY con_nota DESC, total DESC`,
+    args: [grupoId, tareaId, tareaId]
+  });
+  const id = filas.rows[0]?.id;
+  return id ? String(id) : null;
+}
+
+/** Replica hitos assign del integrante más completo al resto del grupo (p. ej. entrega 1 con nota). */
+export async function replicarHitosEntregaGrupo(
+  db: Client,
+  tareaId: string,
+  grupoId: string
+): Promise<string[]> {
+  const fila = await db.execute({ sql: 'SELECT nombre FROM tareas WHERE id = ?', args: [tareaId] });
+  const nombre = String(fila.rows[0]?.nombre || '');
+  if (!tareaUsaEntregasMultiplesCampus({ nombre })) return [];
+  const fuenteId = await elegirFuenteHitosGrupo(db, tareaId, grupoId);
+  if (!fuenteId) return [];
+  return propagarEntregasHitosGrupoTrasSync(db, tareaId, fuenteId);
+}
+
 /** Tras sync o carga manual: replica nota/entrega del grupo a todos los integrantes. */
 export async function propagarNotasGrupalesEnMaterias(
   db: Client,
@@ -442,6 +477,7 @@ export async function propagarNotasGrupalesEnMaterias(
       const tarea = await obtenerTarea(tx, fila.tarea_id);
       return sincronizarProgresoGrupo(tx, tarea, fila.grupo_id);
     });
+    await replicarHitosEntregaGrupo(db, fila.tarea_id, fila.grupo_id);
     if (propagado.integrantes.length && propagado.nota) {
       resultado.push({
         tareaId: fila.tarea_id,
@@ -538,7 +574,11 @@ export async function asignarGrupo(
       // Sincronizar automáticamente entregas y notas previas entre los integrantes
       await sincronizarProgresoGrupo(tx, tarea, destino);
     }
-    return { grupoId: salir ? null : destino };
+    const grupoFinal = salir ? null : destino;
+    if (grupoFinal && tareaUsaEntregasMultiplesCampus({ nombre: tarea.nombre })) {
+      await replicarHitosEntregaGrupo(db, tareaId, grupoFinal);
+    }
+    return { grupoId: grupoFinal };
   });
 }
 
