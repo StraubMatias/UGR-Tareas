@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   aportesRankingDeTarea,
+  fechaEntregaParaRanking,
+  multiplicadorPuntosTarea,
   parseNotaEscalaDiez,
   puntosDeNotaParcial,
   puntosRankingDeTarea
@@ -139,6 +141,57 @@ test('entrega múltiple: entrega 1 cerrada con 10 suma aunque entrega 2 esté ab
   assert.equal(puntosRankingDeTarea(tarea, 'Ana'), 10);
   assert.equal(aportesRankingDeTarea(tarea, 'Ana').length, 1);
   assert.match(aportesRankingDeTarea(tarea, 'Ana')[0].nombre, /Entrega 1/);
+});
+
+test('entrega cerrada usa fecha de entrega real aunque el sync del tablero sea después del cierre', () => {
+  const tarea = {
+    id: 'e',
+    nombre: 'Entregas del trabajo práctico- caso',
+    conNota: true,
+    inicio: '2026-09-04',
+    fin: '2026-10-07',
+    notas: {},
+    completadoPor: ['Matute'],
+    completadoEn: { Matute: '2026-09-07 01:39:50' },
+    entregas: {
+      Matute: [
+        {
+          numero: 1,
+          indiceEntrega: 1,
+          esActiva: false,
+          estado: 'Calificado',
+          nota: '10',
+          sincronizadoEn: '2026-10-08T23:26:42.476Z'
+        },
+        {
+          numero: 2,
+          indiceEntrega: 2,
+          esActiva: true,
+          estado: 'Reabierta',
+          nota: null,
+          pendiente: true
+        }
+      ]
+    }
+  };
+  assert.equal(puntosRankingDeTarea(tarea, 'Matute'), 10);
+});
+
+test('el ranking usa la fecha de entrega, no la de carga de nota manual/sync', () => {
+  const tarea = {
+    id: 't',
+    nombre: 'TP',
+    conNota: true,
+    inicio: '2026-09-04',
+    fin: '2026-10-07',
+    notas: { Ana: 10 },
+    completadoPor: ['Ana'],
+    completadoEn: { Ana: '2026-09-07 12:00:00' },
+    notaCargadaEn: { Ana: '2026-10-08T23:00:00.000Z' }
+  };
+  assert.equal(fechaEntregaParaRanking(tarea, 'Ana'), '2026-09-07 12:00:00');
+  assert.equal(multiplicadorPuntosTarea(tarea, 'Ana', fechaEntregaParaRanking(tarea, 'Ana')), 1);
+  assert.equal(multiplicadorPuntosTarea(tarea, 'Ana', tarea.notaCargadaEn.Ana), 0);
 });
 
 test('notas duplicadas del mismo parcial no duplican puntos', () => {

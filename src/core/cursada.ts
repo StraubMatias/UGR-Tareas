@@ -209,8 +209,22 @@ export const tareaCompletadaPor = (tarea: Tarea, alumno: string | null | undefin
       && tarea.notas?.[alumno as string] !== null && tarea.notas?.[alumno as string] !== '');
 };
 
-export const fechaEntregaTarea = (tarea: Tarea, alumno: string | null | undefined): string | null => (
-  !alumno ? null : tarea.completadoEn?.[alumno] || (tarea.conNota ? tarea.notaCargadaEn?.[alumno] ?? null : null)
+/** Momento en que el alumno marcó o registró la entrega (no la carga de la nota). */
+export const fechaEntregaRealTarea = (tarea: Tarea, alumno: string | null | undefined): string | null => (
+  !alumno ? null : tarea.completadoEn?.[alumno] ?? null
+);
+
+/** UI e historial: entrega real; si falta, fecha en que se publicó la nota en el tablero. */
+export const fechaEntregaTarea = (tarea: Tarea, alumno: string | null | undefined): string | null => {
+  const real = fechaEntregaRealTarea(tarea, alumno);
+  if (real) return real;
+  if (!alumno || !tarea.conNota) return null;
+  return tarea.notaCargadaEn?.[alumno] ?? null;
+};
+
+/** Ranking: solo importa cuándo se entregó; la nota puede llegar después por sync. */
+export const fechaEntregaParaRanking = (tarea: Tarea, alumno: string | null | undefined): string | null => (
+  fechaEntregaRealTarea(tarea, alumno) ?? fechaEntregaTarea(tarea, alumno)
 );
 
 /** Con varias entregas en UGR, la nota del tablero aplica al cierre; mientras hay otra fase abierta, va en los hitos. */
@@ -447,10 +461,15 @@ export interface AporteRankingTarea {
   tipo: 'Nota de tarea' | 'Foro' | 'Actividad';
 }
 
+/** Fecha para el multiplicador de puntos: prioriza entrega real, no un sync tardío del tablero. */
 function fechaCargaHitoEntrega(tarea: Tarea, alumno: string, indiceEntrega: number): string | null {
   const hitos = tarea.entregas?.[alumno];
   const hito = hitos?.find((h) => h.indiceEntrega === indiceEntrega && !h.esActiva);
-  return hito?.sincronizadoEn ?? fechaEntregaTarea(tarea, alumno);
+  const entregaReal = fechaEntregaRealTarea(tarea, alumno);
+  if (entregaReal) return entregaReal;
+  const sync = hito?.sincronizadoEn ?? null;
+  if (sync) return sync;
+  return fechaEntregaTarea(tarea, alumno);
 }
 
 /** Líneas de puntos de ranking por tarea (varias entregas cerradas suman por separado). */
@@ -488,11 +507,12 @@ export const aportesRankingDeTarea = (tarea: Tarea, alumno: string | null | unde
   } else if (base < 1 || base > 2) {
     return [];
   }
-  const puntos = base * multiplicadorPuntosTarea(tarea, alumno);
+  const fechaRanking = fechaEntregaParaRanking(tarea, alumno);
+  const puntos = base * multiplicadorPuntosTarea(tarea, alumno, fechaRanking);
   if (puntos <= 0) return [];
   return [{
     nombre: tarea.nombre,
-    fechaCarga: fechaEntregaTarea(tarea, alumno),
+    fechaCarga: fechaRanking,
     puntos,
     puntosBase: base,
     tipo

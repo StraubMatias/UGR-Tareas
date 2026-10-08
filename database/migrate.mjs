@@ -744,6 +744,12 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     console.log(`   Zoom: ${filas} fila(s) de horario con url_clase actualizada(s).`);
   });
 
+  await ejecutarMigracion(39, 'replicar hitos de entrega grupal a todos los integrantes', async () => {
+    const { ejecutarReplicarHitosGrupales } = await import('./replicar-hitos-grupales.mjs');
+    const total = await ejecutarReplicarHitosGrupales(db);
+    console.log(`   Hitos grupales: ${total} alumno(s) actualizados en entregas múltiples.`);
+  });
+
   await ejecutarMigracion(38, 'eliminar notas cargadas a mano (cerrada=0)', async () => {
     const tareas = await db.execute('DELETE FROM notas_tareas WHERE COALESCE(cerrada, 0) = 0');
     const parciales = await db.execute('DELETE FROM notas_parciales WHERE COALESCE(cerrada, 0) = 0');

@@ -1,7 +1,7 @@
 import type { Row, Value } from '@libsql/client';
 import { formatearNotaParaMostrar } from '../app/validators.ts';
 import { tareaUsaEntregasMultiplesCampus } from '../core/cursada.ts';
-import { texto, textoONull } from './action-internals';
+import { texto, textoONull } from './action-internals.ts';
 
 export function consultaPeriodo(periodoId: string | null, sqlConPeriodo: string, sqlSinPeriodo: string) {
   return periodoId
