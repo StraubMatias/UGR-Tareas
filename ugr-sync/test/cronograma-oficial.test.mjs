@@ -1,14 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { parsearTextoCronogramaOficial, extraerRecursoCronogramaDeHtml } from '../lib/cronograma-oficial.mjs';
 
 test('parsearTextoCronogramaOficial lee fechas del PDF de Activos', () => {
-  let texto = '';
-  try {
-    texto = readFileSync('/tmp/cronograma-activos.txt', 'utf8');
-  } catch {
-    texto = `
+  const texto = `
    1         Lunes        Introducción
           24/08/2026
    4         Lunes       Sin Clases – Semana Turno de Examen Septiembre
@@ -16,7 +11,6 @@ test('parsearTextoCronogramaOficial lee fechas del PDF de Activos', () => {
    6       Lunes      Parcial (opcional) unidades 1 y 2.
      28/09/2026
     `;
-  }
   const filas = parsearTextoCronogramaOficial(texto);
   assert.ok(filas.length >= 3);
   const intro = filas.find((f) => f.fecha === '2026-08-24');
@@ -28,6 +22,21 @@ test('parsearTextoCronogramaOficial lee fechas del PDF de Activos', () => {
   const conParcialOpcional = filas.find((f) => f.fecha === '2026-09-28');
   assert.ok(conParcialOpcional);
   assert.equal(conParcialOpcional.tipo, 'clase', 'parcial opcional en texto de clase no es examen del cronograma');
+});
+
+test('parsearTextoCronogramaOficial toma solo el texto tras la fecha (Módulo II)', () => {
+  const texto = `
+07/10/2026
+MODULO II
+06/10/2026
+MODULO II 5 – Turno examen Septiembre
+  `;
+  const filas = parsearTextoCronogramaOficial(texto);
+  const oct7 = filas.find((f) => f.fecha === '2026-10-07');
+  assert.ok(oct7);
+  assert.equal(oct7.tipo, 'clase');
+  assert.match(oct7.titulo, /modulo\s*ii/i);
+  assert.ok(!/turno\s+examen/i.test(oct7.titulo));
 });
 
 test('extraerRecursoCronogramaDeHtml elige el título más útil', () => {

@@ -10,7 +10,7 @@
 import { load } from 'cheerio';
 import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { extraerSesskey } from './materias.mjs';
-import { esNombreConsignaValido, fechaCampusParaAlmacenar, inferirTipoTarea, limpiarTextoParaBusqueda, notaEnEscalaDiez, parsearFechaHoraCampus, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, coincidirNombreTarea } from './normalizar.mjs';
+import { esNombreConsignaValido, fechaCampusParaAlmacenar, inferirTipoTarea, limpiarTextoParaBusqueda, notaEnEscalaDiez, parsearFechaHoraCampus, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, unidadDesdeNombreSeccion, coincidirNombreTarea } from './normalizar.mjs';
 
 function indiceColumna(encabezados, rotulos) {
   for (let i = 0; i < encabezados.length; i += 1) {
@@ -444,7 +444,7 @@ function actividadDesdeEnlaceModulo({ href, nombre, baseUrl, unidadSeccion = nul
 export function consignasDesdeCourseContents(secciones, baseUrl = '') {
   const actividades = [];
   for (const seccion of Array.isArray(secciones) ? secciones : []) {
-    const unidadSeccion = parsearUnidadMoodle(seccion?.name);
+    const unidadSeccion = unidadDesdeNombreSeccion(seccion?.name);
     for (const mod of seccion?.modules || []) {
       const modname = mod?.modname;
       if (!modname || !MODULOS_CONSIGNA.includes(modname)) continue;
@@ -515,7 +515,7 @@ export function extraerConsignasDePaginaCurso(html, baseUrl = '') {
     actividades.push(actividad);
   };
 
-  const unidadDeSeccion = parsearUnidadMoodle(
+  const unidadDeSeccion = unidadDesdeNombreSeccion(
     limpiarTexto($('.course-content .sectionname, [data-region="section-title"]').first().text())
   );
 

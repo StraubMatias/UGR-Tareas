@@ -147,9 +147,18 @@ function romanoANumero(texto) {
 
 // Convierte el rótulo de unidad que usa Moodle a un número de unidad.
 // Acepta «Unidad 2», «Unidad nro. 2», «Unidad II», «UII», «U. II»…
+/** Sección del curso «Evaluaciones» (parciales / recuperatorios), no unidad numérica. */
+export function unidadDesdeNombreSeccion(nombreSeccion) {
+  const t = String(nombreSeccion || '').replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  if (/\bevaluaci[oó]n(es)?\b/i.test(t)) return 'Evaluaciones';
+  return parsearUnidadMoodle(t);
+}
+
 export function parsearUnidadMoodle(texto) {
   const t = String(texto || '').replace(/\s+/g, ' ').trim();
   if (!t) return null;
+  if (/\bevaluaci[oó]n(es)?\b/i.test(t)) return 'Evaluaciones';
 
   // «Unidad 2», «Unidad nro. 2», «Unidad nº 2», «Unidad numero 2»
   const arabigo = t.match(/unidad\s*(?:num(?:ero)?\.?\s*|nro\.?\s*|n[º°o]?\.?\s*)?(\d{1,2})\b/i);
@@ -366,12 +375,29 @@ export function fechasACorregir(guardada, campus) {
   return parche;
 }
 
+/** «Prueba de software» en clase ≠ parcial; los parciales suelen estar en la sección Evaluaciones. */
+export function actividadEsParcialDeCursada(item) {
+  const nombre = String(item?.nombre || '');
+  const n = limpiarTextoParaBusqueda(nombre);
+  if (!nombre) return false;
+  if (/\bprueba(s)?\s+de\s+software\b/.test(n)) return false;
+  if (/\bcalidad\s+de\s+software\b/.test(n) && !/\bparcial\b/.test(n)) return false;
+  if (/\brecuperatorio\b/.test(n)) return true;
+  if (pareceParcialCuatrimestre(nombre)) return true;
+  if (item?.unidad === 'Evaluaciones') {
+    if (/\bparcial(ito|es)?\b/.test(n)) return true;
+    if (/\bevaluaci[oó]n\b/.test(n)) return true;
+    return false;
+  }
+  return false;
+}
+
 export function separarEvaluaciones(detectadas) {
   const tareas = [];
   const parciales = [];
   for (const item of Array.isArray(detectadas) ? detectadas : []) {
     const fecha = fechaDeEvaluacion(item);
-    if (pareceEvaluacion(item?.nombre) && fecha) {
+    if (actividadEsParcialDeCursada(item) && fecha) {
       parciales.push({ ...item, fin: fecha });
     } else {
       tareas.push(item);
@@ -513,9 +539,26 @@ export function pareceParcialCuatrimestre(titulo) {
   const n = limpiarTextoParaBusqueda(titulo);
   if (!n || esExamenFinalDelCronograma(titulo)) return false;
   if (/\b(repaso|cierre)\s+integrador\b/.test(n)) return false;
+  if (/\bprueba(s)?\s+de\s+software\b/.test(n)) return false;
   if (/\bparcial(ito|es)?\b/.test(n)) return true;
+  if (/\brecuperatorio\b/.test(n)) return true;
   if (/\bevaluacion\s+de\s+avance\b/.test(n)) return true;
   if (/\bmedio\s+cursado\b/.test(n)) return true;
+  if (/\bevaluaci[oó]n\s+\d\b/i.test(String(titulo || ''))) return true;
+  if (/\b\d\s*(?:er|do|ro)?\s*evaluaci[oó]n\b/i.test(String(titulo || ''))) return true;
+  return false;
+}
+
+/** Título de clase del plan (módulo, pruebas de software…), no evaluación parcial. */
+export function tituloPareceClaseDePlan(titulo) {
+  const raw = String(titulo || '').trim();
+  const n = limpiarTextoParaBusqueda(raw);
+  if (!n) return false;
+  if (/\bprueba(s)?\s+de\s+software\b/.test(n)) return true;
+  if (/\bcalidad\s+de\s+software\b/.test(n) && !/\bparcial\b/.test(n)) return true;
+  if (/\b(modulo|m[oó]dulo)\s*(i{1,3}|iv|v|vi{0,3}|\d+)\b/i.test(raw)) return true;
+  if (/\bturno\s+(de\s+)?examen\b/.test(n) && !/\bsin\s+clases\b/.test(n)) return true;
+  if (raw.length > 95 && /\b(modulo|m[oó]dulo)\b/i.test(raw)) return true;
   return false;
 }
 

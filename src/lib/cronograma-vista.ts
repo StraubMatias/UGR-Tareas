@@ -33,10 +33,15 @@ function claveTituloCronograma(titulo: string) {
 
 function puntajeEvento(evento: EventoCronograma) {
   let puntaje = 0;
-  if (evento.origen === 'manual') puntaje += 200;
+  if (evento.origen === 'manual') puntaje += 280;
+  if (evento.origen === 'oficial') puntaje += 40;
   if (evento.url) puntaje += 30;
+  const titulo = String(evento.titulo || '');
+  if (titulo.length > 90) puntaje -= 120;
+  if (/\bturno\s+(de\s+)?examen\b/i.test(titulo) && evento.tipo !== 'sin_clases') puntaje -= 80;
   if (!esDetalleSoloHorario(evento.detalles)) puntaje += Math.min(evento.detalles.length, 80);
-  if (!esTituloClaseGenericaDelCampus(evento.titulo)) puntaje += Math.min(evento.titulo.length, 80);
+  if (!esTituloClaseGenericaDelCampus(titulo)) puntaje += Math.min(titulo.length, 80);
+  if (/^m[oó]dulo\s*(i{1,3}|iv|v|\d+)/i.test(titulo.trim())) puntaje += 60;
   return puntaje;
 }
 
@@ -122,16 +127,25 @@ export function presentarCronogramaDelDia(
     candidatos.push(evento);
   }
 
-  const mejorPorClave = new Map<string, EventoCronograma>();
+  const mejorPorMateria = new Map<string, EventoCronograma>();
   for (const evento of candidatos) {
-    const clave = `${evento.materia_id}|${claveTituloCronograma(evento.titulo)}`;
-    const previo = mejorPorClave.get(clave);
-    if (!previo || puntajeEvento(evento) > puntajeEvento(previo)) {
-      mejorPorClave.set(clave, evento);
+    const clave = evento.materia_id;
+    const previo = mejorPorMateria.get(clave);
+    if (!previo) {
+      mejorPorMateria.set(clave, evento);
+      continue;
+    }
+    if (evento.tipo === 'sin_clases') {
+      mejorPorMateria.set(clave, evento);
+      continue;
+    }
+    if (previo.tipo === 'sin_clases') continue;
+    if (puntajeEvento(evento) > puntajeEvento(previo)) {
+      mejorPorMateria.set(clave, evento);
     }
   }
 
-  const visibles = [...mejorPorClave.values()].sort((a, b) => {
+  const visibles = [...mejorPorMateria.values()].sort((a, b) => {
     const ordenTipo = (e: EventoCronograma) => (
       e.tipo === 'sin_clases' ? 0 : (e.tipo === 'examen' || e.tipo === 'examen_final') ? 1 : 2
     );
