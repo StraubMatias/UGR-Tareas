@@ -1,7 +1,7 @@
 // CLI de sincronización con UGR Virtual → Turso.
 // Uso:
 //   npm run ugr:sync              interactivo
-//   npm run ugr:sync -- --yes     sin preguntas (+ cronogramas oficiales)
+//   npm run ugr:sync -- --yes     sin preguntas (sin PDF de cronograma; usar --cronogramas)
 //   npm run ugr:sync -- --dry     solo muestra
 //   npm run ugr:sync -- --cronogramas   solo añade fase PDF/Zoom al final
 //
@@ -23,7 +23,7 @@ function leerFlags() {
   return {
     autoSi,
     soloSeco: process.argv.includes('--dry') || process.argv.includes('-d'),
-    cronogramas: process.argv.includes('--cronogramas') || autoSi
+    cronogramas: process.argv.includes('--cronogramas')
   };
 }
 

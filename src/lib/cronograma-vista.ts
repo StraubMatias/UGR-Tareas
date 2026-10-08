@@ -50,8 +50,8 @@ function claveTituloCronograma(titulo: string) {
 
 function puntajeEvento(evento: EventoCronograma) {
   let puntaje = 0;
-  if (evento.origen === 'oficial') puntaje += 250;
-  if (evento.origen === 'manual') puntaje += 200;
+  if (evento.origen === 'manual') puntaje += 300;
+  if (evento.origen === 'oficial') puntaje += 120;
   if (evento.url) puntaje += 30;
   if (!esDetalleSoloHorario(evento.detalles)) puntaje += Math.min(evento.detalles.length, 80);
   if (!esTituloClaseGenericaDelCampus(evento.titulo)) puntaje += Math.min(evento.titulo.length, 80);
