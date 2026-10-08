@@ -1,6 +1,5 @@
 import { esTituloClaseGenericaDelCampus } from '../ugr-sync/lib/calendario.mjs';
 import { promoverParcialesDesdeCronograma } from '../ugr-sync/lib/sync-core.mjs';
-import { reassertPlanManualComision2026 } from './restaurar-plan-manual-2026.mjs';
 
 function tituloBaseCronograma(titulo) {
   return String(titulo || '')
@@ -16,8 +15,7 @@ function esRecordatorioAperturaCierre(titulo) {
 
 function puntajeFilaCronograma(fila) {
   let puntaje = 0;
-  if (fila.origen === 'manual') puntaje += 300;
-  if (fila.origen === 'oficial') puntaje += 120;
+  if (fila.origen === 'manual') puntaje += 200;
   if (fila.url) puntaje += 30;
   const det = String(fila.detalles || '').trim();
   if (det && !/^horario del campus:/i.test(det)) puntaje += Math.min(det.length, 80);
@@ -30,9 +28,8 @@ function puntajeFilaCronograma(fila) {
  * y promueve parciales desde filas tipo examen del cronograma.
  */
 export async function ejecutarHigieneCronograma(db) {
-  const materias = await db.execute('SELECT id, nombre FROM materias');
+  const materias = await db.execute('SELECT id FROM materias');
   const materiaIds = materias.rows.map((f) => f.id);
-  const plan2026 = await reassertPlanManualComision2026(db, materias.rows);
 
   const todas = await db.execute(
     'SELECT id, materia_id, fecha, titulo, detalles, url, origen, tipo FROM cronograma_eventos'
@@ -48,18 +45,18 @@ export async function ejecutarHigieneCronograma(db) {
     tipo: r.tipo
   }));
 
-  const planEnFecha = new Set();
-  const planPorMateria = new Map();
+  const manualEnFecha = new Set();
+  const manualPorMateria = new Map();
   for (const f of filas) {
-    if (f.origen !== 'manual' && f.origen !== 'oficial') continue;
-    planPorMateria.set(f.materia_id, (planPorMateria.get(f.materia_id) || 0) + 1);
+    if (f.origen !== 'manual') continue;
+    manualPorMateria.set(f.materia_id, (manualPorMateria.get(f.materia_id) || 0) + 1);
     if (f.tipo === 'sin_clases' || f.tipo === 'clase' || f.tipo === 'consulta' || f.tipo === 'examen'
       || f.tipo === 'entrega' || f.tipo === 'exposición') {
-      planEnFecha.add(`${f.materia_id}|${f.fecha}`);
+      manualEnFecha.add(`${f.materia_id}|${f.fecha}`);
     }
   }
-  const materiaConPlanFuerte = new Set(
-    [...planPorMateria.entries()].filter(([, n]) => n >= 8).map(([id]) => id)
+  const materiaConPlanManual = new Set(
+    [...manualPorMateria.entries()].filter(([, n]) => n >= 8).map(([id]) => id)
   );
 
   const idsBorrar = new Set();
@@ -70,11 +67,11 @@ export async function ejecutarHigieneCronograma(db) {
       idsBorrar.add(f.id);
       continue;
     }
-    if (planEnFecha.has(`${f.materia_id}|${f.fecha}`) && esTituloClaseGenericaDelCampus(f.titulo)) {
+    if (manualEnFecha.has(`${f.materia_id}|${f.fecha}`) && esTituloClaseGenericaDelCampus(f.titulo)) {
       idsBorrar.add(f.id);
       continue;
     }
-    if (materiaConPlanFuerte.has(f.materia_id) && esTituloClaseGenericaDelCampus(f.titulo)) {
+    if (materiaConPlanManual.has(f.materia_id) && esTituloClaseGenericaDelCampus(f.titulo)) {
       idsBorrar.add(f.id);
     }
   }
@@ -95,7 +92,7 @@ export async function ejecutarHigieneCronograma(db) {
     for (const f of ordenadas.slice(1)) {
       if (f.id === ganadora.id) continue;
       const ambasGenericas = esTituloClaseGenericaDelCampus(f.titulo) && esTituloClaseGenericaDelCampus(ganadora.titulo);
-      const pierdeUgr = f.origen === 'ugr' && (ganadora.origen === 'manual' || ganadora.origen === 'oficial' || ambasGenericas);
+      const pierdeUgr = f.origen === 'ugr' && (ganadora.origen === 'manual' || ambasGenericas);
       if (pierdeUgr || (f.origen === 'ugr' && ganadora.origen === 'ugr' && ambasGenericas)) {
         idsBorrar.add(f.id);
       }
@@ -114,31 +111,10 @@ export async function ejecutarHigieneCronograma(db) {
     }
   }
 
-  const parcialesBasura = await db.execute(
-    `SELECT id FROM parciales
-     WHERE nombre LIKE '%opcional%'
-        OR nombre LIKE 'Parcial (%'
-        OR (detalles LIKE '%cronograma académico%' AND nombre LIKE 'Parcial%')`
-  );
-  let parcialesEliminados = 0;
-  if (parcialesBasura.rows.length > 0) {
-    const ids = parcialesBasura.rows.map((f) => f.id);
-    for (let i = 0; i < ids.length; i += 80) {
-      const trozo = ids.slice(i, i + 80);
-      await db.execute({
-        sql: `DELETE FROM parciales WHERE id IN (${trozo.map(() => '?').join(',')})`,
-        args: trozo
-      });
-    }
-    parcialesEliminados = ids.length;
-  }
-
   const parciales = await promoverParcialesDesdeCronograma({ db, materiaIds });
 
   return {
     eventosEliminados: idsBorrar.size,
-    parcialesEliminados,
-    parcialesInsertados: parciales.insertadas,
-    planManual2026: plan2026
+    parcialesInsertados: parciales.insertadas
   };
 }

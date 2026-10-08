@@ -1,20 +1,5 @@
 import type { EventoCronograma, Horario, Parcial } from '../core/cursada';
 
-export function esModalidadAsincronica(modalidad: string) {
-  const m = String(modalidad || '')
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .toLowerCase();
-  return m === 'asincronico';
-}
-
-/** Día sin cursada fija: sin clases o actividad asincrónica del plan (no el turno Zoom del campus). */
-export function eventoCancelaCursadaSincronicaDelDia(evento: EventoCronograma) {
-  if (evento.tipo === 'sin_clases' || evento.modalidad === 'sin_clases') return true;
-  if (!esModalidadAsincronica(evento.modalidad)) return false;
-  return evento.tipo === 'clase' || evento.tipo === 'entrega' || evento.tipo === 'exposición' || evento.tipo === 'consulta';
-}
-
 /** Títulos del campus que solo repiten el enlace/turno de Zoom, sin contenido del plan. */
 export function esTituloClaseGenericaDelCampus(titulo: string) {
   const t = String(titulo || '').trim();
@@ -27,8 +12,6 @@ export function esTituloClaseGenericaDelCampus(titulo: string) {
   if (/^clase sincr[oó]nica semanal/i.test(t)) return true;
   if (/^sala virtual\b/i.test(t)) return true;
   if (/^enlace zoom\b/i.test(t)) return true;
-  if (/^encuentro sincr[oó]nico\b/i.test(t)) return true;
-  if (/^link de acceso a encuentros sincr[oó]nicos\b/i.test(t)) return true;
   return false;
 }
 
@@ -50,8 +33,7 @@ function claveTituloCronograma(titulo: string) {
 
 function puntajeEvento(evento: EventoCronograma) {
   let puntaje = 0;
-  if (evento.origen === 'manual') puntaje += 300;
-  if (evento.origen === 'oficial') puntaje += 120;
+  if (evento.origen === 'manual') puntaje += 200;
   if (evento.url) puntaje += 30;
   if (!esDetalleSoloHorario(evento.detalles)) puntaje += Math.min(evento.detalles.length, 80);
   if (!esTituloClaseGenericaDelCampus(evento.titulo)) puntaje += Math.min(evento.titulo.length, 80);
@@ -159,7 +141,7 @@ export function presentarCronogramaDelDia(
 
   const tituloClaseEnCursadaPorMateria = new Map<string, string>();
   const eventosPresentados = visibles.filter((evento) => {
-    if (evento.tipo !== 'clase' || esModalidadAsincronica(evento.modalidad)) return true;
+    if (evento.tipo !== 'clase' || evento.modalidad === 'asincrónico') return true;
     if (!materiasConCursada.has(evento.materia_id)) return true;
     const titulo = tituloDestacadoCronograma(evento);
     if (titulo) tituloClaseEnCursadaPorMateria.set(evento.materia_id, titulo);
@@ -173,16 +155,6 @@ export function tituloDestacadoCronograma(evento: EventoCronograma) {
   if (evento.tipo === 'sin_clases') return evento.titulo || 'Sin clases';
   if (esTituloClaseGenericaDelCampus(evento.titulo)) return evento.titulo;
   return evento.titulo;
-}
-
-export function esEnlaceZoom(url: string) {
-  return /zoom\.us\/j\//i.test(String(url || '')) || /\/mod\/zoom\//i.test(String(url || ''));
-}
-
-export function etiquetaEnlaceClase(url: string) {
-  if (esEnlaceZoom(url)) return 'Entrar a Zoom ↗';
-  if (/virtual\.ugr\.edu\.ar/i.test(String(url || ''))) return 'Abrir en UGR ↗';
-  return 'Abrir enlace ↗';
 }
 
 export function mostrarEtiquetaTipoCronograma(evento: EventoCronograma) {
