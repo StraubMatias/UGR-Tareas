@@ -15,6 +15,7 @@ La presentación para la comisión está en [`UGRTareas.md`](UGRTareas.md). Este
 | Campus | [Sincronización](#sincronización-con-el-campus) · [`ugr-sync/README.md`](ugr-sync/README.md) |
 | Poner en marcha | [Entorno](#entorno) · [Local](#correr-en-local) · [Vercel](#despliegue-vercel-hobby) |
 | Repo público | [Qué queda fuera de Git](#repositorio-público-y-qué-queda-fuera-de-git) |
+| Contexto para IAs / handoff | [`docs/CONTEXTO-IA.md`](docs/CONTEXTO-IA.md) |
 
 ## Stack
 
@@ -76,16 +77,22 @@ src/lib/grupos-tareas.ts  alta/baja de grupo dentro de una transacción
 src/components/           vistas (estado, materias, grupos, plan, …)
 ugr-sync/lib/             parsers y núcleo de sync (ver su README)
 ugr-sync/scripts/         CLI login y sync
-database/migrate.mjs      migraciones 1–29, idempotentes
+database/migrate.mjs      migraciones numeradas, idempotentes (ver último número en el archivo)
 database/planes-cronograma-comision.mjs  planes oficiales (manual) por materia de la comisión
+database/enlaces-clase-comision.json   catálogo Zoom/URL de clase (calendario + sync)
+database/cronograma-higiene.mjs        limpieza de cronograma importado
 database/grupos-schema.mjs
+src/lib/enlaces-clase-comision.ts      resuelve enlace por materia/horario/docente
+src/lib/promocion-materia.ts           reglas de promoción y parcial rendido
+ugr-sync/lib/zoom-enlaces-comision.mjs  aplica catálogo a horarios.url_clase
+ugr-sync/lib/zoom-cursada.mjs          empareja enlace con día/hora de cursada
 tests/                    tests de la app
 ugr-sync/test/            tests del sync, con fixtures HTML de Moodle
 ```
 
 ## Modelo de datos
 
-SQLite en Turso. Las migraciones viven en `database/migrate.mjs` y se registran en `migraciones(numero, nombre, aplicada_en)`. Correr dos veces no reejecuta un número ya insertado. Hoy el último número es **29** (27–28: planes y higiene UGR; 29: `examen_final` en cronograma para mesas/llamados y `parciales` solo desde evaluaciones del cuatrimestre, no finales).
+SQLite en Turso. Las migraciones viven en `database/migrate.mjs` y se registran en `migraciones(numero, nombre, aplicada_en)`. Correr dos veces no reejecuta un número ya insertado. El **último número** está al final de `migrate.mjs`.
 
 Identidad y cursada:
 
@@ -93,7 +100,7 @@ Identidad y cursada:
 - `periodos`: año, cuatrimestre, `activo`.
 - `materias`: del período. Condiciones de promoción en `condiciones`, `nota_minima_regularizar`, `nota_minima_promocionar`, `regla_promocion`.
 - `inscripciones`: PK `(alumno_id, materia_id)`. Es la cursada real. El tablero de un alumno y el estado de un compañero salen de acá, no de “toda la comisión”.
-- `horarios`: semanal. `alumno_id` NULL = horario compartido de la materia. Con `alumno_id` = horario propio, y se borra con la cuenta.
+- `horarios`: semanal. `alumno_id` NULL = horario compartido de la materia. Con `alumno_id` = horario propio, y se borra con la cuenta. `url_clase`: enlace Zoom o Moodle para la cursada (sync + catálogo `enlaces-clase-comision.json`).
 
 Actividades (compartidas, una fila por materia, no por alumno):
 

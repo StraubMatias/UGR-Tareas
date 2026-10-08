@@ -1,0 +1,51 @@
+[
+  {
+    "materia": "SISTEMAS DE GESTIÓN DE SEGURIDAD",
+    "titulo": "Enlace a la clase sincrónica de los Miércoles a las 19 Hs",
+    "urlCampus": "https://virtual.ugr.edu.ar/mod/zoom/view.php?id=280032",
+    "dia": 3,
+    "horaInicio": "19:00"
+  },
+  {
+    "materia": "SISTEMAS DE GESTIÓN DE SEGURIDAD",
+    "titulo": "Encuentro sincrónico de los jueves a las 20:30 Hs",
+    "urlCampus": "https://virtual.ugr.edu.ar/mod/zoom/view.php?id=342068",
+    "dia": 4,
+    "horaInicio": "20:30"
+  },
+  {
+    "materia": "AUDITORÍAS DE SEGURIDAD",
+    "titulo": "Encuentros Auditorías de S.I., martes 18hs.",
+    "urlCampus": "https://virtual.ugr.edu.ar/mod/url/view.php?id=337190",
+    "dia": 2,
+    "horaInicio": "18:00"
+  },
+  {
+    "materia": "EVALUACIÓN Y GESTIÓN DE RIESGOS",
+    "titulo": "Clase Sincrónica Semanal - Viernes 18:00 hs",
+    "urlCampus": "https://virtual.ugr.edu.ar/mod/zoom/view.php?id=240182",
+    "dia": 5,
+    "horaInicio": "18:00"
+  },
+  {
+    "materia": "GESTIÓN DE ACTIVOS",
+    "titulo": "Link de Clase Sincrónica",
+    "urlCampus": "https://virtual.ugr.edu.ar/mod/zoom/view.php?id=306536"
+  },
+  {
+    "materia": "CONCEPTOS DE DESARROLLO",
+    "titulo": "Sala Virtual",
+    "urlCampus": "https://virtual.ugr.edu.ar/mod/zoom/view.php?id=336084"
+  },
+  {
+    "materia": "INTRODUCCIÓN A LA CRIPTOGRAFÍA",
+    "titulo": "Enlace zoom - clases sincronicas",
+    "urlCampus": "https://virtual.ugr.edu.ar/mod/zoom/view.php?id=215547"
+  },
+  {
+    "materia": "CIBERDELITOS",
+    "titulo": "Clases sincrónicas - Prof. Rodríguez",
+    "urlCampus": "https://virtual.ugr.edu.ar/mod/zoom/view.php?id=344433",
+    "profesorClave": "rodriguez"
+  }
+]

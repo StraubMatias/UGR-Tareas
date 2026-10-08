@@ -1,6 +1,6 @@
 import type { EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
 import { ocultarExamenesCronogramaDuplicados, presentarCronogramaDelDia } from './cronograma-vista';
-import { enlaceClaseComisionParaHorario } from './enlaces-clase-comision';
+import { enlaceClaseComisionParaContexto } from './enlaces-clase-comision';
 import { personalizarParcialesDelDia } from './recuperatorios-calendario';
 
 /** Eventos sincrónicos del plan suelen venir con la fecha del PDF; se alinean al día de cursada semanal. */
@@ -119,7 +119,8 @@ export function eventosDelDiaCalendario(
       horarios: [],
       cronograma: [],
       enlacesClasePorMateria: new Map<string, string>(),
-      tituloClaseEnCursadaPorMateria: new Map<string, string>()
+      tituloClaseEnCursadaPorMateria: new Map<string, string>(),
+      detallesClaseEnCursadaPorMateria: new Map<string, string>()
     };
   }
 
@@ -154,11 +155,22 @@ export function eventosDelDiaCalendario(
   }).sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio)) || String(a.materia_id).localeCompare(String(b.materia_id)));
 
   const nombreMateriaPorId = new Map(materiasCalendario.map((m) => [m.id, m.nombre]));
+  const textoPlanClase = (materiaId: string) => {
+    const ev = eventosCronogramaDia.find(
+      (e) => e.materia_id === materiaId && e.tipo === 'clase' && e.modalidad !== 'asincrónico'
+    );
+    if (!ev) return '';
+    return `${ev.titulo || ''} ${ev.detalles || ''}`.trim();
+  };
   const horariosConEnlace = horariosReales.map((horario) => {
     const urlDb = String(horario.url_clase || '').trim();
     if (urlDb) return horario;
     const nombre = nombreMateriaPorId.get(horario.materia_id) || '';
-    const url = enlaceClaseComisionParaHorario(nombre, horario.dia, horario.hora_inicio);
+    const url = enlaceClaseComisionParaContexto(nombre, {
+      dia: horario.dia,
+      horaInicio: horario.hora_inicio,
+      textoPlan: textoPlanClase(horario.materia_id)
+    });
     return url ? { ...horario, url_clase: url } : horario;
   });
 
@@ -192,6 +204,7 @@ export function eventosDelDiaCalendario(
     horarios: horariosConEnlace,
     cronograma,
     enlacesClasePorMateria,
-    tituloClaseEnCursadaPorMateria: presentacion.tituloClaseEnCursadaPorMateria
+    tituloClaseEnCursadaPorMateria: presentacion.tituloClaseEnCursadaPorMateria,
+    detallesClaseEnCursadaPorMateria: presentacion.detallesClaseEnCursadaPorMateria
   };
 }

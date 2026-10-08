@@ -41,13 +41,3 @@ export function etiquetaSyncMateriaCompleta(
     ? `Sincronizando tareas, notas y avisos de tus ${totalMaterias} materia${totalMaterias === 1 ? '' : 's'}…`
     : `Sincronizando materia ${paso}/${totalPasos} (tareas, notas y avisos)…`;
 }
-
-/** @deprecated Usar etiquetaSyncMateriaCompleta */
-export function etiquetaSyncMaterias(indiceLote: number, lotes: string[][], totalMaterias: number): string {
-  return etiquetaSyncMateriaCompleta(indiceLote, lotes, totalMaterias);
-}
-
-/** @deprecated Avisos van en la misma pasada que la materia */
-export function etiquetaSyncAvisos(indiceLote: number, lotes: string[][], totalMaterias: number): string {
-  return etiquetaSyncMateriaCompleta(indiceLote, lotes, totalMaterias);
-}

@@ -51,6 +51,8 @@ export interface CronogramaDiaPresentacion {
   enlaceClasePorMateria: Map<string, string>;
   /** Tema de la clase del plan, mostrado junto al bloque de cursada del mismo día. */
   tituloClaseEnCursadaPorMateria: Map<string, string>;
+  /** Detalle del plan (p. ej. docente) para el modal del día. */
+  detallesClaseEnCursadaPorMateria: Map<string, string>;
 }
 
 /**
@@ -154,15 +156,25 @@ export function presentarCronogramaDelDia(
   });
 
   const tituloClaseEnCursadaPorMateria = new Map<string, string>();
+  const detallesClaseEnCursadaPorMateria = new Map<string, string>();
   const eventosPresentados = visibles.filter((evento) => {
     if (evento.tipo !== 'clase' || evento.modalidad === 'asincrónico') return true;
     if (!materiasConCursada.has(evento.materia_id)) return true;
     const titulo = tituloDestacadoCronograma(evento);
     if (titulo) tituloClaseEnCursadaPorMateria.set(evento.materia_id, titulo);
+    const detalles = String(evento.detalles || '').trim();
+    if (detalles && !esDetalleSoloHorario(detalles)) {
+      detallesClaseEnCursadaPorMateria.set(evento.materia_id, detalles);
+    }
     return false;
   });
 
-  return { eventos: eventosPresentados, enlaceClasePorMateria, tituloClaseEnCursadaPorMateria };
+  return {
+    eventos: eventosPresentados,
+    enlaceClasePorMateria,
+    tituloClaseEnCursadaPorMateria,
+    detallesClaseEnCursadaPorMateria
+  };
 }
 
 export function tituloDestacadoCronograma(evento: EventoCronograma) {

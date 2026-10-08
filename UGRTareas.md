@@ -36,7 +36,7 @@ De un compañero se puede consultar el estado. La nota de otro no se escribe des
 
 ## El mes, en un calendario
 
-Clases, entregas y parciales van al mismo mes. La campana avisa lo que vence, lo que se habilita mañana y los avisos de la cátedra que importan para la cursada.
+Clases, entregas y parciales van al mismo mes. En cada día de cursada ves el horario (de–a) y un **link sincrónico** al Zoom o al aula del campus; al abrir el día aparece el tema de la unidad y el resto del detalle. La campana avisa lo que vence, lo que se habilita mañana y los avisos de la cátedra que importan para la cursada (los parciales ya pasados no quedan como «rendís hoy»).
 
 ![Calendario del cuatrimestre con clases y entregas](docs/capturas/cronograma.jpg)
 
