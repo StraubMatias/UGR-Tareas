@@ -65,6 +65,7 @@ async function main() {
 
   const resultado = await fasePersistir({
     db,
+    cliente,
     detectado,
     avisosDetectados,
     eventosSugeridos,

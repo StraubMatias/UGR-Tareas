@@ -1,5 +1,7 @@
 import type { Materia, Nota, Parcial, Tarea } from '../core/cursada.ts';
 import { obtenerDiasHastaFecha, tareaCompletadaPor } from '../core/cursada.ts';
+
+const ZONA_CAMPUS = 'America/Argentina/Buenos_Aires';
 import { esParcialRecuperatorio } from './recuperatorios-calendario.ts';
 
 export type EstadoPromocion = { texto: string; estilo: string };
@@ -27,9 +29,17 @@ export function parcialesCuatrimestreOrdenados(parciales: Parcial[], materiaId: 
     .sort((a, b) => claveFecha(a.fecha).localeCompare(claveFecha(b.fecha)) || a.nombre.localeCompare(b.nombre, 'es'));
 }
 
-function parcialYaRendido(parcial: Parcial) {
-  const dias = obtenerDiasHastaFecha(parcial.fecha);
-  return dias !== null && dias <= 0;
+function claveHoyCampus(ahoraMs = Date.now()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_CAMPUS }).format(new Date(ahoraMs));
+}
+
+/** Cuenta como rendido si hay nota o si la fecha del parcial ya pasó (no el mismo día sin nota). */
+function parcialYaRendido(parcial: Parcial, alumno: string, notas: Nota[]) {
+  const fila = notas.find((n) => n.parcial_id === parcial.id && n.alumno === alumno);
+  if (fila && notaDe(fila.nota) !== null) return true;
+  const clave = claveFecha(parcial.fecha);
+  if (!clave) return false;
+  return clave < claveHoyCampus();
 }
 
 /** Metodología con parciales y TPs suele quedar como `metodologia` en DB antigua. */
@@ -66,8 +76,8 @@ export function evaluarParcialesCuatrimestre(
   minPromocionar: number
 ): { estado: EstadoPromocion | null; detalle: EvaluacionParcialesCuatrimestre } {
   const cuatrimestre = parcialesCuatrimestreOrdenados(parciales, materiaId);
-  const rendidos = cuatrimestre.filter(parcialYaRendido);
-  const pendientes = cuatrimestre.filter((p) => !parcialYaRendido(p));
+  const rendidos = cuatrimestre.filter((p) => parcialYaRendido(p, alumno, notas));
+  const pendientes = cuatrimestre.filter((p) => !parcialYaRendido(p, alumno, notas));
   const notasRendidos: number[] = [];
   const sinNota: Parcial[] = [];
 
@@ -96,15 +106,70 @@ export function evaluarParcialesCuatrimestre(
     return { estado: { texto: 'Regulariza', estilo: estilos.regulariza }, detalle };
   }
 
-  if (rendidos.length === 0) {
-    return { estado: { texto: 'En curso', estilo: estilos.enCurso }, detalle };
-  }
-
   if (sinNota.length > 0) {
     return { estado: { texto: 'En curso', estilo: estilos.enCurso }, detalle };
   }
 
+  if (rendidos.length === 0) {
+    return { estado: null, detalle };
+  }
+
   return { estado: { texto: 'En curso', estilo: estilos.enCurso }, detalle };
+}
+
+/** Solo cuenta notas ya cargadas; lo pendiente (parciales futuros, TPs sin nota) no bloquea promoción. */
+function estadoDesdeNotasParciales(
+  notas: number[],
+  minRegularizar: number,
+  minPromocionar: number,
+  esperandoNota: boolean
+): EstadoPromocion | null {
+  if (esperandoNota) {
+    return { texto: 'En curso', estilo: estilos.enCurso };
+  }
+  if (notas.length === 0) return null;
+  if (notas.some((n) => n < minRegularizar)) {
+    return { texto: 'Desaprueba', estilo: estilos.desaprueba };
+  }
+  if (notas.every((n) => n >= minPromocionar)) {
+    return { texto: 'Promociona', estilo: estilos.promociona };
+  }
+  if (notas.every((n) => n >= minRegularizar)) {
+    return { texto: 'Regulariza', estilo: estilos.regulariza };
+  }
+  return { texto: 'En curso', estilo: estilos.enCurso };
+}
+
+function promocionProgresivaParcialesYTps(
+  notasParcial: number[],
+  notasTp: number[],
+  esperandoNotaParcial: boolean,
+  minReg: number,
+  minPromo: number,
+  enCurso: EstadoPromocion
+): EstadoPromocion {
+  if (esperandoNotaParcial) return enCurso;
+  if (notasParcial.some((n) => n < minReg) || notasTp.some((n) => n < minReg)) {
+    return { texto: 'Desaprueba', estilo: estilos.desaprueba };
+  }
+  const hayAlgoEvaluado = notasParcial.length > 0 || notasTp.length > 0;
+  if (!hayAlgoEvaluado) return enCurso;
+
+  const cumplePromo =
+    (notasParcial.length === 0 || notasParcial.every((n) => n >= minPromo))
+    && (notasTp.length === 0 || notasTp.every((n) => n >= minPromo));
+  if (cumplePromo) {
+    return { texto: 'Promociona', estilo: estilos.promociona };
+  }
+
+  const cumpleRegular =
+    (notasParcial.length === 0 || notasParcial.every((n) => n >= minReg))
+    && (notasTp.length === 0 || notasTp.every((n) => n >= minReg));
+  if (cumpleRegular) {
+    return { texto: 'Regulariza', estilo: estilos.regulariza };
+  }
+
+  return enCurso;
 }
 
 function notaDeTarea(tarea: Tarea, alumno: string) {
@@ -125,36 +190,87 @@ export function evaluarPromocionParcialesYTps(
 ) {
   const minReg = materia.notaMinimaRegularizar;
   const minPromo = materia.notaMinimaPromocionar;
+  const enCurso = { texto: 'En curso', estilo: estilos.enCurso };
 
-  const parcialesEval = evaluarParcialesCuatrimestre(parciales, materia.id, alumno, notas, minReg, minPromo);
-  if (parcialesEval.estado?.texto === 'Desaprueba') return parcialesEval.estado;
+  const cuatrimestre = parcialesCuatrimestreOrdenados(parciales, materia.id);
+  const notasParcial: number[] = [];
+  let esperandoNotaParcial = false;
+  for (const parcial of cuatrimestre) {
+    if (!parcialYaRendido(parcial, alumno, notas)) continue;
+    const fila = notas.find((n) => n.parcial_id === parcial.id && n.alumno === alumno);
+    const valor = fila ? notaDe(fila.nota) : null;
+    if (valor === null) esperandoNotaParcial = true;
+    else notasParcial.push(valor);
+  }
 
   if (trabajosPracticos.length === 0) {
-    return parcialesEval.estado || { texto: 'Sin TPs cargados', estilo: estilos.neutro };
+    if (cuatrimestre.length === 0) return { texto: 'Sin TPs cargados', estilo: estilos.neutro };
+    const soloParcial = estadoDesdeNotasParciales(notasParcial, minReg, minPromo, esperandoNotaParcial);
+    return soloParcial || enCurso;
   }
 
-  const notasTp = trabajosPracticos.map((t) => notaDeTarea(t, alumno));
-  const conNota = notasTp.filter((n): n is number => n !== null);
-  const faltanNotas = conNota.length < trabajosPracticos.length;
+  const notasTp = trabajosPracticos
+    .map((t) => notaDeTarea(t, alumno))
+    .filter((n): n is number => n !== null);
 
-  if (conNota.some((n) => n < minReg)) {
+  const resultado = promocionProgresivaParcialesYTps(
+    notasParcial,
+    notasTp,
+    esperandoNotaParcial,
+    minReg,
+    minPromo,
+    enCurso
+  );
+  if (resultado.texto !== 'En curso') return resultado;
+
+  if (trabajosPracticos.every(tareaCerrada) && notasTp.length === 0) {
     return { texto: 'Desaprueba', estilo: estilos.desaprueba };
   }
 
-  const parcialesPromocion = parcialesEval.estado?.texto === 'Promociona';
-  const tpsPromocion = conNota.length > 0 && conNota.every((n) => n >= minPromo);
+  return resultado;
+}
 
-  if (parcialesPromocion && tpsPromocion) {
-    return { texto: 'Promociona', estilo: estilos.promociona };
+/** Promoción según TPs (y opcionalmente parciales) ya calificados; TPs/parciales sin nota no restan. */
+export function evaluarPromocionSoloTps(
+  materia: Materia,
+  alumno: string,
+  trabajosPracticos: Tarea[],
+  parciales: Parcial[] = [],
+  notas: Nota[] = []
+) {
+  const minReg = materia.notaMinimaRegularizar;
+  const minPromo = materia.notaMinimaPromocionar;
+  const enCurso = { texto: 'En curso', estilo: estilos.enCurso };
+
+  if (trabajosPracticos.length === 0) return null;
+
+  const notasTp = trabajosPracticos
+    .map((t) => notaDeTarea(t, alumno))
+    .filter((n): n is number => n !== null);
+  const cuatrimestre = parcialesCuatrimestreOrdenados(parciales, materia.id);
+  const notasParcial: number[] = [];
+  let esperandoNotaParcial = false;
+  for (const parcial of cuatrimestre) {
+    if (!parcialYaRendido(parcial, alumno, notas)) continue;
+    const fila = notas.find((n) => n.parcial_id === parcial.id && n.alumno === alumno);
+    const valor = fila ? notaDe(fila.nota) : null;
+    if (valor === null) esperandoNotaParcial = true;
+    else notasParcial.push(valor);
   }
 
-  if (parcialesEval.estado?.texto === 'Regulariza') {
-    return { texto: 'Regulariza', estilo: estilos.regulariza };
+  const resultado = promocionProgresivaParcialesYTps(
+    notasParcial,
+    notasTp,
+    esperandoNotaParcial,
+    minReg,
+    minPromo,
+    enCurso
+  );
+  if (resultado.texto === 'En curso' && notasTp.length === 0 && !esperandoNotaParcial) {
+    if (trabajosPracticos.every(tareaCerrada)) {
+      return { texto: 'Desaprueba', estilo: estilos.desaprueba };
+    }
+    return enCurso;
   }
-
-  if (trabajosPracticos.every(tareaCerrada) && faltanNotas) {
-    return { texto: 'Desaprueba', estilo: estilos.desaprueba };
-  }
-
-  return parcialesEval.estado || { texto: 'En curso', estilo: estilos.enCurso };
+  return resultado;
 }

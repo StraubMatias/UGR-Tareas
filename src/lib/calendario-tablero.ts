@@ -170,13 +170,18 @@ export function eventosDelDiaCalendario(
     tareas.map(({ tarea }) => ({ nombre: tarea.nombre }))
   );
   const { eventos: cronograma, enlaceClasePorMateria } = presentacion;
+  const enlacesClasePorMateria = new Map(enlaceClasePorMateria);
+  for (const horario of horariosReales) {
+    const url = String(horario.url_clase || '').trim();
+    if (url) enlacesClasePorMateria.set(horario.materia_id, url);
+  }
 
   return {
     parciales,
     tareas,
     horarios: horariosReales,
     cronograma,
-    enlacesClasePorMateria: enlaceClasePorMateria,
+    enlacesClasePorMateria,
     tituloClaseEnCursadaPorMateria: presentacion.tituloClaseEnCursadaPorMateria
   };
 }

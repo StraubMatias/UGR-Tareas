@@ -14,7 +14,10 @@ import {
   insertarTareasDetectadas,
   rechazarAvisos
 } from '../../lib/sync-core.mjs';
-import { sincronizarCronogramasOficialesDesdeCampus } from '../../lib/cronograma-oficial.mjs';
+import {
+  sincronizarCronogramasOficialesDesdeCampus,
+  sincronizarEnlacesZoomHorarios
+} from '../../lib/cronograma-oficial.mjs';
 import { ejecutarHigieneCronograma } from '../../../database/cronograma-higiene.mjs';
 
 /** Lee tareas nuevas, avisos y datos auxiliares del campus (sin escribir). */
@@ -89,6 +92,7 @@ export function imprimirResumenDetectado({ detectado, avisosDetectados, eventosS
 /** Escribe calendario/fechas, registra avisos y aplica confirmaciones del operador. */
 export async function fasePersistir({
   db,
+  cliente,
   detectado,
   avisosDetectados,
   eventosSugeridos,
@@ -98,6 +102,15 @@ export async function fasePersistir({
   const complemento = await aplicarComplementoCampus({ db, detectado });
   if (complemento.eventos || complemento.horarios || complemento.fechas) {
     console.log(`📅 Calendario: ${complemento.eventos} evento(s), ${complemento.horarios} horario(s), ${complemento.fechas} fecha(s) alineada(s).`);
+  }
+
+  const mapeos = detectado.mapeos || [];
+  let zoomHorarios = 0;
+  if (cliente && mapeos.length > 0) {
+    zoomHorarios = await sincronizarEnlacesZoomHorarios({ db, cliente, mapeos });
+    if (zoomHorarios > 0) {
+      console.log(`🔗 Zoom: ${zoomHorarios} horario(s) con enlace de clase.`);
+    }
   }
 
   await insertarAvisosDetectados({ db, avisos: avisosDetectados });

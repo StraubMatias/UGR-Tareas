@@ -4,7 +4,8 @@ import {
   pareceParcialCuatrimestre,
   tituloPareceClaseDePlan
 } from '../ugr-sync/lib/normalizar.mjs';
-import { repararCronogramaComision2026 } from './planes-cronograma-comision.mjs';
+import { repararCronogramaComision2026, PLANES_CRONOGRAMA_COMISION, buscarMateriaPorFragmento } from './planes-cronograma-comision.mjs';
+import { textoPareceColumnasFusionadas } from '../ugr-sync/lib/cronograma-oficial.mjs';
 
 function tituloBaseCronograma(titulo) {
   return String(titulo || '')
@@ -53,6 +54,43 @@ async function corregirEventosExamenMalClasificados(db) {
   return corregidos;
 }
 
+async function limpiarParcialesMalImportados(db, materias) {
+  const ids = [];
+  for (const plan of PLANES_CRONOGRAMA_COMISION) {
+    const materia = buscarMateriaPorFragmento(materias, plan.materia);
+    if (!materia) continue;
+    const fechasExamen = new Set(
+      plan.filas.filter(([, , tipo]) => tipo === 'examen').map(([fecha]) => fecha)
+    );
+    const parciales = await db.execute({
+      sql: 'SELECT id, nombre, fecha, detalles FROM parciales WHERE materia_id = ?',
+      args: [materia.id]
+    });
+    for (const fila of parciales.rows) {
+      const fecha = String(fila.fecha || '').slice(0, 10);
+      const blob = `${fila.nombre || ''} ${fila.detalles || ''}`;
+      const basura = textoPareceColumnasFusionadas(blob) || /^parcial$/i.test(String(fila.nombre || '').trim());
+      const fueraDelPlan = fechasExamen.size > 0
+        && !fechasExamen.has(fecha)
+        && pareceParcialCuatrimestre(String(fila.nombre || ''));
+      if (basura || fueraDelPlan) ids.push(fila.id);
+    }
+  }
+  if (ids.length === 0) return 0;
+  for (let i = 0; i < ids.length; i += 80) {
+    const trozo = ids.slice(i, i + 80);
+    await db.execute({
+      sql: `DELETE FROM notas_parciales WHERE parcial_id IN (${trozo.map(() => '?').join(',')})`,
+      args: trozo
+    });
+    await db.execute({
+      sql: `DELETE FROM parciales WHERE id IN (${trozo.map(() => '?').join(',')})`,
+      args: trozo
+    });
+  }
+  return ids.length;
+}
+
 async function limpiarParcialesFantasma(db) {
   const filas = await db.execute('SELECT id, nombre FROM parciales');
   const ids = [];
@@ -82,6 +120,7 @@ export async function ejecutarHigieneCronograma(db) {
   await repararCronogramaComision2026(db, materias.rows);
   const tiposCorregidos = await corregirEventosExamenMalClasificados(db);
   const parcialesFantasma = await limpiarParcialesFantasma(db);
+  const parcialesMalImportados = await limpiarParcialesMalImportados(db, materias.rows);
 
   const todas = await db.execute(
     'SELECT id, materia_id, fecha, titulo, detalles, url, origen, tipo FROM cronograma_eventos'
@@ -124,6 +163,12 @@ export async function ejecutarHigieneCronograma(db) {
       continue;
     }
     if (materiaConPlanManual.has(f.materia_id) && esTituloClaseGenericaDelCampus(f.titulo)) {
+      idsBorrar.add(f.id);
+    }
+    if (f.origen === 'oficial' && materiaConPlanManual.has(f.materia_id) && manualEnFecha.has(`${f.materia_id}|${f.fecha}`)) {
+      idsBorrar.add(f.id);
+    }
+    if (textoPareceColumnasFusionadas(`${f.titulo} ${f.detalles}`)) {
       idsBorrar.add(f.id);
     }
   }
@@ -187,6 +232,7 @@ export async function ejecutarHigieneCronograma(db) {
     eventosEliminados: idsBorrar.size,
     parcialesInsertados: parciales.insertadas,
     tiposCorregidos,
-    parcialesFantasma
+    parcialesFantasma,
+    parcialesMalImportados
   };
 }

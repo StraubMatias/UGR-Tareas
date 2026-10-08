@@ -64,6 +64,7 @@ export {
 };
 
 import { ajustarClasesAlHorario, clasificarEventosCalendario, extraerEventosCalendario, timestampsDeMesesDelPeriodo } from './calendario.mjs';
+import { textoPareceColumnasFusionadas } from './cronograma-oficial.mjs';
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { cabeceraCookies } from './autenticar.mjs';
 import { extraerEnlacesDeCursada, interpretarCondiciones, textoDeArchivoCampus, urlArchivoDeRecurso } from './metodologia.mjs';
@@ -1024,12 +1025,15 @@ export async function insertarTareasDetectadas({ db, detectadas }) {
 function esEventoCronogramaParcial(evento) {
   const tipo = String(evento?.tipo || '').toLowerCase();
   const titulo = String(evento?.titulo || '').trim();
+  const detalles = String(evento?.detalles || '').trim();
   if (!titulo || tipo === 'sin_clases' || tipo === 'examen_final') return false;
   if (tipo === 'clase' || tipo === 'consulta' || tipo === 'entrega' || tipo === 'exposición') return false;
   if (esExamenFinalDelCronograma(titulo)) return false;
   if (/parcial\s*\(\s*opcional/i.test(titulo)) return false;
   if (tituloPareceClaseDePlan(titulo)) return false;
   if (tipo !== 'examen') return false;
+  if (/^parcial$/i.test(titulo)) return false;
+  if (textoPareceColumnasFusionadas(`${titulo} ${detalles}`)) return false;
   return pareceParcialCuatrimestre(titulo);
 }
 

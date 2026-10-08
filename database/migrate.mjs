@@ -726,6 +726,17 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     );
   });
 
+  await ejecutarMigracion(36, 'cronograma: columnas PDF fusionadas y parciales fuera de plan', async () => {
+    const { repararCronogramaComision2026 } = await import('./planes-cronograma-comision.mjs');
+    const { ejecutarHigieneCronograma } = await import('./cronograma-higiene.mjs');
+    const materias = await db.execute('SELECT id, nombre FROM materias');
+    await repararCronogramaComision2026(db, materias.rows);
+    const higiene = await ejecutarHigieneCronograma(db);
+    console.log(
+      `   Cronograma: ${higiene.eventosEliminados} evento(s) basura; ${higiene.parcialesMalImportados ?? 0} parcial(es) mal importados eliminados.`
+    );
+  });
+
   await db.close?.();
 }
 

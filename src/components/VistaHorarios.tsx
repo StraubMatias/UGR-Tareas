@@ -163,10 +163,25 @@ export default function VistaHorarios({
                         const materia = materias.find((item) => item.id === horario.materia_id);
                         const tema = eventos.tituloClaseEnCursadaPorMateria?.get(horario.materia_id);
                         const titulo = tema || materia?.nombre || 'Materia';
+                        const enlaceClase =
+                          eventos.enlacesClasePorMateria?.get(horario.materia_id)
+                          || horario.url_clase?.trim()
+                          || '';
                         return (
                           <div key={`${claveDia}-${horario.id}`} className="calendar-event calendar-class" title={`${titulo} · ${horario.hora_inicio} - ${horario.hora_fin}`}>
                             <span className="font-bold">{horario.hora_inicio}</span>
                             <span className="block truncate">{titulo}</span>
+                            {enlaceClase && (
+                              <a
+                                href={enlaceClase}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block truncate text-[10px] font-semibold text-blue-300 hover:underline mt-0.5"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                Zoom
+                              </a>
+                            )}
                           </div>
                         );
                       })}

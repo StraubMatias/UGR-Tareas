@@ -36,23 +36,49 @@ function inferirAnioReferencia(texto) {
   return actual;
 }
 
-/** @param {string} texto */
-export function parsearTextoCronogramaOficial(texto) {
-  const normalizado = String(texto || '')
-    .replace(/\r/g, '')
-    .replace(/\f/g, '\n');
-  const anioRef = inferirAnioReferencia(normalizado);
-  const fechasCompletas = [...normalizado.matchAll(/\b(\d{2})\/(\d{2})\/(\d{4})\b/g)];
-  const fechasCortas = [...normalizado.matchAll(/\b(\d{1,2})\/(\d{2})(?!\/\d)/g)];
-  const fechas = fechasCompletas.length > 0
-    ? fechasCompletas
-    : fechasCortas.map((m) => {
+const RE_FECHA_COMPLETA = /\b(\d{1,2})\/(0[1-9]|1[0-2])\/(\d{4})\b/g;
+const RE_FECHA_CORTA = /\b(\d{1,2})\/(0[1-9]|1[0-2])\b(?!\s*\/\s*\d)/g;
+
+function diaMesValido(d, m) {
+  const dia = Number(d);
+  const mes = Number(m);
+  if (!Number.isFinite(dia) || !Number.isFinite(mes) || mes < 1 || mes > 12) return false;
+  if (dia < 1 || dia > 31) return false;
+  return true;
+}
+
+/** Texto de PDF con varias columnas pegadas en una celda (varias unidades / semanas). */
+export function textoPareceColumnasFusionadas(texto) {
+  const t = String(texto || '').trim();
+  if (!t) return false;
+  const unidades = [...t.matchAll(/\b(unidad|m[oó]dulo|modulo)\s*([ivx\d]+)\b/gi)];
+  if (unidades.length >= 2) return true;
+  if (t.length > 240) return true;
+  if (/\b\d{1,2}\s+(UNIDAD|MÓDULO|MODULO)\b.*\b\d{1,2}\s+(UNIDAD|MÓDULO|MODULO)\b/i.test(t)) return true;
+  return false;
+}
+
+function listarFechasCronogramaEnTexto(normalizado, anioRef) {
+  const fechasCompletas = [...normalizado.matchAll(RE_FECHA_COMPLETA)].filter((m) => diaMesValido(m[1], m[2]));
+  if (fechasCompletas.length > 0) return fechasCompletas;
+  return [...normalizado.matchAll(RE_FECHA_CORTA)]
+    .filter((m) => diaMesValido(m[1], m[2]))
+    .map((m) => {
       const d = String(m[1]).padStart(2, '0');
       const mes = m[2];
       const y = String(anioRef);
       const textoFecha = m[0];
       return Object.assign([textoFecha, d, mes, y], { index: m.index });
     });
+}
+
+/** @param {string} texto */
+export function parsearTextoCronogramaOficial(texto) {
+  const normalizado = String(texto || '')
+    .replace(/\r/g, '')
+    .replace(/\f/g, '\n');
+  const anioRef = inferirAnioReferencia(normalizado);
+  const fechas = listarFechasCronogramaEnTexto(normalizado, anioRef);
   const filas = [];
 
   for (let i = 0; i < fechas.length; i += 1) {
@@ -76,7 +102,15 @@ export function parsearTextoCronogramaOficial(texto) {
       modalidad = 'sin_clases';
     } else if (/2\s*do\s+llamado|1\s*er\s+llamado|llamado\s+turno/i.test(norm)) {
       tipo = 'examen_final';
-    } else if (/\bparcial\b/.test(norm) && !/opcional/.test(norm) && !/unidades?\s+\d/.test(norm) && !/prueba(s)?\s+de\s+software/i.test(norm)) {
+    } else if (
+      /\bparcial\b/.test(norm)
+      && !/opcional/.test(norm)
+      && !/unidades?\s+\d/.test(norm)
+      && !/prueba(s)?\s+de\s+software/i.test(norm)
+      && !textoPareceColumnasFusionadas(fragmento)
+      && !/\bunidad\s+[ivx\d]/i.test(norm)
+      && /\b(1|2|primer|segund|er|do)\b.*\b(parcial|examen)\b|\bexamen\s+parcial\b/i.test(fragmento)
+    ) {
       tipo = 'examen';
     } else if (/\bconsulta\b/.test(norm)) {
       tipo = 'consulta';
@@ -111,6 +145,12 @@ export function parsearTextoCronogramaOficial(texto) {
 
   const vistos = new Set();
   return filas.filter((fila) => {
+    const blob = `${fila.titulo} ${fila.detalles}`;
+    if (textoPareceColumnasFusionadas(blob) && fila.tipo !== 'clase') return false;
+    if (textoPareceColumnasFusionadas(blob) && fila.tipo === 'clase' && !/\b(unidad|m[oó]dulo|modulo)\s*[ivx\d]/i.test(fila.titulo)) {
+      return false;
+    }
+    if (fila.tipo === 'examen' && /^parcial$/i.test(String(fila.titulo || '').trim())) return false;
     const clave = `${fila.fecha}|${fila.titulo}`;
     if (vistos.has(clave)) return false;
     vistos.add(clave);
@@ -118,26 +158,53 @@ export function parsearTextoCronogramaOficial(texto) {
   });
 }
 
-/** Solo las primeras líneas tras la fecha (evita arrastrar semanas posteriores del PDF). */
+function recortarCeldaHorizontal(celda) {
+  let t = String(celda || '').trim();
+  if (!t) return '';
+  const otraFecha = t.search(/\b\d{1,2}\/(0[1-9]|1[0-2])(?:\/\d{4})?\b/);
+  if (otraFecha > 8) t = t.slice(0, otraFecha).trim();
+  const trozosUnidad = t.split(/\s+\d{1,2}\s+(?=(?:UNIDAD|MÓDULO|MODULO)\s)/i);
+  if (trozosUnidad.length > 1) {
+    const ultimo = trozosUnidad[trozosUnidad.length - 1].trim();
+    if (ultimo.length > 8) {
+      t = /^(UNIDAD|MÓDULO|MODULO)\b/i.test(ultimo) ? ultimo : `UNIDAD ${ultimo}`;
+    }
+  }
+  if (/\bexamen\b/i.test(t)) {
+    t = t.replace(/\s+\d{1,2}\s+(?:1|2)?\s*(?:er|do|ro)?\.?\s*examen\s*$/i, '').trim();
+  }
+  if (textoPareceColumnasFusionadas(t)) {
+    const primeraUnidad = t.match(/^(.{0,200}?\b(?:UNIDAD|MÓDULO|MODULO)\s*[IVX\d]+[^0-9]{0,120})/i);
+    if (primeraUnidad) t = limpiarTexto(primeraUnidad[1]);
+  }
+  return t.length > 220 ? `${t.slice(0, 217)}…` : t;
+}
+
+/** Solo el contenido de la celda de esa fecha (evita arrastrar columnas del PDF). */
 function fragmentoInmediatoTrasFecha(post) {
-  const lineas = String(post || '').split('\n');
+  const texto = String(post || '');
+  const match = texto.match(/\b(\d{1,2})\/(0[1-9]|1[0-2])(?:\/(\d{4}))?\b/);
+  if (!match || match.index === undefined) return '';
+  const despues = texto.slice(match.index + match[0].length).replace(/^\s+/, '');
+  const primeraLinea = despues.split('\n')[0] || '';
+  let celda = recortarCeldaHorizontal(primeraLinea);
+  if (celda.length >= 12) return celda;
+
+  const lineas = despues.split('\n');
   const acumulado = [];
-  let pasoFecha = false;
   for (const linea of lineas) {
     const t = linea.trim();
-    if (!pasoFecha) {
-      if (/\b\d{1,2}\/\d{2}(?:\/\d{4})?\b/.test(t)) pasoFecha = true;
-      continue;
-    }
     if (!t) {
       if (acumulado.length > 0) break;
       continue;
     }
-    if (/\b\d{1,2}\/\d{2}(?:\/\d{4})?\b/.test(t)) break;
+    if (/\b\d{1,2}\/(0[1-9]|1[0-2])(?:\/\d{4})?\b/.test(t)) break;
     acumulado.push(t);
-    if (acumulado.join(' ').length > 360 || acumulado.length >= 5) break;
+    const unido = acumulado.join(' ');
+    if (unido.length > 200 || acumulado.length >= 3) break;
   }
-  return acumulado.join('\n');
+  celda = recortarCeldaHorizontal(acumulado.join(' '));
+  return celda;
 }
 
 function lineasUtilesTrasFecha(bloque) {
@@ -159,6 +226,13 @@ function extraerTituloBloque(bloque, tipo) {
   if (tipo === 'examen' && /\bparcial\b/i.test(bloque)) {
     const m = bloque.match(/parcial[^.\n]{0,100}/i);
     if (m) return limpiarTexto(m[0].replace(/^[^Pp]*/, ''));
+  }
+
+  const unidades = [...bloque.matchAll(/\b(Unidad|Módulo|Modulo)\s*([IVX\d]+)\s*[:.\-–]?\s*([^\n.]{4,90})/gi)];
+  const unidad = unidades[unidades.length - 1];
+  if (unidad) {
+    const tituloUnidad = limpiarTexto(`${unidad[1]} ${unidad[2]}: ${unidad[3]}`);
+    if (tituloUnidad.length <= 120) return tituloUnidad;
   }
 
   const lineas = lineasUtilesTrasFecha(bloque);
@@ -188,14 +262,15 @@ function extraerTituloBloque(bloque, tipo) {
 }
 
 function extraerDetallesBloque(bloque, titulo) {
+  if (textoPareceColumnasFusionadas(bloque) || textoPareceColumnasFusionadas(titulo)) return '';
   const resto = limpiarTexto(
     bloque
       .replace(/\d{2}\/\d{2}\/\d{4}/g, '')
       .replace(titulo, '')
       .replace(/\b(lunes|martes|mi[eé]rcoles|jueves|viernes)\b/gi, '')
   );
-  if (!resto || resto.length < 20) return '';
-  return resto.length > 500 ? `${resto.slice(0, 497)}…` : resto;
+  if (!resto || resto.length < 20 || textoPareceColumnasFusionadas(resto)) return '';
+  return resto.length > 180 ? `${resto.slice(0, 177)}…` : resto;
 }
 
 /** @param {string} html */
@@ -331,12 +406,13 @@ export async function actualizarEnlacesZoomEnHorarios(db, materiaId, enlacesZoom
   let actualizados = 0;
   for (const fila of horarios.rows) {
     const dia = Number(fila.dia);
+    const urlComun = enlacesZoom.find((e) => e.urlJoin)?.urlJoin || '';
     let url =
       enlacesZoom.find((e) => e.dia === dia && e.urlJoin)?.urlJoin
       || (enlacesZoom.length === 1 ? enlacesZoom[0].urlJoin : '');
     if (!url) {
       const generico = enlacesZoom.find((e) => !e.dia && e.urlJoin);
-      url = generico?.urlJoin || '';
+      url = generico?.urlJoin || urlComun;
     }
     if (!url) continue;
     await db.execute({
@@ -404,6 +480,23 @@ export async function aplicarCronogramaOficialEnDb(db, materiaId, filas, { reemp
 /**
  * @param {{ db: import('@libsql/client').Client, cliente: object, mapeos: Array<object> }} opts
  */
+/** Completa `horarios.url_clase` con el join de Zoom del curso (mismo enlace todos los días). */
+export async function sincronizarEnlacesZoomHorarios({ db, cliente, mapeos }) {
+  let horariosActualizados = 0;
+  for (const mapeo of mapeos || []) {
+    const curso = mapeo?.curso;
+    const materiaId = mapeo?.coincidencia?.materia?.id;
+    if (!curso?.id || !materiaId) continue;
+    try {
+      const enlacesZoom = await extraerEnlacesZoomDelCurso(cliente, curso.id);
+      horariosActualizados += await actualizarEnlacesZoomEnHorarios(db, materiaId, enlacesZoom);
+    } catch {
+      // Un curso sin módulo Zoom no frena el resto.
+    }
+  }
+  return horariosActualizados;
+}
+
 export async function sincronizarCronogramasOficialesDesdeCampus({ db, cliente, mapeos }) {
   const resumen = [];
   for (const mapeo of mapeos || []) {
