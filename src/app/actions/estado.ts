@@ -307,14 +307,17 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       verTodaLaCursada
     );
     const nombresVisibles = new Set(registradosVisibles.map((nombre) => nombre.toLowerCase()));
-    const inscripcionesVisibles = verTodaLaCursada
-      ? inscripciones
-      : inscripciones.filter(
-        (fila) => nombresVisibles.has(fila.alumno.toLowerCase()) && materiasPropias.has(fila.materiaId)
-      );
     const companerosMateria = new Set(
       alumnosConAlgunaMateriaEnComun(inscripciones, usuarioSesion).map((nombre) => nombre.toLowerCase())
     );
+    const inscripcionesVisibles = verTodaLaCursada
+      ? inscripciones
+      : inscripciones.filter((fila) => {
+        if (!materiasPropias.has(fila.materiaId)) return false;
+        const nombre = fila.alumno.toLowerCase();
+        if (nombre === usuarioSesion.toLowerCase()) return true;
+        return companerosMateria.has(nombre);
+      });
     const parcialPorId = new Map(
       resParciales.rows.map((fila) => [texto(fila.id), texto(fila.materia_id)])
     );

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { obtenerIconoMateria, type Materia } from '../core/cursada';
-import { materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
+import { alumnosDeLaMateria, materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
 import type { BadgeEstadoMateria } from '../lib/estado-materia-ui';
 import type { LineaDesgloseActivos } from '../lib/promocion-materia';
 import { reglaPromocionEfectiva } from '../lib/promocion-materia';
@@ -12,13 +12,15 @@ const etiquetaLineaActivos: Record<LineaDesgloseActivos['estado'], string> = {
   no_cuenta: 'Todavía no cuenta'
 };
 
-function DesgloseActivos({ lineas }: { lineas: LineaDesgloseActivos[] }) {
+function DesgloseActivos({ lineas, compacto = false }: { lineas: LineaDesgloseActivos[]; compacto?: boolean }) {
   const cuentan = lineas.filter((l) => l.estado !== 'no_cuenta');
   const fuera = lineas.filter((l) => l.estado === 'no_cuenta');
   if (cuentan.length === 0) return null;
   return (
-    <div className="mt-4 rounded-xl border border-slate-800 bg-[#0f141c] p-3 sm:p-4">
-      <p className="text-xs font-semibold text-slate-300 mb-2">Actividades que cuentan hoy para el %</p>
+    <div className={`${compacto ? 'mt-2' : 'mt-4'} rounded-xl border border-slate-800 bg-[#0f141c] p-3 sm:p-4`}>
+      {!compacto && (
+        <p className="text-xs font-semibold text-slate-300 mb-2">Actividades que cuentan hoy para el %</p>
+      )}
       <ul className="space-y-1.5 text-xs text-slate-400 max-h-64 overflow-y-auto">
         {cuentan.map((linea) => (
           <li key={`${linea.tipo}-${linea.nombre}`} className="flex justify-between gap-2">
@@ -84,7 +86,6 @@ function TarjetaMateria({
   inscripciones,
   esAdmin,
   usuarioActual,
-  alumnosOrdenadosPromocion,
   obtenerEstadoMateria,
   setMateriaCondicionesEnEdicion
 }: {
@@ -92,12 +93,14 @@ function TarjetaMateria({
   inscripciones: InscripcionAlumno[];
   esAdmin: boolean;
   usuarioActual: string | null;
-  alumnosOrdenadosPromocion: string[];
   obtenerEstadoMateria: (materia: Materia, alumno: string) => BadgeEstadoMateria | null;
   setMateriaCondicionesEnEdicion: (condiciones: CondicionesEdicion) => void;
 }) {
   const [expandida, setExpandida] = useState(false);
-  const cursan = alumnosOrdenadosPromocion.filter((alumno) => materiasQueCursa(inscripciones, alumno).has(materia.id));
+  const cursanMateria = alumnosDeLaMateria(inscripciones, materia.id);
+  const cursan = usuarioActual && cursanMateria.includes(usuarioActual)
+    ? [usuarioActual, ...cursanMateria.filter((alumno) => alumno !== usuarioActual)]
+    : cursanMateria;
   const yoCursa = usuarioActual ? materiasQueCursa(inscripciones, usuarioActual).has(materia.id) : false;
   const miEstado = yoCursa && usuarioActual ? obtenerEstadoMateria(materia, usuarioActual) : null;
   const reglaVista = reglaPromocionEfectiva(materia);
@@ -175,19 +178,34 @@ function TarjetaMateria({
           {yoCursa && reglaVista === 'activos_porcentaje' && miEstado?.desgloseActivos?.length ? (
             <DesgloseActivos lineas={miEstado.desgloseActivos} />
           ) : null}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-5">
+          <p className="text-xs text-slate-500 mt-5 mb-2">
+            {cursan.length} alumno{cursan.length === 1 ? '' : 's'} inscripto{cursan.length === 1 ? '' : 's'} en esta materia
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {cursan.map((alumno) => {
               const estado = obtenerEstadoMateria(materia, alumno);
+              const esYo = yoCursa && alumno === usuarioActual;
               return (
-                <div key={alumno} className={`flex items-center justify-between gap-3 bg-[#0f141c] border rounded-xl p-3 ${
-                  yoCursa && alumno === usuarioActual ? 'border-emerald-500/60 ring-1 ring-emerald-500/30' : 'border-slate-800'
-                }`}>
-                  <span className="text-sm font-semibold text-slate-200 truncate">{alumno}</span>
-                  {estado ? (
-                    <BadgePromocion estado={estado} />
-                  ) : (
-                    <span className="text-xs text-slate-500">Sin regla</span>
-                  )}
+                <div
+                  key={alumno}
+                  className={`bg-[#0f141c] border rounded-xl p-3 ${
+                    esYo ? 'border-emerald-500/60 ring-1 ring-emerald-500/30' : 'border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-sm font-semibold text-slate-200 truncate">{alumno}</span>
+                    {estado ? (
+                      <BadgePromocion estado={estado} />
+                    ) : (
+                      <span className="text-xs text-slate-500 shrink-0">Sin regla</span>
+                    )}
+                  </div>
+                  {reglaVista === 'activos_porcentaje' && estado?.desgloseActivos?.length ? (
+                    <details className="mt-2 text-[10px] text-slate-500">
+                      <summary className="cursor-pointer hover:text-slate-400">Detalle actividades</summary>
+                      <DesgloseActivos lineas={estado.desgloseActivos} compacto />
+                    </details>
+                  ) : null}
                 </div>
               );
             })}
