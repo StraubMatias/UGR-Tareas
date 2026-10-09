@@ -93,30 +93,61 @@ function plazoVencido(desde: number, dias: number, ahora: number): boolean {
   return ahora - desde >= dias * MS_POR_DIA;
 }
 
+/** Desde cuándo corre el plazo de 7 días (no se mira inactividad anterior). Override: `POLITICA_CUENTAS_DESDE`. */
+export const POLITICA_CUENTAS_VIGENTE_DESDE = '2026-10-09T18:00:00.000Z';
+
+export function instantePoliticaCuentas(): number {
+  const desdeEntorno =
+    typeof process !== 'undefined' ? String(process.env.POLITICA_CUENTAS_DESDE || '').trim() : '';
+  const parseado = instanteActividad(desdeEntorno || POLITICA_CUENTAS_VIGENTE_DESDE);
+  return Number.isFinite(parseado) ? parseado : Date.parse(POLITICA_CUENTAS_VIGENTE_DESDE);
+}
+
+function referenciaTrasPolitica(
+  valor: string | null | undefined,
+  creadoEn: string | null | undefined,
+  politicaDesde: number
+): number {
+  const candidatos = [instanteActividad(valor), instanteActividad(creadoEn)].filter(Number.isFinite);
+  const ultima = candidatos.length ? Math.max(...candidatos) : politicaDesde;
+  return Math.max(ultima, politicaDesde);
+}
+
 /** Sin entrar al tablero en 7 días (desde último acceso o desde el alta). */
-export function cuentaSinLoginReciente(cuenta: CuentaAlumnoLimpieza, ahora = Date.now()): boolean {
-  const acceso = instanteActividad(cuenta.ultimoAcceso);
-  const referencia = Number.isFinite(acceso)
-    ? acceso
-    : instanteActividad(cuenta.creadoEn);
-  if (!Number.isFinite(referencia)) return true;
+export function cuentaSinLoginReciente(
+  cuenta: CuentaAlumnoLimpieza,
+  ahora = Date.now(),
+  politicaDesde?: number
+): boolean {
+  const politica = Number.isFinite(politicaDesde) ? politicaDesde! : instantePoliticaCuentas();
+  if (ahora < politica) return false;
+  const referencia = referenciaTrasPolitica(cuenta.ultimoAcceso, cuenta.creadoEn, politica);
   return plazoVencido(referencia, DIAS_SIN_LOGIN, ahora);
 }
 
 /** Sin sync UGR en 7 días (desde última sync o desde el alta si nunca sincronizó). */
-export function cuentaSinSyncReciente(cuenta: CuentaAlumnoLimpieza, ahora = Date.now()): boolean {
-  const sync = instanteActividad(cuenta.sincronizadoEn);
-  const referencia = Number.isFinite(sync)
-    ? sync
-    : instanteActividad(cuenta.creadoEn);
-  if (!Number.isFinite(referencia)) return true;
+export function cuentaSinSyncReciente(
+  cuenta: CuentaAlumnoLimpieza,
+  ahora = Date.now(),
+  politicaDesde?: number
+): boolean {
+  const politica = Number.isFinite(politicaDesde) ? politicaDesde! : instantePoliticaCuentas();
+  if (ahora < politica) return false;
+  const referencia = referenciaTrasPolitica(cuenta.sincronizadoEn, cuenta.creadoEn, politica);
   return plazoVencido(referencia, DIAS_SIN_SYNC_UGR, ahora);
 }
 
-/** Toda cuenta de alumno (propio o comisión), excepto admin. */
-export function cuentaAlumnoDebeBorrarse(cuenta: CuentaAlumnoLimpieza, ahora = Date.now()): boolean {
+/** Solo cuentas `propio` (alta pública), excepto admin. Comisión no se borra automáticamente. */
+export function cuentaAlumnoDebeBorrarse(
+  cuenta: CuentaAlumnoLimpieza,
+  ahora = Date.now(),
+  politicaDesde?: number
+): boolean {
   if (String(cuenta.rol || 'alumno') === 'admin') return false;
-  return cuentaSinLoginReciente(cuenta, ahora) || cuentaSinSyncReciente(cuenta, ahora);
+  if (String(cuenta.origen || 'comision') !== 'propio') return false;
+  const politica = Number.isFinite(politicaDesde) ? politicaDesde! : instantePoliticaCuentas();
+  if (ahora < politica) return false;
+  return cuentaSinLoginReciente(cuenta, ahora, politica) || cuentaSinSyncReciente(cuenta, ahora, politica);
 }
 
 /** @deprecated usar cuentaAlumnoDebeBorrarse */

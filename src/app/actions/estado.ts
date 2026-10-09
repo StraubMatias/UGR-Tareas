@@ -2,7 +2,7 @@
 
 import { db } from '../turso';
 import { actualizarProgresoTarea, ErrorGrupo } from '../../lib/grupos-tareas';
-import { alumnosConAlgunaMateriaEnComun, alumnosConLaMismaCursada, alumnosEnEstado } from '../../lib/companeros';
+import { alumnosConAlgunaMateriaEnComun, alumnosEnEstado } from '../../lib/companeros';
 import type { RespuestaAction } from './types';
 import {
   texto,
@@ -281,11 +281,6 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       alumno: texto(fila.alumno),
       materiaId: texto(fila.materia_id)
     }));
-    const companeros = alumnosConLaMismaCursada(
-      inscripciones,
-      usuarioSesion,
-      materiasArmadas.map((materia) => materia.id)
-    );
     const materiasPropias = new Set(
       inscripciones
         .filter((fila) => fila.alumno.toLowerCase() === usuarioSesion.toLowerCase())
@@ -297,27 +292,24 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
     const materiaDeLaCursada = (materiaId: string) => materiasPropias.has(materiaId);
     const materiasVisibles = materiasArmadas.filter((materia) => materiaVisible(materia.id));
     const todosLosAlumnos = resAlumnos.rows.map((fila) => texto(fila.nombre));
-    const alumnosVisibles = verTodaLaCursada
-      ? todosLosAlumnos
-      : companeros;
     const registradosVisibles = alumnosEnEstado(
       inscripciones,
       usuarioSesion,
       todosLosAlumnos,
       verTodaLaCursada
     );
-    const nombresVisibles = new Set(registradosVisibles.map((nombre) => nombre.toLowerCase()));
     const companerosMateria = new Set(
       alumnosConAlgunaMateriaEnComun(inscripciones, usuarioSesion).map((nombre) => nombre.toLowerCase())
     );
+    const alumnosVisibles = verTodaLaCursada
+      ? todosLosAlumnos
+      : alumnosConAlgunaMateriaEnComun(inscripciones, usuarioSesion).filter(
+        (nombre) => nombre.toLowerCase() !== usuarioSesion.toLowerCase()
+      );
+    // Todas las inscripciones de tus materias (cualquier compañero inscripto ahí comparte al menos esa materia).
     const inscripcionesVisibles = verTodaLaCursada
       ? inscripciones
-      : inscripciones.filter((fila) => {
-        if (!materiasPropias.has(fila.materiaId)) return false;
-        const nombre = fila.alumno.toLowerCase();
-        if (nombre === usuarioSesion.toLowerCase()) return true;
-        return companerosMateria.has(nombre);
-      });
+      : inscripciones.filter((fila) => materiasPropias.has(fila.materiaId));
     const parcialPorId = new Map(
       resParciales.rows.map((fila) => [texto(fila.id), texto(fila.materia_id)])
     );
