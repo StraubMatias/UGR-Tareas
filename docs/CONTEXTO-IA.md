@@ -70,7 +70,7 @@ El cronograma mensual es la vista principal de cursada:
 - Reglas habituales comisión:
   - `parciales_y_tps` — Conceptos y metodología mixta (6 / 8).
   - `ciberdelitos_parciales` — solo parciales.
-  - `activos_porcentaje` — **tareas + parciales** en el mismo % (75 regulariza, 90 promociona).
+  - `activos_porcentaje` — **todas las tareas de la materia en DB** + parciales con fecha ≤ hoy (futuros suman el día del examen). Hecha = entregada o con nota; sin nota pero entregada cuenta. % 75/90 + desglose en Promoción.
   - `tp_porcentaje_nota` — SGSI: 75% de entregas del proyecto con ≥6; **Promociona** si cada entrega **calificada** tiene ≥8.
   - `riesgos_tps` — ≥3 actividades (TP + **cuestionarios con nota**); promoción si todas las notas cargadas ≥8.
 - UI: `VistaPromocion.tsx` (texto de umbrales por regla).
