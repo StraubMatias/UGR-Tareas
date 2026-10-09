@@ -1,7 +1,65 @@
 import { useState } from 'react';
 import { obtenerIconoMateria, type Materia } from '../core/cursada';
 import { materiasQueCursa, type InscripcionAlumno } from '../lib/companeros';
+import type { BadgeEstadoMateria } from '../lib/estado-materia-ui';
+import type { LineaDesgloseActivos } from '../lib/promocion-materia';
 import { reglaPromocionEfectiva } from '../lib/promocion-materia';
+
+const etiquetaLineaActivos: Record<LineaDesgloseActivos['estado'], string> = {
+  hecha: 'Hecha',
+  espera_nota: 'Entregada · sin nota',
+  pendiente: 'Pendiente',
+  no_cuenta: 'Todavía no cuenta'
+};
+
+function DesgloseActivos({ lineas }: { lineas: LineaDesgloseActivos[] }) {
+  const cuentan = lineas.filter((l) => l.estado !== 'no_cuenta');
+  const fuera = lineas.filter((l) => l.estado === 'no_cuenta');
+  if (cuentan.length === 0) return null;
+  return (
+    <div className="mt-4 rounded-xl border border-slate-800 bg-[#0f141c] p-3 sm:p-4">
+      <p className="text-xs font-semibold text-slate-300 mb-2">Actividades que cuentan hoy para el %</p>
+      <ul className="space-y-1.5 text-xs text-slate-400 max-h-64 overflow-y-auto">
+        {cuentan.map((linea) => (
+          <li key={`${linea.tipo}-${linea.nombre}`} className="flex justify-between gap-2">
+            <span className="text-slate-300 truncate">{linea.nombre}</span>
+            <span className={`shrink-0 font-medium ${
+              linea.estado === 'hecha' ? 'text-emerald-400/90'
+                : linea.estado === 'espera_nota' ? 'text-cyan-400/90'
+                  : 'text-amber-400/90'
+            }`}>
+              {etiquetaLineaActivos[linea.estado]}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {fuera.length > 0 && (
+        <p className="text-[10px] text-slate-500 mt-3 pt-2 border-t border-slate-800">
+          Parcial futuro ({fuera.length}): entra al total el día del examen.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function BadgePromocion({ estado }: { estado: BadgeEstadoMateria }) {
+  const muestraPct = estado.porcentaje != null && estado.total != null && estado.total > 0;
+  return (
+    <div className="flex flex-col items-end gap-0.5 shrink-0 max-w-[11rem] sm:max-w-none">
+      <div className="flex items-center gap-1.5">
+        {muestraPct && (
+          <span className="text-xs font-bold text-slate-200 tabular-nums" title={`${estado.cumplidas ?? 0} de ${estado.total} actividades`}>
+            {estado.porcentaje}%
+          </span>
+        )}
+        <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${estado.estilo}`}>{estado.texto}</span>
+      </div>
+      {estado.aviso && (
+        <span className="text-[10px] sm:text-xs text-slate-400 text-right leading-tight">{estado.aviso}</span>
+      )}
+    </div>
+  );
+}
 
 interface CondicionesEdicion {
   id: string;
@@ -17,7 +75,7 @@ interface Props {
   esAdmin: boolean;
   usuarioActual: string | null;
   alumnosOrdenadosPromocion: string[];
-  obtenerEstadoMateria: (materia: Materia, alumno: string) => { texto: string; estilo: string } | null;
+  obtenerEstadoMateria: (materia: Materia, alumno: string) => BadgeEstadoMateria | null;
   setMateriaCondicionesEnEdicion: (condiciones: CondicionesEdicion) => void;
 }
 
@@ -35,7 +93,7 @@ function TarjetaMateria({
   esAdmin: boolean;
   usuarioActual: string | null;
   alumnosOrdenadosPromocion: string[];
-  obtenerEstadoMateria: (materia: Materia, alumno: string) => { texto: string; estilo: string } | null;
+  obtenerEstadoMateria: (materia: Materia, alumno: string) => BadgeEstadoMateria | null;
   setMateriaCondicionesEnEdicion: (condiciones: CondicionesEdicion) => void;
 }) {
   const [expandida, setExpandida] = useState(false);
@@ -57,8 +115,8 @@ function TarjetaMateria({
           <span className="text-lg shrink-0" aria-hidden="true">{obtenerIconoMateria(materia.nombre)}</span>
           <span className="text-base sm:text-lg font-bold text-white truncate">{materia.nombre}</span>
           {!expandida && miEstado && (
-            <span className={`ml-auto shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg border ${miEstado.estilo}`}>
-              {miEstado.texto}
+            <span className="ml-auto">
+              <BadgePromocion estado={miEstado} />
             </span>
           )}
           {!expandida && !miEstado && (
@@ -86,10 +144,18 @@ function TarjetaMateria({
 
       {expandida && (
         <div className="px-4 sm:px-6 pb-5 border-t border-slate-800 pt-4">
+          {yoCursa && miEstado && (
+            <div className="flex justify-end mb-3">
+              <BadgePromocion estado={miEstado} />
+            </div>
+          )}
           {reglaVista !== 'metodologia' && (
             <p className="text-xs text-slate-400 mb-3">
               {reglaVista === 'activos_porcentaje' && (
-                <>Regulariza desde {materia.notaMinimaRegularizar}% · Promociona desde {materia.notaMinimaPromocionar}% (tareas y parciales)</>
+                <>
+                  Regulariza desde {materia.notaMinimaRegularizar}% · Promociona desde {materia.notaMinimaPromocionar}%
+                  {' '}(todas las tareas cargadas + parcialitos con fecha de hoy o anterior; parcialitos futuros suman ese día)
+                </>
               )}
               {reglaVista === 'tp_porcentaje_nota' && (
                 <>Regulariza con {materia.notaMinimaRegularizar}% de entregas aprobadas · Promociona con cada entrega calificada ≥ {materia.notaMinimaPromocionar}</>
@@ -106,6 +172,9 @@ function TarjetaMateria({
           <p className="text-sm text-slate-300 whitespace-pre-wrap">
             {materia.condiciones || 'Condiciones todavía no cargadas.'}
           </p>
+          {yoCursa && reglaVista === 'activos_porcentaje' && miEstado?.desgloseActivos?.length ? (
+            <DesgloseActivos lineas={miEstado.desgloseActivos} />
+          ) : null}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-5">
             {cursan.map((alumno) => {
               const estado = obtenerEstadoMateria(materia, alumno);
@@ -115,7 +184,7 @@ function TarjetaMateria({
                 }`}>
                   <span className="text-sm font-semibold text-slate-200 truncate">{alumno}</span>
                   {estado ? (
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${estado.estilo}`}>{estado.texto}</span>
+                    <BadgePromocion estado={estado} />
                   ) : (
                     <span className="text-xs text-slate-500">Sin regla</span>
                   )}

@@ -8,8 +8,19 @@ import {
   evaluarPromocionRiesgosTps,
   evaluarPromocionSoloTps,
   evaluarPromocionTpPorcentajeNota,
-  reglaPromocionEfectiva
+  reglaPromocionEfectiva,
+  type LineaDesgloseActivos
 } from './promocion-materia';
+
+export type BadgeEstadoMateria = {
+  texto: string;
+  estilo: string;
+  porcentaje?: number;
+  cumplidas?: number;
+  total?: number;
+  aviso?: string | null;
+  desgloseActivos?: LineaDesgloseActivos[];
+};
 
 export function calcularBadgeEstadoMateria(
   materia: Materia,
@@ -17,7 +28,7 @@ export function calcularBadgeEstadoMateria(
   parciales: Parcial[],
   notas: Nota[],
   inscripciones?: InscripcionAlumno[]
-): { texto: string; estilo: string } | null {
+): BadgeEstadoMateria | null {
   if (inscripciones && !alumnoCursaMateria(inscripciones, alumno, materia.id)) {
     return null;
   }
@@ -46,7 +57,16 @@ export function calcularBadgeEstadoMateria(
     }
 
     if (regla === 'activos_porcentaje') {
-      return evaluarPromocionActivosPorcentaje(materia, alumno, parciales, notas, materia.tareas);
+      const r = evaluarPromocionActivosPorcentaje(materia, alumno, parciales, notas, materia.tareas);
+      return {
+        texto: r.texto,
+        estilo: r.estilo,
+        porcentaje: r.porcentaje,
+        cumplidas: r.cumplidas,
+        total: r.total,
+        aviso: r.aviso,
+        desgloseActivos: r.desglose
+      };
     }
 
     if (regla === 'tp_porcentaje_nota') {
