@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from '../lib/materias.mjs';
-import { consignasDesdeCourseContents, esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeHtml, extraerConsignasDePaginaCurso, extraerFechasActividad, extraerForos, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, parsearNotaPublicada, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
+import { consignasDesdeCourseContents, esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeHtml, extraerConsignasDePaginaCurso, extraerFechasActividad, extraerForos, extraerNotaQuizDesdeRevision, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, parsearNotaPublicada, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -428,6 +428,16 @@ test('la tarjeta de Moodle trae la nota del último intento, no la más alta', (
   assert.equal(extraerNotaUltimoIntento(viejoPrimero), 10);
   assert.equal(extraerProgresoDeActividad(viejoPrimero).entregada, true);
   assert.equal(extraerProgresoDeActividad(viejoPrimero).nota, 10);
+});
+
+test('quiz revisado sin calificación publicada: todas correctas → nota 10', () => {
+  const html = `
+    <table class="quizreviewsummary">
+      <tr><th>Estado</th><td>Finalizado</td></tr>
+    </table>
+    <div class="que ddwtos correct"><div class="info"><div class="state">Correcta</div><div class="grade">Se puntúa como 0 sobre 1,00</div></div></div>
+    <div class="que ddwtos correct"><div class="info"><div class="state">Correcta</div><div class="grade">Se puntúa como 0 sobre 1,00</div></div></div>`;
+  assert.equal(extraerNotaQuizDesdeRevision(html), 10);
 });
 
 test('si el resumen no trae número, la revisión del último intento es la que hay que abrir', () => {

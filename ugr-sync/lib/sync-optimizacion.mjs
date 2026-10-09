@@ -52,7 +52,7 @@ export function evaluarFilaRevisionCampus(fila, opciones = {}) {
     return { omitir: true, prioridad: 99 };
   }
 
-  if (requiereNota && conNotaEnTablero && cerrada && cargadaEn && diasDesdeIso(cargadaEn, ahoraMs) >= dias) {
+  if (requiereNota && conNotaEnTablero && cerrada) {
     return { omitir: true, prioridad: 99 };
   }
 
