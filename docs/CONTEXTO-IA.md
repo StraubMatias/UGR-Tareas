@@ -70,7 +70,7 @@ El cronograma mensual es la vista principal de cursada:
 - Reglas habituales comisión:
   - `parciales_y_tps` — Conceptos y metodología mixta (6 / 8).
   - `ciberdelitos_parciales` — solo parciales.
-  - `activos_porcentaje` — **tareas + parciales** en el mismo % (75 regulariza, 90 promociona).
+  - `activos_porcentaje` — **todas las tareas de la materia en DB** + parciales con fecha ≤ hoy (futuros suman el día del examen). Hecha = entregada o con nota; sin nota pero entregada cuenta. % 75/90 + desglose en Promoción.
   - `tp_porcentaje_nota` — SGSI: 75% de entregas del proyecto con ≥6; **Promociona** si cada entrega **calificada** tiene ≥8.
   - `riesgos_tps` — ≥3 actividades (TP + **cuestionarios con nota**); promoción si todas las notas cargadas ≥8.
 - UI: `VistaPromocion.tsx` (texto de umbrales por regla).
@@ -111,6 +111,19 @@ npm run lint
 ```
 
 No hay tests E2E de UI. Lógica de calendario, promoción y enlaces: `tests/*.test.mjs`.
+
+---
+
+## Cuentas y limpieza (7 días)
+
+Política en `src/lib/cuentas.ts` (`cuentaAlumnoDebeBorrarse`). **Admin exento.** Solo cuentas **`origen=propio`** (alta pública). Los alumnos de **comisión** (lista del admin / roster) **no** se borran por inactividad.
+
+Desde `POLITICA_CUENTAS_VIGENTE_DESDE` (override `POLITICA_CUENTAS_DESDE`), el plazo de 7 días **no** cuenta actividad anterior a esa fecha.
+
+1. **Sin login** en 7 días → borrado (`ultimo_acceso`, o `creado_en` si nunca entró).
+2. **Sin sync UGR** en 7 días → borrado (`sincronizado_en`; si nunca sincronizó, cuenta desde el inicio de la política o `creado_en`).
+
+Se ejecuta en login y al cargar el tablero (`borrarCuentasSinSincronizar`). Borrado: `sentenciasBorrarAlumno` (historial del alumno). Recuperar borrado masivo: rama Turso con `--timestamp` anterior al deploy (ver README).
 
 ---
 

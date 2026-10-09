@@ -1,6 +1,9 @@
-/** Plazo para borrar cuentas propias sin sincronizar o sin entrar al tablero. */
-export const DIAS_PARA_SINCRONIZAR = 7;
-export const DIAS_INACTIVIDAD_CUENTA = DIAS_PARA_SINCRONIZAR;
+/** Plazo sin login o sin sync UGR: se borra la cuenta (salvo admin). */
+export const DIAS_SIN_LOGIN = 7;
+export const DIAS_SIN_SYNC_UGR = 7;
+/** @deprecated usar DIAS_SIN_LOGIN / DIAS_SIN_SYNC_UGR */
+export const DIAS_PARA_SINCRONIZAR = DIAS_SIN_SYNC_UGR;
+export const DIAS_INACTIVIDAD_CUENTA = DIAS_SIN_LOGIN;
 export const MAX_CUENTAS_POR_IP = 2;
 
 export function ipPermiteOtraCuenta(cuentasExistentes: number, maximo = MAX_CUENTAS_POR_IP): boolean {
@@ -17,6 +20,9 @@ export interface Sentencia {
 export function sentenciasBorrarAlumno(id: string, nombre: string): Sentencia[] {
   const usuario = nombre.toLowerCase();
   return [
+    { sql: 'DELETE FROM tareas_entregas WHERE alumno_id = ?', args: [id] },
+    { sql: 'DELETE FROM invitaciones_grupo WHERE de_alumno_id = ? OR para_alumno_id = ?', args: [id, id] },
+    { sql: 'DELETE FROM preferencias_tarea_alumno WHERE alumno_id = ?', args: [id] },
     { sql: 'DELETE FROM integrantes_tareas WHERE alumno_id = ?', args: [id] },
     { sql: 'DELETE FROM completadas WHERE alumno_id = ? OR LOWER(alumno) = LOWER(?)', args: [id, nombre] },
     { sql: 'DELETE FROM notas_parciales WHERE alumno_id = ? OR LOWER(alumno) = LOWER(?)', args: [id, nombre] },
@@ -75,68 +81,89 @@ export function instanteActividad(valor: string | null | undefined): number {
   return Date.parse(normalizado);
 }
 
-// Cuenta propia sin sincronizar: se borra a los 7 días desde el alta.
-// Si ya sincronizó o tiene cursada: se borra tras 7 días sin entrar (ver cuentaPropiaInactiva).
-export function cuentaPropiaVencida(
-  cuenta: {
-    origen?: string | null;
-    creadoEn?: string | null;
-    sincronizadoEn?: string | null;
-    inscripciones?: number;
-  },
-  ahora = Date.now()
-): boolean {
-  if (String(cuenta.origen || '') !== 'propio') return false;
-  if (String(cuenta.sincronizadoEn || '').trim()) return false;
-  if (Number(cuenta.inscripciones || 0) > 0) return false;
-  const creado = instanteActividad(cuenta.creadoEn);
-  if (!Number.isFinite(creado)) return false;
-  return ahora - creado >= DIAS_PARA_SINCRONIZAR * MS_POR_DIA;
-}
-
-function ultimaActividadCuenta(cuenta: {
-  ultimoAcceso?: string | null;
-  sincronizadoEn?: string | null;
+export interface CuentaAlumnoLimpieza {
+  origen?: string | null;
+  rol?: string | null;
   creadoEn?: string | null;
-}): number {
-  const candidatos = [cuenta.ultimoAcceso, cuenta.sincronizadoEn, cuenta.creadoEn]
-    .map(instanteActividad)
-    .filter(Number.isFinite);
-  return candidatos.length ? Math.max(...candidatos) : Number.NaN;
+  sincronizadoEn?: string | null;
+  ultimoAcceso?: string | null;
 }
 
-// Cuenta propia que ya sincronizó o tiene cursada, pero no entra hace 7+ días.
-export function cuentaPropiaInactiva(
-  cuenta: {
-    origen?: string | null;
-    rol?: string | null;
-    creadoEn?: string | null;
-    sincronizadoEn?: string | null;
-    ultimoAcceso?: string | null;
-    inscripciones?: number;
-  },
-  ahora = Date.now()
+function plazoVencido(desde: number, dias: number, ahora: number): boolean {
+  return ahora - desde >= dias * MS_POR_DIA;
+}
+
+/** Desde cuándo corre el plazo de 7 días (no se mira inactividad anterior). Override: `POLITICA_CUENTAS_DESDE`. */
+export const POLITICA_CUENTAS_VIGENTE_DESDE = '2026-10-09T18:00:00.000Z';
+
+export function instantePoliticaCuentas(): number {
+  const desdeEntorno =
+    typeof process !== 'undefined' ? String(process.env.POLITICA_CUENTAS_DESDE || '').trim() : '';
+  const parseado = instanteActividad(desdeEntorno || POLITICA_CUENTAS_VIGENTE_DESDE);
+  return Number.isFinite(parseado) ? parseado : Date.parse(POLITICA_CUENTAS_VIGENTE_DESDE);
+}
+
+function referenciaTrasPolitica(
+  valor: string | null | undefined,
+  creadoEn: string | null | undefined,
+  politicaDesde: number
+): number {
+  const candidatos = [instanteActividad(valor), instanteActividad(creadoEn)].filter(Number.isFinite);
+  const ultima = candidatos.length ? Math.max(...candidatos) : politicaDesde;
+  return Math.max(ultima, politicaDesde);
+}
+
+/** Sin entrar al tablero en 7 días (desde último acceso o desde el alta). */
+export function cuentaSinLoginReciente(
+  cuenta: CuentaAlumnoLimpieza,
+  ahora = Date.now(),
+  politicaDesde?: number
 ): boolean {
-  if (String(cuenta.origen || '') !== 'propio') return false;
+  const politica = Number.isFinite(politicaDesde) ? politicaDesde! : instantePoliticaCuentas();
+  if (ahora < politica) return false;
+  const referencia = referenciaTrasPolitica(cuenta.ultimoAcceso, cuenta.creadoEn, politica);
+  return plazoVencido(referencia, DIAS_SIN_LOGIN, ahora);
+}
+
+/** Sin sync UGR en 7 días (desde última sync o desde el alta si nunca sincronizó). */
+export function cuentaSinSyncReciente(
+  cuenta: CuentaAlumnoLimpieza,
+  ahora = Date.now(),
+  politicaDesde?: number
+): boolean {
+  const politica = Number.isFinite(politicaDesde) ? politicaDesde! : instantePoliticaCuentas();
+  if (ahora < politica) return false;
+  const referencia = referenciaTrasPolitica(cuenta.sincronizadoEn, cuenta.creadoEn, politica);
+  return plazoVencido(referencia, DIAS_SIN_SYNC_UGR, ahora);
+}
+
+/** Solo cuentas `propio` (alta pública), excepto admin. Comisión no se borra automáticamente. */
+export function cuentaAlumnoDebeBorrarse(
+  cuenta: CuentaAlumnoLimpieza,
+  ahora = Date.now(),
+  politicaDesde?: number
+): boolean {
   if (String(cuenta.rol || 'alumno') === 'admin') return false;
-  const sincronizo = Boolean(String(cuenta.sincronizadoEn || '').trim());
-  const inscripto = Number(cuenta.inscripciones || 0) > 0;
-  if (!sincronizo && !inscripto) return false;
-  const ultima = ultimaActividadCuenta(cuenta);
-  if (!Number.isFinite(ultima)) return false;
-  return ahora - ultima >= DIAS_INACTIVIDAD_CUENTA * MS_POR_DIA;
+  if (String(cuenta.origen || 'comision') !== 'propio') return false;
+  const politica = Number.isFinite(politicaDesde) ? politicaDesde! : instantePoliticaCuentas();
+  if (ahora < politica) return false;
+  return cuentaSinLoginReciente(cuenta, ahora, politica) || cuentaSinSyncReciente(cuenta, ahora, politica);
 }
 
-export function cuentaPropiaDebeBorrarse(
-  cuenta: {
-    origen?: string | null;
-    rol?: string | null;
-    creadoEn?: string | null;
-    sincronizadoEn?: string | null;
-    ultimoAcceso?: string | null;
-    inscripciones?: number;
-  },
+/** @deprecated usar cuentaAlumnoDebeBorrarse */
+export function cuentaPropiaVencida(
+  cuenta: CuentaAlumnoLimpieza & { inscripciones?: number },
   ahora = Date.now()
 ): boolean {
-  return cuentaPropiaVencida(cuenta, ahora) || cuentaPropiaInactiva(cuenta, ahora);
+  return cuentaSinSyncReciente(cuenta, ahora) && !String(cuenta.sincronizadoEn || '').trim();
+}
+
+/** @deprecated usar cuentaSinLoginReciente */
+export function cuentaPropiaInactiva(cuenta: CuentaAlumnoLimpieza, ahora = Date.now()): boolean {
+  return cuentaSinLoginReciente(cuenta, ahora);
+}
+
+/** @deprecated usar cuentaAlumnoDebeBorrarse */
+export function cuentaPropiaDebeBorrarse(cuenta: CuentaAlumnoLimpieza, ahora = Date.now()): boolean {
+  return cuentaAlumnoDebeBorrarse(cuenta, ahora);
 }

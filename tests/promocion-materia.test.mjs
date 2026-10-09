@@ -5,6 +5,7 @@ import {
   evaluarPromocionParcialesYTps,
   evaluarParcialesCuatrimestre,
   evaluarPromocionActivosPorcentaje,
+  parcialCuentaActividadActivos,
   evaluarPromocionTpPorcentajeNota,
   evaluarPromocionRiesgosTps
 } from '../src/lib/promocion-materia.ts';
@@ -91,6 +92,72 @@ test('activos: parcial y tareas suman al porcentaje 75/90', () => {
   const notas = [{ parcial_id: 'p1', alumno: 'Ana', nota: 7 }];
   const r = evaluarPromocionActivosPorcentaje(materia, 'Ana', parciales, notas, materia.tareas);
   assert.equal(r.texto, 'Regulariza');
+  assert.equal(r.porcentaje, 75);
+  assert.equal(r.cumplidas, 3);
+  assert.equal(r.total, 4);
+});
+
+test('activos: parcial futuro no entra al total; con eso alcanza regularizar', () => {
+  const ahora = Date.parse('2026-10-09T15:00:00.000Z');
+  const materia = {
+    id: 'act',
+    nombre: 'ACTIVOS',
+    notaMinimaRegularizar: 75,
+    notaMinimaPromocionar: 90,
+    reglaPromocion: 'activos_porcentaje',
+    tareas: [
+      { id: 't1', nombre: 'T1', inicio: '2026-08-01', fin: '2026-12-01', conNota: true, notas: { Ana: 8 }, completadoPor: [] },
+      { id: 't2', nombre: 'T2', inicio: '2026-08-01', fin: '2026-12-01', conNota: true, notas: { Ana: 8 }, completadoPor: [] },
+      { id: 't3', nombre: 'T3', inicio: '2026-08-01', fin: '2026-12-01', conNota: true, notas: { Ana: 8 }, completadoPor: [] },
+      { id: 't4', nombre: 'T4', inicio: '2026-08-01', fin: '2026-12-01', conNota: true, notas: {}, completadoPor: [] },
+      { id: 't5', nombre: 'T5', inicio: '2026-08-01', fin: '2026-12-01', conNota: true, notas: {}, completadoPor: [] }
+    ]
+  };
+  const parciales = [
+    { id: 'p1', materia_id: 'act', nombre: '1er parcialito', fecha: '2026-09-15' },
+    { id: 'p2', materia_id: 'act', nombre: '2do parcialito', fecha: '2026-12-15' }
+  ];
+  const notas = [{ parcial_id: 'p1', alumno: 'Ana', nota: 8 }];
+  assert.equal(parcialCuentaActividadActivos(parciales[1], ahora), false);
+  const r = evaluarPromocionActivosPorcentaje(materia, 'Ana', parciales, notas, materia.tareas, ahora);
+  assert.equal(r.total, 6);
+  assert.equal(r.cumplidas, 4);
+  assert.equal(r.porcentaje, 67);
+  assert.equal(r.texto, 'En curso');
+  assert.match(r.aviso || '', /regulariz/);
+});
+
+test('activos: tarea sin fecha de apertura cuenta en el total', () => {
+  const materia = {
+    id: 'act',
+    notaMinimaRegularizar: 75,
+    notaMinimaPromocionar: 90,
+    reglaPromocion: 'activos_porcentaje',
+    tareas: [
+      { id: 't1', nombre: 'Con fecha', inicio: '2026-08-01', fin: 'x', conNota: false, completadoPor: ['Ana'] },
+      { id: 't2', nombre: 'Sin fecha', inicio: 'Sin fecha', fin: 'Sin fecha', conNota: false, completadoPor: [] }
+    ]
+  };
+  const r = evaluarPromocionActivosPorcentaje(materia, 'Ana', [], [], materia.tareas);
+  assert.equal(r.total, 2);
+  assert.equal(r.cumplidas, 1);
+});
+
+test('activos: entregada sin nota en campus cuenta hacia el %', () => {
+  const materia = {
+    id: 'act',
+    notaMinimaRegularizar: 75,
+    notaMinimaPromocionar: 90,
+    reglaPromocion: 'activos_porcentaje',
+    tareas: [
+      { id: 't1', nombre: 'T1', inicio: '2026-08-01', fin: 'x', conNota: true, notas: { Ana: 8 }, completadoPor: ['Ana'] },
+      { id: 't2', nombre: 'T2', inicio: '2026-08-01', fin: 'x', conNota: true, notas: {}, completadoPor: ['Ana'] }
+    ]
+  };
+  const r = evaluarPromocionActivosPorcentaje(materia, 'Ana', [], [], materia.tareas);
+  assert.equal(r.cumplidas, 2);
+  assert.equal(r.total, 2);
+  assert.equal(r.texto, 'Promociona');
 });
 
 test('SGSI: promociona con entregas calificadas en 8 aunque falten sin nota', () => {
