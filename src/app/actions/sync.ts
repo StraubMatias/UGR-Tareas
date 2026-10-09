@@ -252,7 +252,7 @@ export async function sincronizarCuentaUgrAction(
     await asegurarEsquemaCuentasEnServidor();
     await asegurarEsquemaEntregasEnServidor(db);
 
-    const fase = opciones?.fase ?? 'preparar';
+    const fase = (opciones?.fase ?? 'preparar') as FaseSyncUgrCursada;
     const cliente = await conectarClienteUgr(usarCredencialesServidor, dni, contrasena);
     const { sync, lineasInforme, mensaje, materiasSync } = await ejecutarFaseSyncUgr({
       fase,
@@ -262,9 +262,9 @@ export async function sincronizarCuentaUgrAction(
       materiaIds: opciones?.materiaIds
     });
     const ahoraIso = new Date().toISOString();
-    if (fase === 'materias' || fase === 'materia' || fase === 'nucleo') {
+    if (fase === 'materias' || fase === 'materia' || fase === 'nucleo' || fase === 'completa') {
       await db.execute({
-        sql: `UPDATE alumnos SET sincronizado_en = COALESCE(NULLIF(sincronizado_en, ''), ?), ultimo_acceso = ? WHERE id = ?`,
+        sql: 'UPDATE alumnos SET sincronizado_en = ?, ultimo_acceso = ? WHERE id = ?',
         args: [ahoraIso, ahoraIso, alumnoId]
       });
     } else if (fase === 'preparar') {

@@ -5,7 +5,7 @@ import type { Value } from '@libsql/client';
 import { db } from '../app/turso';
 import { PLAN_DE_ESTUDIO } from '../app/plan-utils';
 import {
-  cuentaPropiaDebeBorrarse,
+  cuentaAlumnoDebeBorrarse,
   instanteActividad,
   ipPermiteOtraCuenta,
   nombreDeUsuarioValido,
@@ -222,20 +222,17 @@ export async function borrarCuentasSinSincronizar(): Promise<void> {
     const candidatas = await db.execute(`
       SELECT a.id, a.nombre, COALESCE(a.origen, 'comision') AS origen,
              COALESCE(a.rol, 'alumno') AS rol,
-             a.creado_en, a.sincronizado_en, a.ultimo_acceso,
-             (SELECT COUNT(*) FROM inscripciones i WHERE i.alumno_id = a.id) AS inscripciones
+             a.creado_en, a.sincronizado_en, a.ultimo_acceso
       FROM alumnos a
-      WHERE COALESCE(a.origen, 'comision') = 'propio'
-        AND COALESCE(a.rol, 'alumno') != 'admin'
+      WHERE COALESCE(a.rol, 'alumno') != 'admin'
     `);
     const cuentas = candidatas.rows
-      .filter((fila) => cuentaPropiaDebeBorrarse({
+      .filter((fila) => cuentaAlumnoDebeBorrarse({
         origen: texto(fila.origen),
         rol: texto(fila.rol),
         creadoEn: texto(fila.creado_en),
         sincronizadoEn: texto(fila.sincronizado_en),
-        ultimoAcceso: texto(fila.ultimo_acceso),
-        inscripciones: Number(fila.inscripciones || 0)
+        ultimoAcceso: texto(fila.ultimo_acceso)
       }))
       .map((fila) => ({ id: texto(fila.id), nombre: texto(fila.nombre) }))
       .filter((cuenta) => cuenta.id && cuenta.nombre);

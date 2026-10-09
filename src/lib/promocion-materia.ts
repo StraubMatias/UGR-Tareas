@@ -1,5 +1,5 @@
 import type { Materia, Nota, Parcial, Tarea } from '../core/cursada.ts';
-import { obtenerDiasHastaFecha, tareaCompletadaPor, tareaEstaHabilitada } from '../core/cursada.ts';
+import { obtenerDiasHastaFecha, tareaCompletadaPor } from '../core/cursada.ts';
 
 const ZONA_CAMPUS = 'America/Argentina/Buenos_Aires';
 import { esParcialRecuperatorio } from './recuperatorios-calendario.ts';
@@ -183,34 +183,129 @@ function tareaCerrada(tarea: Tarea) {
 
 const NOTA_APROBACION_ACTIVIDAD = 6;
 
-function tareaCuentaActividadActivos(tarea: Tarea) {
-  return Boolean(tarea.inicio && tarea.inicio !== 'Sin fecha' && tareaEstaHabilitada(tarea.inicio));
+/** Parcial futuro no entra al %; el día del examen o después sí (aunque aún no haya nota). */
+export function parcialCuentaActividadActivos(parcial: Parcial, ahoraMs = Date.now()) {
+  const clave = claveFecha(parcial.fecha);
+  if (!clave) return false;
+  return clave <= claveHoyCampus(ahoraMs);
 }
 
-function actividadActivosCumplida(tarea: Tarea, alumno: string) {
-  if (tarea.conNota || tarea.tipo === 'trabajo_practico') {
-    const n = notaDeTarea(tarea, alumno);
-    return n !== null && n >= NOTA_APROBACION_ACTIVIDAD;
+function actividadesParaUmbral(cumplidas: number, total: number, umbralPct: number) {
+  if (total <= 0) return 0;
+  const necesarias = Math.ceil((umbralPct / 100) * total);
+  return Math.max(0, necesarias - cumplidas);
+}
+
+export function avisoProximoHitoActivos(
+  cumplidas: number,
+  total: number,
+  umbralReg: number,
+  umbralPromo: number,
+  estadoTexto: string
+): string | null {
+  if (total === 0 || estadoTexto === 'Desaprueba' || estadoTexto === 'Sin actividades') return null;
+  const pct = (cumplidas / total) * 100;
+  const faltanRegular = actividadesParaUmbral(cumplidas, total, umbralReg);
+  const faltanPromo = actividadesParaUmbral(cumplidas, total, umbralPromo);
+
+  if (pct >= umbralPromo) {
+    return `${cumplidas}/${total} actividades · ${Math.round(pct)}%`;
   }
-  return tareaCompletadaPor(tarea, alumno);
+  if (faltanPromo === 1) return 'Con 1 actividad más promocionarías.';
+  if (pct >= umbralReg && faltanPromo > 0 && faltanPromo <= 3) {
+    return `Con ${faltanPromo} actividad${faltanPromo === 1 ? '' : 'es'} más promocionarías.`;
+  }
+  if (faltanRegular === 1) return 'Con 1 actividad más estarías regularizando.';
+  if (pct < umbralReg && faltanRegular > 0 && faltanRegular <= 3) {
+    return `Con ${faltanRegular} actividad${faltanRegular === 1 ? '' : 'es'} más regularizarías.`;
+  }
+  return `${cumplidas}/${total} actividades · ${Math.round(pct)}%`;
 }
 
-/** 75% / 90% de actividades (tareas + parciales como una actividad más). */
+export type EstadoLineaActivos = 'hecha' | 'pendiente' | 'espera_nota' | 'no_cuenta';
+
+export interface LineaDesgloseActivos {
+  nombre: string;
+  tipo: 'tarea' | 'parcial';
+  estado: EstadoLineaActivos;
+}
+
+export interface ResultadoActivosPorcentaje extends EstadoPromocion {
+  porcentaje: number;
+  cumplidas: number;
+  total: number;
+  aviso: string | null;
+  desglose: LineaDesgloseActivos[];
+}
+
+function resultadoActivosParcial(
+  estado: EstadoPromocion,
+  cumplidas: number,
+  total: number,
+  umbralReg: number,
+  umbralPromo: number,
+  desglose: LineaDesgloseActivos[]
+): ResultadoActivosPorcentaje {
+  const porcentaje = total > 0 ? Math.round((cumplidas / total) * 100) : 0;
+  return {
+    ...estado,
+    porcentaje,
+    cumplidas,
+    total,
+    aviso: avisoProximoHitoActivos(cumplidas, total, umbralReg, umbralPromo, estado.texto),
+    desglose
+  };
+}
+
+/** En Activos importa haberla hecho; la nota no define el % (solo si está entregada o calificada). */
+function estadoTareaActivos(tarea: Tarea, alumno: string): 'cumplida' | 'espera_nota' | 'pendiente' {
+  if (tareaCompletadaPor(tarea, alumno)) {
+    const valor = notaDeTarea(tarea, alumno);
+    if ((tarea.conNota || tarea.tipo === 'trabajo_practico') && valor === null) return 'espera_nota';
+    return 'cumplida';
+  }
+  if (notaDeTarea(tarea, alumno) !== null) return 'cumplida';
+  return 'pendiente';
+}
+
+function lineaEstadoDesdeTarea(estado: ReturnType<typeof estadoTareaActivos>): EstadoLineaActivos {
+  if (estado === 'cumplida') return 'hecha';
+  if (estado === 'espera_nota') return 'espera_nota';
+  return 'pendiente';
+}
+
+/** 75% / 90%: todas las tareas cargadas en la materia + parciales con fecha ≤ hoy (el futuro suma el día del examen). */
 export function evaluarPromocionActivosPorcentaje(
   materia: Materia,
   alumno: string,
   parciales: Parcial[],
   notas: Nota[],
-  tareas: Tarea[]
-): EstadoPromocion {
+  tareas: Tarea[],
+  ahoraMs = Date.now()
+): ResultadoActivosPorcentaje {
   const umbralReg = materia.notaMinimaRegularizar;
   const umbralPromo = materia.notaMinimaPromocionar;
   const enCurso = { texto: 'En curso', estilo: estilos.enCurso };
-  const parcialesMateria = parcialesCuatrimestreOrdenados(parciales, materia.id);
-  const tareasMateria = tareas.filter(tareaCuentaActividadActivos);
+  const parcialesTodos = parcialesCuatrimestreOrdenados(parciales, materia.id);
+  const parcialesMateria = parcialesTodos.filter((p) => parcialCuentaActividadActivos(p, ahoraMs));
+  const tareasMateria = tareas;
   const total = parcialesMateria.length + tareasMateria.length;
+  const desglose: LineaDesgloseActivos[] = [];
+  for (const parcial of parcialesTodos) {
+    if (!parcialCuentaActividadActivos(parcial, ahoraMs)) {
+      desglose.push({ nombre: parcial.nombre, tipo: 'parcial', estado: 'no_cuenta' });
+    }
+  }
+
   if (total === 0) {
-    return { texto: 'Sin actividades', estilo: estilos.neutro };
+    return resultadoActivosParcial(
+      { texto: 'Sin actividades', estilo: estilos.neutro },
+      0,
+      0,
+      umbralReg,
+      umbralPromo,
+      desglose
+    );
   }
 
   let cumplidas = 0;
@@ -218,32 +313,47 @@ export function evaluarPromocionActivosPorcentaje(
     const fila = notas.find((n) => n.parcial_id === parcial.id && n.alumno === alumno);
     const valor = fila ? notaDe(fila.nota) : null;
     if (valor !== null && valor < NOTA_APROBACION_ACTIVIDAD) {
-      return { texto: 'Desaprueba', estilo: estilos.desaprueba };
+      desglose.push({ nombre: parcial.nombre, tipo: 'parcial', estado: 'pendiente' });
+      return resultadoActivosParcial(
+        { texto: 'Desaprueba', estilo: estilos.desaprueba },
+        cumplidas,
+        total,
+        umbralReg,
+        umbralPromo,
+        desglose
+      );
     }
-    if (valor !== null && valor >= NOTA_APROBACION_ACTIVIDAD) cumplidas += 1;
+    if (valor !== null && valor >= NOTA_APROBACION_ACTIVIDAD) {
+      cumplidas += 1;
+      desglose.push({ nombre: parcial.nombre, tipo: 'parcial', estado: 'hecha' });
+    } else {
+      desglose.push({
+        nombre: parcial.nombre,
+        tipo: 'parcial',
+        estado: parcialYaRendido(parcial, alumno, notas) ? 'pendiente' : 'pendiente'
+      });
+    }
   }
 
   for (const tarea of tareasMateria) {
-    const valor = notaDeTarea(tarea, alumno);
-    if (tarea.conNota || tarea.tipo === 'trabajo_practico') {
-      if (valor !== null && valor < NOTA_APROBACION_ACTIVIDAD) {
-        return { texto: 'Desaprueba', estilo: estilos.desaprueba };
-      }
-      if (valor !== null && valor >= NOTA_APROBACION_ACTIVIDAD) cumplidas += 1;
-    } else if (tareaCompletadaPor(tarea, alumno)) {
-      cumplidas += 1;
-    }
+    const est = estadoTareaActivos(tarea, alumno);
+    if (est === 'cumplida' || est === 'espera_nota') cumplidas += 1;
+    desglose.push({ nombre: tarea.nombre, tipo: 'tarea', estado: lineaEstadoDesdeTarea(est) });
   }
 
-  const porcentaje = (cumplidas / total) * 100;
-  if (porcentaje >= umbralPromo) return { texto: 'Promociona', estilo: estilos.promociona };
-  if (porcentaje >= umbralReg) return { texto: 'Regulariza', estilo: estilos.regulariza };
-  const todoCerrado = tareasMateria.every(tareaCerrada)
-    && parcialesMateria.every((p) => parcialYaRendido(p, alumno, notas));
-  if (todoCerrado && porcentaje < umbralReg) {
-    return { texto: 'Desaprueba', estilo: estilos.desaprueba };
+  const porcentaje = Math.round((cumplidas / total) * 100);
+  let estado: EstadoPromocion;
+  if (porcentaje >= umbralPromo) estado = { texto: 'Promociona', estilo: estilos.promociona };
+  else if (porcentaje >= umbralReg) estado = { texto: 'Regulariza', estilo: estilos.regulariza };
+  else {
+    const todoCerrado = tareasMateria.every(tareaCerrada)
+      && parcialesMateria.every((p) => parcialYaRendido(p, alumno, notas));
+    estado = todoCerrado && porcentaje < umbralReg
+      ? { texto: 'Desaprueba', estilo: estilos.desaprueba }
+      : enCurso;
   }
-  return enCurso;
+
+  return resultadoActivosParcial(estado, cumplidas, total, umbralReg, umbralPromo, desglose);
 }
 
 /** Proyecto SGSI: 75% de entregas con ≥6; promoción progresiva con cada entrega calificada ≥8. */
