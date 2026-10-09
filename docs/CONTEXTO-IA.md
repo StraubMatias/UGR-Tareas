@@ -114,6 +114,17 @@ No hay tests E2E de UI. Lógica de calendario, promoción y enlaces: `tests/*.te
 
 ---
 
+## Cuentas y limpieza (7 días)
+
+Política en `src/lib/cuentas.ts` (`cuentaAlumnoDebeBorrarse`). **Admin exento.** Resto de alumnos (`propio` y `comision`):
+
+1. **Sin login** en 7 días → borrado (`ultimo_acceso`, o `creado_en` si nunca entró).
+2. **Sin sync UGR** en 7 días → borrado (`sincronizado_en`; si nunca sincronizó, cuenta desde `creado_en`).
+
+Se ejecuta en login y al cargar el tablero (`borrarCuentasSinSincronizar`). Cada sync de materias/núcleo/completa **actualiza** `sincronizado_en` (no solo la primera vez). Borrado: `sentenciasBorrarAlumno` (incluye `tareas_entregas`, invitaciones, etc.); materias/tareas compartidas quedan.
+
+---
+
 ## Qué no refactorizar sin cuidado
 
 - `ugr-sync/lib/sync-core.mjs` — núcleo grande; cambios chicos y con tests.

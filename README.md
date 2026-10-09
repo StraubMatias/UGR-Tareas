@@ -71,7 +71,7 @@ src/app/validators.ts     notas, unidades, habilitación de tarea/parcial
 src/app/layout.tsx        metadata, maxDuration
 src/core/cursada.ts       puntaje, pendientes, historial (puro)
 src/lib/companeros.ts     misma cursada, materia en común, intersección
-src/lib/cuentas.ts        vencimiento a 7 días, tope por IP, SQL de borrado
+src/lib/cuentas.ts        limpieza 7 días sin login/sync, tope por IP, SQL de borrado
 src/lib/seguridad.ts      claves temporales, validación HH:MM (sin deps de Next)
 src/lib/grupos-tareas.ts  alta/baja de grupo dentro de una transacción
 src/components/           vistas (estado, materias, grupos, plan, …)
@@ -131,9 +131,14 @@ Cookie `ugr_sesion`: `base64url(JSON).base64url(HMAC-SHA256)`. El JSON lleva `us
 
 Alta pública (`registrarCuentaAction`): usuario, contraseña y confirmación. No pide DNI ni clave de campus. Inserta `origen='propio'`, `creado_en` y `creado_ip`. El usuario tiene 3–100 caracteres (`nombreDeUsuarioValido`); la contraseña, 6–128. Si el nombre ya existe, mensaje genérico (no enumerar usuarios). Tope: **2 cuentas `propio` vivas con la misma `creado_ip`**. Con `VERCEL=1` o `TRUST_PROXY=1`, la IP sale de `cf-connecting-ip` / `x-forwarded-for` / `x-real-ip`; en local sin proxy de confianza no se confía en `X-Forwarded-For` (evita spoof). Borrar la cuenta libera el cupo. Las cuentas `comision` que crea el admin no llevan `creado_ip` y no consumen el cupo. Quien llega sin IP cae en el balde `unknown` y comparte ese mismo tope de 2. El admin que crea un alumno de comisión recibe una **contraseña inicial aleatoria** (una sola vez en pantalla), no el nombre como clave.
 
-Cuenta `propio` que a los 7 días (`DIAS_PARA_SINCRONIZAR`) no tiene `sincronizado_en` ni inscripciones: `borrarCuentasSinSincronizar` la elimina al registrar, al entrar y al cargar el tablero. El error de esa limpieza se traga para no tumbar el login si faltara una columna. Una sync exitosa escribe `sincronizado_en` una sola vez (`COALESCE` del valor ya guardado). Una cuenta `comision` no entra en esa limpieza.
+**Limpieza de cuentas inactivas** (`borrarCuentasSinSincronizar`, en login y al cargar el tablero): aplica a **todos los alumnos** (cuenta `propio` o `comision`), **excepto admin**. Se borra la cuenta si se cumple **cualquiera** de estas condiciones (ventana de **7 días**, ver `DIAS_SIN_LOGIN` y `DIAS_SIN_SYNC_UGR` en `src/lib/cuentas.ts`):
 
-Borrado (admin o vencimiento), `sentenciasBorrarAlumno`: integrantes, completadas, notas de parcial y de tarea, progreso del plan, inscripciones, horarios con ese `alumno_id`, filas de `auditoria` cuyo `usuario` es esa persona, claves `user:`, `accion:user:` y `ugr:` de `login_intentos`, y la fila de `alumnos`. Después se borran grupos que quedaron sin integrantes. No se tocan `materias`, `tareas`, `parciales`, `cronograma_eventos` ni `avisos_moodle`. Las filas por alumno también matchean `LOWER(alumno)` por si `alumno_id` quedó viejo.
+1. No hubo **login** (`ultimo_acceso`, o `creado_en` si nunca entró).
+2. No hubo **sync UGR** (`sincronizado_en` se actualiza en cada sync de materias/núcleo/completa; si nunca sincronizó, cuenta desde `creado_en`).
+
+El error de esa limpieza se traga para no tumbar el login si faltara una columna.
+
+Borrado (admin o vencimiento), `sentenciasBorrarAlumno`: entregas campus, invitaciones de grupo, preferencias, integrantes, completadas, notas, progreso del plan, inscripciones, horarios, auditoría, `login_intentos`, y `alumnos`. Después se borran grupos vacíos. No se tocan `materias`, `tareas`, `parciales`, `cronograma_eventos` ni `avisos_moodle`.
 
 Rate limit (tabla `login_intentos`):
 

@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  cuentaPropiaInactiva,
-  cuentaPropiaVencida,
+  cuentaAlumnoDebeBorrarse,
+  cuentaSinLoginReciente,
+  cuentaSinSyncReciente,
   ipPermiteOtraCuenta,
   nombreDeUsuarioValido,
   sentenciasBorrarAlumno,
@@ -13,33 +14,68 @@ const ahora = Date.parse('2026-09-22T15:00:00.000Z');
 const haceOchoDias = '2026-09-14T15:00:00.000Z';
 const haceDosDias = '2026-09-20T15:00:00.000Z';
 
-test('una cuenta propia sin sincronizar se vence a los 7 días', () => {
-  assert.equal(cuentaPropiaVencida({
-    origen: 'propio',
-    creadoEn: haceOchoDias,
-    inscripciones: 0
+const cuentaBase = {
+  origen: 'comision',
+  rol: 'alumno',
+  creadoEn: haceOchoDias
+};
+
+test('sin login en 7 días (comisión o propio)', () => {
+  assert.equal(cuentaSinLoginReciente({
+    ...cuentaBase,
+    ultimoAcceso: haceOchoDias
+  }, ahora), true);
+  assert.equal(cuentaSinLoginReciente({
+    ...cuentaBase,
+    ultimoAcceso: haceDosDias
+  }, ahora), false);
+});
+
+test('sin sync UGR en 7 días', () => {
+  assert.equal(cuentaSinSyncReciente({
+    ...cuentaBase,
+    sincronizadoEn: haceOchoDias
+  }, ahora), true);
+  assert.equal(cuentaSinSyncReciente({
+    ...cuentaBase,
+    sincronizadoEn: haceDosDias
+  }, ahora), false);
+});
+
+test('nunca sincronizó: cuenta desde el alta', () => {
+  assert.equal(cuentaSinSyncReciente({
+    ...cuentaBase,
+    creadoEn: haceDosDias
+  }, ahora), false);
+  assert.equal(cuentaSinSyncReciente({
+    ...cuentaBase,
+    creadoEn: haceOchoDias
   }, ahora), true);
 });
 
-test('dentro de los 7 días la cuenta sigue', () => {
-  assert.equal(cuentaPropiaVencida({
-    origen: 'propio',
-    creadoEn: haceDosDias,
-    inscripciones: 0
+test('cuentaAlumnoDebeBorrarse: login reciente pero sync vieja', () => {
+  assert.equal(cuentaAlumnoDebeBorrarse({
+    ...cuentaBase,
+    ultimoAcceso: haceDosDias,
+    sincronizadoEn: haceOchoDias
+  }, ahora), true);
+});
+
+test('cuenta activa: login y sync dentro de la semana', () => {
+  assert.equal(cuentaAlumnoDebeBorrarse({
+    ...cuentaBase,
+    ultimoAcceso: haceDosDias,
+    sincronizadoEn: haceDosDias
   }, ahora), false);
 });
 
-test('si ya sincronizó o cursa una materia, no se borra', () => {
-  assert.equal(cuentaPropiaVencida({
+test('admin no se borra aunque esté inactivo', () => {
+  assert.equal(cuentaAlumnoDebeBorrarse({
     origen: 'propio',
-    creadoEn: haceOchoDias,
-    sincronizadoEn: '2026-09-15T12:00:00.000Z',
-    inscripciones: 0
-  }, ahora), false);
-  assert.equal(cuentaPropiaVencida({
-    origen: 'propio',
-    creadoEn: haceOchoDias,
-    inscripciones: 1
+    rol: 'admin',
+    ultimoAcceso: haceOchoDias,
+    sincronizadoEn: haceOchoDias,
+    creadoEn: haceOchoDias
   }, ahora), false);
 });
 
@@ -61,57 +97,25 @@ test('renombrar un alumno conserva el id y mueve el nombre copiado', () => {
 
 test('borrar un alumno saca sus datos y deja las materias compartidas', () => {
   const sql = sentenciasBorrarAlumno('a_1', 'Ana').map((sentencia) => sentencia.sql).join('\n');
-  for (const tabla of ['integrantes_tareas', 'completadas', 'notas_parciales', 'notas_tareas', 'progreso_materias', 'inscripciones', 'horarios', 'auditoria', 'login_intentos', 'alumnos']) {
+  for (const tabla of [
+    'tareas_entregas',
+    'invitaciones_grupo',
+    'preferencias_tarea_alumno',
+    'integrantes_tareas',
+    'completadas',
+    'notas_parciales',
+    'notas_tareas',
+    'progreso_materias',
+    'inscripciones',
+    'horarios',
+    'auditoria',
+    'login_intentos',
+    'alumnos'
+  ]) {
     assert.match(sql, new RegExp(`DELETE FROM ${tabla}`));
   }
-  assert.doesNotMatch(sql, /DELETE FROM (materias|tareas|cronograma_eventos|avisos_moodle)/);
-  const horarios = sentenciasBorrarAlumno('a_1', 'Ana').find((sentencia) => sentencia.sql.includes('horarios'));
-  assert.deepEqual(horarios?.args, ['a_1']);
-});
-
-test('una cuenta de la comisión no entra en esa limpieza', () => {
-  assert.equal(cuentaPropiaVencida({
-    origen: 'comision',
-    creadoEn: haceOchoDias,
-    inscripciones: 0
-  }, ahora), false);
-});
-
-test('cuenta propia inactiva tras sincronizar y 7 días sin entrar', () => {
-  assert.equal(cuentaPropiaInactiva({
-    origen: 'propio',
-    rol: 'alumno',
-    creadoEn: haceOchoDias,
-    sincronizadoEn: haceOchoDias,
-    ultimoAcceso: haceOchoDias,
-    inscripciones: 2
-  }, ahora), true);
-});
-
-test('cuenta propia activa no se borra por inactividad', () => {
-  assert.equal(cuentaPropiaInactiva({
-    origen: 'propio',
-    rol: 'alumno',
-    sincronizadoEn: haceOchoDias,
-    ultimoAcceso: haceDosDias,
-    inscripciones: 1
-  }, ahora), false);
-});
-
-test('admin propio no se borra por inactividad', () => {
-  assert.equal(cuentaPropiaInactiva({
-    origen: 'propio',
-    rol: 'admin',
-    sincronizadoEn: haceOchoDias,
-    ultimoAcceso: haceOchoDias,
-    inscripciones: 1
-  }, ahora), false);
-});
-
-test('sin sincronizar la inactividad la resuelve cuentaPropiaVencida', () => {
-  assert.equal(cuentaPropiaInactiva({
-    origen: 'propio',
-    creadoEn: haceOchoDias,
-    inscripciones: 0
-  }, ahora), false);
+  assert.doesNotMatch(sql, /DELETE FROM materias/);
+  assert.doesNotMatch(sql, /DELETE FROM tareas WHERE/);
+  assert.doesNotMatch(sql, /DELETE FROM cronograma_eventos/);
+  assert.doesNotMatch(sql, /DELETE FROM avisos_moodle/);
 });
