@@ -185,7 +185,7 @@ export async function registrarCuentaAction(
       rol: 'alumno',
       origen: 'propio',
       ugrUsuario: null,
-      mensaje: 'La cuenta está lista. El tablero queda vacío hasta que sincronices. Si pasan 7 días sin sincronizar o sin entrar, la cuenta se borra.'
+      mensaje: 'La cuenta está lista. Tenés que entrar y sincronizar con UGR al menos una vez por semana; si no, la cuenta se borra.'
     };
   } catch (error) {
     console.error('Error en registrarCuentaAction:', error);
