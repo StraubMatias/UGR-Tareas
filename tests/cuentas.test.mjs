@@ -20,53 +20,67 @@ const cuentaBase = {
   creadoEn: haceOchoDias
 };
 
+const sinPolitica = 0;
+
 test('sin login en 7 días (comisión o propio)', () => {
   assert.equal(cuentaSinLoginReciente({
     ...cuentaBase,
     ultimoAcceso: haceOchoDias
-  }, ahora), true);
+  }, ahora, sinPolitica), true);
   assert.equal(cuentaSinLoginReciente({
     ...cuentaBase,
     ultimoAcceso: haceDosDias
-  }, ahora), false);
+  }, ahora, sinPolitica), false);
 });
 
 test('sin sync UGR en 7 días', () => {
   assert.equal(cuentaSinSyncReciente({
     ...cuentaBase,
     sincronizadoEn: haceOchoDias
-  }, ahora), true);
+  }, ahora, sinPolitica), true);
   assert.equal(cuentaSinSyncReciente({
     ...cuentaBase,
     sincronizadoEn: haceDosDias
-  }, ahora), false);
+  }, ahora, sinPolitica), false);
 });
 
 test('nunca sincronizó: cuenta desde el alta', () => {
   assert.equal(cuentaSinSyncReciente({
     ...cuentaBase,
     creadoEn: haceDosDias
-  }, ahora), false);
+  }, ahora, sinPolitica), false);
   assert.equal(cuentaSinSyncReciente({
     ...cuentaBase,
     creadoEn: haceOchoDias
-  }, ahora), true);
+  }, ahora, sinPolitica), true);
 });
 
-test('cuentaAlumnoDebeBorrarse: login reciente pero sync vieja', () => {
+test('cuentaAlumnoDebeBorrarse: login reciente pero sync vieja (solo propio)', () => {
   assert.equal(cuentaAlumnoDebeBorrarse({
-    ...cuentaBase,
+    origen: 'propio',
+    rol: 'alumno',
+    creadoEn: haceOchoDias,
     ultimoAcceso: haceDosDias,
     sincronizadoEn: haceOchoDias
-  }, ahora), true);
+  }, ahora, sinPolitica), true);
 });
 
 test('cuenta activa: login y sync dentro de la semana', () => {
   assert.equal(cuentaAlumnoDebeBorrarse({
-    ...cuentaBase,
+    origen: 'propio',
+    rol: 'alumno',
+    creadoEn: haceOchoDias,
     ultimoAcceso: haceDosDias,
     sincronizadoEn: haceDosDias
-  }, ahora), false);
+  }, ahora, sinPolitica), false);
+});
+
+test('comisión inactiva no se borra automáticamente', () => {
+  assert.equal(cuentaAlumnoDebeBorrarse({
+    ...cuentaBase,
+    ultimoAcceso: haceOchoDias,
+    sincronizadoEn: haceOchoDias
+  }, ahora, sinPolitica), false);
 });
 
 test('admin no se borra aunque esté inactivo', () => {

@@ -131,10 +131,12 @@ Cookie `ugr_sesion`: `base64url(JSON).base64url(HMAC-SHA256)`. El JSON lleva `us
 
 Alta pública (`registrarCuentaAction`): usuario, contraseña y confirmación. No pide DNI ni clave de campus. Inserta `origen='propio'`, `creado_en` y `creado_ip`. El usuario tiene 3–100 caracteres (`nombreDeUsuarioValido`); la contraseña, 6–128. Si el nombre ya existe, mensaje genérico (no enumerar usuarios). Tope: **2 cuentas `propio` vivas con la misma `creado_ip`**. Con `VERCEL=1` o `TRUST_PROXY=1`, la IP sale de `cf-connecting-ip` / `x-forwarded-for` / `x-real-ip`; en local sin proxy de confianza no se confía en `X-Forwarded-For` (evita spoof). Borrar la cuenta libera el cupo. Las cuentas `comision` que crea el admin no llevan `creado_ip` y no consumen el cupo. Quien llega sin IP cae en el balde `unknown` y comparte ese mismo tope de 2. El admin que crea un alumno de comisión recibe una **contraseña inicial aleatoria** (una sola vez en pantalla), no el nombre como clave.
 
-**Limpieza de cuentas inactivas** (`borrarCuentasSinSincronizar`, en login y al cargar el tablero): aplica a **todos los alumnos** (cuenta `propio` o `comision`), **excepto admin**. Se borra la cuenta si se cumple **cualquiera** de estas condiciones (ventana de **7 días**, ver `DIAS_SIN_LOGIN` y `DIAS_SIN_SYNC_UGR` en `src/lib/cuentas.ts`):
+**Limpieza de cuentas inactivas** (`borrarCuentasSinSincronizar`, en login y al cargar el tablero): solo cuentas **`propio`** (alta pública), **excepto admin**. Los alumnos de **comisión** no se eliminan por inactividad. El plazo de 7 días corre desde `POLITICA_CUENTAS_VIGENTE_DESDE` en `src/lib/cuentas.ts` (opcional `POLITICA_CUENTAS_DESDE` en el entorno); no se usa inactividad anterior. Se borra si se cumple **cualquiera** de:
 
 1. No hubo **login** (`ultimo_acceso`, o `creado_en` si nunca entró).
-2. No hubo **sync UGR** (`sincronizado_en` se actualiza en cada sync de materias/núcleo/completa; si nunca sincronizó, cuenta desde `creado_en`).
+2. No hubo **sync UGR** (`sincronizado_en` en cada sync de materias/núcleo/completa).
+
+**Recuperar datos** tras un borrado masivo: `turso db branch <db> <db-restaurada> --timestamp '…'` a un instante anterior, exportar tablas afectadas y volcar en la base productiva (o cambiar `TURSO_DATABASE_URL` tras validar).
 
 El error de esa limpieza se traga para no tumbar el login si faltara una columna.
 
