@@ -246,7 +246,7 @@ test('un parcial cargado como tarea pasa al apartado de parciales', async () => 
   }
 });
 
-test('cargarNotasDesdeEnlaces omite notas cerradas hace más de una semana y prioriza pendientes', async () => {
+test('cargarNotasDesdeEnlaces omite tareas con nota cerrada y prioriza pendientes', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ugr-cache-notas-'));
   const db = createClient({ url: `file:${join(dir, 'test.db')}` });
   try {
@@ -288,9 +288,9 @@ test('cargarNotasDesdeEnlaces omite notas cerradas hace más de una semana y pri
     });
 
     assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=1'), false);
-    assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=2'), true);
+    assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=2'), false);
     assert.equal(urlsPedidas.includes('https://virtual.ugr.edu.ar/mod/assign/view.php?id=3'), true);
-    assert.equal(urlsPedidas.length, 2);
+    assert.equal(urlsPedidas.length, 1);
     assert.equal(urlsPedidas[0], 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=3');
   } finally {
     db.close();

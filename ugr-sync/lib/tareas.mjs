@@ -628,6 +628,53 @@ export function parsearNotaPublicada(texto) {
   return null;
 }
 
+/**
+ * Cuestionario revisado sin fila «Calificación» en el resumen (común en UGR):
+ * si el intento está finalizado y todas las preguntas están correctas, se infiere la nota.
+ */
+export function extraerNotaQuizDesdeRevision(html) {
+  if (!html) return null;
+  const $ = load(html);
+  const resumen = $('table.quizreviewsummary').first();
+  if (!resumen.length && $('.que').length === 0) return null;
+  let estadoFinalizado = false;
+  let notaOficial = null;
+  resumen.find('tr').each((_, tr) => {
+    const rotulo = limpiarTexto($(tr).find('th').first().text()).toLowerCase();
+    const celda = limpiarTexto($(tr).find('td').first().text());
+    if (/^(estado|status)$/.test(rotulo) && /finalizado|finished|completado|completed/i.test(celda)) {
+      estadoFinalizado = true;
+    }
+    if (/^calificaci[oó]n$/.test(rotulo)) {
+      const oficial = notaDeRotuloCalificacion($(tr).find('td').first().html() || celda);
+      if (oficial != null) notaOficial = oficial;
+    }
+  });
+  if (notaOficial != null) return notaOficial;
+  if (!estadoFinalizado) return null;
+
+  const preguntas = $('.que').toArray();
+  if (!preguntas.length) return null;
+  let todasCorrectas = true;
+  let puntos = 0;
+  let maxPuntos = 0;
+  for (const nodo of preguntas) {
+    const bloque = $(nodo);
+    const ok = bloque.hasClass('correct') || /correcta|correct/i.test(bloque.find('.state').first().text());
+    if (!ok) todasCorrectas = false;
+    const textoPuntos = bloque.find('.info .grade').first().text();
+    const m = textoPuntos.match(/(\d+(?:[.,]\d+)?)\s*sobre\s*(\d+(?:[.,]\d+)?)/i);
+    if (m) {
+      puntos += Number(m[1].replace(',', '.'));
+      maxPuntos += Number(m[2].replace(',', '.'));
+    }
+  }
+  if (todasCorrectas && maxPuntos > 0 && puntos < maxPuntos) puntos = maxPuntos;
+  if (maxPuntos > 0) return notaEnEscalaDiez(puntos, maxPuntos);
+  if (todasCorrectas) return 10;
+  return null;
+}
+
 function notaDeCuerpoDeIntento(cuerpo) {
   const enCurso = /en curso|sin finalizar|in progress/i.test(cuerpo);
   const cerrado = /finalizado|completado|completed/i.test(cuerpo);
@@ -754,7 +801,9 @@ export function extraerNotaUltimoIntento(html) {
   const final = texto.match(/calificaci[oó]n final(?:\s+en\s+este\s+cuestionario)?(?:\s+es)?\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/i);
   if (final) return parsearNotaPublicada(final[1]);
   const suelta = texto.match(/(?:su calificaci[oó]n(?:\s+es)?|calificaci[oó]n m[aá]s alta)\s*:?\s*(\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d+(?:[.,]\d+)?)/i);
-  return suelta ? parsearNotaPublicada(suelta[1]) : null;
+  const deSuelta = suelta ? parsearNotaPublicada(suelta[1]) : null;
+  if (deSuelta != null) return deSuelta;
+  return extraerNotaQuizDesdeRevision(html);
 }
 
 function extraerNotaDeForo(html) {

@@ -8,14 +8,13 @@ import {
   priorizarYFiltrarRevisionCampus
 } from '../lib/sync-optimizacion.mjs';
 
-test('omite tarea con nota cerrada hace más de una semana', () => {
-  const haceOcho = new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString();
+test('omite tarea con nota cerrada en el tablero (no vuelve a pedir la página)', () => {
   const { omitir } = evaluarFilaRevisionCampus({
     tabla: 'tareas',
     con_nota: 1,
     nota_guardada: '10',
     nota_cerrada: 1,
-    nota_cargada_en: haceOcho
+    nota_cargada_en: new Date().toISOString()
   });
   assert.equal(omitir, true);
 });
