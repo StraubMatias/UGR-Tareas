@@ -272,8 +272,8 @@ export default function VistaHorarios({
                         return (
                           <div key={parcial.id} className="calendar-event calendar-exam" title={`${parcial.nombre} · ${materia?.nombre || 'Materia'}`}>
                             <span className="font-bold">{etiqueta}</span>{' '}
-                            <span className="block truncate">{esRecup ? parcial.nombre : nombreMateriaEnCalendario(materia?.nombre || 'Materia')}</span>
-                            {!esRecup && parcial.detalles && <span className="block truncate opacity-75">{parcial.detalles}</span>}
+                            <span className="block text-center">{esRecup ? parcial.nombre : nombreMateriaEnCalendario(materia?.nombre || 'Materia')}</span>
+                            {!esRecup && parcial.detalles && <span className="block text-center opacity-75">{parcial.detalles}</span>}
                           </div>
                         );
                       })}
@@ -322,7 +322,7 @@ export default function VistaHorarios({
                           >
                             {mostrarEtiquetaChip && <span className="font-bold">{etiqueta}</span>}
                             {!esSinClases && (
-                              <span className={`block truncate ${mostrarEtiquetaChip ? 'opacity-90' : 'font-bold'}`}>{tituloChip}</span>
+                              <span className={`block text-center ${mostrarEtiquetaChip ? 'opacity-90' : 'font-bold'}`}>{tituloChip}</span>
                             )}
                           </div>
                         );
