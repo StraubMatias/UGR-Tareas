@@ -9,10 +9,10 @@ import {
 } from '../core/cursada';
 import type { ReactNode } from 'react';
 import {
-  claseDensidadDiaCalendario,
   horariosParaCeldaCalendario,
   nombreMateriaEnCalendario,
-  rangoHorarioCalendario
+  rangoHorarioCalendario,
+  semanasCalendarioDelMes
 } from '../lib/calendario-celda';
 import { mostrarEtiquetaTipoCronograma, tituloDestacadoCronograma } from '../lib/cronograma-vista';
 
@@ -186,11 +186,13 @@ export default function VistaHorarios({
                 </span>
               ))}
             </div>
-            <div className="calendar-week-grid calendar-grid mt-2">
-              {diasCalendario.map((fecha, indice) => {
+            <div className="calendar-weeks mt-2">
+              {semanasCalendarioDelMes(diasCalendario).map((semana, indiceSemana) => (
+                <div key={`semana-${indiceSemana}`} className="calendar-week-row calendar-week-grid">
+              {semana.map((fecha, indice) => {
                 const finde = esColumnaFinDeSemana(indice);
                 if (!fecha) {
-                  return <div key={`vacio-${indice}`} className={`calendar-empty ${finde ? 'calendar-empty-weekend' : ''}`} />;
+                  return <div key={`vacio-${indiceSemana}-${indice}`} className={`calendar-empty ${finde ? 'calendar-empty-weekend' : ''}`} aria-hidden />;
                 }
 
                 const eventos = eventosDelDiaCalendario(fecha);
@@ -208,7 +210,7 @@ export default function VistaHorarios({
                     type="button"
                     onClick={() => setDiaCalendarioSeleccionado(fecha)}
                     aria-label={`Ver detalle del día ${fecha.toLocaleDateString('es-AR', { dateStyle: 'full' })}`}
-                    className={`calendar-day ${esHoy ? 'calendar-day-today' : ''} ${esFinde ? 'calendar-day-weekend' : ''} ${claseDensidadDiaCalendario(cantidadEventos, esFinde)}`}
+                    className={`calendar-day ${esHoy ? 'calendar-day-today' : ''} ${esFinde ? 'calendar-day-weekend' : ''}`}
                   >
                     <div className="flex items-center justify-between gap-1">
                       <span className={`calendar-date ${esHoy ? 'calendar-date-today' : ''}`}>{fecha.getDate()}</span>
@@ -337,6 +339,8 @@ export default function VistaHorarios({
                   </button>
                 );
               })}
+                </div>
+              ))}
             </div>
             <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-800 pt-3 text-[11px] font-semibold text-slate-400">
               <span><i className="calendar-legend-dot bg-cyan-400" /> Cursada</span>
