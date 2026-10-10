@@ -53,6 +53,14 @@ const esFinDeSemanaCalendario = (fecha: Date) => fecha.getDay() === 0 || fecha.g
 
 const esColumnaFinDeSemana = (indice: number) => indice % 7 >= 5;
 
+/** La cursada fija ya tiene chip; no repetir la misma materia como «clase» del plan. */
+function cronogramaVisibleEnCelda(evento: EventoCronograma, horarios: Horario[]) {
+  if (esEventoDeSinClases(evento)) return true;
+  if (evento.modalidad === 'asincrónico') return true;
+  if (evento.tipo !== 'clase') return true;
+  return !horarios.some((horario) => horario.materia_id === evento.materia_id);
+}
+
 function enlaceSincronicoHorario(
   horario: Horario,
   enlacesPorMateria?: Map<string, string>
@@ -287,7 +295,7 @@ export default function VistaHorarios({
                           <span className="font-bold">Entrega</span> {tarea.nombre}
                         </div>
                       ))}
-                      {eventos.cronograma.map((evento) => {
+                      {eventos.cronograma.filter((evento) => cronogramaVisibleEnCelda(evento, eventos.horarios)).map((evento) => {
                         const materia = materias.find((item) => item.id === evento.materia_id);
                         const esAsincronico = evento.modalidad === 'asincrónico';
                         const esSinClases = esEventoDeSinClases(evento);

@@ -2,7 +2,7 @@ const ABREVIAR_MATERIA_CALENDARIO: Array<{ prueba: RegExp; etiqueta: string }> =
   { prueba: /conceptos?\s+de\s+desarrollo\s+de\s+software/i, etiqueta: 'Desarrollo de software' },
   { prueba: /introducci[oó]n\s+a\s+la\s+criptograf[ií]a/i, etiqueta: 'Intro. criptografía' },
   { prueba: /auditor[ií]as?\s+de\s+seguridad/i, etiqueta: 'Auditoría SGSI' },
-  { prueba: /sistemas\s+de\s+gesti[oó]n\s+de\s+la\s+seguridad/i, etiqueta: 'SGSI' },
+  { prueba: /sistemas?\s+de\s+gesti[oó]n\s+de\s+la\s+seguridad/i, etiqueta: 'SGSI' },
   { prueba: /gesti[oó]n\s+de\s+activos/i, etiqueta: 'Gestión de activos' }
 ];
 
