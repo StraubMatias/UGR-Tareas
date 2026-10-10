@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  claseDensidadDiaCalendario,
   horariosParaCeldaCalendario,
   nombreMateriaEnCalendario,
   ordenarHorariosCalendario,
-  rangoHorarioCalendario
+  rangoHorarioCalendario,
+  semanasCalendarioDelMes
 } from '../src/lib/calendario-celda.ts';
 
 function obtenerDiaSemanaHorario(fecha) {
@@ -68,13 +68,14 @@ test('horariosParaCeldaCalendario deja un chip por materia y por nombre+horario'
   assert.equal(lista.length, 1);
 });
 
-test('ordenarHorariosCalendario y densidad del día', () => {
+test('ordenarHorariosCalendario y semanas del mes', () => {
   const ordenados = ordenarHorariosCalendario([
     { hora_inicio: '19:00' },
     { hora_inicio: '17:00' }
   ]);
   assert.equal(ordenados[0].hora_inicio, '17:00');
   assert.equal(rangoHorarioCalendario('17:00', '18:30'), '17:00–18:30');
-  assert.equal(claseDensidadDiaCalendario(2, false), 'calendar-day-medium');
-  assert.equal(claseDensidadDiaCalendario(4, true), '');
+  const semanas = semanasCalendarioDelMes([null, null, new Date(2026, 8, 1), new Date(2026, 8, 2)]);
+  assert.equal(semanas.length, 1);
+  assert.equal(semanas[0].length, 4);
 });

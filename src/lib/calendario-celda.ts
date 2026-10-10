@@ -34,12 +34,13 @@ export function rangoHorarioCalendario(horaInicio: string, horaFin: string): str
   return `${inicio}–${fin}`;
 }
 
-/** Más eventos en la celda → más alto el día hábil (lun–vie). */
-export function claseDensidadDiaCalendario(cantidadEventos: number, esFinDeSemana: boolean): string {
-  if (esFinDeSemana || cantidadEventos < 2) return '';
-  if (cantidadEventos >= 4) return 'calendar-day-heavy';
-  if (cantidadEventos >= 3) return 'calendar-day-dense';
-  return 'calendar-day-medium';
+/** Agrupa el mes en filas de 7 (lun–dom) para altura por semana. */
+export function semanasCalendarioDelMes(dias: (Date | null)[]): (Date | null)[][] {
+  const semanas: (Date | null)[][] = [];
+  for (let indice = 0; indice < dias.length; indice += 7) {
+    semanas.push(dias.slice(indice, indice + 7));
+  }
+  return semanas;
 }
 
 export function ordenarHorariosCalendario<T extends { hora_inicio?: string }>(horarios: T[]): T[] {
