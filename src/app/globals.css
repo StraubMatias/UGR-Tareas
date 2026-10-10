@@ -475,6 +475,69 @@ textarea {
   color: #62d6d1;
 }
 
+/* Lun–vie ocupan más ancho; sáb/dom angostos (siguen clicables y abren el modal). */
+.calendar-week-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr))
+    minmax(0, 0.34fr)
+    minmax(0, 0.34fr);
+  gap: 0.25rem;
+}
+
+@media (min-width: 640px) {
+  .calendar-week-grid {
+    gap: 0.5rem;
+  }
+}
+
+.calendar-weekday-weekend {
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  opacity: 0.75;
+}
+
+.calendar-empty-weekend {
+  min-height: 1.75rem;
+  opacity: 0.35;
+}
+
+.calendar-day-weekend {
+  min-height: 2.75rem;
+  padding: 0.2rem 0.12rem;
+  border-color: rgba(51, 65, 85, 0.45);
+  background: rgba(12, 16, 22, 0.72);
+}
+
+.calendar-day-weekend:hover {
+  border-color: rgba(98, 214, 209, 0.45);
+  background: rgba(20, 28, 36, 0.88);
+}
+
+.calendar-day-weekend .calendar-date {
+  min-width: 1.25rem;
+  height: 1.25rem;
+  font-size: 0.65rem;
+  color: #64748b;
+}
+
+.calendar-day-chips-weekend {
+  margin-top: 0.35rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.calendar-weekend-hint {
+  display: block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin: 0.15rem auto 0;
+  border-radius: 999px;
+  background: #62d6d1;
+  box-shadow: 0 0 0 2px rgba(98, 214, 209, 0.2);
+}
+
 .calendar-empty {
   min-height: 3rem;
 }
@@ -704,6 +767,10 @@ textarea {
   .calendar-day {
     min-height: 3.25rem;
     padding: 0.25rem;
+  }
+
+  .calendar-day-weekend {
+    min-height: 2.25rem;
   }
 
   .calendar-day-empty {
