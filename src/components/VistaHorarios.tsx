@@ -1,5 +1,6 @@
 import {
   etiquetaMateria,
+  obtenerIconoMateria,
   type EventoCronograma,
   type Horario,
   type Materia,
@@ -7,6 +8,12 @@ import {
   type Tarea
 } from '../core/cursada';
 import type { ReactNode } from 'react';
+import {
+  claseDensidadDiaCalendario,
+  nombreMateriaEnCalendario,
+  ordenarHorariosCalendario,
+  rangoHorarioCalendario
+} from '../lib/calendario-celda';
 import { mostrarEtiquetaTipoCronograma, tituloDestacadoCronograma } from '../lib/cronograma-vista';
 
 interface EventosDia {
@@ -60,12 +67,38 @@ function BotonLinkSincronico({ url, compact = false }: { url: string; compact?: 
       target="_blank"
       rel="noopener noreferrer"
       className={`inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 font-bold text-cyan-200 hover:bg-cyan-500/20 hover:underline ${
-        compact ? 'px-1.5 py-0.5 text-[9px] mt-0.5' : 'px-2 py-1 text-[11px] mt-1'
+        compact ? 'calendar-class-link px-1 py-0.5 text-[8px] mt-0.5' : 'px-2 py-1 text-[11px] mt-1'
       }`}
       onClick={(e) => e.stopPropagation()}
     >
       {compact ? 'Sincrónico ↗' : 'Link sincrónico ↗'}
     </a>
+  );
+}
+
+function ChipCursadaCalendario({
+  nombreCompleto,
+  rango,
+  enlaceClase
+}: {
+  nombreCompleto: string;
+  rango: string;
+  enlaceClase: string;
+}) {
+  const nombre = nombreMateriaEnCalendario(nombreCompleto);
+  const icono = obtenerIconoMateria(nombreCompleto);
+  return (
+    <div
+      className="calendar-event calendar-class calendar-class-stacked"
+      title={`${nombreCompleto} · ${rango}`}
+    >
+      <span className="calendar-class-name">
+        <span className="calendar-class-icon" aria-hidden>{icono}</span>
+        {nombre}
+      </span>
+      <span className="calendar-class-time">{rango}</span>
+      {enlaceClase && <BotonLinkSincronico url={enlaceClase} compact />}
+    </div>
   );
 }
 
@@ -164,7 +197,7 @@ export default function VistaHorarios({
                     type="button"
                     onClick={() => setDiaCalendarioSeleccionado(fecha)}
                     aria-label={`Ver detalle del día ${fecha.toLocaleDateString('es-AR', { dateStyle: 'full' })}`}
-                    className={`calendar-day ${esHoy ? 'calendar-day-today' : ''} ${esFinde ? 'calendar-day-weekend' : ''}`}
+                    className={`calendar-day ${esHoy ? 'calendar-day-today' : ''} ${esFinde ? 'calendar-day-weekend' : ''} ${claseDensidadDiaCalendario(cantidadEventos, esFinde)}`}
                   >
                     <div className="flex items-center justify-between gap-1">
                       <span className={`calendar-date ${esHoy ? 'calendar-date-today' : ''}`}>{fecha.getDate()}</span>
@@ -181,8 +214,26 @@ export default function VistaHorarios({
                         aria-hidden
                       />
                     )}
+                    {cantidadEventos > 0 && !esFinde && eventos.horarios.length > 0 && (
+                      <div className="calendar-day-chips calendar-day-chips-mobile sm:hidden mt-1">
+                        {ordenarHorariosCalendario(eventos.horarios).slice(0, 3).map((horario) => {
+                          const materia = materias.find((item) => item.id === horario.materia_id);
+                          const nombreCorto = materia?.nombre || 'Materia';
+                          const rango = rangoHorarioCalendario(horario.hora_inicio, horario.hora_fin);
+                          const enlaceClase = enlaceSincronicoHorario(horario, eventos.enlacesClasePorMateria);
+                          return (
+                            <ChipCursadaCalendario
+                              key={`m-${claveDia}-${horario.id}`}
+                              nombreCompleto={nombreCorto}
+                              rango={rango}
+                              enlaceClase={enlaceClase}
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
                     {cantidadEventos > 0 && !esFinde && (
-                      <div className="calendar-day-chips hidden sm:block">
+                      <div className="calendar-day-chips hidden sm:flex">
                     {(() => {
                       const esSoloSinClases = eventos.horarios.length === 0
                         && eventos.parciales.length === 0
@@ -205,22 +256,18 @@ export default function VistaHorarios({
                       }
                       return (
                         <div className="mt-2 space-y-1.5">
-                      {eventos.horarios.map((horario) => {
+                      {ordenarHorariosCalendario(eventos.horarios).map((horario) => {
                         const materia = materias.find((item) => item.id === horario.materia_id);
                         const nombreCorto = materia?.nombre || 'Materia';
                         const enlaceClase = enlaceSincronicoHorario(horario, eventos.enlacesClasePorMateria);
-                        const rango = `${horario.hora_inicio}–${horario.hora_fin}`;
+                        const rango = rangoHorarioCalendario(horario.hora_inicio, horario.hora_fin);
                         return (
-                          <div
+                          <ChipCursadaCalendario
                             key={`${claveDia}-${horario.id}`}
-                            className="calendar-event calendar-class"
-                            title={`${nombreCorto} · ${rango}`}
-                          >
-                            <span className="block truncate text-[10px] font-extrabold leading-tight sm:text-[11px]">
-                              {etiquetaMateria(nombreCorto)} · {rango}
-                            </span>
-                            {enlaceClase && <BotonLinkSincronico url={enlaceClase} compact />}
-                          </div>
+                            nombreCompleto={nombreCorto}
+                            rango={rango}
+                            enlaceClase={enlaceClase}
+                          />
                         );
                       })}
                       {eventos.parciales.map((parcial) => {
@@ -230,7 +277,7 @@ export default function VistaHorarios({
                         return (
                           <div key={parcial.id} className="calendar-event calendar-exam" title={`${parcial.nombre} · ${materia?.nombre || 'Materia'}`}>
                             <span className="font-bold">{etiqueta}</span>{' '}
-                            <span className="block truncate">{esRecup ? parcial.nombre : (materia?.nombre || 'Materia')}</span>
+                            <span className="block truncate">{esRecup ? parcial.nombre : nombreMateriaEnCalendario(materia?.nombre || 'Materia')}</span>
                             {!esRecup && parcial.detalles && <span className="block truncate opacity-75">{parcial.detalles}</span>}
                           </div>
                         );

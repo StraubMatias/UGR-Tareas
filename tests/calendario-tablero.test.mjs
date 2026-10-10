@@ -1,5 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {
+  claseDensidadDiaCalendario,
+  nombreMateriaEnCalendario,
+  ordenarHorariosCalendario,
+  rangoHorarioCalendario
+} from '../src/lib/calendario-celda.ts';
 
 function obtenerDiaSemanaHorario(fecha) {
   const diaSemana = fecha.getDay();
@@ -30,4 +36,24 @@ test('alinearFechaEventoAlHorarioMateria mueve el plan al miércoles de Criptogr
 test('alinearFechaEventoAlHorarioMateria corrige Conceptos al jueves', () => {
   const horarios = [{ id: 'h1', materia_id: 'dev', dia: 4, hora_inicio: '19:00', hora_fin: '20:30', aula: 'Virtual' }];
   assert.equal(alinearFechaEventoAlHorarioMateria('2026-09-04', 'dev', horarios), '2026-09-03');
+});
+
+test('nombreMateriaEnCalendario abrevia títulos largos de la comisión', () => {
+  assert.equal(
+    nombreMateriaEnCalendario('(V.TUCS…) Conceptos de Desarrollo de Software'),
+    'Desarrollo de software'
+  );
+  assert.equal(nombreMateriaEnCalendario('Gestión de Activos de la Información'), 'Gestión de activos');
+  assert.equal(nombreMateriaEnCalendario('Sistemas de Gestión de la Seguridad'), 'SGSI');
+});
+
+test('ordenarHorariosCalendario y densidad del día', () => {
+  const ordenados = ordenarHorariosCalendario([
+    { hora_inicio: '19:00' },
+    { hora_inicio: '17:00' }
+  ]);
+  assert.equal(ordenados[0].hora_inicio, '17:00');
+  assert.equal(rangoHorarioCalendario('17:00', '18:30'), '17:00–18:30');
+  assert.equal(claseDensidadDiaCalendario(2, false), 'calendar-day-medium');
+  assert.equal(claseDensidadDiaCalendario(4, true), '');
 });
