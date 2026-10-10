@@ -47,6 +47,13 @@ test('nombreMateriaEnCalendario abrevia títulos largos de la comisión', () => 
   assert.equal(nombreMateriaEnCalendario('Sistemas de Gestión de la Seguridad'), 'SGSI');
 });
 
+test('nombreMateriaEnCalendario abrevia SGSI en singular', () => {
+  assert.equal(
+    nombreMateriaEnCalendario('Sistema de Gestión de la Seguridad de la Información'),
+    'SGSI'
+  );
+});
+
 test('ordenarHorariosCalendario y densidad del día', () => {
   const ordenados = ordenarHorariosCalendario([
     { hora_inicio: '19:00' },

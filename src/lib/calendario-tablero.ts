@@ -145,14 +145,21 @@ export function eventosDelDiaCalendario(
     grupo.push(horario);
     porMateria.set(horario.materia_id, grupo);
   }
-  const horariosReales = [...porMateria.values()].flatMap((grupo) => {
+  const elegirHorarioCursada = (grupo: Horario[]) => {
     const deHoraYMedia = grupo.filter((horario) => {
       const [ha, ma] = String(horario.hora_inicio).split(':').map(Number);
       const [hb, mb] = String(horario.hora_fin).split(':').map(Number);
       return [ha, ma, hb, mb].every(Number.isFinite) && (hb * 60 + mb) - (ha * 60 + ma) === 90;
     });
-    return deHoraYMedia.length > 0 ? deHoraYMedia : grupo;
-  }).sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio)) || String(a.materia_id).localeCompare(String(b.materia_id)));
+    const candidatos = deHoraYMedia.length > 0 ? deHoraYMedia : grupo;
+    return [...candidatos].sort(
+      (a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio)) || String(a.id).localeCompare(String(b.id))
+    )[0];
+  };
+  const horariosReales = [...porMateria.values()]
+    .map(elegirHorarioCursada)
+    .filter(Boolean)
+    .sort((a, b) => String(a.hora_inicio).localeCompare(String(b.hora_inicio)) || String(a.materia_id).localeCompare(String(b.materia_id)));
 
   const nombreMateriaPorId = new Map(materiasCalendario.map((m) => [m.id, m.nombre]));
   const textoPlanClase = (materiaId: string) => {
