@@ -208,3 +208,4 @@ export function eventosDelDiaCalendario(
     detallesClaseEnCursadaPorMateria: presentacion.detallesClaseEnCursadaPorMateria
   };
 }
+

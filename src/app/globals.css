@@ -555,6 +555,26 @@ textarea {
   transition: border-color 160ms ease, background-color 160ms ease;
 }
 
+@media (min-width: 640px) {
+  .calendar-day-medium {
+    min-height: 6.75rem;
+  }
+
+  .calendar-day-dense {
+    min-height: 8.75rem;
+  }
+
+  .calendar-day-heavy {
+    min-height: 11rem;
+  }
+}
+
+.calendar-day-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 .calendar-day-empty {
   align-self: start;
   min-height: 3.25rem;
@@ -605,6 +625,50 @@ textarea {
   border-color: #62d6d1;
   background: rgba(98, 214, 209, 0.12);
   color: #b8f3f0;
+}
+
+.calendar-class-stacked {
+  white-space: normal;
+  padding: 0.32rem 0.38rem 0.38rem;
+  line-height: 1.2;
+}
+
+.calendar-class-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1.22;
+}
+
+.calendar-class-icon {
+  margin-right: 0.2rem;
+}
+
+.calendar-class-time {
+  display: block;
+  margin-top: 0.12rem;
+  font-size: 0.58rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: #7dd3fc;
+}
+
+.calendar-class-link {
+  max-width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .calendar-class-name {
+    font-size: 0.68rem;
+  }
+
+  .calendar-class-time {
+    font-size: 0.62rem;
+  }
 }
 
 .calendar-exam {
