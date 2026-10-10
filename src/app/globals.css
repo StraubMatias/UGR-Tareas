@@ -618,17 +618,63 @@ textarea {
   width: 100%;
   flex: 0 1 auto;
   flex-direction: column;
+  align-items: center;
   gap: 0.3rem;
   min-height: 0;
   overflow: hidden;
-  text-align: left;
+  text-align: center;
 }
 
 .calendar-day-chip-list {
   display: flex;
   width: 100%;
   flex-direction: column;
+  align-items: center;
   gap: 0.3rem;
+  text-align: center;
+}
+
+/* Chips del mes: texto centrado (el modal del día sigue alineado a la izquierda). */
+.calendar-day .calendar-event {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  white-space: normal;
+  border-left: none;
+  border-top: 2px solid;
+}
+
+.calendar-day .calendar-class-stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.calendar-day .calendar-class-name {
+  width: 100%;
+  text-align: center;
+  -webkit-box-pack: center;
+}
+
+.calendar-day .calendar-class-time {
+  width: 100%;
+  text-align: center;
+}
+
+.calendar-day .calendar-event .truncate,
+.calendar-day .calendar-event [class*='truncate'] {
+  text-align: center;
+  white-space: normal;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.calendar-day .calendar-class-link {
+  display: inline-flex;
+  justify-content: center;
+  margin-inline: auto;
 }
 
 .calendar-day-empty {
