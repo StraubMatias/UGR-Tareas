@@ -10,8 +10,8 @@ import {
 import type { ReactNode } from 'react';
 import {
   claseDensidadDiaCalendario,
+  horariosParaCeldaCalendario,
   nombreMateriaEnCalendario,
-  ordenarHorariosCalendario,
   rangoHorarioCalendario
 } from '../lib/calendario-celda';
 import { mostrarEtiquetaTipoCronograma, tituloDestacadoCronograma } from '../lib/cronograma-vista';
@@ -53,12 +53,12 @@ const esFinDeSemanaCalendario = (fecha: Date) => fecha.getDay() === 0 || fecha.g
 
 const esColumnaFinDeSemana = (indice: number) => indice % 7 >= 5;
 
-/** La cursada fija ya tiene chip; no repetir la misma materia como «clase» del plan. */
+/** En la grilla solo entran avisos del plan; la cursada fija ya tiene su chip. */
 function cronogramaVisibleEnCelda(evento: EventoCronograma, horarios: Horario[]) {
   if (esEventoDeSinClases(evento)) return true;
   if (evento.modalidad === 'asincrónico') return true;
-  if (evento.tipo !== 'clase') return true;
-  return !horarios.some((horario) => horario.materia_id === evento.materia_id);
+  if (horarios.some((horario) => horario.materia_id === evento.materia_id)) return false;
+  return true;
 }
 
 function enlaceSincronicoHorario(
@@ -196,7 +196,10 @@ export default function VistaHorarios({
                 const eventos = eventosDelDiaCalendario(fecha);
                 const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
                 const esHoy = claveDia === claveHoyCalendario;
-                const cantidadEventos = eventos.horarios.length + eventos.parciales.length + eventos.tareas.length + eventos.cronograma.length;
+                const nombreMateriaId = (materiaId: string) => materias.find((m) => m.id === materiaId)?.nombre || 'Materia';
+                const horariosCelda = horariosParaCeldaCalendario(eventos.horarios, nombreMateriaId);
+                const cronogramaCelda = eventos.cronograma.filter((evento) => cronogramaVisibleEnCelda(evento, horariosCelda));
+                const cantidadEventos = horariosCelda.length + eventos.parciales.length + eventos.tareas.length + cronogramaCelda.length;
                 const esFinde = esFinDeSemanaCalendario(fecha);
 
                 return (
@@ -222,40 +225,22 @@ export default function VistaHorarios({
                         aria-hidden
                       />
                     )}
-                    {cantidadEventos > 0 && !esFinde && eventos.horarios.length > 0 && (
-                      <div className="calendar-day-chips calendar-day-chips-mobile sm:hidden mt-1">
-                        {ordenarHorariosCalendario(eventos.horarios).slice(0, 3).map((horario) => {
-                          const materia = materias.find((item) => item.id === horario.materia_id);
-                          const nombreCorto = materia?.nombre || 'Materia';
-                          const rango = rangoHorarioCalendario(horario.hora_inicio, horario.hora_fin);
-                          const enlaceClase = enlaceSincronicoHorario(horario, eventos.enlacesClasePorMateria);
-                          return (
-                            <ChipCursadaCalendario
-                              key={`m-${claveDia}-${horario.id}`}
-                              nombreCompleto={nombreCorto}
-                              rango={rango}
-                              enlaceClase={enlaceClase}
-                            />
-                          );
-                        })}
-                      </div>
-                    )}
                     {cantidadEventos > 0 && !esFinde && (
-                      <div className="calendar-day-chips hidden sm:flex">
+                      <div className="calendar-day-chips mt-1 flex flex-col">
                     {(() => {
-                      const esSoloSinClases = eventos.horarios.length === 0
+                      const esSoloSinClases = horariosCelda.length === 0
                         && eventos.parciales.length === 0
                         && eventos.tareas.length === 0
-                        && eventos.cronograma.length > 0
-                        && eventos.cronograma.every(esEventoDeSinClases);
+                        && cronogramaCelda.length > 0
+                        && cronogramaCelda.every(esEventoDeSinClases);
                       if (esSoloSinClases) {
                         return (
                           <div className="mt-2 space-y-1.5">
-                            {eventos.cronograma.map((evento) => {
+                            {cronogramaCelda.map((evento) => {
                               const materia = materias.find((item) => item.id === evento.materia_id);
                               return (
                                 <div key={evento.id} className="calendar-event calendar-off" title={`Sin clases · ${materia?.nombre || 'Materia'}`}>
-                                  <span className="font-bold">Sin clases</span> {materia?.nombre || 'Materia'}
+                                  <span className="font-bold">Sin clases</span> {nombreMateriaEnCalendario(materia?.nombre || 'Materia')}
                                 </div>
                               );
                             })}
@@ -264,14 +249,13 @@ export default function VistaHorarios({
                       }
                       return (
                         <div className="mt-2 space-y-1.5">
-                      {ordenarHorariosCalendario(eventos.horarios).map((horario) => {
-                        const materia = materias.find((item) => item.id === horario.materia_id);
-                        const nombreCorto = materia?.nombre || 'Materia';
+                      {horariosCelda.map((horario) => {
+                        const nombreCorto = nombreMateriaId(horario.materia_id);
                         const enlaceClase = enlaceSincronicoHorario(horario, eventos.enlacesClasePorMateria);
                         const rango = rangoHorarioCalendario(horario.hora_inicio, horario.hora_fin);
                         return (
                           <ChipCursadaCalendario
-                            key={`${claveDia}-${horario.id}`}
+                            key={`${claveDia}-${horario.materia_id}`}
                             nombreCompleto={nombreCorto}
                             rango={rango}
                             enlaceClase={enlaceClase}
@@ -295,7 +279,7 @@ export default function VistaHorarios({
                           <span className="font-bold">Entrega</span> {tarea.nombre}
                         </div>
                       ))}
-                      {eventos.cronograma.filter((evento) => cronogramaVisibleEnCelda(evento, eventos.horarios)).map((evento) => {
+                      {cronogramaCelda.map((evento) => {
                         const materia = materias.find((item) => item.id === evento.materia_id);
                         const esAsincronico = evento.modalidad === 'asincrónico';
                         const esSinClases = esEventoDeSinClases(evento);

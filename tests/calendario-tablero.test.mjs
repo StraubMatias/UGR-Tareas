@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   claseDensidadDiaCalendario,
+  horariosParaCeldaCalendario,
   nombreMateriaEnCalendario,
   ordenarHorariosCalendario,
   rangoHorarioCalendario
@@ -47,11 +48,24 @@ test('nombreMateriaEnCalendario abrevia títulos largos de la comisión', () => 
   assert.equal(nombreMateriaEnCalendario('Sistemas de Gestión de la Seguridad'), 'SGSI');
 });
 
-test('nombreMateriaEnCalendario abrevia SGSI en singular', () => {
+test('Auditoría SI y SGSI no se mezclan', () => {
+  assert.equal(nombreMateriaEnCalendario('Auditorías de Seguridad de la Información'), 'Auditoría SI');
   assert.equal(
-    nombreMateriaEnCalendario('Sistema de Gestión de la Seguridad de la Información'),
+    nombreMateriaEnCalendario('Sistemas de Gestión de Seguridad de la Información (Marcos Normativos)'),
     'SGSI'
   );
+});
+
+test('horariosParaCeldaCalendario deja un chip por materia y por nombre+horario', () => {
+  const lista = horariosParaCeldaCalendario(
+    [
+      { materia_id: 'a', hora_inicio: '19:00', hora_fin: '20:30', id: '1' },
+      { materia_id: 'a', hora_inicio: '19:00', hora_fin: '20:30', id: '2' },
+      { materia_id: 'b', hora_inicio: '19:00', hora_fin: '20:30', id: '3' }
+    ],
+    (id) => (id === 'a' ? 'Conceptos de Desarrollo de Software' : 'Conceptos de Desarrollo de Software')
+  );
+  assert.equal(lista.length, 1);
 });
 
 test('ordenarHorariosCalendario y densidad del día', () => {
