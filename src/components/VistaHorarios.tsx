@@ -212,10 +212,11 @@ export default function VistaHorarios({
                     aria-label={`Ver detalle del día ${fecha.toLocaleDateString('es-AR', { dateStyle: 'full' })}`}
                     className={`calendar-day ${esHoy ? 'calendar-day-today' : ''} ${esFinde ? 'calendar-day-weekend' : ''}`}
                   >
-                    <div className="flex items-center justify-between gap-1">
+                    <div className="calendar-day-inner">
+                    <div className="calendar-day-head">
                       <span className={`calendar-date ${esHoy ? 'calendar-date-today' : ''}`}>{fecha.getDate()}</span>
                       {cantidadEventos > 0 && (
-                        <span className={`font-bold text-slate-500 ${esFinde ? 'text-[8px]' : 'text-[9px]'}`}>
+                        <span className={`calendar-day-count font-bold text-slate-500 ${esFinde ? 'text-[8px]' : 'text-[9px]'}`}>
                           {cantidadEventos}
                         </span>
                       )}
@@ -228,7 +229,7 @@ export default function VistaHorarios({
                       />
                     )}
                     {cantidadEventos > 0 && !esFinde && (
-                      <div className="calendar-day-chips mt-1 flex flex-col">
+                      <div className="calendar-day-chips">
                     {(() => {
                       const esSoloSinClases = horariosCelda.length === 0
                         && eventos.parciales.length === 0
@@ -237,7 +238,7 @@ export default function VistaHorarios({
                         && cronogramaCelda.every(esEventoDeSinClases);
                       if (esSoloSinClases) {
                         return (
-                          <div className="mt-2 space-y-1.5">
+                          <div className="calendar-day-chip-list">
                             {cronogramaCelda.map((evento) => {
                               const materia = materias.find((item) => item.id === evento.materia_id);
                               return (
@@ -250,7 +251,7 @@ export default function VistaHorarios({
                         );
                       }
                       return (
-                        <div className="mt-2 space-y-1.5">
+                        <div className="calendar-day-chip-list">
                       {horariosCelda.map((horario) => {
                         const nombreCorto = nombreMateriaId(horario.materia_id);
                         const enlaceClase = enlaceSincronicoHorario(horario, eventos.enlacesClasePorMateria);
@@ -336,6 +337,7 @@ export default function VistaHorarios({
                         <span className="calendar-weekend-hint" aria-hidden />
                       </div>
                     )}
+                    </div>
                   </button>
                 );
               })}
