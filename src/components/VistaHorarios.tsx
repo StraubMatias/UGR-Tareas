@@ -42,6 +42,10 @@ interface Props {
 // como de un aviso aprobado del campus (origen 'ugr'):
 const esEventoDeSinClases = (evento: EventoCronograma) => Boolean(evento) && (evento.tipo === 'sin_clases' || evento.modalidad === 'sin_clases');
 
+const esFinDeSemanaCalendario = (fecha: Date) => fecha.getDay() === 0 || fecha.getDay() === 6;
+
+const esColumnaFinDeSemana = (indice: number) => indice % 7 >= 5;
+
 function enlaceSincronicoHorario(
   horario: Horario,
   enlacesPorMateria?: Map<string, string>
@@ -129,19 +133,30 @@ export default function VistaHorarios({
           </div>
         ) : (
           <div className="monthly-calendar rounded-2xl border border-slate-800 bg-[#111821] p-2 sm:p-4">
-            <div className="grid grid-cols-7 border-b border-slate-800 pb-2 text-center">
-              {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((dia) => (
-                <span key={dia} className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 sm:text-xs">{dia}</span>
+            <div className="calendar-week-grid border-b border-slate-800 pb-2 text-center">
+              {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((dia, indice) => (
+                <span
+                  key={dia}
+                  className={`text-[10px] font-extrabold uppercase tracking-wider text-slate-500 sm:text-xs ${
+                    indice >= 5 ? 'calendar-weekday-weekend' : ''
+                  }`}
+                >
+                  {dia}
+                </span>
               ))}
             </div>
-            <div className="calendar-grid mt-2 grid grid-cols-7 gap-1 sm:gap-2">
+            <div className="calendar-week-grid calendar-grid mt-2">
               {diasCalendario.map((fecha, indice) => {
-                if (!fecha) return <div key={`vacio-${indice}`} className="calendar-empty" />;
+                const finde = esColumnaFinDeSemana(indice);
+                if (!fecha) {
+                  return <div key={`vacio-${indice}`} className={`calendar-empty ${finde ? 'calendar-empty-weekend' : ''}`} />;
+                }
 
                 const eventos = eventosDelDiaCalendario(fecha);
                 const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
                 const esHoy = claveDia === claveHoyCalendario;
                 const cantidadEventos = eventos.horarios.length + eventos.parciales.length + eventos.tareas.length + eventos.cronograma.length;
+                const esFinde = esFinDeSemanaCalendario(fecha);
 
                 return (
                   <button
@@ -149,17 +164,24 @@ export default function VistaHorarios({
                     type="button"
                     onClick={() => setDiaCalendarioSeleccionado(fecha)}
                     aria-label={`Ver detalle del día ${fecha.toLocaleDateString('es-AR', { dateStyle: 'full' })}`}
-                    className={`calendar-day ${esHoy ? 'calendar-day-today' : ''}`}
+                    className={`calendar-day ${esHoy ? 'calendar-day-today' : ''} ${esFinde ? 'calendar-day-weekend' : ''}`}
                   >
                     <div className="flex items-center justify-between gap-1">
                       <span className={`calendar-date ${esHoy ? 'calendar-date-today' : ''}`}>{fecha.getDate()}</span>
                       {cantidadEventos > 0 && (
-                        <span className="text-[9px] font-bold text-slate-500">
+                        <span className={`font-bold text-slate-500 ${esFinde ? 'text-[8px]' : 'text-[9px]'}`}>
                           {cantidadEventos}
                         </span>
                       )}
                     </div>
-                    {cantidadEventos > 0 && (
+                    {cantidadEventos > 0 && esFinde && (
+                      <span
+                        className="calendar-weekend-hint sm:hidden"
+                        title={`${cantidadEventos} evento(s). Tocá para ver el detalle.`}
+                        aria-hidden
+                      />
+                    )}
+                    {cantidadEventos > 0 && !esFinde && (
                       <div className="calendar-day-chips hidden sm:block">
                     {(() => {
                       const esSoloSinClases = eventos.horarios.length === 0
@@ -266,6 +288,11 @@ export default function VistaHorarios({
                         </div>
                       );
                     })()}
+                      </div>
+                    )}
+                    {cantidadEventos > 0 && esFinde && (
+                      <div className="calendar-day-chips-weekend hidden sm:flex" title={`${cantidadEventos} evento(s)`}>
+                        <span className="calendar-weekend-hint" aria-hidden />
                       </div>
                     )}
                   </button>
