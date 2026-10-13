@@ -72,7 +72,7 @@ Si UGR acepta, la sync dice a qué materias del plan estás inscripto, guarda es
 
 A partir de ahí, cada sincronización vuelve a mirar el campus: fechas nuevas, parciales y notas que la cátedra haya publicado.
 
-**Actividad mínima:** si una semana no entrás al tablero o no sincronizás con UGR Virtual, la cuenta se borra sola (junto con tus notas y progreso en el tablero). El admin no entra en esa regla. Así el espacio queda para quien lo usa de verdad.
+**Actividad mínima:** cada semana tenés que sincronizar con UGR Virtual al menos una vez; si no, la cuenta se borra sola (junto con tus notas y progreso en el tablero). Solo mirar el tablero no alcanza. El admin no entra en esa regla. Así el tablero refleja campus al día.
 
 ---
 

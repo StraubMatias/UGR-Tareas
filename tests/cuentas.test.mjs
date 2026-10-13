@@ -55,7 +55,7 @@ test('nunca sincronizó: cuenta desde el alta', () => {
   }, ahora, sinPolitica), true);
 });
 
-test('cuentaAlumnoDebeBorrarse: login reciente pero sync vieja (solo propio)', () => {
+test('cuentaAlumnoDebeBorrarse: login reciente pero sync vieja', () => {
   assert.equal(cuentaAlumnoDebeBorrarse({
     origen: 'propio',
     rol: 'alumno',
@@ -65,7 +65,7 @@ test('cuentaAlumnoDebeBorrarse: login reciente pero sync vieja (solo propio)', (
   }, ahora, sinPolitica), true);
 });
 
-test('cuenta activa: login y sync dentro de la semana', () => {
+test('cuenta activa: sync UGR dentro de la semana (login no alcanza)', () => {
   assert.equal(cuentaAlumnoDebeBorrarse({
     origen: 'propio',
     rol: 'alumno',
@@ -73,14 +73,21 @@ test('cuenta activa: login y sync dentro de la semana', () => {
     ultimoAcceso: haceDosDias,
     sincronizadoEn: haceDosDias
   }, ahora, sinPolitica), false);
+  assert.equal(cuentaAlumnoDebeBorrarse({
+    origen: 'propio',
+    rol: 'alumno',
+    creadoEn: haceOchoDias,
+    ultimoAcceso: haceDosDias,
+    sincronizadoEn: null
+  }, ahora, sinPolitica), true);
 });
 
-test('comisión inactiva no se borra automáticamente', () => {
+test('comisión sin sync reciente se borra igual que propio', () => {
   assert.equal(cuentaAlumnoDebeBorrarse({
     ...cuentaBase,
-    ultimoAcceso: haceOchoDias,
+    ultimoAcceso: haceDosDias,
     sincronizadoEn: haceOchoDias
-  }, ahora, sinPolitica), false);
+  }, ahora, sinPolitica), true);
 });
 
 test('admin no se borra aunque esté inactivo', () => {
