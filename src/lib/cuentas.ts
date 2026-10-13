@@ -1,4 +1,4 @@
-/** Plazo sin login o sin sync UGR: se borra la cuenta (salvo admin). */
+/** Plazo sin sync UGR semanal: se borra la cuenta de alumno (salvo admin). */
 export const DIAS_SIN_LOGIN = 7;
 export const DIAS_SIN_SYNC_UGR = 7;
 /** @deprecated usar DIAS_SIN_LOGIN / DIAS_SIN_SYNC_UGR */
@@ -94,7 +94,7 @@ function plazoVencido(desde: number, dias: number, ahora: number): boolean {
 }
 
 /** Desde cuándo corre el plazo de 7 días (no se mira inactividad anterior). Override: `POLITICA_CUENTAS_DESDE`. */
-export const POLITICA_CUENTAS_VIGENTE_DESDE = '2026-10-09T18:00:00.000Z';
+export const POLITICA_CUENTAS_VIGENTE_DESDE = '2026-10-14T03:00:00.000Z';
 
 export function instantePoliticaCuentas(): number {
   const desdeEntorno =
@@ -137,17 +137,16 @@ export function cuentaSinSyncReciente(
   return plazoVencido(referencia, DIAS_SIN_SYNC_UGR, ahora);
 }
 
-/** Solo cuentas `propio` (alta pública), excepto admin. Comisión no se borra automáticamente. */
+/** Cualquier alumno (comisión o propio) sin sync UGR en 7 días. Admin exento. */
 export function cuentaAlumnoDebeBorrarse(
   cuenta: CuentaAlumnoLimpieza,
   ahora = Date.now(),
   politicaDesde?: number
 ): boolean {
   if (String(cuenta.rol || 'alumno') === 'admin') return false;
-  if (String(cuenta.origen || 'comision') !== 'propio') return false;
   const politica = Number.isFinite(politicaDesde) ? politicaDesde! : instantePoliticaCuentas();
   if (ahora < politica) return false;
-  return cuentaSinLoginReciente(cuenta, ahora, politica) || cuentaSinSyncReciente(cuenta, ahora, politica);
+  return cuentaSinSyncReciente(cuenta, ahora, politica);
 }
 
 /** @deprecated usar cuentaAlumnoDebeBorrarse */
