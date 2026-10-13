@@ -71,7 +71,7 @@ src/app/validators.ts     notas, unidades, habilitación de tarea/parcial
 src/app/layout.tsx        metadata, maxDuration
 src/core/cursada.ts       puntaje, pendientes, historial (puro)
 src/lib/companeros.ts     misma cursada, materia en común, intersección
-src/lib/cuentas.ts        limpieza 7 días sin login/sync, tope por IP, SQL de borrado
+src/lib/cuentas.ts        limpieza 7 días sin sync UGR, tope por IP, SQL de borrado
 src/lib/seguridad.ts      claves temporales, validación HH:MM (sin deps de Next)
 src/lib/grupos-tareas.ts  alta/baja de grupo dentro de una transacción
 src/components/           vistas (estado, materias, grupos, plan, …)
@@ -131,10 +131,7 @@ Cookie `ugr_sesion`: `base64url(JSON).base64url(HMAC-SHA256)`. El JSON lleva `us
 
 Alta pública (`registrarCuentaAction`): usuario, contraseña y confirmación. No pide DNI ni clave de campus. Inserta `origen='propio'`, `creado_en` y `creado_ip`. El usuario tiene 3–100 caracteres (`nombreDeUsuarioValido`); la contraseña, 6–128. Si el nombre ya existe, mensaje genérico (no enumerar usuarios). Tope: **2 cuentas `propio` vivas con la misma `creado_ip`**. Con `VERCEL=1` o `TRUST_PROXY=1`, la IP sale de `cf-connecting-ip` / `x-forwarded-for` / `x-real-ip`; en local sin proxy de confianza no se confía en `X-Forwarded-For` (evita spoof). Borrar la cuenta libera el cupo. Las cuentas `comision` que crea el admin no llevan `creado_ip` y no consumen el cupo. Quien llega sin IP cae en el balde `unknown` y comparte ese mismo tope de 2. El admin que crea un alumno de comisión recibe una **contraseña inicial aleatoria** (una sola vez en pantalla), no el nombre como clave.
 
-**Limpieza de cuentas inactivas** (`borrarCuentasSinSincronizar`, en login y al cargar el tablero): solo cuentas **`propio`** (alta pública), **excepto admin**. Los alumnos de **comisión** no se eliminan por inactividad. El plazo de 7 días corre desde `POLITICA_CUENTAS_VIGENTE_DESDE` en `src/lib/cuentas.ts` (opcional `POLITICA_CUENTAS_DESDE` en el entorno); no se usa inactividad anterior. Se borra si se cumple **cualquiera** de:
-
-1. No hubo **login** (`ultimo_acceso`, o `creado_en` si nunca entró).
-2. No hubo **sync UGR** (`sincronizado_en` en cada sync de materias/núcleo/completa).
+**Limpieza de cuentas inactivas** (`borrarCuentasSinSincronizar`, en login y al cargar el tablero): **cualquier alumno** (comisión o `propio`), **excepto admin**. El plazo de 7 días corre desde `POLITICA_CUENTAS_VIGENTE_DESDE` en `src/lib/cuentas.ts` (opcional `POLITICA_CUENTAS_DESDE` en el entorno); no se usa sync anterior a esa fecha. Se borra si no hubo **sync UGR** en ese plazo (`sincronizado_en` al terminar fases materias/núcleo/completa de `sincronizarCuentaUgrAction`). Entrar al tablero no alcanza; sync SIU no cuenta.
 
 **Recuperar datos** tras un borrado masivo: `turso db branch <db> <db-restaurada> --timestamp '…'` a un instante anterior, exportar tablas afectadas y volcar en la base productiva (o cambiar `TURSO_DATABASE_URL` tras validar).
 
