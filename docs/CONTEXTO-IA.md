@@ -116,12 +116,9 @@ No hay tests E2E de UI. Lógica de calendario, promoción y enlaces: `tests/*.te
 
 ## Cuentas y limpieza (7 días)
 
-Política en `src/lib/cuentas.ts` (`cuentaAlumnoDebeBorrarse`). **Admin exento.** Solo cuentas **`origen=propio`** (alta pública). Los alumnos de **comisión** (lista del admin / roster) **no** se borran por inactividad.
+Política en `src/lib/cuentas.ts` (`cuentaAlumnoDebeBorrarse`). **Admin exento.** Cualquier **alumno** (comisión o `propio`) sin **sync UGR** en 7 días → borrado. Entrar al tablero (`ultimo_acceso`) **no** renueva la cuenta.
 
-Desde `POLITICA_CUENTAS_VIGENTE_DESDE` (override `POLITICA_CUENTAS_DESDE`), el plazo de 7 días **no** cuenta actividad anterior a esa fecha.
-
-1. **Sin login** en 7 días → borrado (`ultimo_acceso`, o `creado_en` si nunca entró).
-2. **Sin sync UGR** en 7 días → borrado (`sincronizado_en`; si nunca sincronizó, cuenta desde el inicio de la política o `creado_en`).
+Desde `POLITICA_CUENTAS_VIGENTE_DESDE` (override `POLITICA_CUENTAS_DESDE`), el plazo **no** cuenta sync anterior a esa fecha. Referencia: `sincronizado_en`, o `creado_en` / inicio de política si nunca sincronizó. Cuenta la sync personal UGR (`sincronizarCuentaUgrAction`); SIU no actualiza `sincronizado_en`.
 
 Se ejecuta en login y al cargar el tablero (`borrarCuentasSinSincronizar`). Borrado: `sentenciasBorrarAlumno` (historial del alumno). Recuperar borrado masivo: rama Turso con `--timestamp` anterior al deploy (ver README).
 
