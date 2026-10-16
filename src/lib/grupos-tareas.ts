@@ -712,36 +712,98 @@ export async function enviarInvitacionGrupo(
 }
 
 /**
- * Copia los grupos y sus integrantes de una tarea de "primera entrega" a una
- * tarea de "segunda entrega" en la misma materia, para que los alumnos no tengan
- * que volver a armar los equipos.
+ * Detecta el número de entrega a partir del nombre de una tarea.
  *
- * Busca en la misma materia una tarea cuyo nombre contenga "Primera Entrega",
- * "Primer Entrega", "1ra Entrega", "1° entrega" o "entrega 1" y replica sus
- * grupos_tareas + integrantes_tareas en la tarea indicada por `tareaDestinoId`.
+ * Reconoce ordinales en palabras ("Primera"=1, "Segunda"=2, "Tercera"=3, …),
+ * abreviaturas ("1ra", "2da", "3ra", "1er"), símbolos ("1°", "2ª") y el patrón
+ * "Entrega N". Devuelve `null` si el nombre no corresponde a una entrega
+ * numerada del trabajo práctico.
+ */
+export function numeroEntregaDeNombre(nombre: string): number | null {
+  if (!nombre) return null;
+  const lower = nombre.toLowerCase();
+
+  // "entrega N" (N = 1 o 2 dígitos, con o sin espacio)
+  let m = lower.match(/entrega\s*(\d{1,2})\b/);
+  if (m) return Number(m[1]);
+
+  // "Nra/Nda/Nta/Nma/Nna/Nva/Ner entrega" → 1ra, 2da, 3ra, 4ta, 1er, etc.
+  m = lower.match(/\b(\d{1,2})(?:ra|da|ta|ma|na|va|er)\s+entrega\b/);
+  if (m) return Number(m[1]);
+
+  // "N° entrega" o "Nª entrega" (con símbolo de ordinal)
+  m = lower.match(/\b(\d{1,2})\s*[°ªº]\s*entrega\b/);
+  if (m) return Number(m[1]);
+
+  // Ordinales escritos en palabras
+  const ordinales: Array<[string, number]> = [
+    ['primera', 1], ['primer', 1], ['primero', 1],
+    ['segunda', 2], ['segundo', 2],
+    ['tercera', 3], ['tercero', 3],
+    ['cuarta', 4], ['cuarto', 4],
+    ['quinta', 5], ['quinto', 5],
+    ['sexta', 6], ['sexto', 6],
+    ['septima', 7], ['séptima', 7], ['septimo', 7], ['séptimo', 7],
+    ['octava', 8], ['octavo', 8],
+    ['novena', 9], ['noveno', 9],
+    ['decima', 10], ['décima', 10], ['decimo', 10], ['décimo', 10]
+  ];
+  for (const [palabra, num] of ordinales) {
+    if (lower.includes(`${palabra} entrega`)) return num;
+  }
+
+  return null;
+}
+
+/**
+ * Copia los grupos y sus integrantes de una entrega anterior a la tarea indicada
+ * por `tareaDestinoId`, para que los alumnos no tengan que volver a armar los
+ * equipos en cada nueva entrega del trabajo práctico.
+ *
+ * Busca en la misma materia la entrega numerada de menor número que tenga grupos
+ * cargados (típicamente la "Primera Entrega") y replica sus grupos_tareas +
+ * integrantes_tareas. Así la 2da, 3ra y futuras entregas mantienen los mismos
+ * equipos automáticamente, sin que los alumnos rearmen nada.
+ *
+ * Si la tarea destino ya tiene grupos, no hace nada (evita duplicados).
  */
 export async function copiarGruposDePrimeraEntrega(
   db: Client,
   materiaId: string,
   tareaDestinoId: string
 ): Promise<{ gruposCopiados: number; integrantesCopiados: number }> {
-  const filasRef = await db.execute({
-    sql: `SELECT id, nombre FROM tareas
-          WHERE materia_id = ? AND (
-            LOWER(nombre) LIKE '%primera entrega%' OR
-            LOWER(nombre) LIKE '%primer entrega%' OR
-            LOWER(nombre) LIKE '%1ra entrega%' OR
-            LOWER(nombre) LIKE '%1° entrega%' OR
-            LOWER(nombre) LIKE '%entrega 1%'
-          )
-          ORDER BY inicio ASC
-          LIMIT 1`,
+  // Si la tarea destino ya tiene grupos, no copiar (evita duplicados).
+  const yaTiene = await db.execute({
+    sql: 'SELECT 1 FROM grupos_tareas WHERE tarea_id = ? LIMIT 1',
+    args: [tareaDestinoId]
+  });
+  if (yaTiene.rows.length > 0) return { gruposCopiados: 0, integrantesCopiados: 0 };
+
+  // Traer todas las tareas de la materia con la cantidad de grupos de cada una.
+  const filas = await db.execute({
+    sql: `SELECT t.id, t.nombre, t.inicio,
+                 (SELECT COUNT(*) FROM grupos_tareas g WHERE g.tarea_id = t.id) AS num_grupos
+          FROM tareas t
+          WHERE t.materia_id = ?
+          ORDER BY t.inicio ASC`,
     args: [materiaId]
   });
-  const ref = filasRef.rows[0];
+
+  // Quedarse con las que son entregas numeradas, descartando la tarea destino.
+  const entregas = filas.rows
+    .map((r) => ({
+      id: String(r.id),
+      numero: numeroEntregaDeNombre(String(r.nombre ?? '')),
+      numGrupos: Number(r.num_grupos ?? 0)
+    }))
+    .filter((e) => e.numero != null && e.id !== tareaDestinoId)
+    .sort((a, b) => (a.numero! - b.numero!));
+
+  // La entrega de referencia es la de menor número que tenga grupos.
+  const ref = entregas.find((e) => e.numGrupos > 0);
   if (!ref) return { gruposCopiados: 0, integrantesCopiados: 0 };
 
-  const tareaOrigenId = String(ref.id);
+  const tareaOrigenId = ref.id;
 
   return transaccion(db, async (tx) => {
     const grupos = await consultar<{ id: string; nombre: string }>(tx,
