@@ -20,6 +20,9 @@ const materiaConceptos = {
   tareas: []
 };
 
+/** Fecha ISO dentro de N días: evita que los tests dependan del día en que corren. */
+const fechaEn = (dias) => new Date(Date.now() + dias * 86_400_000).toISOString().slice(0, 10);
+
 test('reglaPromocionEfectiva detecta parciales + TPs en metodología', () => {
   assert.equal(reglaPromocionEfectiva(materiaConceptos), 'parciales_y_tps');
 });
@@ -27,7 +30,7 @@ test('reglaPromocionEfectiva detecta parciales + TPs en metodología', () => {
 test('promociona con 1er parcial 8 y TPs 8 aunque falte el 2do parcial', () => {
   const parciales = [
     { id: 'p1', materia_id: 'dev', nombre: '1er Parcial', fecha: '2026-09-20' },
-    { id: 'p2', materia_id: 'dev', nombre: '2do Parcial', fecha: '2026-12-01' }
+    { id: 'p2', materia_id: 'dev', nombre: '2do Parcial', fecha: fechaEn(60) }
   ];
   const notas = [{ parcial_id: 'p1', alumno: 'Ana', nota: 8 }];
   const tps = [
@@ -40,8 +43,8 @@ test('promociona con 1er parcial 8 y TPs 8 aunque falte el 2do parcial', () => {
 
 test('promociona solo con TPs 10 sin parciales rendidos', () => {
   const parciales = [
-    { id: 'p1', materia_id: 'dev', nombre: '1er Parcial', fecha: '2026-10-15' },
-    { id: 'p2', materia_id: 'dev', nombre: '2do Parcial', fecha: '2026-12-01' }
+    { id: 'p1', materia_id: 'dev', nombre: '1er Parcial', fecha: fechaEn(30) },
+    { id: 'p2', materia_id: 'dev', nombre: '2do Parcial', fecha: fechaEn(60) }
   ];
   const tps = [
     { id: 't1', nombre: 'TP1', tipo: 'trabajo_practico', conNota: true, notas: { Ana: 10 }, inicio: 'x', fin: 'x', unidad: 1, completadoPor: [] },

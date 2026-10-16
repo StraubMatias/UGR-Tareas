@@ -35,7 +35,8 @@ export {
   eliminarMateriaAction,
   crearTareaAction,
   editarTareaAction,
-  eliminarTareaAction
+  eliminarTareaAction,
+  aplicarGruposPrimeraEntregaAction
 } from './actions/materias';
 
 export {
