@@ -159,7 +159,8 @@ test('el segundo alumno no vuelve a insertar las tareas que ya cargó el primero
     assert.equal((await db.execute("SELECT COUNT(*) AS n FROM cronograma_eventos WHERE materia_id='cri' AND fecha='2026-10-13'")).rows[0].n, 1);
   } finally {
     db.close();
-    await rm(dir, { recursive: true, force: true });
+    try { await rm(dir, { recursive: true, force: true }); }
+    catch { /* EBUSY on Windows: SQLite file lock not released yet */ }
   }
 });
 
@@ -204,7 +205,8 @@ test('asegurarMateriasDeLaCursada crea las extras de otro cuatrimestre y las map
     assert.equal((await db.execute('SELECT COUNT(*) AS n FROM materias')).rows[0].n, 3);
   } finally {
     db.close();
-    await rm(dir, { recursive: true, force: true });
+    try { await rm(dir, { recursive: true, force: true }); }
+    catch { /* EBUSY on Windows: SQLite file lock not released yet */ }
   }
 });
 
@@ -242,7 +244,8 @@ test('un parcial cargado como tarea pasa al apartado de parciales', async () => 
     assert.equal((await db.execute('SELECT nota FROM notas_parciales')).rows[0].nota, '8');
   } finally {
     db.close();
-    await rm(dir, { recursive: true, force: true });
+    try { await rm(dir, { recursive: true, force: true }); }
+    catch { /* EBUSY on Windows: SQLite file lock not released yet */ }
   }
 });
 
@@ -294,7 +297,8 @@ test('cargarNotasDesdeEnlaces omite tareas con nota cerrada y prioriza pendiente
     assert.equal(urlsPedidas[0], 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=3');
   } finally {
     db.close();
-    await rm(dir, { recursive: true, force: true });
+    try { await rm(dir, { recursive: true, force: true }); }
+    catch { /* EBUSY on Windows: SQLite file lock not released yet */ }
   }
 });
 
@@ -340,7 +344,105 @@ test('el sync con forzar reemplaza una nota manual del tablero', async () => {
     assert.equal(Number(fila.rows[0].cerrada), 1);
   } finally {
     db.close();
-    await rm(dir, { recursive: true, force: true });
+    try { await rm(dir, { recursive: true, force: true }); }
+    catch { /* EBUSY on Windows: SQLite file lock not released yet */ }
+  }
+});
+
+test('insertarTareasDetectadas copia grupos de la primera entrega a la segunda automáticamente', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ugr-grupos-sync-'));
+  const db = createClient({ url: `file:${join(dir, 'test.db')}` });
+  try {
+    await db.batch([
+      'CREATE TABLE alumnos (id TEXT PRIMARY KEY, nombre TEXT)',
+      `CREATE TABLE tareas (
+        id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, inicio TEXT, fin TEXT,
+        detalles TEXT, unidad INTEGER, con_nota INTEGER, tipo TEXT, url TEXT
+      )`
+    ], 'write');
+    const { crearEsquemaGrupos } = await import('../../database/grupos-schema.mjs');
+    await crearEsquemaGrupos(db);
+
+    // Crear la "Primera Entrega" con grupos e integrantes
+    await db.batch([
+      "INSERT INTO alumnos VALUES ('a', 'Ana'), ('b', 'Beto')",
+      "INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, url) VALUES ('t_primera', 'cri', 'Primera Entrega TP', 'Sin fecha', 'Sin fecha', 'Importada', NULL, 1, 'actividad', '')"
+    ], 'write');
+    await db.execute({ sql: 'UPDATE tareas SET grupal = 1 WHERE id = ?', args: ['t_primera'] });
+    await db.batch([
+      "INSERT INTO grupos_tareas (id, tarea_id, nombre) VALUES ('g1', 't_primera', 'Equipo 1')",
+      "INSERT INTO integrantes_tareas (tarea_id, alumno_id, grupo_id) VALUES ('t_primera', 'a', 'g1')",
+      "INSERT INTO integrantes_tareas (tarea_id, alumno_id, grupo_id) VALUES ('t_primera', 'b', 'g1')"
+    ], 'write');
+
+    // El sync detecta una "Segunda Entrega" y la inserta
+    const detectadas = [{
+      materiaId: 'cri',
+      nombre: 'Segunda Entrega TP',
+      inicio: 'Sin fecha',
+      fin: '2026-12-01',
+      url: '/mod/assign/view.php?id=20'
+    }];
+    const insertadas = await insertarTareasDetectadas({ db, detectadas });
+    assert.equal(insertadas, 1);
+
+    // La nueva tarea debe tener grupal = 1 (heredado de la primera entrega)
+    const tareaNueva = await db.execute("SELECT id, grupal FROM tareas WHERE nombre = 'Segunda Entrega TP'");
+    assert.equal(tareaNueva.rows.length, 1);
+    assert.equal(Number(tareaNueva.rows[0].grupal), 1);
+    const tareaIdNueva = tareaNueva.rows[0].id;
+
+    // Debe tener los mismos grupos e integrantes que la primera entrega
+    const gruposNuevos = (await db.execute({
+      sql: 'SELECT nombre FROM grupos_tareas WHERE tarea_id = ? ORDER BY nombre',
+      args: [tareaIdNueva]
+    })).rows;
+    assert.equal(gruposNuevos.length, 1);
+    assert.equal(gruposNuevos[0].nombre, 'Equipo 1');
+
+    const integrantesNuevos = (await db.execute({
+      sql: 'SELECT alumno_id FROM integrantes_tareas WHERE tarea_id = ? ORDER BY alumno_id',
+      args: [tareaIdNueva]
+    })).rows;
+    assert.deepEqual(integrantesNuevos.map((r) => r.alumno_id), ['a', 'b']);
+  } finally {
+    db.close();
+    try { await rm(dir, { recursive: true, force: true }); }
+    catch { /* EBUSY on Windows: SQLite file lock not released yet */ }
+  }
+});
+
+test('insertarTareasDetectadas no copia grupos si no hay una entrega anterior con grupos', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ugr-grupos-sync-vacio-'));
+  const db = createClient({ url: `file:${join(dir, 'test.db')}` });
+  try {
+    await db.batch([
+      'CREATE TABLE alumnos (id TEXT PRIMARY KEY, nombre TEXT)',
+      `CREATE TABLE tareas (
+        id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, inicio TEXT, fin TEXT,
+        detalles TEXT, unidad INTEGER, con_nota INTEGER, tipo TEXT, url TEXT
+      )`
+    ], 'write');
+    const { crearEsquemaGrupos } = await import('../../database/grupos-schema.mjs');
+    await crearEsquemaGrupos(db);
+
+    const detectadas = [{
+      materiaId: 'cri',
+      nombre: 'Segunda Entrega TP',
+      inicio: 'Sin fecha',
+      fin: '2026-12-01',
+      url: '/mod/assign/view.php?id=20'
+    }];
+    const insertadas = await insertarTareasDetectadas({ db, detectadas });
+    assert.equal(insertadas, 1);
+
+    const tareaIdNueva = (await db.execute("SELECT id FROM tareas WHERE nombre = 'Segunda Entrega TP'")).rows[0].id;
+    const gruposNuevos = (await db.execute({ sql: 'SELECT COUNT(*) AS n FROM grupos_tareas WHERE tarea_id = ?', args: [tareaIdNueva] })).rows;
+    assert.equal(Number(gruposNuevos[0].n), 0);
+  } finally {
+    db.close();
+    try { await rm(dir, { recursive: true, force: true }); }
+    catch { /* EBUSY on Windows: SQLite file lock not released yet */ }
   }
 });
 
