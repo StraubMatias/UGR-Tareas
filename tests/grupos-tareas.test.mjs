@@ -5,12 +5,16 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { crearEsquemaGrupos } from '../database/grupos-schema.mjs';
-import { asignarGrupo, actualizarProgresoTarea, propagarNotasGrupalesEnMaterias } from '../src/lib/grupos-tareas.ts';
+import { asignarGrupo, actualizarProgresoTarea, propagarNotasGrupalesEnMaterias, copiarGruposDePrimeraEntrega, numeroEntregaDeNombre } from '../src/lib/grupos-tareas.ts';
 
 async function preparar(t) {
   const directorio = mkdtempSync(join(tmpdir(), 'ugr-grupos-'));
   const db = createClient({ url: `file:${join(directorio, 'test.db')}` });
-  t.after(() => { db.close(); rmSync(directorio, { recursive: true, force: true }); });
+  t.after(() => {
+    db.close();
+    try { rmSync(directorio, { recursive: true, force: true }); }
+    catch { /* EPERM on Windows: SQLite file lock not released yet */ }
+  });
   await db.batch([
     'CREATE TABLE alumnos (id TEXT PRIMARY KEY, nombre TEXT)',
     'CREATE TABLE tareas (id TEXT PRIMARY KEY, inicio TEXT, con_nota INTEGER)',
@@ -212,5 +216,122 @@ test('administrador: reasignar alumno entre grupos y eliminar grupo', async (t) 
   assert.equal(grupos.length, 0);
   const integrantes = (await db.execute('SELECT * FROM integrantes_tareas')).rows;
   assert.equal(integrantes.length, 0);
+});
+
+test('numeroEntregaDeNombre detecta ordinales, abreviaturas y patrones numéricos', () => {
+  // Palabras
+  assert.equal(numeroEntregaDeNombre('Trabajo Práctico Final Primera Entrega'), 1);
+  assert.equal(numeroEntregaDeNombre('Trabajo Práctico Final Segunda Entrega'), 2);
+  assert.equal(numeroEntregaDeNombre('Trabajo Práctico Final Tercera Entrega'), 3);
+  assert.equal(numeroEntregaDeNombre('Trabajo Práctico Final Cuarta Entrega'), 4);
+  assert.equal(numeroEntregaDeNombre('Trabajo Práctico Final Décima Entrega'), 10);
+  // Abreviaturas
+  assert.equal(numeroEntregaDeNombre('TP Final 1ra Entrega'), 1);
+  assert.equal(numeroEntregaDeNombre('TP Final 2da Entrega'), 2);
+  assert.equal(numeroEntregaDeNombre('TP Final 3ra Entrega'), 3);
+  assert.equal(numeroEntregaDeNombre('TP Final 1er Entrega'), 1);
+  // Símbolos de ordinal
+  assert.equal(numeroEntregaDeNombre('TP Final 1° Entrega'), 1);
+  assert.equal(numeroEntregaDeNombre('TP Final 2° Entrega'), 2);
+  assert.equal(numeroEntregaDeNombre('TP Final 2ª Entrega'), 2);
+  // "Entrega N"
+  assert.equal(numeroEntregaDeNombre('Entrega 1'), 1);
+  assert.equal(numeroEntregaDeNombre('Entrega 2'), 2);
+  assert.equal(numeroEntregaDeNombre('Trabajo Final Entrega 3'), 3);
+  // Case-insensitive
+  assert.equal(numeroEntregaDeNombre('SEGUNDA ENTREGA'), 2);
+  assert.equal(numeroEntregaDeNombre('segunda entrega'), 2);
+  // No es entrega numerada
+  assert.equal(numeroEntregaDeNombre('Parcial 1'), null);
+  assert.equal(numeroEntregaDeNombre('Trabajo Práctico Final'), null);
+  assert.equal(numeroEntregaDeNombre(''), null);
+  assert.equal(numeroEntregaDeNombre('Entregas del trabajo práctico'), null);
+});
+
+// Helper para tests de copia: agregar columnas y datos de materia a la BD de test.
+async function prepararCopia(db) {
+  await db.batch([
+    'ALTER TABLE tareas ADD COLUMN materia_id TEXT',
+    'ALTER TABLE tareas ADD COLUMN nombre TEXT',
+    'CREATE TABLE materias (id TEXT PRIMARY KEY)',
+    "INSERT INTO materias VALUES ('m_riesgos')"
+  ], 'write');
+}
+
+test('copiarGruposDePrimeraEntrega copia grupos de la primera entrega a la segunda', async (t) => {
+  const db = await preparar(t);
+  await prepararCopia(db);
+  await db.batch([
+    "UPDATE tareas SET materia_id = 'm_riesgos', nombre = 'Trabajo Práctico Final Primera Entrega' WHERE id = 't'",
+    "UPDATE tareas SET materia_id = 'm_riesgos', nombre = 'Trabajo Práctico Final Segunda Entrega' WHERE id = 'otra'"
+  ], 'write');
+
+  const { grupoId } = await asignarGrupo(db, 't', 'a', { nombre: 'Equipo Riesgos' });
+  await asignarGrupo(db, 't', 'b', { grupoId });
+
+  const copia = await copiarGruposDePrimeraEntrega(db, 'm_riesgos', 'otra');
+  assert.equal(copia.gruposCopiados, 1);
+  assert.equal(copia.integrantesCopiados, 2);
+
+  const gruposDest = (await db.execute({ sql: 'SELECT nombre FROM grupos_tareas WHERE tarea_id = ?', args: ['otra'] })).rows;
+  assert.equal(gruposDest.length, 1);
+  assert.equal(String(gruposDest[0].nombre), 'Equipo Riesgos');
+
+  const integrantesDest = (await db.execute({ sql: 'SELECT alumno_id FROM integrantes_tareas WHERE tarea_id = ? ORDER BY alumno_id', args: ['otra'] })).rows;
+  assert.deepEqual(integrantesDest.map((r) => r.alumno_id), ['a', 'b']);
+});
+
+test('copiarGruposDePrimeraEntrega no duplica si la tarea destino ya tiene grupos', async (t) => {
+  const db = await preparar(t);
+  await prepararCopia(db);
+  await db.batch([
+    "UPDATE tareas SET materia_id = 'm_riesgos', nombre = 'Trabajo Práctico Final Primera Entrega' WHERE id = 't'",
+    "UPDATE tareas SET materia_id = 'm_riesgos', nombre = 'Trabajo Práctico Final Segunda Entrega' WHERE id = 'otra'"
+  ], 'write');
+
+  const { grupoId } = await asignarGrupo(db, 't', 'a', { nombre: 'Equipo 1' });
+  await asignarGrupo(db, 't', 'b', { grupoId });
+  await asignarGrupo(db, 'otra', 'c', { nombre: 'Grupo Distinto' });
+
+  const copia = await copiarGruposDePrimeraEntrega(db, 'm_riesgos', 'otra');
+  assert.equal(copia.gruposCopiados, 0);
+  assert.equal(copia.integrantesCopiados, 0);
+
+  const gruposDest = (await db.execute({ sql: 'SELECT nombre FROM grupos_tareas WHERE tarea_id = ?', args: ['otra'] })).rows;
+  assert.equal(gruposDest.length, 1);
+  assert.equal(String(gruposDest[0].nombre), 'Grupo Distinto');
+});
+
+test('copiarGruposDePrimeraEntrega copia a la tercera entrega desde la primera', async (t) => {
+  const db = await preparar(t);
+  await prepararCopia(db);
+  await db.batch([
+    "UPDATE tareas SET materia_id = 'm_riesgos', nombre = 'Trabajo Práctico Final Primera Entrega' WHERE id = 't'",
+    "UPDATE tareas SET materia_id = 'm_riesgos', nombre = 'Trabajo Práctico Final Tercera Entrega' WHERE id = 'otra'"
+  ], 'write');
+
+  const { grupoId } = await asignarGrupo(db, 't', 'a', { nombre: 'Equipo Alpha' });
+  await asignarGrupo(db, 't', 'b', { grupoId });
+
+  const copia = await copiarGruposDePrimeraEntrega(db, 'm_riesgos', 'otra');
+  assert.equal(copia.gruposCopiados, 1);
+  assert.equal(copia.integrantesCopiados, 2);
+
+  const gruposDest = (await db.execute({ sql: 'SELECT nombre FROM grupos_tareas WHERE tarea_id = ?', args: ['otra'] })).rows;
+  assert.equal(gruposDest.length, 1);
+  assert.equal(String(gruposDest[0].nombre), 'Equipo Alpha');
+});
+
+test('copiarGruposDePrimeraEntrega devuelve 0 si no hay entregas con grupos', async (t) => {
+  const db = await preparar(t);
+  await prepararCopia(db);
+  await db.batch([
+    "UPDATE tareas SET materia_id = 'm_riesgos', nombre = 'Trabajo Práctico Final Primera Entrega' WHERE id = 't'",
+    "UPDATE tareas SET materia_id = 'm_riesgos', nombre = 'Trabajo Práctico Final Segunda Entrega' WHERE id = 'otra'"
+  ], 'write');
+
+  const copia = await copiarGruposDePrimeraEntrega(db, 'm_riesgos', 'otra');
+  assert.equal(copia.gruposCopiados, 0);
+  assert.equal(copia.integrantesCopiados, 0);
 });
 
