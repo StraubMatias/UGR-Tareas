@@ -711,6 +711,78 @@ export async function enviarInvitacionGrupo(
   });
 }
 
+/**
+ * Copia los grupos y sus integrantes de una tarea de "primera entrega" a una
+ * tarea de "segunda entrega" en la misma materia, para que los alumnos no tengan
+ * que volver a armar los equipos.
+ *
+ * Busca en la misma materia una tarea cuyo nombre contenga "Primera Entrega",
+ * "Primer Entrega", "1ra Entrega", "1° entrega" o "entrega 1" y replica sus
+ * grupos_tareas + integrantes_tareas en la tarea indicada por `tareaDestinoId`.
+ */
+export async function copiarGruposDePrimeraEntrega(
+  db: Client,
+  materiaId: string,
+  tareaDestinoId: string
+): Promise<{ gruposCopiados: number; integrantesCopiados: number }> {
+  const filasRef = await db.execute({
+    sql: `SELECT id, nombre FROM tareas
+          WHERE materia_id = ? AND (
+            LOWER(nombre) LIKE '%primera entrega%' OR
+            LOWER(nombre) LIKE '%primer entrega%' OR
+            LOWER(nombre) LIKE '%1ra entrega%' OR
+            LOWER(nombre) LIKE '%1° entrega%' OR
+            LOWER(nombre) LIKE '%entrega 1%'
+          )
+          ORDER BY inicio ASC
+          LIMIT 1`,
+    args: [materiaId]
+  });
+  const ref = filasRef.rows[0];
+  if (!ref) return { gruposCopiados: 0, integrantesCopiados: 0 };
+
+  const tareaOrigenId = String(ref.id);
+
+  return transaccion(db, async (tx) => {
+    const grupos = await consultar<{ id: string; nombre: string }>(tx,
+      'SELECT id, nombre FROM grupos_tareas WHERE tarea_id = ? ORDER BY nombre',
+      [tareaOrigenId]
+    );
+
+    let gruposCopiados = 0;
+    let integrantesCopiados = 0;
+    const mapaGrupos = new Map<string, string>();
+
+    for (const g of grupos) {
+      const nuevoId = `grupo_${randomUUID()}`;
+      await tx.execute({
+        sql: 'INSERT INTO grupos_tareas (id, tarea_id, nombre) VALUES (?, ?, ?)',
+        args: [nuevoId, tareaDestinoId, g.nombre]
+      });
+      mapaGrupos.set(g.id, nuevoId);
+      gruposCopiados += 1;
+    }
+
+    const integrantes = await consultar<{ alumno_id: string; grupo_id: string }>(tx,
+      'SELECT alumno_id, grupo_id FROM integrantes_tareas WHERE tarea_id = ?',
+      [tareaOrigenId]
+    );
+
+    for (const inc of integrantes) {
+      const nuevoGrupoId = mapaGrupos.get(inc.grupo_id);
+      if (!nuevoGrupoId) continue;
+      await tx.execute({
+        sql: `INSERT OR IGNORE INTO integrantes_tareas (tarea_id, alumno_id, grupo_id)
+              VALUES (?, ?, ?)`,
+        args: [tareaDestinoId, inc.alumno_id, nuevoGrupoId]
+      });
+      integrantesCopiados += 1;
+    }
+
+    return { gruposCopiados, integrantesCopiados };
+  });
+}
+
 export async function responderInvitacionGrupo(
   db: Client,
   invitacionId: string,

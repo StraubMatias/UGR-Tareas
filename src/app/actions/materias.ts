@@ -18,6 +18,7 @@ import {
   MAX_DETALLES_LENGTH,
   MAX_CONDICIONES_LENGTH
 } from '../../server/action-internals';
+import { copiarGruposDePrimeraEntrega } from '../../lib/grupos-tareas';
 
 
 export async function crearMateriaAction({ nombre, anio, cuatrimestre }: {
@@ -192,6 +193,31 @@ export async function crearTareaAction(params: TareaActionParams): Promise<Respu
       sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, grupal, permite_individual, cupo_maximo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       args: [id, materiaId, validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupalNumerico, permiteIndividualNumerico, cupo]
     });
+    // Si es una tarea de "segunda entrega", copiar automáticamente los grupos
+    // de la "primera entrega" de la misma materia para no rearmar los equipos.
+    const nombreLower = validacionNombre.valor.toLowerCase();
+    const esSegundaEntrega =
+      nombreLower.includes('segunda entrega') ||
+      nombreLower.includes('2da entrega') ||
+      nombreLower.includes('2° entrega') ||
+      nombreLower.includes('entrega 2');
+    if (esSegundaEntrega && grupalNumerico === 1) {
+      try {
+        const copia = await copiarGruposDePrimeraEntrega(db, materiaId, id);
+        if (copia.gruposCopiados > 0) {
+          await registrarAuditoria({
+            accion: 'copiar_grupos_primera_entrega',
+            usuario: usuarioSesion,
+            detalle: `Copiados ${copia.gruposCopiados} grupo(s) y ${copia.integrantesCopiados} integrante(s) de la primera entrega a "${validacionNombre.valor}"`,
+            ip: await obtenerIPReal()
+          });
+        }
+      } catch (error) {
+        // No fallar la creación de la tarea si falla la copia de grupos
+        console.error('No se pudieron copiar grupos de primera entrega:', error);
+      }
+    }
+
     await registrarAuditoria({ accion: 'crear_tarea', usuario: usuarioSesion, detalle: `Creó la tarea ${validacionNombre.valor}`, ip: await obtenerIPReal() });
     return { exito: true };
   } catch (error) {
