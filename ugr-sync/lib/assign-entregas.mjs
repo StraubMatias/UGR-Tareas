@@ -82,8 +82,11 @@ function enlacesDevolucion($, alcance, baseUrl) {
     const href = $(a).attr('href') || '';
     const nombre = limpiarTexto($(a).text()) || 'Devolución';
     if (!esArchivoRetroalimentacionProf(href, nombre)) return;
+    const urlCompleta = completarUrl(href, baseUrl);
+    const urlSegura = urlEgressCampusPermitida(urlCompleta, baseUrl);
+    if (!urlSegura) return;
     archivos.push({
-      url: completarUrl(href, baseUrl),
+      url: urlSegura,
       nombre
     });
   });

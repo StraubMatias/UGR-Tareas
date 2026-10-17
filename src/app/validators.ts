@@ -3,24 +3,24 @@
 
 import { tareaEstaHabilitada } from '../core/cursada.ts';
 
+function claveHoyArgentina(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+}
+
 export function parcialHabilitado(fecha: string | null | undefined): boolean {
   if (!fecha || fecha === 'Sin fecha') return false;
-
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const fechaParcial = new Date(`${fecha}T00:00:00`);
-  return !Number.isNaN(fechaParcial.getTime()) && fechaParcial <= hoy;
+  const fechaLimpia = String(fecha).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaLimpia)) return false;
+  return fechaLimpia <= claveHoyArgentina();
 }
 
 export const tareaHabilitada = tareaEstaHabilitada;
 
 export function tareaDentroDelPlazo(fecha: string | null | undefined): boolean {
   if (!fecha || fecha === 'Sin fecha') return true;
-
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const fechaCierre = new Date(`${fecha}T00:00:00`);
-  return !Number.isNaN(fechaCierre.getTime()) && hoy < fechaCierre;
+  const fechaCierre = String(fecha).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaCierre)) return true;
+  return claveHoyArgentina() < fechaCierre;
 }
 
 export function formatearNotaParaMostrar(nota: string | number | null | undefined): string {
