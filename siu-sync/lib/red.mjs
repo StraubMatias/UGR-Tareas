@@ -12,6 +12,18 @@ import {
 } from './autenticar.mjs';
 
 const TOPE_PEDIDO_MS = 8000;
+const HOST_SIU = new URL(SIU_BASE_URL).hostname;
+
+function urlEgressSiuPermitida(url, base = SIU_BASE_URL) {
+  try {
+    const destino = new URL(String(url), String(base));
+    if (destino.protocol !== 'https:' && destino.protocol !== 'http:') return null;
+    if (destino.hostname !== HOST_SIU) return null;
+    return destino.toString();
+  } catch {
+    return null;
+  }
+}
 
 function fetchConTope(url, opciones) {
   const control = new AbortController();
@@ -51,8 +63,9 @@ export async function crearClienteSIU({ usuario, contrasena, baseUrl = SIU_BASE_
         if (respuesta.status < 300 || respuesta.status >= 400) break;
         const destino = respuesta.headers.get('location');
         if (!destino) break;
-        const urlDestino = new URL(destino, actual);
-        actual = urlDestino.toString();
+        const urlSegura = urlEgressSiuPermitida(destino, actual);
+        if (!urlSegura) break;
+        actual = urlSegura;
         // Si era POST y hubo redirect, la siguiente iteración usa GET
         if (esRedirectPost) {
           method = 'GET';

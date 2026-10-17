@@ -772,13 +772,6 @@ export async function copiarGruposDePrimeraEntrega(
   materiaId: string,
   tareaDestinoId: string
 ): Promise<{ gruposCopiados: number; integrantesCopiados: number }> {
-  // Si la tarea destino ya tiene grupos, no copiar (evita duplicados).
-  const yaTiene = await db.execute({
-    sql: 'SELECT 1 FROM grupos_tareas WHERE tarea_id = ? LIMIT 1',
-    args: [tareaDestinoId]
-  });
-  if (yaTiene.rows.length > 0) return { gruposCopiados: 0, integrantesCopiados: 0 };
-
   // Traer todas las tareas de la materia con la cantidad de grupos de cada una.
   const filas = await db.execute({
     sql: `SELECT t.id, t.nombre, t.inicio,
@@ -806,6 +799,12 @@ export async function copiarGruposDePrimeraEntrega(
   const tareaOrigenId = ref.id;
 
   return transaccion(db, async (tx) => {
+    const yaTiene = await tx.execute({
+      sql: 'SELECT 1 FROM grupos_tareas WHERE tarea_id = ? LIMIT 1',
+      args: [tareaDestinoId]
+    });
+    if (yaTiene.rows.length > 0) return { gruposCopiados: 0, integrantesCopiados: 0 };
+
     const grupos = await consultar<{ id: string; nombre: string }>(tx,
       'SELECT id, nombre FROM grupos_tareas WHERE tarea_id = ? ORDER BY nombre',
       [tareaOrigenId]
