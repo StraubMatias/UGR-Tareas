@@ -1,0 +1,6 @@
+{
+    "github.copilot.advanced": {
+        "debug.overrideProxyUrl": "http://localhost:20128/v1",
+        "debug.overrideCAPIUrl": "http://localhost:20128/v1"
+    }
+}

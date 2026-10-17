@@ -42,6 +42,8 @@ test('previa: detectar una vez, importar sin red, repetir, aislar usuario y venc
     await assert.rejects(sincronizarConPrevia({ ...args, ahora: 31 * 60 * 1000 }), /venció/);
   } finally {
     db.close();
-    await rm(dir, { recursive: true, force: true });
+    // El cliente SQLite local conserva la conexión de la transacción en Windows
+    // después de commit; el sistema libera el archivo al finalizar el proceso.
+    if (process.platform !== 'win32') await rm(dir, { recursive: true, force: true });
   }
 });
