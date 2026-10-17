@@ -5,9 +5,6 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
 import { createClient } from '@libsql/client';
-import { mkdtemp } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { rm } from 'node:fs/promises';
 import {
   extraerEntregasAssign,
   extraerNotaDeTextoDevolucion,
@@ -169,8 +166,7 @@ test('enriquecerNotasDesdeDevoluciones descarga docx y asigna nota', async () =>
 });
 
 test('aplicarEntregasAssignEnDb destilda si el intento actual está reabierto', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ugr-entregas-'));
-  const db = createClient({ url: `file:${join(dir, 'test.db')}` });
+  const db = createClient({ url: 'file::memory:' });
   try {
     await db.batch([
       `CREATE TABLE tareas_entregas (
@@ -214,13 +210,11 @@ test('aplicarEntregasAssignEnDb destilda si el intento actual está reabierto', 
     assert.equal((await db.execute('SELECT COUNT(*) AS n FROM completadas')).rows[0].n, 0);
   } finally {
     db.close();
-    await rm(dir, { recursive: true, force: true });
   }
 });
 
 test('aplicarEntregasAssignEnDb no destilda en resync si la fase pendiente sigue siendo la misma', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ugr-entregas-'));
-  const db = createClient({ url: `file:${join(dir, 'test.db')}` });
+  const db = createClient({ url: 'file::memory:' });
   const entregas = [
     {
       numero: 2,
@@ -275,6 +269,47 @@ test('aplicarEntregasAssignEnDb no destilda en resync si la fase pendiente sigue
     assert.equal(fila?.completada_en, '2026-10-06T12:00:00.000Z');
   } finally {
     db.close();
-    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('aplicarEntregasAssignEnDb conserva los hitos anteriores si falla la escritura', async () => {
+  const db = createClient({ url: 'file::memory:' });
+  try {
+    await db.batch([
+      `CREATE TABLE tareas_entregas (
+        id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, numero INTEGER,
+        indice_entrega INTEGER, es_activa INTEGER, estado TEXT, nota TEXT, nota_origen TEXT,
+        comentario_prof TEXT, feedback_url TEXT, feedback_nombre TEXT, devolucion_texto TEXT,
+        sincronizado_en TEXT, UNIQUE(tarea_id, alumno_id, numero)
+      )`,
+      'CREATE TABLE completadas (tarea_id TEXT, alumno_id TEXT, alumno TEXT, completada_en TEXT, UNIQUE(tarea_id, alumno))',
+      `INSERT INTO tareas_entregas (id, tarea_id, alumno_id, numero, indice_entrega, es_activa, estado)
+       VALUES ('previa', 't1', 'alu', 1, 1, 1, 'Pendiente')`,
+      `CREATE TRIGGER fallo_hito BEFORE INSERT ON tareas_entregas
+       BEGIN SELECT RAISE(ABORT, 'fallo simulado'); END`
+    ], 'write');
+
+    await assert.rejects(aplicarEntregasAssignEnDb({
+      db,
+      tareaId: 't1',
+      alumnoId: 'alu',
+      alumnoNombre: 'Ana',
+      entregas: [{
+        numero: 2,
+        esActiva: true,
+        indiceEntrega: 2,
+        pendiente: true,
+        estado: 'Pendiente',
+        nota: null,
+        comentarioProf: '',
+        archivos: []
+      }]
+    }), /fallo simulado/);
+    const filas = await db.execute('SELECT id, estado FROM tareas_entregas WHERE tarea_id = ?', ['t1']);
+    assert.deepEqual(filas.rows.map((fila) => ({ id: fila.id, estado: fila.estado })), [
+      { id: 'previa', estado: 'Pendiente' }
+    ]);
+  } finally {
+    db.close();
   }
 });
