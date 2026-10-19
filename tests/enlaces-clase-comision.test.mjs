@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   enlaceClaseComisionParaContexto,
-  enlaceClaseComisionParaHorario
+  enlaceClaseComisionParaHorario,
+  resolverEnlaceClaseComision
 } from '../src/lib/enlaces-clase-comision.ts';
 
 test('ciberdelitos: Rodríguez en el plan usa su Zoom', () => {
@@ -14,13 +15,37 @@ test('ciberdelitos: Rodríguez en el plan usa su Zoom', () => {
   assert.match(url, /344433/);
 });
 
-test('ciberdelitos: Gianzone sin link cargado no fuerza el de Rodríguez', () => {
+test('ciberdelitos: Gianzone en el plan usa su enlace', () => {
   const url = enlaceClaseComisionParaContexto('CIBERDELITOS', {
     dia: 1,
     horaInicio: '19:00',
     textoPlan: 'Leonardo Gianzone.'
   });
-  assert.equal(url, '');
+  assert.match(url, /173820/);
+});
+
+test('ciberdelitos: el docente del plan prevalece sobre el enlace guardado en horario', () => {
+  const url = resolverEnlaceClaseComision(
+    'CIBERDELITOS',
+    'https://virtual.ugr.edu.ar/mod/zoom/view.php?id=344433',
+    {
+      dia: 1,
+      horaInicio: '19:00',
+      textoPlan: 'Características y clases. Leonardo Gianzone.'
+    }
+  );
+  assert.match(url, /173820/);
+});
+
+test('calendario: mantiene el enlace guardado cuando el plan no cambia el enlace de catálogo', () => {
+  const urlGuardada = 'https://example.test/enlace-guardado';
+  const url = resolverEnlaceClaseComision(
+    'SISTEMAS DE GESTIÓN DE SEGURIDAD',
+    urlGuardada,
+    { dia: 3, horaInicio: '19:00' }
+  );
+
+  assert.equal(url, urlGuardada);
 });
 
 test('enlace SGSI según día de cursada', () => {

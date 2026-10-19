@@ -47,5 +47,11 @@
     "titulo": "Clases sincrónicas - Prof. Rodríguez",
     "urlCampus": "https://virtual.ugr.edu.ar/mod/zoom/view.php?id=344433",
     "profesorClave": "rodriguez"
+  },
+  {
+    "materia": "CIBERDELITOS",
+    "titulo": "Clases sincrónicas - Prof. Gianzone",
+    "urlCampus": "https://virtual.ugr.edu.ar/mod/zoom/view.php?id=173820",
+    "profesorClave": "gianzone"
   }
 ]

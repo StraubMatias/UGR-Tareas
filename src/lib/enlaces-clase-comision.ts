@@ -87,6 +87,26 @@ export function enlaceClaseComisionParaContexto(
   return mejor?.urlCampus && !mejor.profesorClave ? mejor.urlCampus : '';
 }
 
+export function resolverEnlaceClaseComision(
+  nombreMateria: string,
+  urlExistente: string | null | undefined,
+  opciones: { dia?: number | string; horaInicio?: string; textoPlan?: string } = {}
+): string {
+  const url = enlaceClaseComisionParaContexto(nombreMateria, opciones);
+  const existente = String(urlExistente || '').trim();
+  if (!existente) return url;
+
+  if (opciones.textoPlan && url) {
+    const urlSinDocente = enlaceClaseComisionParaContexto(nombreMateria, {
+      dia: opciones.dia,
+      horaInicio: opciones.horaInicio
+    });
+    if (url !== urlSinDocente) return url;
+  }
+
+  return existente;
+}
+
 export function enlaceClaseComisionParaHorario(
   nombreMateria: string,
   dia: number | string,
