@@ -41,13 +41,13 @@ El cronograma mensual es la vista principal de cursada:
 
 **De dónde sale el enlace**
 
-1. Columna `horarios.url_clase` en Turso (rellenada por sync o migración que aplica el catálogo).
-2. Si falta, respaldo en runtime desde [`database/enlaces-clase-comision.json`](../database/enlaces-clase-comision.json) vía `enlaces-clase-comision.ts`.
+1. Si el plan del día identifica docente, el runtime elige el enlace de ese profesor desde [`database/enlaces-clase-comision.json`](../database/enlaces-clase-comision.json), incluso si `horarios.url_clase` ya tiene un enlace general.
+2. Para el resto, se usa `horarios.url_clase` en Turso; si está vacío, el runtime usa el catálogo como respaldo.
 
 **Casos especiales**
 
 - **SGSI:** dos módulos (mié 19:00 y jue 20:30). `elegirEnlaceZoomParaFilaHorario` en `zoom-cursada.mjs` elige por fila de horario.
-- **Ciberdelitos:** el campus alterna Zoom según docente. En el JSON está Rodríguez (`profesorClave: rodriguez`); si el plan del día menciona Gianzone, no se usa el link de Rodríguez hasta cargar el de Gianzone en el mismo JSON.
+- **Ciberdelitos:** el campus alterna Zoom según docente. El JSON contiene enlaces separados para Rodríguez (`profesorClave: rodriguez`) y Gianzone (`profesorClave: gianzone`); el calendario usa el correspondiente al docente mencionado en el plan del día.
 
 **Archivos:** `VistaHorarios.tsx`, `calendario-tablero.ts`, `enlaces-clase-comision.ts`, `cronograma-vista.ts`.
 
