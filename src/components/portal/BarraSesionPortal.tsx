@@ -5,6 +5,7 @@ import { precargarAlInteractuarNav, precargarSyncPortal } from './portal-vista-p
 
 const btnBase =
   'shrink-0 rounded-lg border text-xs font-semibold transition-all cursor-pointer px-2.5 py-1.5 sm:px-3 sm:py-2';
+const CERTIFICADO_PARCIAL_URL = 'https://forms.gle/6F2nbLbVT1gXR97SA';
 
 interface BarraSesionPortalProps {
   campana: ReactNode;
@@ -38,6 +39,15 @@ export default function BarraSesionPortal({
         >
           🔄 Sincronizar
         </button>
+        <a
+          href={CERTIFICADO_PARCIAL_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Solicitar el certificado una vez rendido el examen parcial"
+          className={`${btnBase} bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border-emerald-500/40`}
+        >
+          📄 Solicitar certificado
+        </a>
         {esAdmin && (
           <button
             type="button"
