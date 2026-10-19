@@ -44,7 +44,7 @@ export default function BarraSesionPortal({
           target="_blank"
           rel="noopener noreferrer"
           title="Solicitar el certificado una vez rendido el examen parcial"
-          className={`${btnBase} bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border-emerald-500/40`}
+          className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
         >
           📄 Solicitar certificado
         </a>
