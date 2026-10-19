@@ -11,6 +11,7 @@ interface BarraSesionPortalProps {
   campana: ReactNode;
   esAdmin: boolean;
   onAbrirSync: () => void;
+  onAbrirConstancias: () => void;
   onAbrirPassword: () => void;
   onAbrirAdmin: () => void;
   onSalir: () => void;
@@ -20,6 +21,7 @@ export default function BarraSesionPortal({
   campana,
   esAdmin,
   onAbrirSync,
+  onAbrirConstancias,
   onAbrirPassword,
   onAbrirAdmin,
   onSalir
@@ -43,11 +45,19 @@ export default function BarraSesionPortal({
           href={CERTIFICADO_PARCIAL_URL}
           target="_blank"
           rel="noopener noreferrer"
-          title="Solicitar el certificado una vez rendido el examen parcial"
+          title="Solicitar la constancia de examen una vez rendido el parcial"
           className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
         >
-          📄 Solicitar certificado
+          📄 Constancia de examen
         </a>
+        <button
+          type="button"
+          onClick={onAbrirConstancias}
+          title="Solicitar constancias y certificados en SIU Guaraní"
+          className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
+        >
+          📜 Constancias
+        </button>
         {esAdmin && (
           <button
             type="button"
