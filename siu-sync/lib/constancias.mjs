@@ -157,29 +157,6 @@ export async function listarAniosAcademicos(cliente) {
   return anios;
 }
 
-/** Sillas de examen (llamados) disponibles para una actividad/turno. */
-export async function listarSillasExamen(cliente, { anioAcademico, turnoExamen, actividad }) {
-  const res = await cliente.pedir('solicitudes/get_llamado_examen', {
-    method: 'POST',
-    cuerpo: new URLSearchParams({
-      anio: String(anioAcademico),
-      turno_examen: String(turnoExamen ?? ''),
-      actividad: String(actividad ?? ''),
-      fecha_desde: '',
-      fecha_hasta: ''
-    }).toString()
-  });
-  const json = jsonSiu(res.html);
-  if (json && json.cod === '-1') return [];
-  const datos = json?.llamado_examen || json?.actividad || [];
-  return datos
-    .map((item) => ({
-      valor: String(item.llamado_mesa ?? item.valor ?? item.elemento ?? ''),
-      etiqueta: [item.nombre_llamado, item.fecha].filter(Boolean).join(' · ')
-    }))
-    .filter((silla) => silla.valor !== '');
-}
-
 /**
  * Alta de la solicitud de constancia.
  * `filtro` solo se usa para "examen final" (mesa de examen) y "promedio académico".

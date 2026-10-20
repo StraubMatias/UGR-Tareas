@@ -13,6 +13,7 @@ La presentación para la comisión está en [`UGRTareas.md`](UGRTareas.md). Este
 | Stack y arquitectura | [Stack](#stack) · [Topología](#topología) · [Árbol](#árbol) |
 | Datos y permisos | [Modelo de datos](#modelo-de-datos) · [Cuentas y sesión](#cuentas-y-sesión) · [Quién ve qué](#quién-ve-qué) |
 | Campus | [Sincronización](#sincronización-con-el-campus) · [`ugr-sync/README.md`](ugr-sync/README.md) |
+| Constancias | [Solicitudes y constancias](#solicitudes-y-constancias-siu-guaraní) |
 | Poner en marcha | [Entorno](#entorno) · [Local](#correr-en-local) · [Vercel](#despliegue-vercel-hobby) |
 | Repo público | [Qué queda fuera de Git](#repositorio-público-y-qué-queda-fuera-de-git) |
 | Contexto para IAs / handoff | [`docs/CONTEXTO-IA.md`](docs/CONTEXTO-IA.md) |
@@ -21,7 +22,7 @@ La presentación para la comisión está en [`UGRTareas.md`](UGRTareas.md). Este
 
 | Capa | Versión / elección |
 | --- | --- |
-| Runtime | Node 20+ |
+| Runtime | Node 20+ (CI en Node 22) |
 | App | Next.js 16.3.8 (App Router, Turbopack en `next dev`), React 19.2.8 |
 | Lenguaje de la app | TypeScript. El compilador de chequeo es TypeScript 7 (`@typescript/native` → `npm:typescript@^7.0.2`). El paquete `typescript` es el API 6 (`npm:@typescript/typescript6@^6.0.2`) porque ESLint / typescript-eslint no hablan la API de TS 7 |
 | Estilos | Tailwind CSS 4 (`@tailwindcss/postcss`) |
@@ -65,6 +66,7 @@ src/hooks/useTableroPortal.ts  carga, sync, acciones y derivados
 src/hooks/tablero-acciones/  handlers por dominio (alumnos, tareas, parciales, …)
 src/hooks/useTableroAcciones.ts  compone los handlers del tablero
 src/app/actions.tsx       Server Actions, sesión, rate limit, borrado
+src/app/actions/          por dominio: auth, estado, evaluaciones, materias, horarios, sync
 src/app/turso.ts          cliente HTTP de Turso
 src/app/plan-utils.ts     PLAN_DE_ESTUDIO (códigos y correlativas)
 src/app/validators.ts     notas, unidades, habilitación de tarea/parcial
@@ -75,24 +77,30 @@ src/lib/cuentas.ts        limpieza 7 días sin sync UGR, tope por IP, SQL de bor
 src/lib/seguridad.ts      claves temporales, validación HH:MM (sin deps de Next)
 src/lib/grupos-tareas.ts  alta/baja de grupo dentro de una transacción
 src/components/           vistas (estado, materias, grupos, plan, …)
+src/components/portal/ModalOverlay.tsx  base de los modales (variantes sheet/compact/panel)
 ugr-sync/lib/             parsers y núcleo de sync (ver su README)
 ugr-sync/scripts/         CLI login y sync
-database/migrate.mjs      migraciones numeradas, idempotentes (ver último número en el archivo)
+siu-sync/lib/             plan de estudio, constancias y certificados de Guaraní
+database/migrate.mjs      migraciones numeradas, idempotentes (el nº más alto está en el archivo)
 database/planes-cronograma-comision.mjs  planes oficiales (manual) por materia de la comisión
 database/enlaces-clase-comision.json   catálogo Zoom/URL de clase (calendario + sync)
 database/cronograma-higiene.mjs        limpieza de cronograma importado
 database/grupos-schema.mjs
 src/lib/enlaces-clase-comision.ts      resuelve enlace por materia/horario/docente
+src/lib/constancias-vigentes.ts        vigencias y nombres de las constancias de SIU
 src/lib/promocion-materia.ts           reglas de promoción y parcial rendido
+src/lib/importar-plan-siu.ts           importador de notas del plan desde SIU
 ugr-sync/lib/zoom-enlaces-comision.mjs  aplica catálogo a horarios.url_clase
 ugr-sync/lib/zoom-cursada.mjs          empareja enlace con día/hora de cursada
+ugr-sync/lib/foros-notas.mjs           nota de cada publicación en un foro calificado
 tests/                    tests de la app
 ugr-sync/test/            tests del sync, con fixtures HTML de Moodle
+siu-sync/test/            tests de SIU Guaraní
 ```
 
 ## Modelo de datos
 
-SQLite en Turso. Las migraciones viven en `database/migrate.mjs` y se registran en `migraciones(numero, nombre, aplicada_en)`. Correr dos veces no reejecuta un número ya insertado. El **último número** está al final de `migrate.mjs`.
+SQLite en Turso. Las migraciones viven en `database/migrate.mjs` y se registran en `migraciones(numero, nombre, aplicada_en)`. Correr dos veces no reejecuta un número ya insertado. El **número más alto** está en `database/migrate.mjs` (hoy, 39); el orden en el archivo no importa porque el registro de aplicadas es lo que evita el reejecución.
 
 Identidad y cursada:
 
@@ -173,7 +181,7 @@ Un alumno no escribe entregas ni notas propias. Esas filas las escribe el sync (
 
 Un botón **Sincronizar** (UGR o SIU). Ninguna ruta persiste DNI ni contraseña de UGR en la base.
 
-**Alumno** — `sincronizarCuentaUgrAction(dni, password)` o `sincronizarCuentaSiuAction(usuario, password)`. UGR usa `conectarUGRCon({ usuario, contrasena, rutaSesion: null })`: jar aislado, no pisa la cookie de la comisión. Si Moodle rechaza el login, la action responde “UGR Virtual no aceptó ese DNI o contraseña” y no loguea las credenciales. Una sync buena reemplaza las inscripciones del período actual (`inscribirAlumnoEnPeriodo`): la cursada queda en lo que el campus dice ahora. **SIU** hoy solo importa el **plan de estudio** (historia académica / materias en curso); inscripciones a exámenes en Guaraní no se leen aún (`inscripcionesExamenes` queda vacío).
+**Alumno** — `sincronizarCuentaUgrAction(dni, password)` o `sincronizarCuentaSiuAction(usuario, password)`. UGR usa `conectarUGRCon({ usuario, contrasena, rutaSesion: null })`: jar aislado, no pisa la cookie de la comisión. Si Moodle rechaza el login, la action responde “UGR Virtual no aceptó ese DNI o contraseña” y no loguea las credenciales. Una sync buena reemplaza las inscripciones del período actual (`inscribirAlumnoEnPeriodo`): la cursada queda en lo que el campus dice ahora. **SIU** importa el **plan de estudio** (historia académica / materias en curso) y, por separado, habilita el pedido de constancias (ver [Solicitudes y constancias](#solicitudes-y-constancias-siu-guaraní)); inscripciones a exámenes en Guaraní no se leen aún (`inscripcionesExamenes` queda vacío).
 
 **UGR en varias pasadas (cuenta propia y admin en la UI):** un solo botón **Sincronizar** encadena varias server actions para no superar el techo de **60 s por request** (`maxDuration` en `layout.tsx`). Orden: `fase: 'preparar'` (login, inscripciones, lista de materias) → varios lotes `fase: 'materias'` con `materiaIds` (tamaño de lote en `src/lib/sync-ugr-orquestacion.ts`, típicamente 2 materias; 3 si hay muchas) → lotes `fase: 'avisos'`. El texto de progreso habla de pasadas (p. ej. “materias 1/4”), no del total de materias de la cursada. SIU sigue siendo una sola action. Detalle en `src/server/sync-ugr-cursada.ts` y `src/components/CuentaPropia.tsx`.
 
@@ -194,7 +202,38 @@ Reglas de escritura:
 - Tarea ya existente: no se duplica. Se actualiza la fecha si el campus trae una fecha distinta. Una fecha vacía del campus **no borra** la fecha guardada (`fechasACorregir`).
 - Nombre con “parcial” o “evaluación” (`pareceEvaluacion`): es parcial, no tarea con apertura y cierre. Se rinde **un** día de clase. Si apertura y cierre difieren, se queda el día cuyo weekday coincide con `horarios.dia` (1 = lunes … 5 = viernes). La nota no se pide hasta ese día (`parcialYaSeRindio`). La fecha del parcial se relee en cada sync desde la página de la actividad.
 - Nota con `cerrada = 1`: no se vuelve a consultar. Al verificarla contra la libreta se cierra.
+- **Foro con calificación:** la nota no está en el índice del foro. Cada publicación se califica por separado y Moodle la publica en `span.ratingaggregate` dentro del post, junto a «Calificación máxima». `ugr-sync/lib/foros-notas.mjs` abre el índice, lista las discusiones, identifica la del alumno por su id de usuario (`data-userid` de la sesión del campus) y toma la nota de su publicación. Como la tarea del tablero apunta al índice, es el camino que usa `leerNotasDeEnlaces` cuando detecta un foro. Cada alumno recibe la suya, no la del curso.
 - Clase: duración fija **90 minutos** (`DURACION_CLASE_MINUTOS`). El inicio verdadero es el que declara el texto del enlace (`horarioDeclaradoEnTitulo`: “17 hs. a 18.30”, “a las 19 Hs”, “Viernes 18:00 hs”), no la ventana larga del calendario. Fin = inicio + 90. Un evento repetido cuya duración no es 90 y cuyo título no declara hora no es horario semanal. `ajustarClasesAlHorario` reescribe título y detalle de la clase; no toca “Se abre/Se cierra”, quizzes, `tipo === 'consulta'` ni filas “sin clases”. Si el título ya existe y solo cambió el rango, `insertarEventosCronograma` hace `UPDATE`, no inserta un duplicado.
+
+### Enlace sincrónico por docente
+
+El catálogo `database/enlaces-clase-comision.json` puede traer **varios enlaces para la misma materia**, distinguidos por `profesorClave` (`rodriguez`, `gianzone`). Es el caso de Ciberdelitos, donde el campus alterna Zoom según quién cursa.
+
+El runtime elige el enlace del docente que el plan del día menciona, aunque `horarios.url_clase` ya tenga un enlace general guardado: `resolverEnlaceClaseComision` (`src/lib/enlaces-clase-comision.ts`) compara el texto del plan contra la clave del catálogo y, si difieren, lo reemplaza. Sin esa precedencia, todos los días de Ciberdelitos abrirían el Zoom del mismo profesor.
+
+## Solicitudes y constancias (SIU Guaraní)
+
+El botón **📜 Solicitudes** (`src/components/portal/ModalSolicitudes.tsx`) permite pedir constancias de la carrera sin entrar a Guaraní a mano.
+
+Opciones del menú:
+
+| Opción | Dónde se resuelve |
+| --- | --- |
+| Constancia de examen parcial | Formulario externo de la cátedra. No pasa por SIU: el certificado llega por mail. |
+| Constancia de alumno regular | SIU Guaraní (Autogestión → Solicitudes → Nueva solicitud) |
+| Constancia de examen final | SIU Guaraní, con filtro de año, turno, materia y mesa |
+| Constancia de promedio académico | SIU Guaraní |
+| Constancia de promedio académico sin aplazos | SIU Guaraní |
+
+**Flujo:** el modal muestra primero las constancias que el alumno **ya tiene y siguen vigentes**, con su fecha de vencimiento, botón **📄 PDF** y botón **➕ Solicitar** (que abre el formulario con el tipo preseleccionado). Las vencidas no se listan: se avisa cuántas hay y que hay que pedirlas de nuevo. Para verlas o para registrar una solicitud hace falta conectar con SIU; el alumno escribe su usuario y clave, que no se persisten.
+
+**Admin:** puede marcar «Usar las credenciales de SIU del servidor» y no tipea nada: la action usa `SIU_USER` / `SIU_PASSWORD` del entorno. Con credenciales del servidor no se cuentan los intentos de login del usuario.
+
+**Descarga del PDF:** el enlace de SIU (`/solicitudes/descargar_comprobante/<id>`) exige la sesión del alumno —sin cookies responde 302 al login—, así que la descarga se hace en el servidor con la sesión de SIU y se devuelve en base64 al navegador. Por eso el cliente de red tiene un método aparte: `pedir` usa `text()`, que decodifica como UTF-8 y corrompe el PDF; `pedirBinario` (`siu-sync/lib/red.mjs`) lee los bytes crudos.
+
+El HTML de SIU llega con los caracteres del JSON sin developar (`\"`, `\/`, `\u00f3`) y con el layout del campus antes del contenido: `developirHtmlSiu` y `recortarFragmentoSiu` (`siu-sync/lib/constancias.mjs`) lo dejan parseable. Sin eso, el listado de solicitudes no se lee y el comprobante no aparece.
+
+**Qué no hace:** no emite constancias, solo registra la solicitud que la cátedra de Guaraní emite después. La constancia de examen parcial no se pide por acá (la emite la cátedra, por formulario).
 
 ## Entorno
 
@@ -208,7 +247,7 @@ Copiar [`.env.example`](.env.example) a `.env.local`. `.env*` está en `.gitigno
 | `ADMIN_USUARIO` | para migrate / reset | nombre exacto del admin a promover |
 | `UGRVIRTUAL_USER` | solo sync admin y CLI | usuario del campus de la comisión |
 | `UGRVIRTUAL_PASSWORD` | solo sync admin y CLI | clave de ese usuario. El alta de un alumno no la usa |
-| `SIU_USER` / `SIU_PASSWORD` | sync SIU (admin / importar plan) | Guaraní |
+| `SIU_USER` / `SIU_PASSWORD` | sync SIU (admin / importar plan) y constancias (admin) | Guaraní |
 | `SIU_BASE_URL` | no | default `https://guarani.ugr.edu.ar/3w` |
 | `TRUST_PROXY` | no | `1` si hay reverse proxy fuera de Vercel y querés rate limit por IP real |
 
@@ -285,6 +324,10 @@ Para mostrar el proyecto sin invitar a replicarlo: en el portfolio enlazá la **
 ## Qué no hace este servicio
 
 - No guarda el DNI ni la contraseña de UGR Virtual. Entran en memoria durante `sincronizarCuentaUgrAction` y se descartan.
+- No guarda el usuario ni la contraseña de SIU Guaraní. Si el admin usa las credenciales del servidor, tampoco salen del entorno.
 - No es la entrega. El enlace abre la actividad en el campus.
 - No reconsulta una nota ya cerrada.
 - No deja que un alumno marque su propia entrega o su nota de cátedra. El admin sí puede corregir filas.
+- No emite constancias: registra la solicitud en Guaraní y descarga el comprobante cuando la cátedra lo emite. La constancia de examen parcial la emite la cátedra, por su propio formulario.
+- No lee inscripciones a exámenes de Guaraní (`inscripcionesExamenes` queda vacío).
+- No es un LMS ni reemplaza al campus: el tablero ordena lo que el campus ya publica.

@@ -71,6 +71,7 @@ Flags: `--yes`, `--dry`, `--cronogramas`.
 | `assign-entregas.mjs` | Buzones assign con varias entregas (SGSI, etc.) |
 | `docx-texto.mjs` | Texto desde DOCX sin dependencias pesadas |
 | `cronograma-oficial.mjs` | Recurso «Cronograma», PDF/Word → `cronograma_eventos` + Zoom en `horarios.url_clase` |
+| `foros-notas.mjs` | Nota de cada publicación en un foro calificado (`span.ratingaggregate`) |
 
 ### Núcleo de negocio (con DB)
 
@@ -145,6 +146,8 @@ Fixtures HTML reales en `ugr-sync/test/fixtures/`. Tras cambiar parsers, actuali
 
 `siu-sync/` es **otro** módulo (`siu-sync/lib/sync-core.mjs`): plan de estudio y notas SIU Guaraní. No importa desde `ugr-sync/lib/sync-core.mjs` salvo tests viejos que deben apuntar a `siu-sync`.
 
+`siu-sync/lib/constancias.mjs` es una piece aparte de ese módulo: el flujo de **constancias y certificados** de Guaraní (Autogestión → Solicitudes). Tips de constancia, cantidad de copias, filtro de mesa de examen, alta de la solicitud y descarga del comprobante en PDF. Server Actions en `src/app/actions/constancias.ts`.
+
 ## Cuando algo falla
 
 | Síntoma | Dónde mirar |
@@ -156,6 +159,8 @@ Fixtures HTML reales en `ugr-sync/test/fixtures/`. Tras cambiar parsers, actuali
 | Cronograma con ruido | `cronograma-higiene.mjs`, `npm run ugr:cronogramas` |
 | Aviso no aparece | `avisos-detectar.mjs`, estado en `avisos_moodle` |
 | Nota assign multi-entrega | `assign-entregas.mjs`, `sincronizarHitosAssignEnMaterias` |
+| Nota de foro no llega | `foros-notas.mjs`: el enlace debe ser el índice (`/mod/forum/view.php?id=N`) y el post debe traer `span.ratingaggregate` con la nota |
+| Constancia de SIU no se registra | `siu-sync/lib/constancias.mjs`: el HTML de Guaraní viene con escapes del JSON sin developar; revisar `developirHtmlSiu` y `recortarFragmentoSiu` |
 
 ## Mantenimiento habitual
 
