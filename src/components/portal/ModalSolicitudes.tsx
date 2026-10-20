@@ -4,11 +4,19 @@ import { useState } from 'react';
 import {
   cargarDatosConstanciasSiuAction,
   cargarMesasExamenSiuAction,
+  descargarComprobanteSiuAction,
   solicitarConstanciaSiuAction,
   type OpcionConstancia,
   type TipoConstanciaSiu
 } from '../../app/actions/constancias';
 import ModalOverlay, { ModalOverlayBody, ModalOverlayFooter, ModalOverlayHeader } from './ModalOverlay';
+import {
+  claveTipoDesdeNombreSiu,
+  diasDeValidez,
+  etiquetaVigencia,
+  filtrarConstanciasVigentes,
+  type SolicitudConstancia
+} from '../../lib/constancias-vigentes';
 
 interface ModalSolicitudesProps {
   onCerrar: () => void;
@@ -60,6 +68,7 @@ export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSol
   const [conectado, setConectado] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [descargando, setDescargando] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null);
   const [usarServidor, setUsarServidor] = useState(esAdmin);
 
@@ -68,9 +77,7 @@ export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSol
   const [turnos, setTurnos] = useState<OpcionConstancia[]>([]);
   const [actividades, setActividades] = useState<OpcionConstancia[]>([]);
   const [mesas, setMesas] = useState<OpcionConstancia[]>([]);
-  const [solicitudes, setSolicitudes] = useState<
-    Array<{ constancia: string; fecha: string; presentar: string; estado: string; vencimiento: string; comprobante: string }>
-  >([]);
+  const [solicitudes, setSolicitudes] = useState<SolicitudConstancia[]>([]);
 
   const [copias, setCopias] = useState(1);
   const [presentar, setPresentar] = useState('');
@@ -83,7 +90,16 @@ export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSol
   const tipo = tipos.find((t) => t.clave === opcion);
   const necesitaFiltro = opcion === 'examen_final';
   const esFormularioExterno = opcion === 'examen_parcial';
+  const vigentes = filtrarConstanciasVigentes(solicitudes);
+  const vencidas = solicitudes.filter((s) => !filtrarConstanciasVigentes([s]).length);
 
+  /** Al pedir una constancia de un tipo que ya tiene, se precarga ese tipo. */
+  const solicitarTipo = (clave: string) => {
+    setOpcion(clave as OpcionSolicitud);
+    setMensaje(null);
+  };
+
+  /** Conectar a SIU: hace falta para ver las vigentes y para registrar la solicitud. */
   const conectar = async () => {
     setCargando(true);
     setMensaje(null);
@@ -102,7 +118,7 @@ export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSol
     setConectado(true);
     const anioActual = String(new Date().getFullYear());
     if ((res.anios || []).some((a) => a.valor === anioActual)) setAnio(anioActual);
-    else if (res.anios?.length) setAnio(res.anios[0].valor);
+    else     if (res.anios?.length) setAnio(res.anios[0].valor);
   };
 
   const recargarMesas = async (anioValue: string, turnoValue: string, actividadValue: string) => {
@@ -151,6 +167,99 @@ export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSol
     setMensaje(null);
   };
 
+  const descargar = async (
+    solicitud: { fecha: string; presentar: string; constancia: string; comprobante: string },
+    claveFila: string
+  ) => {
+    setDescargando(claveFila);
+    setMensaje(null);
+    const res = await descargarComprobanteSiuAction(
+      usarServidor ? '' : usuario,
+      usarServidor ? '' : clave,
+      {
+        url: solicitud.comprobante,
+        nombre: `constancia-${solicitud.fecha}-${solicitud.presentar}`
+      }
+    );
+    setDescargando(null);
+    if (!res.exito || !res.base64) {
+      setMensaje({ ok: false, texto: res.mensaje || 'No se pudo descargar el comprobante.' });
+      return;
+    }
+    const binario = Uint8Array.from(atob(res.base64), (caracter) => caracter.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([binario], { type: 'application/pdf' }));
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = res.nombreArchivo || 'constancia.pdf';
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
+    URL.revokeObjectURL(url);
+    setMensaje({ ok: true, texto: `Comprobante descargado (${res.nombreArchivo}).` });
+  };
+
+  /** Formulario de conexión a SIU: se usa en el menú y al pedir una constancia. */
+  const formularioConexion = (
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void conectar();
+      }}
+    >
+      <p className="text-xs text-slate-400">
+        Iniciá sesión con tu usuario y contraseña de SIU Guaraní para ver tus constancias y registrar solicitudes.
+      </p>
+      {esAdmin && (
+        <label className="flex items-center gap-2 rounded-lg border border-slate-700 bg-[#111722] px-3 py-2 text-xs text-slate-300">
+          <input
+            type="checkbox"
+            checked={usarServidor}
+            onChange={(e) => setUsarServidor(e.target.checked)}
+          />
+          Usar las credenciales de SIU del servidor (sin tipearlas)
+        </label>
+      )}
+      {!usarServidor && (
+        <>
+          <div>
+            <label className={etiquetaClase} htmlFor="solicitud-usuario">Usuario de SIU Guaraní</label>
+            <input
+              id="solicitud-usuario"
+              className={campoClase}
+              value={usuario}
+              onChange={(e) => setUsuario(e.target.value)}
+              autoComplete="username"
+              required
+            />
+          </div>
+          <div>
+            <label className={etiquetaClase} htmlFor="solicitud-clave">Contraseña</label>
+            <input
+              id="solicitud-clave"
+              type="password"
+              className={campoClase}
+              value={clave}
+              onChange={(e) => setClave(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </div>
+        </>
+      )}
+      {mensaje && !mensaje.ok ? (
+        <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">{mensaje.texto}</p>
+      ) : null}
+      <button
+        type="submit"
+        disabled={cargando}
+        className="rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-4 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-60 cursor-pointer"
+      >
+        {cargando ? 'Conectando…' : 'Conectar a SIU Guaraní'}
+      </button>
+    </form>
+  );
+
   return (
     <ModalOverlay maxWidth="2xl" variant="compact">
       <div className="flex h-full flex-col">
@@ -161,35 +270,117 @@ export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSol
         />
         <ModalOverlayBody>
           {!opcion ? (
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => setOpcion('examen_parcial')}
-                className="flex w-full items-start gap-3 rounded-xl border border-slate-700 bg-[#111722] p-4 text-left transition-colors hover:border-cyan-500/40 hover:bg-[#141b26] cursor-pointer"
-              >
-                <span className="text-lg" aria-hidden="true">📄</span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-bold text-slate-100">Constancia de examen parcial</span>
-                  <span className="mt-1 block text-xs leading-relaxed text-slate-400">
-                    Se completa en el formulario una vez rendido el parcial; el certificado llega por mail.
-                  </span>
-                </span>
-              </button>
+            <div className="space-y-4">
+              {conectado && (
+                <section className="space-y-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-100">Tus constancias vigentes</h3>
+                    <span className="text-[11px] text-slate-400">
+                      {vigentes.length} vigente{vigentes.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  {vigentes.length === 0 ? (
+                    <p className="rounded-xl border border-slate-700 bg-[#111722] px-4 py-3 text-xs text-slate-400">
+                      No tenés constancias vigentes. Pedí una abajo y te llega por mail.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {vigentes.map((s, i) => {
+                        const clave = claveTipoDesdeNombreSiu(s.constancia);
+                        const dias = diasDeValidez(s);
+                        return (
+                          <li
+                            key={`${s.fecha}-${s.presentar}-${i}`}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-slate-100">{s.constancia}</p>
+                              <p className="mt-0.5 text-xs text-slate-400">
+                                Pedida el {s.fecha} · Presentada a {s.presentar || '—'}
+                              </p>
+                              <p
+                                className={`mt-1 text-[11px] font-semibold ${
+                                  dias !== null && dias <= 30 ? 'text-amber-300' : 'text-emerald-300'
+                                }`}
+                              >
+                                {etiquetaVigencia(s)}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              {s.comprobante && (
+                                <button
+                                  type="button"
+                                  onClick={() => void descargar(s, `${s.fecha}-${i}`)}
+                                  disabled={descargando === `${s.fecha}-${i}`}
+                                  title={`Descargar el PDF de la constancia del ${s.fecha}`}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-bold text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-50 cursor-pointer"
+                                >
+                                  {descargando === `${s.fecha}-${i}` ? '⏳' : '📄'} PDF
+                                </button>
+                              )}
+                              {clave && (
+                                <button
+                                  type="button"
+                                  onClick={() => solicitarTipo(clave)}
+                                  title="Pedir una constancia nueva de este tipo"
+                                  className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-bold text-emerald-200 hover:bg-emerald-500/20 cursor-pointer"
+                                >
+                                  ➕ Solicitar
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  {vencidas.length > 0 && (
+                    <p className="text-[11px] text-slate-500">
+                      Tenés {vencidas.length} constancia{vencidas.length === 1 ? '' : 's'} vencida
+                      {vencidas.length === 1 ? '' : 's'}: pedilas de nuevo si las necesitás.
+                    </p>
+                  )}
+                </section>
+              )}
 
-              {OPCIONES_SIU.map((item) => (
+              {!conectado && (
+                <section className="space-y-2 rounded-xl border border-slate-700 bg-[#111722] p-4">
+                  <h3 className="text-sm font-bold text-slate-100">Ver mis constancias vigentes</h3>
+                  {formularioConexion}
+                </section>
+              )}
+
+              <section className="space-y-2">
+                <h3 className="text-sm font-bold text-slate-100">Pedir una constancia</h3>
                 <button
-                  key={item.clave}
                   type="button"
-                  onClick={() => setOpcion(item.clave)}
+                  onClick={() => solicitarTipo('examen_parcial')}
                   className="flex w-full items-start gap-3 rounded-xl border border-slate-700 bg-[#111722] p-4 text-left transition-colors hover:border-cyan-500/40 hover:bg-[#141b26] cursor-pointer"
                 >
-                  <span className="text-lg" aria-hidden="true">{item.icono}</span>
+                  <span className="text-lg" aria-hidden="true">📄</span>
                   <span className="min-w-0">
-                    <span className="block text-sm font-bold text-slate-100">{item.titulo}</span>
-                    <span className="mt-1 block text-xs leading-relaxed text-slate-400">{item.detalle}</span>
+                    <span className="block text-sm font-bold text-slate-100">Constancia de examen parcial</span>
+                    <span className="mt-1 block text-xs leading-relaxed text-slate-400">
+                      Se completa en el formulario una vez rendido el parcial; el certificado llega por mail.
+                    </span>
                   </span>
                 </button>
-              ))}
+
+                {OPCIONES_SIU.map((item) => (
+                  <button
+                    key={item.clave}
+                    type="button"
+                    onClick={() => solicitarTipo(item.clave)}
+                    className="flex w-full items-start gap-3 rounded-xl border border-slate-700 bg-[#111722] p-4 text-left transition-colors hover:border-cyan-500/40 hover:bg-[#141b26] cursor-pointer"
+                  >
+                    <span className="text-lg" aria-hidden="true">{item.icono}</span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-slate-100">{item.titulo}</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-slate-400">{item.detalle}</span>
+                    </span>
+                  </button>
+                ))}
+              </section>
             </div>
           ) : esFormularioExterno ? (
             <div className="space-y-4">
@@ -217,13 +408,7 @@ export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSol
               </div>
             </div>
           ) : !conectado ? (
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void conectar();
-              }}
-            >
+            <div className="space-y-4">
               <button
                 type="button"
                 onClick={volverAlMenu}
@@ -231,57 +416,8 @@ export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSol
               >
                 ← Volver a las solicitudes
               </button>
-              <p className="text-xs text-slate-400">
-                Iniciá sesión con tu usuario y contraseña de SIU Guaraní para registrar la solicitud.
-              </p>
-              {esAdmin && (
-                <label className="flex items-center gap-2 rounded-lg border border-slate-700 bg-[#111722] px-3 py-2 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={usarServidor}
-                    onChange={(e) => setUsarServidor(e.target.checked)}
-                  />
-                  Usar las credenciales de SIU del servidor (sin tipearlas)
-                </label>
-              )}
-              {!usarServidor && (
-                <>
-                  <div>
-                    <label className={etiquetaClase} htmlFor="solicitud-usuario">Usuario de SIU Guaraní</label>
-                    <input
-                      id="solicitud-usuario"
-                      className={campoClase}
-                      value={usuario}
-                      onChange={(e) => setUsuario(e.target.value)}
-                      autoComplete="username"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className={etiquetaClase} htmlFor="solicitud-clave">Contraseña</label>
-                    <input
-                      id="solicitud-clave"
-                      type="password"
-                      className={campoClase}
-                      value={clave}
-                      onChange={(e) => setClave(e.target.value)}
-                      autoComplete="current-password"
-                      required
-                    />
-                  </div>
-                </>
-              )}
-              {mensaje && !mensaje.ok ? (
-                <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">{mensaje.texto}</p>
-              ) : null}
-              <button
-                type="submit"
-                disabled={cargando}
-                className="rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-4 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-60 cursor-pointer"
-              >
-                {cargando ? 'Conectando…' : 'Conectar a SIU Guaraní'}
-              </button>
-            </form>
+              {formularioConexion}
+            </div>
           ) : (
             <div className="space-y-5">
               <button
@@ -301,8 +437,7 @@ export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSol
                     value={tipo?.etiqueta || ''}
                     readOnly
                   />
-                </div>
-                <div>
+                </div>                <div>
                   <label className={etiquetaClase} htmlFor="solicitud-copias">Copias</label>
                   <select
                     id="solicitud-copias"
@@ -448,6 +583,7 @@ export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSol
                           <th className="px-3 py-2 font-semibold">Presentar a</th>
                           <th className="px-3 py-2 font-semibold">Estado</th>
                           <th className="px-3 py-2 font-semibold">Vencimiento</th>
+                          <th className="px-3 py-2 font-semibold">Comprobante</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -458,6 +594,21 @@ export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSol
                             <td className="px-3 py-2">{s.presentar}</td>
                             <td className="px-3 py-2">{s.estado}</td>
                             <td className="px-3 py-2">{s.vencimiento}</td>
+                            <td className="px-3 py-2">
+                              {s.comprobante ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void descargar(s, `${s.fecha}-${i}`)}
+                                  disabled={descargando === `${s.fecha}-${i}`}
+                                  title={`Descargar el PDF de la constancia del ${s.fecha}`}
+                                  className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-bold text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-50 cursor-pointer"
+                                >
+                                  {descargando === `${s.fecha}-${i}` ? '⏳' : '📄'} PDF
+                                </button>
+                              ) : (
+                                <span className="text-slate-600">—</span>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

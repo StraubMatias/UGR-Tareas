@@ -51,6 +51,13 @@ export interface RespuestaConstanciasSiu {
   }>;
 }
 
+export interface RespuestaDescargaComprobante {
+  exito: boolean;
+  mensaje?: string;
+  nombreArchivo?: string;
+  base64?: string;
+}
+
 async function clienteSiu(usuario: string, contrasena: string) {
   // @ts-expect-error módulo ESM del sync SIU
   const { crearClienteSIU } = await import('../../../siu-sync/lib/red.mjs');
@@ -226,5 +233,55 @@ export async function solicitarConstanciaSiuAction(
       return { exito: false, mensaje };
     }
     return { exito: false, mensaje: 'No se pudo registrar la solicitud en SIU Guaraní.' };
+  }
+}
+
+/**
+ * Descarga el PDF de un comprobante de constancia.
+ * El enlace de SIU necesita la sesión del alumno: se abre con las mismas
+ * credenciales con las que se conectó el modal.
+ */
+export async function descargarComprobanteSiuAction(
+  usuarioInput: string,
+  passwordInput: string,
+  datos: { url: string; nombre?: string }
+): Promise<RespuestaDescargaComprobante> {
+  try {
+    const usuarioSesion = await obtenerUsuarioSesion();
+    if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
+    const { usuario, contrasena } = await credencialesSiu(usuarioInput, passwordInput);
+    if (!credencialesOk(usuario, contrasena)) {
+      return { exito: false, mensaje: 'Completá el usuario y la contraseña de SIU Guaraní.' };
+    }
+    const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
+    if (!rateLimit.exito) return rateLimit;
+
+    // @ts-expect-error módulo ESM del sync SIU
+    const { descargarComprobanteSiu } = await import('../../../siu-sync/lib/constancias.mjs');
+    const cliente = await clienteSiu(usuario, contrasena);
+    await cliente.autenticar();
+
+    const descarga = await descargarComprobanteSiu(cliente, {
+      url: String(datos?.url || ''),
+      nombre: datos?.nombre || 'constancia'
+    });
+    if (!descarga.ok) return { exito: false, mensaje: descarga.mensaje };
+
+    await registrarAuditoria({
+      accion: 'descargar_comprobante_siu',
+      usuario: usuarioSesion,
+      detalle: `Descargó el comprobante «${texto(descarga.nombreArchivo)}»`,
+      ip: await obtenerIPReal()
+    });
+
+    return {
+      exito: true,
+      nombreArchivo: descarga.nombreArchivo,
+      base64: descarga.base64
+    };
+  } catch (error) {
+    const mensaje = error instanceof Error ? error.message : '';
+    console.error('Error en descargarComprobanteSiuAction:', mensaje || 'falló');
+    return { exito: false, mensaje: 'No se pudo descargar el comprobante de SIU Guaraní.' };
   }
 }

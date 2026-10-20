@@ -108,6 +108,13 @@ declare module '../../siu-sync/lib/red.mjs' {
     rutaSesion?: string | null;
   }): Promise<{
     pedir: (ruta: string, opciones?: unknown) => Promise<{ url: string; html: string; status: number }>;
+    pedirBinario: (ruta: string, opciones?: unknown) => Promise<{
+      url: string;
+      status: number;
+      contentType: string;
+      esPdf: boolean;
+      buffer: Uint8Array;
+    }>;
     autenticar: () => Promise<unknown>;
     jar: Map<string, string>;
   }>;

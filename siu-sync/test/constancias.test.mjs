@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  descargarComprobanteSiu,
+  developirHtmlSiu,
   extraerContSiu,
   listarMesasExamen,
   listarSolicitudesSiu,
   listarTiposConstancia,
+  recortarFragmentoSiu,
   solicitarConstanciaSiu,
   TIPOS_CONSTANCIA
 } from '../lib/constancias.mjs';
@@ -59,6 +62,74 @@ test('listarSolicitudesSiu arma el listado con el comprobante de descarga', asyn
   assert.equal(solicitudes[0].constancia, 'Constancia de Alumno Regular');
   assert.equal(solicitudes[0].presentar, 'Trabajo');
   assert.match(solicitudes[0].comprobante, /descargar_comprobante\/abc123/);
+});
+
+test('listarSolicitudesSiu parsa el listado real de SIU con escapes y layout previo', async () => {
+  // Así llega de verdad: el `cont` viene con el layout del campus antes de la
+  // tabla y con los caracteres del JSON sin developar.
+  const cont = '<div class="titulo_operacion row-fluid"><div class="span12"></div></div>'
+    + '<table class=\\"table table-condensed table-bordered\\"><thead><tr><th>Constancia</th></tr></thead><tbody>'
+    + '<tr><td>Constancia de Alumno Regular</td><td>20\\/09\\/2026</td><td>Trabajo</td><td>Autogesti\\u00f3n</td><td>1</td><td>Online</td><td>19\\/12\\/2026</td>'
+    + '<td><a class=\\"btn no-ajax descargar_cert\\" href=\\"https:\\/\\/guarani.ugr.edu.ar:443\\/3w\\/solicitudes\\/descargar_comprobante\\/65a42e\\">pdf</a></td></tr>'
+    + '</tbody></table>';
+  const cliente = clienteFalso({ solicitudes: JSON.stringify({ cod: '1', cont }) });
+
+  const solicitudes = await listarSolicitudesSiu(cliente);
+  assert.equal(solicitudes.length, 1);
+  assert.equal(solicitudes[0].constancia, 'Constancia de Alumno Regular');
+  assert.equal(solicitudes[0].fecha, '20/09/2026');
+  assert.equal(solicitudes[0].solicitadoEn, 'Autogestión');
+  assert.match(solicitudes[0].comprobante, /descargar_comprobante\/65a42e$/);
+});
+
+test('developirHtmlSiu deshace los escapes del JSON de SIU', () => {
+  assert.equal(developirHtmlSiu('a\\"b\\"'), 'a"b"');
+  assert.equal(developirHtmlSiu('a\\/b'), 'a/b');
+  assert.equal(developirHtmlSiu('Autogesti\\u00f3n'), 'Autogestión');
+  assert.equal(developirHtmlSiu('línea\\n'), 'línea\n');
+});
+
+test('recortarFragmentoSiu deja solo la tabla del campus', () => {
+  const html = '<div class="layout">basura</div><table><tbody><tr><td>x</td></tr></tbody></table>';
+  const recorte = recortarFragmentoSiu(html);
+  assert.ok(recorte.startsWith('<table'));
+  assert.ok(!recorte.includes('basura'));
+});
+
+test('descargarComprobanteSiu devuelve el PDF en base64 con nombre de archivo', async () => {
+  const pdf = Buffer.from('%PDF-1.4\ncontenido\n%%EOF', 'utf8');
+  const cliente = {
+    async pedirBinario() {
+      return { url: 'x', status: 200, contentType: 'application/pdf', esPdf: true, buffer: pdf };
+    }
+  };
+
+  const descarga = await descargarComprobanteSiu(cliente, {
+    url: 'https://guarani.ugr.edu.ar/3w/solicitudes/descargar_comprobante/abc',
+    nombre: 'constancia-20/09/2026-Trabajo'
+  });
+  assert.equal(descarga.ok, true);
+  assert.equal(descarga.nombreArchivo, 'constancia-20-09-2026-trabajo.pdf');
+  assert.equal(Buffer.from(descarga.base64, 'base64').toString('utf8'), pdf.toString('utf8'));
+});
+
+test('descargarComprobanteSiu avisa si la sesión expiró', async () => {
+  const cliente = {
+    async pedirBinario() {
+      return { url: '/acceso/login', status: 302, contentType: 'text/html', esPdf: false, buffer: Buffer.alloc(0) };
+    }
+  };
+
+  const descarga = await descargarComprobanteSiu(cliente, { url: 'https://guarani.ugr.edu.ar/x' });
+  assert.equal(descarga.ok, false);
+  assert.match(descarga.mensaje, /sesión de SIU/i);
+});
+
+test('descargarComprobanteSiu avisa si la solicitud no tiene comprobante', async () => {
+  const cliente = { async pedirBinario() { throw new Error('no debería llamarse'); } };
+  const descarga = await descargarComprobanteSiu(cliente, { url: '' });
+  assert.equal(descarga.ok, false);
+  assert.match(descarga.mensaje, /no tiene comprobante/i);
 });
 
 test('listarMesasExamen usa la clave llamado_mesa del campus', async () => {

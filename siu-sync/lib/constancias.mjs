@@ -39,6 +39,33 @@ function jsonSiu(html) {
   }
 }
 
+/**
+ * El HTML de SIU llega con los caracteres del JSON sin developar (`\"`, `\/`,
+ * `\n`). Hay que deshacerlo antes de pasarlo a cheerio, si no los atributos
+ * quedan con barras y el parser no los reconoce.
+ */
+export function developirHtmlSiu(html) {
+  return String(html || '')
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/\\"/g, '"')
+    .replace(/\\\//g, '/')
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\r/g, '\r');
+}
+
+/**
+ * El `cont` de SIU es un fragmento con el layout del campus antes del
+ * contenido real. Se recorta desde el primer `<table` (o el primer `<div` con
+ * contenido) para que cheerio lo parsee.
+ */
+export function recortarFragmentoSiu(cont) {
+  const html = developirHtmlSiu(cont);
+  const inicio = html.indexOf('<table');
+  if (inicio >= 0) return html.slice(inicio);
+  return html;
+}
+
 /** Tipos de constancia con la cantidad de copias que permite cada uno. */
 export async function listarTiposConstancia(cliente) {
   const tipos = [];
@@ -120,7 +147,7 @@ export async function listarAniosAcademicos(cliente) {
     cuerpo: new URLSearchParams({ form: TIPOS_CONSTANCIA.examen_final.formulario }).toString()
   });
   const json = jsonSiu(res.html);
-  const cont = extraerContSiu(json?.cont ?? res.html);
+  const cont = recortarFragmentoSiu(extraerContSiu(json?.cont ?? res.html));
   const $ = load(cont);
   const anios = [];
   $('#formulario_filtro-anio_academico option').each((_, opcion) => {
@@ -208,7 +235,7 @@ export async function solicitarConstanciaSiu(cliente, {
 /** Listado de solicitudes del alumno: [{ constancia, fecha, presentar, estado, vencimiento, comprobante }]. */
 export async function listarSolicitudesSiu(cliente) {
   const res = await cliente.pedir('solicitudes', {});
-  const cont = extraerContSiu(res.html);
+  const cont = recortarFragmentoSiu(extraerContSiu(res.html));
   const $ = load(cont);
   const solicitudes = [];
   $('table tbody tr').each((_, fila) => {
@@ -227,4 +254,36 @@ export async function listarSolicitudesSiu(cliente) {
     });
   });
   return solicitudes;
+}
+
+/**
+ * Descarga el PDF de un comprobante de constancia.
+ * El enlace necesita la sesión de SIU (sin cookies responde 302 al login),
+ * por eso se pide con el cliente autenticado.
+ * @returns {{ ok: boolean, nombreArchivo: string, base64?: string, mensaje?: string }}
+ */
+export async function descargarComprobanteSiu(cliente, { url, nombre = 'constancia' } = {}) {
+  if (!url) return { ok: false, nombreArchivo: '', mensaje: 'La solicitud no tiene comprobante descargable.' };
+  const descarga = await cliente.pedirBinario(url);
+  if (!descarga?.esPdf || !descarga.buffer?.length) {
+    return {
+      ok: false,
+      nombreArchivo: '',
+      mensaje: descarga?.status === 302
+        ? 'La sesión de SIU Guaraní expiró. Volvé a conectar y probá de nuevo.'
+        : 'SIU Guaraní no devolvió el PDF del comprobante.'
+    };
+  }
+  const base = String(nombre)
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'constancia';
+  return {
+    ok: true,
+    nombreArchivo: `${base}.pdf`,
+    base64: descarga.buffer.toString('base64'),
+    bytes: descarga.buffer.length
+  };
 }
