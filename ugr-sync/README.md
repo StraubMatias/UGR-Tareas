@@ -23,6 +23,7 @@ ugr-sync/
 │   ├── cronograma-oficial.mjs   # PDF/Word + Zoom
 │   ├── zoom-enlaces-comision.mjs  # catálogo JSON → horarios.url_clase
 │   ├── zoom-cursada.mjs         # emparejar enlace ↔ horario semanal
+│   ├── foros-notas.mjs          # nota de cada publicación en un foro calificado
 │   ├── constantes.mjs, red.mjs, autenticar.mjs, …
 │   └── parsers: materias, tareas, calendario, avisos, …
 ├── scripts/
@@ -90,6 +91,11 @@ node --test ugr-sync/test
    hoy en adelante, además se sugiere el evento al cronograma (consulta,
    encuentro, entrega, examen, «sin clases»). Las fechas de vencimiento se leen
    en hora de Argentina, que es la que muestra el campus.
+6. **Trae la nota de los foros calificados**: en un foro con calificación (ej.
+   «Hallazgos de la Semana») la nota no está en el índice sino en cada
+   publicación (`span.ratingaggregate`). `lib/foros-notas.mjs` abre el índice,
+   identifica la discusión del alumno por su id de usuario y toma la nota de su
+   post. Cada alumno recibe la suya.
 
 El recorrido es **paralelo** (concurrencia 4): overviews de todos los cursos,
 índices de foros, páginas de foro y post de cada hilo se piden de a cuatro. Además,

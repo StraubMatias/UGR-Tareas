@@ -74,6 +74,28 @@ A partir de ahí, cada sincronización vuelve a mirar el campus: fechas nuevas, 
 
 **Actividad mínima:** cada semana tenés que sincronizar con UGR Virtual al menos una vez; si no, la cuenta se borra sola (junto con tus notas y progreso en el tablero). Solo mirar el tablero no alcanza. El admin no entra en esa regla. Así el tablero refleja campus al día.
 
+## Constancias, sin entrar a Guaraní
+
+El botón **📜 Solicitudes** te ahorra el paseo por Guaraní.
+
+![Menú de solicitudes de constancias](docs/capturas/solicitudes-menu.jpg)
+
+Primero te muestra **las constancias que ya tenés y siguen vigentes**, con la fecha de vencimiento y un botón para bajar el PDF. Si la necesitás para otro motivo (un trabajo, un colectivo), el botón **➕ Solicitar** te deja pedir otra del mismo tipo sin volver atrás.
+
+![Formulario de solicitud de constancia](docs/capturas/solicitudes-formulario.jpg)
+
+Las cinco opciones disponibles:
+
+| Constancia | Dónde se pide |
+| --- | --- |
+| Examen parcial | Formulario de la cátedra (el certificado llega por mail) |
+| Alumno regular | Acá, directo en Guaraní |
+| Examen final | Acá, eligiendo año, turno, materia y mesa |
+| Promedio académico | Acá, directo en Guaraní |
+| Promedio académico sin aplazos | Acá, directo en Guaraní |
+
+Para usarlo, entrás con tu usuario y clave de Guaraní en el mismo modal. **No se guardan**: se usan para esa operación y se descartan.
+
 ---
 
 Documentación técnica, despliegue y seguridad: [`README.md`](README.md) · [`SECURITY.md`](SECURITY.md)
