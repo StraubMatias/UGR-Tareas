@@ -3,7 +3,13 @@
 
 import { tareaEstaHabilitada } from '../core/cursada.ts';
 
-function claveHoyArgentina(): string {
+/**
+ * Fecha de hoy en Argentina (YYYY-MM-DD).
+ * El campus y la cátedra trabajan con la hora de Argentina, así que las
+ * comparaciones de fechas deben usar esa zona, no la del servidor o la del
+ * navegador: los tests corren en UTC en CI y en hora local en la máquina.
+ */
+export function claveHoyArgentina(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 }
 
