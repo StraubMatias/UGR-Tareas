@@ -159,6 +159,16 @@ export async function iniciarSesion({ usuario, contrasena, baseUrl = SIU_BASE_UR
     const mantenimientoPost = detectarMantenimientoCampus(cuerpoPost, respuesta.status);
     if (mantenimientoPost) throw new Error(mantenimientoPost);
 
+    // SIU Guaraní 3W responde con JSON AJAX: {"cod":"1","cont":"..."}.
+    // cod distinto de "0" (o sin cod) indica error de autenticación/sesión.
+    let jsonRespuesta = null;
+    if (cuerpoPost.trim().startsWith('{')) {
+      try { jsonRespuesta = JSON.parse(cuerpoPost); } catch { jsonRespuesta = null; }
+    }
+    if (jsonRespuesta && jsonRespuesta.cod !== undefined && String(jsonRespuesta.cod) !== '0') {
+      throw new Error('Credenciales de SIU Guaraní incorrectas. Verificá tu usuario y contraseña.');
+    }
+
     const urlResultante = respuesta.headers.get('location')
       ? new URL(respuesta.headers.get('location'), baseUrl).toString()
       : urlLogin;
