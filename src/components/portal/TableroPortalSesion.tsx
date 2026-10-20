@@ -4,9 +4,9 @@ import { etiquetaMateria } from '../../core/cursada';
 import type { TableroPortalViewModel } from '../../hooks/useTableroPortal';
 import BarraSesionPortal from './BarraSesionPortal';
 import CampanaNotificaciones from './CampanaNotificaciones';
-import ModalConstanciasSiu from './ModalConstanciasSiu';
 import ModalCuentaSync from './ModalCuentaSync';
 import ModalElegirSyncFuente from './ModalElegirSyncFuente';
+import ModalSolicitudes from './ModalSolicitudes';
 
 export default function TableroPortalSesion({ vm }: { vm: TableroPortalViewModel }) {
   const { ui, acceso, esAdmin, derivados, cargarBD, portalAcceso, navegarA, abrirModalPassword, marcarNotificacionesVistas, responderInvitacionGrupo } = vm;
@@ -34,7 +34,7 @@ export default function TableroPortalSesion({ vm }: { vm: TableroPortalViewModel
         }
         esAdmin={esAdmin}
         onAbrirSync={() => ui.setSyncPickerAbierto(true)}
-        onAbrirConstancias={() => ui.setConstanciasSiuAbierto(true)}
+        onAbrirSolicitudes={() => ui.setConstanciasSiuAbierto(true)}
         onAbrirPassword={abrirModalPassword}
         onAbrirAdmin={() => navegarA('admin')}
         onSalir={portalAcceso.cerrarSesionLocal}
@@ -66,7 +66,10 @@ export default function TableroPortalSesion({ vm }: { vm: TableroPortalViewModel
         />
       )}
       {ui.constanciasSiuAbierto && (
-        <ModalConstanciasSiu onCerrar={() => ui.setConstanciasSiuAbierto(false)} />
+        <ModalSolicitudes
+          esAdmin={esAdmin}
+          onCerrar={() => ui.setConstanciasSiuAbierto(false)}
+        />
       )}
     </>
   );

@@ -10,22 +10,58 @@ import {
 } from '../../app/actions/constancias';
 import ModalOverlay, { ModalOverlayBody, ModalOverlayFooter, ModalOverlayHeader } from './ModalOverlay';
 
-interface ModalConstanciasSiuProps {
+interface ModalSolicitudesProps {
   onCerrar: () => void;
+  /** El admin puede usar las credenciales de SIU del servidor, sin tipearlas. */
+  esAdmin?: boolean;
 }
+
+/** Formulario externo para la constancia de examen parcial (se completa en Google). */
+const FORMULARIO_EXAMEN_PARCIAL = 'https://forms.gle/6F2nbLbVT1gXR97SA';
 
 const campoClase =
   'w-full rounded-lg border border-slate-700 bg-[#111722] px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500/60';
 
 const etiquetaClase = 'mb-1 block text-xs font-semibold text-slate-300';
 
-export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuProps) {
+type OpcionSolicitud = 'examen_parcial' | 'alumno_regular' | 'examen_final' | 'promedio_academico' | 'promedio_sin_aplazos';
+
+const OPCIONES_SIU: Array<{ clave: OpcionSolicitud; titulo: string; detalle: string; icono: string }> = [
+  {
+    clave: 'alumno_regular',
+    titulo: 'Constancia de alumno regular',
+    detalle: 'Certifica que estás inscripto como alumno regular.',
+    icono: '🎓'
+  },
+  {
+    clave: 'examen_final',
+    titulo: 'Constancia de examen final',
+    detalle: 'Certifica el examen final de una mesa; elegís materia y turno.',
+    icono: '🧾'
+  },
+  {
+    clave: 'promedio_academico',
+    titulo: 'Constancia de promedio académico',
+    detalle: 'Certifica el promedio de tu carrera.',
+    icono: '📊'
+  },
+  {
+    clave: 'promedio_sin_aplazos',
+    titulo: 'Constancia de promedio académico sin aplazos',
+    detalle: 'Certifica el promedio de tu carrera sin contar aplazos.',
+    icono: '📈'
+  }
+];
+
+export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSolicitudesProps) {
+  const [opcion, setOpcion] = useState<OpcionSolicitud | null>(null);
   const [usuario, setUsuario] = useState('');
   const [clave, setClave] = useState('');
   const [conectado, setConectado] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [usarServidor, setUsarServidor] = useState(esAdmin);
 
   const [tipos, setTipos] = useState<TipoConstanciaSiu[]>([]);
   const [anios, setAnios] = useState<OpcionConstancia[]>([]);
@@ -36,7 +72,6 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
     Array<{ constancia: string; fecha: string; presentar: string; estado: string; vencimiento: string; comprobante: string }>
   >([]);
 
-  const [tipoClave, setTipoClave] = useState('alumno_regular');
   const [copias, setCopias] = useState(1);
   const [presentar, setPresentar] = useState('');
   const [observaciones, setObservaciones] = useState('');
@@ -45,13 +80,14 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
   const [actividad, setActividad] = useState('');
   const [mesa, setMesa] = useState('');
 
-  const tipo = tipos.find((t) => t.clave === tipoClave);
-  const necesitaFiltro = tipoClave === 'examen_final';
+  const tipo = tipos.find((t) => t.clave === opcion);
+  const necesitaFiltro = opcion === 'examen_final';
+  const esFormularioExterno = opcion === 'examen_parcial';
 
   const conectar = async () => {
     setCargando(true);
     setMensaje(null);
-    const res = await cargarDatosConstanciasSiuAction(usuario, clave);
+    const res = await cargarDatosConstanciasSiuAction(usarServidor ? '' : usuario, usarServidor ? '' : clave);
     setCargando(false);
     if (!res.exito) {
       setMensaje({ ok: false, texto: res.mensaje || 'No se pudo conectar con SIU Guaraní.' });
@@ -74,20 +110,31 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
       setMesas([]);
       return;
     }
-    const res = await cargarMesasExamenSiuAction(usuario, clave, anioValue, turnoValue, actividadValue);
+    const res = await cargarMesasExamenSiuAction(
+      usarServidor ? '' : usuario,
+      usarServidor ? '' : clave,
+      anioValue,
+      turnoValue,
+      actividadValue
+    );
     setMesas(res.exito ? res.mesas || [] : []);
   };
 
   const enviar = async () => {
+    if (!opcion) return;
     setEnviando(true);
     setMensaje(null);
-    const res = await solicitarConstanciaSiuAction(usuario, clave, {
-      tipoClave,
-      copias,
-      presentar,
-      observaciones,
-      filtro: necesitaFiltro && mesa ? { campo: 'llamado_mesa', valor: mesa } : null
-    });
+    const res = await solicitarConstanciaSiuAction(
+      usarServidor ? '' : usuario,
+      usarServidor ? '' : clave,
+      {
+        tipoClave: opcion,
+        copias,
+        presentar,
+        observaciones,
+        filtro: necesitaFiltro && mesa ? { campo: 'llamado_mesa', valor: mesa } : null
+      }
+    );
     setEnviando(false);
     if (!res.exito) {
       setMensaje({ ok: false, texto: res.mensaje || 'No se pudo registrar la solicitud.' });
@@ -99,16 +146,77 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
     setObservaciones('');
   };
 
+  const volverAlMenu = () => {
+    setOpcion(null);
+    setMensaje(null);
+  };
+
   return (
     <ModalOverlay maxWidth="2xl" variant="compact">
       <div className="flex h-full flex-col">
         <ModalOverlayHeader
-          title="Constancias y certificados (SIU Guaraní)"
-          subtitle="Autogestión → Solicitudes → Nueva solicitud"
+          title="Solicitudes"
+          subtitle="Constancias y certificados de la carrera"
           onClose={onCerrar}
         />
         <ModalOverlayBody>
-          {!conectado ? (
+          {!opcion ? (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setOpcion('examen_parcial')}
+                className="flex w-full items-start gap-3 rounded-xl border border-slate-700 bg-[#111722] p-4 text-left transition-colors hover:border-cyan-500/40 hover:bg-[#141b26] cursor-pointer"
+              >
+                <span className="text-lg" aria-hidden="true">📄</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-slate-100">Constancia de examen parcial</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-slate-400">
+                    Se completa en el formulario una vez rendido el parcial; el certificado llega por mail.
+                  </span>
+                </span>
+              </button>
+
+              {OPCIONES_SIU.map((item) => (
+                <button
+                  key={item.clave}
+                  type="button"
+                  onClick={() => setOpcion(item.clave)}
+                  className="flex w-full items-start gap-3 rounded-xl border border-slate-700 bg-[#111722] p-4 text-left transition-colors hover:border-cyan-500/40 hover:bg-[#141b26] cursor-pointer"
+                >
+                  <span className="text-lg" aria-hidden="true">{item.icono}</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold text-slate-100">{item.titulo}</span>
+                    <span className="mt-1 block text-xs leading-relaxed text-slate-400">{item.detalle}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : esFormularioExterno ? (
+            <div className="space-y-4">
+              <button
+                type="button"
+                onClick={volverAlMenu}
+                className="text-xs text-slate-400 hover:text-white cursor-pointer"
+              >
+                ← Volver a las solicitudes
+              </button>
+              <div className="rounded-xl border border-slate-700 bg-[#111722] p-4">
+                <h4 className="text-sm font-bold text-slate-100">Constancia de examen parcial</h4>
+                <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                  La constancia de examen parcial se pide una vez rendido el parcial, completando el formulario
+                  de la cátedra. Recibís el certificado por mail dentro de las 24 h.
+                </p>
+                <a
+                  href={FORMULARIO_EXAMEN_PARCIAL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-4 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-500/25"
+                >
+                  📄 Abrir formulario <span aria-hidden="true">↗</span>
+                </a>
+              </div>
+            </div>
+          ) : !conectado ? (
             <form
               className="space-y-4"
               onSubmit={(event) => {
@@ -116,32 +224,53 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
                 void conectar();
               }}
             >
+              <button
+                type="button"
+                onClick={volverAlMenu}
+                className="text-xs text-slate-400 hover:text-white cursor-pointer"
+              >
+                ← Volver a las solicitudes
+              </button>
               <p className="text-xs text-slate-400">
-                Iniciá sesión con tu usuario y contraseña de SIU Guaraní para solicitar constancias.
+                Iniciá sesión con tu usuario y contraseña de SIU Guaraní para registrar la solicitud.
               </p>
-              <div>
-                <label className={etiquetaClase} htmlFor="constancia-usuario">Usuario de SIU Guaraní</label>
-                <input
-                  id="constancia-usuario"
-                  className={campoClase}
-                  value={usuario}
-                  onChange={(e) => setUsuario(e.target.value)}
-                  autoComplete="username"
-                  required
-                />
-              </div>
-              <div>
-                <label className={etiquetaClase} htmlFor="constancia-clave">Contraseña</label>
-                <input
-                  id="constancia-clave"
-                  type="password"
-                  className={campoClase}
-                  value={clave}
-                  onChange={(e) => setClave(e.target.value)}
-                  autoComplete="current-password"
-                  required
-                />
-              </div>
+              {esAdmin && (
+                <label className="flex items-center gap-2 rounded-lg border border-slate-700 bg-[#111722] px-3 py-2 text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={usarServidor}
+                    onChange={(e) => setUsarServidor(e.target.checked)}
+                  />
+                  Usar las credenciales de SIU del servidor (sin tipearlas)
+                </label>
+              )}
+              {!usarServidor && (
+                <>
+                  <div>
+                    <label className={etiquetaClase} htmlFor="solicitud-usuario">Usuario de SIU Guaraní</label>
+                    <input
+                      id="solicitud-usuario"
+                      className={campoClase}
+                      value={usuario}
+                      onChange={(e) => setUsuario(e.target.value)}
+                      autoComplete="username"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className={etiquetaClase} htmlFor="solicitud-clave">Contraseña</label>
+                    <input
+                      id="solicitud-clave"
+                      type="password"
+                      className={campoClase}
+                      value={clave}
+                      onChange={(e) => setClave(e.target.value)}
+                      autoComplete="current-password"
+                      required
+                    />
+                  </div>
+                </>
+              )}
               {mensaje && !mensaje.ok ? (
                 <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">{mensaje.texto}</p>
               ) : null}
@@ -155,28 +284,28 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
             </form>
           ) : (
             <div className="space-y-5">
+              <button
+                type="button"
+                onClick={volverAlMenu}
+                className="text-xs text-slate-400 hover:text-white cursor-pointer"
+              >
+                ← Volver a las solicitudes
+              </button>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className={etiquetaClase} htmlFor="constancia-tipo">Tipo de constancia</label>
-                  <select
-                    id="constancia-tipo"
-                    className={campoClase}
-                    value={tipoClave}
-                    onChange={(e) => {
-                      setTipoClave(e.target.value);
-                      setCopias(1);
-                      setMesa('');
-                    }}
-                  >
-                    {tipos.map((t) => (
-                      <option key={t.clave} value={t.clave}>{t.etiqueta}</option>
-                    ))}
-                  </select>
+                  <label className={etiquetaClase} htmlFor="solicitud-tipo">Tipo de constancia</label>
+                  <input
+                    id="solicitud-tipo"
+                    className={`${campoClase} opacity-70`}
+                    value={tipo?.etiqueta || ''}
+                    readOnly
+                  />
                 </div>
                 <div>
-                  <label className={etiquetaClase} htmlFor="constancia-copias">Copias</label>
+                  <label className={etiquetaClase} htmlFor="solicitud-copias">Copias</label>
                   <select
-                    id="constancia-copias"
+                    id="solicitud-copias"
                     className={campoClase}
                     value={copias}
                     onChange={(e) => setCopias(Number(e.target.value))}
@@ -196,9 +325,9 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
                   </p>
                   <div className="grid gap-4 sm:grid-cols-3">
                     <div>
-                      <label className={etiquetaClase} htmlFor="constancia-anio">Año académico</label>
+                      <label className={etiquetaClase} htmlFor="solicitud-anio">Año académico</label>
                       <select
-                        id="constancia-anio"
+                        id="solicitud-anio"
                         className={campoClase}
                         value={anio}
                         onChange={(e) => {
@@ -214,9 +343,9 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
                       </select>
                     </div>
                     <div>
-                      <label className={etiquetaClase} htmlFor="constancia-turno">Turno de examen</label>
+                      <label className={etiquetaClase} htmlFor="solicitud-turno">Turno de examen</label>
                       <select
-                        id="constancia-turno"
+                        id="solicitud-turno"
                         className={campoClase}
                         value={turno}
                         onChange={(e) => {
@@ -232,9 +361,9 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
                       </select>
                     </div>
                     <div>
-                      <label className={etiquetaClase} htmlFor="constancia-actividad">Materia</label>
+                      <label className={etiquetaClase} htmlFor="solicitud-actividad">Materia</label>
                       <select
-                        id="constancia-actividad"
+                        id="solicitud-actividad"
                         className={campoClase}
                         value={actividad}
                         onChange={(e) => {
@@ -251,9 +380,9 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
                     </div>
                   </div>
                   <div>
-                    <label className={etiquetaClase} htmlFor="constancia-mesa">Mesa de examen</label>
+                    <label className={etiquetaClase} htmlFor="solicitud-mesa">Mesa de examen</label>
                     <select
-                      id="constancia-mesa"
+                      id="solicitud-mesa"
                       className={campoClase}
                       value={mesa}
                       onChange={(e) => setMesa(e.target.value)}
@@ -273,9 +402,9 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
               )}
 
               <div>
-                <label className={etiquetaClase} htmlFor="constancia-presentar">Presentar a</label>
+                <label className={etiquetaClase} htmlFor="solicitud-presentar">Presentar a</label>
                 <input
-                  id="constancia-presentar"
+                  id="solicitud-presentar"
                   className={campoClase}
                   value={presentar}
                   onChange={(e) => setPresentar(e.target.value)}
@@ -285,9 +414,9 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
                 />
               </div>
               <div>
-                <label className={etiquetaClase} htmlFor="constancia-observaciones">Observaciones (opcional)</label>
+                <label className={etiquetaClase} htmlFor="solicitud-observaciones">Observaciones (opcional)</label>
                 <textarea
-                  id="constancia-observaciones"
+                  id="solicitud-observaciones"
                   className={`${campoClase} min-h-20`}
                   value={observaciones}
                   onChange={(e) => setObservaciones(e.target.value)}
@@ -339,7 +468,7 @@ export default function ModalConstanciasSiu({ onCerrar }: ModalConstanciasSiuPro
             </div>
           )}
         </ModalOverlayBody>
-        {conectado && (
+        {conectado && !esFormularioExterno && (
           <ModalOverlayFooter>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <button
