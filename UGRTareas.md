@@ -6,6 +6,8 @@ Presentación para la comisión y el portfolio. La especificación técnica est�
 
 UGR Virtual sigue siendo donde se entrega y donde la cátedra publica. Este tablero es donde se entiende el cuatrimestre: qué te falta, cuándo cursás, cuándo se toma el parcial, cómo venís para regularizar o promocionar, y qué te queda de la carrera.
 
+*Las capturas son de una cuenta de ejemplo, «Martin Gonzalez», con la cursada de la comisión.*
+
 ![Ingreso al tablero](docs/capturas/entrar.jpg)
 
 ## Para qué está
@@ -78,13 +80,17 @@ A partir de ahí, cada sincronización vuelve a mirar el campus: fechas nuevas, 
 
 El botón **📜 Solicitudes** te ahorra el paseo por Guaraní.
 
-![Menú de solicitudes de constancias](docs/capturas/solicitudes-menu.jpg)
+Abierto el modal, arriba están **las constancias que ya tenés y siguen vigentes**: cuándo la pediste, a quién la presentaste, hasta qué día sirve, y dos botones — **📄 PDF** para bajar el comprobante y **➕ Solicitar** para pedir otra del mismo tipo sin volver atrás. Las vencidas no se listan: te avisa cuántas tenés y que hay que pedirlas de nuevo.
 
-Primero te muestra **las constancias que ya tenés y siguen vigentes**, con la fecha de vencimiento y un botón para bajar el PDF. Si la necesitás para otro motivo (un trabajo, un colectivo), el botón **➕ Solicitar** te deja pedir otra del mismo tipo sin volver atrás.
+![Constancias vigentes del alumno, con vencimiento, PDF y botón de solicitar](docs/capturas/solicitudes-vigentes.jpg)
 
-![Formulario de solicitud de constancia](docs/capturas/solicitudes-formulario.jpg)
+Debajo, el menú con las cinco opciones para pedir una constancia nueva. El examen parcial se completa en el formulario de la cátedra (el certificado llega por mail); las otras cuatro se registran acá mismo, en Guaraní.
 
-Las cinco opciones disponibles:
+![Menú con las cinco opciones de constancia](docs/capturas/solicitudes-menu.jpg)
+
+La constancia de examen final es la única que pide detalle: año, turno, materia y mesa.
+
+![Formulario de constancia de examen final con el filtro de mesa](docs/capturas/solicitudes-examen-final.jpg)
 
 | Constancia | Dónde se pide |
 | --- | --- |

@@ -159,21 +159,29 @@ export async function iniciarSesion({ usuario, contrasena, baseUrl = SIU_BASE_UR
     const mantenimientoPost = detectarMantenimientoCampus(cuerpoPost, respuesta.status);
     if (mantenimientoPost) throw new Error(mantenimientoPost);
 
-    // SIU Guaraní 3W responde con JSON AJAX: {"cod":"1","cont":"..."}.
-    // cod distinto de "0" (o sin cod) indica error de autenticación/sesión.
+    // SIU Guaraní 3W responde con JSON AJAX. Hay dos casos:
+    //   - login OK:      {"cod":"-2","cont":{"url":".../inicio_alumno"}}
+    //   - login fallido: {"cod":"1","cont":"<html>...formulario de login..."}
+    // El "cod" NO es un código de error: "-2" es la redirección al inicio.
     let jsonRespuesta = null;
     if (cuerpoPost.trim().startsWith('{')) {
       try { jsonRespuesta = JSON.parse(cuerpoPost); } catch { jsonRespuesta = null; }
     }
-    if (jsonRespuesta && jsonRespuesta.cod !== undefined && String(jsonRespuesta.cod) !== '0') {
-      throw new Error('Credenciales de SIU Guaraní incorrectas. Verificá tu usuario y contraseña.');
-    }
+    const contEsObjeto = jsonRespuesta?.cont && typeof jsonRespuesta.cont === 'object';
+    const urlDesdeJson = contEsObjeto ? jsonRespuesta.cont.url : null;
+    const esRedireccionAlInicio = String(jsonRespuesta?.cod ?? '') === '-2'
+      && typeof urlDesdeJson === 'string'
+      && !urlDesdeJson.includes('/acceso/login');
+    const vuelveAlFormulario = String(jsonRespuesta?.cod ?? '') === '1' && !contEsObjeto;
 
     const urlResultante = respuesta.headers.get('location')
       ? new URL(respuesta.headers.get('location'), baseUrl).toString()
-      : urlLogin;
+      : esRedireccionAlInicio
+        ? new URL(urlDesdeJson, baseUrl).toString()
+        : urlLogin;
 
-    const esExitoso = !urlResultante.includes('/acceso/login') && !detectarErrorCredenciales(cuerpoPost);
+    const esExitoso = esRedireccionAlInicio
+      || (!vuelveAlFormulario && !urlResultante.includes('/acceso/login') && !detectarErrorCredenciales(cuerpoPost));
 
     if (!esExitoso) {
       throw new Error('Credenciales de SIU Guaraní incorrectas. Verificá tu usuario y contraseña.');
