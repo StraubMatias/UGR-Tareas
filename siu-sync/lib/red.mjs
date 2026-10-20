@@ -12,6 +12,18 @@ import {
 } from './autenticar.mjs';
 
 const TOPE_PEDIDO_MS = 8000;
+const HOST_SIU = new URL(SIU_BASE_URL).hostname;
+
+function urlEgressSiuPermitida(url, base = SIU_BASE_URL) {
+  try {
+    const destino = new URL(String(url), String(base));
+    if (destino.protocol !== 'https:' && destino.protocol !== 'http:') return null;
+    if (destino.hostname !== HOST_SIU) return null;
+    return destino.toString();
+  } catch {
+    return null;
+  }
+}
 
 function fetchConTope(url, opciones) {
   const control = new AbortController();
@@ -51,8 +63,9 @@ export async function crearClienteSIU({ usuario, contrasena, baseUrl = SIU_BASE_
         if (respuesta.status < 300 || respuesta.status >= 400) break;
         const destino = respuesta.headers.get('location');
         if (!destino) break;
-        const urlDestino = new URL(destino, actual);
-        actual = urlDestino.toString();
+        const urlSegura = urlEgressSiuPermitida(destino, actual);
+        if (!urlSegura) break;
+        actual = urlSegura;
         // Si era POST y hubo redirect, la siguiente iteración usa GET
         if (esRedirectPost) {
           method = 'GET';
@@ -81,6 +94,54 @@ export async function crearClienteSIU({ usuario, contrasena, baseUrl = SIU_BASE_
     return resultado;
   }
 
+  /**
+   * Descarga binaria (PDF de comprobantes). `pedir` usa `text()`, que decodifica
+   * como UTF-8 y corrompe el archivo; acá se leen los bytes crudos.
+   */
+  async function pedirBinarioSinAutenticar(ruta, opciones = {}) {
+    const url = new URL(ruta, baseNormalizada).toString();
+    let actual = url;
+    let respuesta = null;
+    try {
+      for (let salto = 0; salto < 5; salto += 1) {
+        respuesta = await fetchConTope(actual, {
+          method: salto === 0 ? (opciones.method || 'GET') : 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; tareasUGR-sync/0.1)',
+            ...(jar.size > 0 ? { Cookie: cabeceraCookies(jar) } : {})
+          },
+          redirect: 'manual'
+        });
+        const setCookie = respuesta.headers.getSetCookie?.() || [];
+        const cruda = setCookie.length > 0 ? setCookie : [respuesta.headers.get('set-cookie')].filter(Boolean);
+        if (cruda.length > 0) combinarJar(jar, crearJarCookies(cruda).entries());
+
+        if (respuesta.status < 300 || respuesta.status >= 400) break;
+        const destino = respuesta.headers.get('location');
+        if (!destino) break;
+        const urlSegura = urlEgressSiuPermitida(destino, actual);
+        if (!urlSegura) break;
+        actual = urlSegura;
+      }
+
+      const tipo = respuesta.headers.get('content-type') || '';
+      const buffer = Buffer.from(await respuesta.arrayBuffer());
+      await guardarSesion(jar, rutaSesion);
+      return {
+        url: actual,
+        status: respuesta.status,
+        contentType: tipo,
+        esPdf: tipo.includes('pdf') || buffer.subarray(0, 4).toString() === '%PDF',
+        buffer
+      };
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        return { url: actual, status: 0, contentType: '', esPdf: false, buffer: Buffer.alloc(0) };
+      }
+      throw error;
+    }
+  }
+
   async function pedir(ruta, opciones) {
     let resultado = await pedirSinAutenticar(ruta, opciones);
     // 如果返回的是登录页，说明会话过期，重新登录
@@ -91,5 +152,14 @@ export async function crearClienteSIU({ usuario, contrasena, baseUrl = SIU_BASE_
     return resultado;
   }
 
-  return { pedir, autenticar, jar };
+  async function pedirBinario(ruta, opciones = {}) {
+    let resultado = await pedirBinarioSinAutenticar(ruta, opciones);
+    if (resultado.url.includes('/acceso/login') && !sesionIntentada) {
+      await autenticar();
+      resultado = await pedirBinarioSinAutenticar(ruta, opciones);
+    }
+    return resultado;
+  }
+
+  return { pedir, pedirBinario, autenticar, jar };
 }

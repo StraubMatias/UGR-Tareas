@@ -15,20 +15,28 @@ Tablero Next.js + Turso para la Tecnicatura en Ciberseguridad (UGR). Los alumnos
 | Ruta | Rol |
 |------|-----|
 | `src/app/` | App Router, Server Actions, Turso |
+| `src/app/actions/constancias.ts` | Solicitudes y descargas de constancias de SIU |
 | `src/components/portal/` | Tablero (pestañas, campana, sync) |
+| `src/components/portal/ModalOverlay.tsx` | Base de modales: `sheet`, `compact`, `panel` (header/footer fijos) |
+| `src/components/portal/ModalSolicitudes.tsx` | Menú de constancias: vigentes, PDF, alta y filtros |
 | `src/components/VistaHorarios.tsx` | Calendario mensual + modal del día |
 | `src/lib/calendario-tablero.ts` | Qué eventos caen en cada día |
 | `src/lib/cronograma-vista.ts` | Filtra ruido del cronograma; tema de clase junto a «Cursada» |
 | `src/lib/promocion-materia.ts` | Reglas de promoción / regularización |
 | `src/lib/notificaciones-tablero.ts` | Campana (parciales, vencimientos, avisos) |
-| `src/lib/enlaces-clase-comision.ts` | URLs de Zoom/aula para el calendario |
+| `src/lib/enlaces-clase-comision.ts` | URLs de Zoom/aula; elige por docente del plan |
+| `src/lib/constancias-vigentes.ts` | Vigencia y nombres de las constancias de SIU |
+| `src/lib/importar-plan-siu.ts` | Importa notas del plan desde SIU |
 | `database/migrate.mjs` | Migraciones numeradas (último nº al final del archivo) |
 | `database/planes-cronograma-comision.mjs` | Plan manual por materia (prioridad sobre PDF) |
 | `database/enlaces-clase-comision.json` | **Catálogo único** de enlaces sincrónicos |
 | `database/cronograma-higiene.mjs` | Limpia basura de PDFs importados |
+| `siu-sync/lib/constancias.mjs` | Constancias de Guaraní: tipos, mesas, alta, listado, PDF |
+| `siu-sync/lib/red.mjs` | Cliente SIU; `pedirBinario` para los PDF |
 | `ugr-sync/lib/cronograma-oficial.mjs` | PDF/DOCX + Zoom del campus |
 | `ugr-sync/lib/zoom-cursada.mjs` | Empareja enlace ↔ día/hora de cursada |
 | `ugr-sync/lib/zoom-enlaces-comision.mjs` | Lee el JSON y escribe `horarios.url_clase` |
+| `ugr-sync/lib/foros-notas.mjs` | Nota de cada publicación en un foro calificado |
 
 ---
 
@@ -41,13 +49,13 @@ El cronograma mensual es la vista principal de cursada:
 
 **De dónde sale el enlace**
 
-1. Columna `horarios.url_clase` en Turso (rellenada por sync o migración que aplica el catálogo).
-2. Si falta, respaldo en runtime desde [`database/enlaces-clase-comision.json`](../database/enlaces-clase-comision.json) vía `enlaces-clase-comision.ts`.
+1. Si el plan del día identifica docente, el runtime elige el enlace de ese profesor desde [`database/enlaces-clase-comision.json`](../database/enlaces-clase-comision.json), incluso si `horarios.url_clase` ya tiene un enlace general.
+2. Para el resto, se usa `horarios.url_clase` en Turso; si está vacío, el runtime usa el catálogo como respaldo.
 
 **Casos especiales**
 
 - **SGSI:** dos módulos (mié 19:00 y jue 20:30). `elegirEnlaceZoomParaFilaHorario` en `zoom-cursada.mjs` elige por fila de horario.
-- **Ciberdelitos:** el campus alterna Zoom según docente. En el JSON está Rodríguez (`profesorClave: rodriguez`); si el plan del día menciona Gianzone, no se usa el link de Rodríguez hasta cargar el de Gianzone en el mismo JSON.
+- **Ciberdelitos:** el campus alterna Zoom según docente. El JSON contiene enlaces separados para Rodríguez (`profesorClave: rodriguez`) y Gianzone (`profesorClave: gianzone`); el calendario usa el correspondiente al docente mencionado en el plan del día.
 
 **Archivos:** `VistaHorarios.tsx`, `calendario-tablero.ts`, `enlaces-clase-comision.ts`, `cronograma-vista.ts`.
 
@@ -90,6 +98,31 @@ El cronograma mensual es la vista principal de cursada:
 - Cuenta propia: varias invocaciones de Server Action (una materia por pasada) por `maxDuration` 60 s en Vercel (`sync-ugr-orquestacion.ts`, `sync-ugr-cursada.ts`).
 - Comisión / CLI: `ugr-sync/scripts/sync.mjs`, `flujo-sync-comision.mjs`; al persistir corre `sincronizarEnlacesZoomHorarios`.
 - Credenciales: `UGRVIRTUAL_*` en entorno; cookie de comisión en `data/ugr-sesion.json` (local) o `/tmp` en Vercel. `sync/env.mjs` evita lecturas de filesystem en el build de Vercel.
+
+### Notas de foros calificados
+
+En los foros con calificación (ej. «Hallazgos de la Semana» de Gestión de Activos) la nota **no** está en el índice del foro: cada publicación se califica por separado y Moodle la publica en `span.ratingaggregate` dentro del post, junto a «Calificación máxima».
+
+- `ugr-sync/lib/foros-notas.mjs`: abre el índice (`/mod/forum/view.php?id=N`), lista las discusiones, identifica la del alumno por su id de usuario (`data-userid` de la sesión) y toma la nota de su publicación.
+- `leerNotasDeEnlaces` detecta el índice de un foro y usa ese camino en vez de la nota de la página.
+- Tests: `ugr-sync/test/foros-notas.test.mjs` (con fixtures tomados de la página real).
+
+---
+
+## Solicitudes de constancias (SIU Guaraní)
+
+Botón **📜 Solicitudes** en la barra del portal (`BarraSesionPortal.tsx`) → `ModalSolicitudes.tsx`.
+
+- Opciones: constancia de examen parcial (formulario externo de la cátedra), alumno regular, examen final, promedio académico y promedio académico sin aplazos.
+- Las cuatro últimas se registran en SIU Guaraní (Autogestión → Solicitudes → Nueva solicitud) desde el portal: el usuario y la clave de SIU se piden en el modal y no se persisten.
+- El **admin** puede marcar «Usar las credenciales de SIU del servidor»: en ese caso se usan `SIU_USER` / `SIU_PASSWORD` del entorno y no se tipea nada.
+- **Descarga del comprobante en PDF:** cada solicitud con comprobante tiene un botón «📄 PDF». El enlace de SIU exige la sesión del alumno (sin cookies responde 302 al login), así que se descarga en el servidor con `pedirBinario` (lee los bytes crudos; `pedir` usa `text()` y corrompe el PDF) y se devuelve en base64 al navegador.
+- **Constancias vigentes:** al abrir el modal, el menú muestra las constancias que el alumno ya tiene y siguen vigentes (por fecha de vencimiento), con botón «📄 PDF» y «➕ Solicitar» para pedir otra del mismo tipo. Las vencidas se avisan aparte.
+- Lógica de vigencia y de mapeo de nombres en `src/lib/constancias-vigentes.ts` (tests en `tests/constancias-vigentes.test.mjs`).
+- El HTML de SIU llega con los escapes del JSON sin developar (`\"`, `\/`, `\u00f3`) y con el layout del campus antes del contenido: `developirHtmlSiu` y `recortarFragmentoSiu` lo dejan parseable.
+- Capa de red: `siu-sync/lib/constancias.mjs` (tipos, copias, filtro de mesa de examen, alta y listado). Server Actions en `src/app/actions/constancias.ts`.
+- La constancia de examen final exige elegir año, turno, materia y mesa (`llamado_mesa`); el campus devuelve la lista de mesas en `llamado_examen`.
+- Tests: `siu-sync/test/constancias.test.mjs`.
 
 ---
 

@@ -45,7 +45,7 @@ export async function validarLoginAction(usuarioInput: string, passwordInput: st
   try {
     await borrarCuentasSinSincronizar();
     const userClean = String(usuarioInput || '').trim();
-    const passClean = String(passwordInput || '').trim();
+    const passClean = String(passwordInput || '');
 
     if (!userClean || !passClean) {
       return { exito: false, mensaje: MENSAJE_LOGIN_INVALIDO };
@@ -197,8 +197,8 @@ export async function registrarCuentaAction(
 export async function cambiarPasswordAction(usuarioInput: string, passActualInput: string, passNuevaInput: string): Promise<RespuestaAction> {
   try {
     const userClean = usuarioInput ? usuarioInput.trim() : '';
-    const passActualClean = passActualInput ? passActualInput.trim() : '';
-    const passNuevaClean = passNuevaInput ? passNuevaInput.trim() : '';
+    const passActualClean = String(passActualInput || '');
+    const passNuevaClean = String(passNuevaInput || '');
 
     if (!userClean || !passActualClean || !passNuevaClean) {
       return { exito: false, mensaje: 'Completá todos los campos.' };

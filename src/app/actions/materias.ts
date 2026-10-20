@@ -18,7 +18,7 @@ import {
   MAX_DETALLES_LENGTH,
   MAX_CONDICIONES_LENGTH
 } from '../../server/action-internals';
-import { copiarGruposDePrimeraEntrega } from '../../lib/grupos-tareas';
+import { copiarGruposDePrimeraEntrega, numeroEntregaDeNombre } from '../../lib/grupos-tareas';
 
 
 export async function crearMateriaAction({ nombre, anio, cuatrimestre }: {
@@ -193,15 +193,11 @@ export async function crearTareaAction(params: TareaActionParams): Promise<Respu
       sql: 'INSERT INTO tareas (id, materia_id, nombre, inicio, fin, detalles, unidad, con_nota, tipo, grupal, permite_individual, cupo_maximo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       args: [id, materiaId, validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupalNumerico, permiteIndividualNumerico, cupo]
     });
-    // Si es una tarea de "segunda entrega", copiar automáticamente los grupos
-    // de la "primera entrega" de la misma materia para no rearmar los equipos.
-    const nombreLower = validacionNombre.valor.toLowerCase();
-    const esSegundaEntrega =
-      nombreLower.includes('segunda entrega') ||
-      nombreLower.includes('2da entrega') ||
-      nombreLower.includes('2° entrega') ||
-      nombreLower.includes('entrega 2');
-    if (esSegundaEntrega && grupalNumerico === 1) {
+    // Si es una tarea de una entrega posterior (2da, 3ra, etc.) y es grupal,
+    // copiar automáticamente los grupos de la entrega de referencia de la misma
+    // materia para no rearmar los equipos.
+    const numeroEntrega = numeroEntregaDeNombre(validacionNombre.valor);
+    if (numeroEntrega && numeroEntrega >= 2 && grupalNumerico === 1) {
       try {
         const copia = await copiarGruposDePrimeraEntrega(db, materiaId, id);
         if (copia.gruposCopiados > 0) {
@@ -213,7 +209,7 @@ export async function crearTareaAction(params: TareaActionParams): Promise<Respu
           });
         }
       } catch (error) {
-        // No fallar la creaciÃ³n de la tarea si falla la copia de grupos
+        // No fallar la creación de la tarea si falla la copia de grupos
         console.error('No se pudieron copiar grupos de primera entrega:', error);
       }
     }
@@ -261,6 +257,36 @@ export async function editarTareaAction(params: TareaActionParams): Promise<Resp
       args: [validacionNombre.valor, validacionInicio.valor, validacionFin.valor, validacionDetalles.valor || 'Sin observaciones', unidadNormalizada.valor, conNotaNumerico, tipoNormalizado, grupalNumerico, permiteIndividualNumerico, cupo, id]
     });
     if (!actualizacion.rowsAffected) return { exito: false, mensaje: 'La tarea seleccionada no existe o no se pudo editar.' };
+    // Si es una tarea de una entrega posterior (2da, 3ra, etc.) y es grupal,
+    // copiar automáticamente los grupos de la entrega de referencia de la misma
+    // materia (solo si la tarea aún no tiene grupos).
+    const numeroEntrega = numeroEntregaDeNombre(validacionNombre.valor);
+    if (numeroEntrega && numeroEntrega >= 2 && grupalNumerico === 1) {
+      const tareaFila = await db.execute({
+        sql: 'SELECT materia_id FROM tareas WHERE id = ?',
+        args: [id]
+      });
+      const materiaId = String(tareaFila.rows[0]?.materia_id ?? '');
+      const yaTieneGrupos = await db.execute({
+        sql: 'SELECT 1 FROM grupos_tareas WHERE tarea_id = ? LIMIT 1',
+        args: [id]
+      });
+      if (materiaId && yaTieneGrupos.rows.length === 0) {
+        try {
+          const copia = await copiarGruposDePrimeraEntrega(db, materiaId, id);
+          if (copia.gruposCopiados > 0) {
+            await registrarAuditoria({
+              accion: 'copiar_grupos_primera_entrega',
+              usuario: usuarioSesion,
+              detalle: `Copiados ${copia.gruposCopiados} grupo(s) y ${copia.integrantesCopiados} integrante(s) de la primera entrega a "${validacionNombre.valor}" (tarea existente)`,
+              ip: await obtenerIPReal()
+            });
+          }
+        } catch (error) {
+          console.error('No se pudieron copiar grupos de primera entrega:', error);
+        }
+      }
+    }
     await registrarAuditoria({ accion: 'editar_tarea', usuario: usuarioSesion, detalle: `Editó la tarea ${id}`, ip: await obtenerIPReal() });
     return { exito: true };
   } catch (error) {
@@ -287,5 +313,63 @@ export async function eliminarTareaAction(id: string): Promise<RespuestaAction> 
   } catch (error) {
     console.error('Error en eliminarTareaAction:', error);
     return { exito: false, mensaje: 'No se pudo eliminar la tarea.' };
+  }
+}
+
+export async function aplicarGruposPrimeraEntregaAction({
+  tareaId,
+  materiaId
+}: { tareaId: string; materiaId: string }): Promise<RespuestaAction> {
+  try {
+    if (!await verificarAdmin()) return { exito: false, mensaje: 'Solo el administrador puede aplicar grupos.' };
+    const usuarioSesion = await obtenerUsuarioSesion();
+    const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
+    if (!rateLimit.exito) return rateLimit;
+
+    const tareaFila = await db.execute({
+      sql: 'SELECT nombre, grupal FROM tareas WHERE id = ?',
+      args: [tareaId]
+    });
+    const tarea = tareaFila.rows[0];
+    if (!tarea) return { exito: false, mensaje: 'La tarea no existe.' };
+
+    const nombre = String(tarea.nombre ?? '');
+    const grupal = Number(tarea.grupal) === 1;
+    const numeroEntrega = numeroEntregaDeNombre(nombre);
+
+    if (!numeroEntrega || numeroEntrega < 2) {
+      return { exito: false, mensaje: 'Esta tarea no es de una entrega posterior (2da, 3ra, etc.).' };
+    }
+    if (!grupal) {
+      return { exito: false, mensaje: 'Esta tarea no es grupal.' };
+    }
+
+    const yaTieneGrupos = await db.execute({
+      sql: 'SELECT 1 FROM grupos_tareas WHERE tarea_id = ? LIMIT 1',
+      args: [tareaId]
+    });
+    if (yaTieneGrupos.rows.length > 0) {
+      return { exito: false, mensaje: 'La tarea ya tiene grupos asignados.' };
+    }
+
+    const copia = await copiarGruposDePrimeraEntrega(db, materiaId, tareaId);
+    if (copia.gruposCopiados === 0) {
+      return { exito: false, mensaje: 'No se encontró una entrega anterior con grupos para copiar.' };
+    }
+
+    await registrarAuditoria({
+      accion: 'aplicar_grupos_primera_entrega',
+      usuario: usuarioSesion,
+      detalle: `Aplicados ${copia.gruposCopiados} grupo(s) y ${copia.integrantesCopiados} integrante(s) a "${nombre}"`,
+      ip: await obtenerIPReal()
+    });
+
+    return {
+      exito: true,
+      mensaje: `Grupos aplicados: ${copia.gruposCopiados} grupo(s), ${copia.integrantesCopiados} integrante(s).`
+    };
+  } catch (error) {
+    console.error('Error en aplicarGruposPrimeraEntregaAction:', error);
+    return { exito: false, mensaje: 'No se pudieron aplicar los grupos.' };
   }
 }

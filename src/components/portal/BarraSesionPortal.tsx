@@ -10,6 +10,7 @@ interface BarraSesionPortalProps {
   campana: ReactNode;
   esAdmin: boolean;
   onAbrirSync: () => void;
+  onAbrirSolicitudes: () => void;
   onAbrirPassword: () => void;
   onAbrirAdmin: () => void;
   onSalir: () => void;
@@ -19,6 +20,7 @@ export default function BarraSesionPortal({
   campana,
   esAdmin,
   onAbrirSync,
+  onAbrirSolicitudes,
   onAbrirPassword,
   onAbrirAdmin,
   onSalir
@@ -37,6 +39,14 @@ export default function BarraSesionPortal({
           className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
         >
           🔄 Sincronizar
+        </button>
+        <button
+          type="button"
+          onClick={onAbrirSolicitudes}
+          title="Solicitar constancias y certificados"
+          className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
+        >
+          📜 Solicitudes
         </button>
         {esAdmin && (
           <button

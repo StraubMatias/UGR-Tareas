@@ -1,6 +1,6 @@
 import type { EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
 import { ocultarExamenesCronogramaDuplicados, presentarCronogramaDelDia } from './cronograma-vista';
-import { enlaceClaseComisionParaContexto } from './enlaces-clase-comision';
+import { resolverEnlaceClaseComision } from './enlaces-clase-comision';
 import { personalizarParcialesDelDia } from './recuperatorios-calendario';
 
 /** Eventos sincrónicos del plan suelen venir con la fecha del PDF; se alinean al día de cursada semanal. */
@@ -170,10 +170,8 @@ export function eventosDelDiaCalendario(
     return `${ev.titulo || ''} ${ev.detalles || ''}`.trim();
   };
   const horariosConEnlace = horariosReales.map((horario) => {
-    const urlDb = String(horario.url_clase || '').trim();
-    if (urlDb) return horario;
     const nombre = nombreMateriaPorId.get(horario.materia_id) || '';
-    const url = enlaceClaseComisionParaContexto(nombre, {
+    const url = resolverEnlaceClaseComision(nombre, horario.url_clase, {
       dia: horario.dia,
       horaInicio: horario.hora_inicio,
       textoPlan: textoPlanClase(horario.materia_id)
@@ -215,4 +213,3 @@ export function eventosDelDiaCalendario(
     detallesClaseEnCursadaPorMateria: presentacion.detallesClaseEnCursadaPorMateria
   };
 }
-

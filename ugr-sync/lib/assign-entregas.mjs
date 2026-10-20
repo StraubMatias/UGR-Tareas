@@ -82,8 +82,11 @@ function enlacesDevolucion($, alcance, baseUrl) {
     const href = $(a).attr('href') || '';
     const nombre = limpiarTexto($(a).text()) || 'Devolución';
     if (!esArchivoRetroalimentacionProf(href, nombre)) return;
+    const urlCompleta = completarUrl(href, baseUrl);
+    const urlSegura = urlEgressCampusPermitida(urlCompleta, baseUrl);
+    if (!urlSegura) return;
     archivos.push({
-      url: completarUrl(href, baseUrl),
+      url: urlSegura,
       nombre
     });
   });
@@ -651,13 +654,10 @@ export async function aplicarEntregasAssignEnDb({
     args: [tareaId, alumnoId]
   });
   const indicePendienteAntes = indiceFasePendienteDesdeFilasDb(hitosPrevios.rows);
-
-  await db.execute({
+  const escrituras = [{
     sql: 'DELETE FROM tareas_entregas WHERE tarea_id = ? AND alumno_id = ?',
     args: [tareaId, alumnoId]
-  });
-
-  const escrituras = [];
+  }];
   const ahora = new Date().toISOString();
   for (const entrega of entregas) {
     if (entrega.indiceEntrega == null) continue;
@@ -696,7 +696,6 @@ export async function aplicarEntregasAssignEnDb({
       ]
     });
   }
-  if (escrituras.length) await db.batch(escrituras, 'write');
 
   const resumen = resumirEntregasParaTablero(entregas);
   const entregasCalificadas = entregas.filter((e) => !e.esActiva && e.nota != null).length;
@@ -707,12 +706,12 @@ export async function aplicarEntregasAssignEnDb({
   const cambioDeFasePendiente = indicePendienteDespues != null
     && indicePendienteAntes !== indicePendienteDespues;
   if (!resumen.entregada && entregasCalificadas > 0 && otraFasePendiente && cambioDeFasePendiente) {
-    await db.execute({
+    escrituras.push({
       sql: `DELETE FROM completadas WHERE tarea_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))`,
       args: [tareaId, alumnoId, alumnoNombre || '']
     });
   } else if (resumen.entregada) {
-    await db.execute({
+    escrituras.push({
       sql: `INSERT INTO completadas (tarea_id, alumno_id, alumno, completada_en) VALUES (?, ?, ?, ?)
             ON CONFLICT(tarea_id, alumno) DO UPDATE SET
               alumno_id = excluded.alumno_id,
@@ -725,6 +724,7 @@ export async function aplicarEntregasAssignEnDb({
     });
   }
 
+  await db.batch(escrituras, 'write');
   return resumen;
 }
 

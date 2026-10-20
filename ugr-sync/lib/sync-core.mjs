@@ -3,6 +3,7 @@
 // Mapa completo: ugr-sync/docs/GUIA-SINCRONIZACION.md
 import { randomUUID } from 'node:crypto';
 import { extraerConsignasDeCurso, extraerFechasActividad, extraerNotasDeLibreta, extraerProgresoDeActividad, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from './tareas.mjs';
+import { buscarNotaEnForo, esIndiceDeForo } from './foros-notas.mjs';
 import { debeOmitirSyncHitosAssign, priorizarYFiltrarRevisionCampus } from './sync-optimizacion.mjs';
 import {
   claveTareaParaEmparejar,
@@ -132,6 +133,24 @@ function pareceCuestionarioHecho(html) {
   return /quizreviewsummary|\/mod\/quiz\/review\.php|intento\s+\d+/i.test(html || '');
 }
 
+/**
+ * Nota de un foro calificado.
+ * El índice del foro no muestra la nota: cada publicación se califica por
+ * separado. Se recorren las discusiones buscando la del alumno y se toma la
+ * nota de su publicación (`span.ratingaggregate`).
+ */
+async function notaDeForo(cliente, url, alumnoNombre) {
+  const autor = String(alumnoNombre || '').trim();
+  try {
+    // El id de usuario sale de la sesión del campus, así que el nombre del
+    // tablero solo sirve de respaldo.
+    const hallada = await buscarNotaEnForo(cliente, { url, autor: autor || null });
+    if (hallada.nota != null) return { nota: hallada.nota, entregada: true };
+    return { nota: null, entregada: false };
+  } catch {
+    return { nota: null, entregada: false };
+  }
+}
 // La nota no está en el índice del curso: está en la página de cada actividad
 // («Ver en UGR»). Se abre con la sesión de quien sincroniza. Los cuestionarios
 // van primero y, si se pide, cada nota se guarda en cuanto se lee.
@@ -214,6 +233,10 @@ async function leerNotasDeEnlaces({
           nota: resumenEntregas.notaParaTablero ?? null,
           entregada: resumenEntregas.entregada
         };
+      } else if (esIndiceDeForo(fila.url)) {
+        // Foro calificado: la nota está en la publicación del alumno, no en el
+        // índice. Se busca la discusión donde participó y se toma su nota.
+        progreso = await notaDeForo(cliente, fila.url, alumnoNombre);
       } else {
         progreso = await notaDePagina(cliente, pagina.html);
       }
@@ -1021,7 +1044,60 @@ export async function insertarTareasDetectadas({ db, detectadas }) {
 
   if (inserts.length === 0) return 0;
   await db.batch(inserts, 'write');
+  await replicarGruposParaEntregasNuevas(db, nuevas, inserts);
   return inserts.length;
+}
+
+// --- Replicación de grupos para entregas numeradas importadas del campus ---
+// Importación diferida: grupos-tareas.ts es TypeScript y puede no estar
+// disponible en todos los contextos (CLI, server actions, pruebas mínimas).
+let _moduloGruposTareas = null;
+async function moduloGruposTareas() {
+  if (!_moduloGruposTareas) {
+    _moduloGruposTareas = await import('../../src/lib/grupos-tareas.ts');
+  }
+  return _moduloGruposTareas;
+}
+
+/**
+ * Después de insertar tareas nuevas, busca las que son entregas numeradas
+ * (2da, 3ra, etc.) e intenta copiar los grupos de la entrega anterior que
+ * tenga grupos cargados (típicamente la "Primera Entrega"). Así los alumnos
+ * no tienen que rearmar equipos en cada nueva entrega del trabajo práctico.
+ *
+ * Si las tablas de grupos no existen (esquema mínimo) o el módulo no se
+ * puede cargar, no hace nada: es una mejora opcional sobre la inserción.
+ */
+async function replicarGruposParaEntregasNuevas(db, nuevas, inserts) {
+  let numeroEntregaDeNombre, copiarGruposDePrimeraEntrega;
+  try {
+    ({ numeroEntregaDeNombre, copiarGruposDePrimeraEntrega } = await moduloGruposTareas());
+  } catch {
+    return;
+  }
+  for (let i = 0; i < nuevas.length; i++) {
+    const nombre = String(nuevas[i]?.nombre || '');
+    const numero = numeroEntregaDeNombre(nombre);
+    if (!numero || numero < 2) continue;
+    const tareaId = inserts[i].args[0];
+    const materiaId = nuevas[i].materiaId;
+    if (!materiaId) continue;
+    try {
+      const copia = await copiarGruposDePrimeraEntrega(db, materiaId, tareaId);
+      if (copia.gruposCopiados > 0) {
+        try {
+          await db.execute({
+            sql: 'UPDATE tareas SET grupal = 1 WHERE id = ?',
+            args: [tareaId]
+          });
+        } catch {
+          // La columna 'grupal' puede no existir en esquemas de prueba mínimos.
+        }
+      }
+    } catch {
+      // Las tablas grupos_tareas / integrantes_tareas pueden no existir.
+    }
+  }
 }
 
 function esEventoCronogramaParcial(evento) {

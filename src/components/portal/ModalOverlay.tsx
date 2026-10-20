@@ -5,8 +5,12 @@ import { useEffect, type ReactNode } from 'react';
 interface ModalOverlayProps {
   children: ReactNode;
   maxWidth?: 'md' | 'xl' | '2xl' | 'full';
-  /** `sheet`: casi pantalla completa (ediciones). `compact`: cuadro centrado (sync, etc.). */
-  variant?: 'sheet' | 'compact';
+  /**
+   * `sheet`: casi pantalla completa (ediciones).
+   * `compact`: cuadro centrado (sync, etc.), todo scrollea junto.
+   * `panel`: cuadro centrado con header y footer fijos; solo el cuerpo scrollea.
+   */
+  variant?: 'sheet' | 'compact' | 'panel';
 }
 
 const ancho: Record<NonNullable<ModalOverlayProps['maxWidth']>, string> = {
@@ -33,6 +37,23 @@ export default function ModalOverlay({ children, maxWidth = 'md', variant = 'she
       >
         <div
           className={`w-full max-h-[min(90dvh,720px)] overflow-y-auto rounded-2xl border border-slate-800 bg-[#161c26] p-6 shadow-2xl sm:p-8 ${ancho[maxWidth]}`}
+        >
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'panel') {
+    // Header y footer fijos: solo el cuerpo scrollea, así los botones de acción
+    // y el título quedan siempre visibles con contenido largo.
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-0 sm:p-4"
+        role="presentation"
+      >
+        <div
+          className={`flex max-h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-slate-800 bg-[#161c26] shadow-2xl sm:max-h-[min(92dvh,860px)] sm:rounded-2xl ${ancho[maxWidth]}`}
         >
           {children}
         </div>
