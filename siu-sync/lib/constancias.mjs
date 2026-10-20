@@ -103,12 +103,14 @@ export async function listarMesasExamen(cliente, { anioAcademico, turnoExamen, a
   });
   const json = jsonSiu(res.html);
   if (json && json.cod === '-1') return [];
-  // El servidor usa `llamado_examen`; el JS del campus lee `actividad`.
+  // El campus usa `llamado_examen`; el JS del sitio lee `actividad`.
   const datos = json?.llamado_examen || json?.actividad || [];
-  return datos.map((item) => ({
-    valor: String(item.valor ?? item.elemento ?? ''),
-    etiqueta: String(item.descr ?? item.llamado_examen_descr ?? '')
-  }));
+  return datos
+    .map((item) => ({
+      valor: String(item.llamado_mesa ?? item.valor ?? item.elemento ?? ''),
+      etiqueta: [item.nombre_llamado, item.fecha].filter(Boolean).join(' · ')
+    }))
+    .filter((mesa) => mesa.valor !== '');
 }
 
 /** Años académicos disponibles (el filtro de SIU los manda como opciones). */
@@ -143,10 +145,12 @@ export async function listarSillasExamen(cliente, { anioAcademico, turnoExamen, 
   const json = jsonSiu(res.html);
   if (json && json.cod === '-1') return [];
   const datos = json?.llamado_examen || json?.actividad || [];
-  return datos.map((item) => ({
-    valor: String(item.valor ?? item.elemento ?? ''),
-    etiqueta: String(item.descr ?? item.llamado_examen_descr ?? '')
-  }));
+  return datos
+    .map((item) => ({
+      valor: String(item.llamado_mesa ?? item.valor ?? item.elemento ?? ''),
+      etiqueta: [item.nombre_llamado, item.fecha].filter(Boolean).join(' · ')
+    }))
+    .filter((silla) => silla.valor !== '');
 }
 
 /**

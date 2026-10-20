@@ -91,6 +91,27 @@ El cronograma mensual es la vista principal de cursada:
 - Comisión / CLI: `ugr-sync/scripts/sync.mjs`, `flujo-sync-comision.mjs`; al persistir corre `sincronizarEnlacesZoomHorarios`.
 - Credenciales: `UGRVIRTUAL_*` en entorno; cookie de comisión en `data/ugr-sesion.json` (local) o `/tmp` en Vercel. `sync/env.mjs` evita lecturas de filesystem en el build de Vercel.
 
+### Notas de foros calificados
+
+En los foros con calificación (ej. «Hallazgos de la Semana» de Gestión de Activos) la nota **no** está en el índice del foro: cada publicación se califica por separado y Moodle la publica en `span.ratingaggregate` dentro del post, junto a «Calificación máxima».
+
+- `ugr-sync/lib/foros-notas.mjs`: abre el índice (`/mod/forum/view.php?id=N`), lista las discusiones, identifica la del alumno por su id de usuario (`data-userid` de la sesión) y toma la nota de su publicación.
+- `leerNotasDeEnlaces` detecta el índice de un foro y usa ese camino en vez de la nota de la página.
+- Tests: `ugr-sync/test/foros-notas.test.mjs` (con fixtures tomados de la página real).
+
+---
+
+## Solicitudes de constancias (SIU Guaraní)
+
+Botón **📜 Solicitudes** en la barra del portal (`BarraSesionPortal.tsx`) → `ModalSolicitudes.tsx`.
+
+- Opciones: constancia de examen parcial (formulario externo de la cátedra), alumno regular, examen final, promedio académico y promedio académico sin aplazos.
+- Las cuatro últimas se registran en SIU Guaraní (Autogestión → Solicitudes → Nueva solicitud) desde el portal: el usuario y la clave de SIU se piden en el modal y no se persisten.
+- El **admin** puede marcar «Usar las credenciales de SIU del servidor»: en ese caso se usan `SIU_USER` / `SIU_PASSWORD` del entorno y no se tipea nada.
+- Capa de red: `siu-sync/lib/constancias.mjs` (tipos, copias, filtro de mesa de examen, alta y listado). Server Actions en `src/app/actions/constancias.ts`.
+- La constancia de examen final exige elegir año, turno, materia y mesa (`llamado_mesa`); el campus devuelve la lista de mesas en `llamado_examen`.
+- Tests: `siu-sync/test/constancias.test.mjs`.
+
 ---
 
 ## Agregar o cambiar un enlace de clase

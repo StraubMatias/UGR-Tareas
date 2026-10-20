@@ -3,6 +3,7 @@
 // Mapa completo: ugr-sync/docs/GUIA-SINCRONIZACION.md
 import { randomUUID } from 'node:crypto';
 import { extraerConsignasDeCurso, extraerFechasActividad, extraerNotasDeLibreta, extraerProgresoDeActividad, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from './tareas.mjs';
+import { buscarNotaEnForo, esIndiceDeForo } from './foros-notas.mjs';
 import { debeOmitirSyncHitosAssign, priorizarYFiltrarRevisionCampus } from './sync-optimizacion.mjs';
 import {
   claveTareaParaEmparejar,
@@ -132,6 +133,24 @@ function pareceCuestionarioHecho(html) {
   return /quizreviewsummary|\/mod\/quiz\/review\.php|intento\s+\d+/i.test(html || '');
 }
 
+/**
+ * Nota de un foro calificado.
+ * El índice del foro no muestra la nota: cada publicación se califica por
+ * separado. Se recorren las discusiones buscando la del alumno y se toma la
+ * nota de su publicación (`span.ratingaggregate`).
+ */
+async function notaDeForo(cliente, url, alumnoNombre) {
+  const autor = String(alumnoNombre || '').trim();
+  try {
+    // El id de usuario sale de la sesión del campus, así que el nombre del
+    // tablero solo sirve de respaldo.
+    const hallada = await buscarNotaEnForo(cliente, { url, autor: autor || null });
+    if (hallada.nota != null) return { nota: hallada.nota, entregada: true };
+    return { nota: null, entregada: false };
+  } catch {
+    return { nota: null, entregada: false };
+  }
+}
 // La nota no está en el índice del curso: está en la página de cada actividad
 // («Ver en UGR»). Se abre con la sesión de quien sincroniza. Los cuestionarios
 // van primero y, si se pide, cada nota se guarda en cuanto se lee.
@@ -214,6 +233,10 @@ async function leerNotasDeEnlaces({
           nota: resumenEntregas.notaParaTablero ?? null,
           entregada: resumenEntregas.entregada
         };
+      } else if (esIndiceDeForo(fila.url)) {
+        // Foro calificado: la nota está en la publicación del alumno, no en el
+        // índice. Se busca la discusión donde participó y se toma su nota.
+        progreso = await notaDeForo(cliente, fila.url, alumnoNombre);
       } else {
         progreso = await notaDePagina(cliente, pagina.html);
       }

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   extraerContSiu,
+  listarMesasExamen,
   listarSolicitudesSiu,
   listarTiposConstancia,
   solicitarConstanciaSiu,
@@ -58,6 +59,28 @@ test('listarSolicitudesSiu arma el listado con el comprobante de descarga', asyn
   assert.equal(solicitudes[0].constancia, 'Constancia de Alumno Regular');
   assert.equal(solicitudes[0].presentar, 'Trabajo');
   assert.match(solicitudes[0].comprobante, /descargar_comprobante\/abc123/);
+});
+
+test('listarMesasExamen usa la clave llamado_mesa del campus', async () => {
+  const cliente = clienteFalso({
+    'solicitudes/get_llamado_examen': '{"cod":"1","llamado_examen":[{"llamado_mesa":"95568","nombre_llamado":"1° Llamado del Turno Julio-Agosto 2026","fecha":"2026-07-15"},{"llamado_mesa":"95554","nombre_llamado":"1° Llamado del Turno Julio-Agosto 2026","fecha":"2026-07-16"}]}'
+  });
+
+  const mesas = await listarMesasExamen(cliente, { anioAcademico: '2026', turnoExamen: '', actividad: '' });
+  assert.equal(mesas.length, 2);
+  assert.equal(mesas[0].valor, '95568');
+  assert.match(mesas[0].etiqueta, /Julio-Agosto 2026/);
+  assert.match(mesas[0].etiqueta, /2026-07-15/);
+  assert.notEqual(mesas[0].valor, mesas[1].valor);
+});
+
+test('listarMesasExamen devuelve lista vacía si SIU responde con error', async () => {
+  const cliente = clienteFalso({
+    'solicitudes/get_llamado_examen': '{"cod":"-1","cont":"Ha ocurrido un error."}'
+  });
+
+  const mesas = await listarMesasExamen(cliente, { anioAcademico: '2026', turnoExamen: '', actividad: '' });
+  assert.deepEqual(mesas, []);
 });
 
 test('solicitarConstanciaSiu manda el cuerpo con todos los campos del formulario', async () => {

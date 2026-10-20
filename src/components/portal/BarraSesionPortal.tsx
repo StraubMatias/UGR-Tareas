@@ -5,13 +5,12 @@ import { precargarAlInteractuarNav, precargarSyncPortal } from './portal-vista-p
 
 const btnBase =
   'shrink-0 rounded-lg border text-xs font-semibold transition-all cursor-pointer px-2.5 py-1.5 sm:px-3 sm:py-2';
-const CERTIFICADO_PARCIAL_URL = 'https://forms.gle/6F2nbLbVT1gXR97SA';
 
 interface BarraSesionPortalProps {
   campana: ReactNode;
   esAdmin: boolean;
   onAbrirSync: () => void;
-  onAbrirConstancias: () => void;
+  onAbrirSolicitudes: () => void;
   onAbrirPassword: () => void;
   onAbrirAdmin: () => void;
   onSalir: () => void;
@@ -21,7 +20,7 @@ export default function BarraSesionPortal({
   campana,
   esAdmin,
   onAbrirSync,
-  onAbrirConstancias,
+  onAbrirSolicitudes,
   onAbrirPassword,
   onAbrirAdmin,
   onSalir
@@ -41,22 +40,13 @@ export default function BarraSesionPortal({
         >
           🔄 Sincronizar
         </button>
-        <a
-          href={CERTIFICADO_PARCIAL_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Solicitar la constancia de examen una vez rendido el parcial"
-          className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
-        >
-          📄 Constancia de examen
-        </a>
         <button
           type="button"
-          onClick={onAbrirConstancias}
-          title="Solicitar constancias y certificados en SIU Guaraní"
+          onClick={onAbrirSolicitudes}
+          title="Solicitar constancias y certificados"
           className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
         >
-          📜 Constancias
+          📜 Solicitudes
         </button>
         {esAdmin && (
           <button

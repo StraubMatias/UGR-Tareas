@@ -61,17 +61,34 @@ function credencialesOk(usuario: string, contrasena: string) {
   return Boolean(usuario?.trim()) && Boolean(contrasena) && usuario.length <= MAX_USUARIO_LENGTH && contrasena.length <= MAX_PASSWORD_LENGTH;
 }
 
+/**
+ * Credenciales a usar: las que envía el usuario o, si es el administrador y
+ * noiautenticó, las del servidor (SIU_USER / SIU_PASSWORD del entorno).
+ */
+async function credencialesSiu(usuarioInput: string, passwordInput: string) {
+  const usuario = normalizarDni(usuarioInput);
+  const contrasena = String(passwordInput || '');
+  if (credencialesOk(usuario, contrasena)) return { usuario, contrasena, delServidor: false };
+  if (await verificarAdmin()) {
+    const usuarioServidor = String(process.env.SIU_USER || '').trim();
+    const contrasenaServidor = String(process.env.SIU_PASSWORD || '');
+    if (credencialesOk(usuarioServidor, contrasenaServidor)) {
+      return { usuario: usuarioServidor, contrasena: contrasenaServidor, delServidor: true };
+    }
+  }
+  return { usuario, contrasena, delServidor: false };
+}
+
 /** Datos que necesita el formulario: tipos de constancia, años, turnos, actividades y mesas. */
 export async function cargarDatosConstanciasSiuAction(
   usuarioInput: string,
   passwordInput: string
 ): Promise<RespuestaConstanciasSiu> {
-  const usuario = normalizarDni(usuarioInput);
-  const contrasena = String(passwordInput || '');
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
-    if (!credencialesOk(usuario, contrasena) && !(await verificarAdmin())) {
+    const { usuario, contrasena } = await credencialesSiu(usuarioInput, passwordInput);
+    if (!credencialesOk(usuario, contrasena)) {
       return { exito: false, mensaje: 'Completá el usuario y la contraseña de SIU Guaraní.' };
     }
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
@@ -114,11 +131,13 @@ export async function cargarMesasExamenSiuAction(
   turnoExamen: string,
   actividad: string
 ): Promise<RespuestaConstanciasSiu> {
-  const usuario = normalizarDni(usuarioInput);
-  const contrasena = String(passwordInput || '');
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
+    const { usuario, contrasena } = await credencialesSiu(usuarioInput, passwordInput);
+    if (!credencialesOk(usuario, contrasena)) {
+      return { exito: false, mensaje: 'Completá el usuario y la contraseña de SIU Guaraní.' };
+    }
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
 
@@ -147,23 +166,25 @@ export async function solicitarConstanciaSiuAction(
     filtro?: { campo?: string; valor?: string } | null;
   }
 ): Promise<RespuestaConstanciasSiu> {
-  const usuario = normalizarDni(usuarioInput);
-  const contrasena = String(passwordInput || '');
   const presentar = String(datos?.presentar || '').trim();
   let claves: { clave: string; limite: number }[] = [];
   try {
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return { exito: false, mensaje: 'La sesión no es válida.' };
+    const { usuario, contrasena, delServidor } = await credencialesSiu(usuarioInput, passwordInput);
     if (!credencialesOk(usuario, contrasena)) {
       return { exito: false, mensaje: 'Completá el usuario y la contraseña de SIU Guaraní.' };
     }
     if (!presentar) return { exito: false, mensaje: 'Indicá a quién se presenta la constancia.' };
-    claves = [
-      { clave: `siu:${usuarioSesion.toLowerCase()}`, limite: LIMITE_LOGIN_USUARIO },
-      { clave: `siu-ip:${await obtenerIPReal()}`, limite: LIMITE_LOGIN_IP }
-    ];
-    if (await loginEstaBloqueado(claves)) {
-      return { exito: false, mensaje: MENSAJE_LOGIN_BLOQUEADO };
+    // Con credenciales del servidor no se cuentan los intentos de login del usuario.
+    if (!delServidor) {
+      claves = [
+        { clave: `siu:${usuarioSesion.toLowerCase()}`, limite: LIMITE_LOGIN_USUARIO },
+        { clave: `siu-ip:${await obtenerIPReal()}`, limite: LIMITE_LOGIN_IP }
+      ];
+      if (await loginEstaBloqueado(claves)) {
+        return { exito: false, mensaje: MENSAJE_LOGIN_BLOQUEADO };
+      }
     }
     const rateLimit = await verificarRateLimitEscritura(usuarioSesion);
     if (!rateLimit.exito) return rateLimit;
