@@ -108,6 +108,10 @@ Botón **📜 Solicitudes** en la barra del portal (`BarraSesionPortal.tsx`) →
 - Opciones: constancia de examen parcial (formulario externo de la cátedra), alumno regular, examen final, promedio académico y promedio académico sin aplazos.
 - Las cuatro últimas se registran en SIU Guaraní (Autogestión → Solicitudes → Nueva solicitud) desde el portal: el usuario y la clave de SIU se piden en el modal y no se persisten.
 - El **admin** puede marcar «Usar las credenciales de SIU del servidor»: en ese caso se usan `SIU_USER` / `SIU_PASSWORD` del entorno y no se tipea nada.
+- **Descarga del comprobante en PDF:** cada solicitud con comprobante tiene un botón «📄 PDF». El enlace de SIU exige la sesión del alumno (sin cookies responde 302 al login), así que se descarga en el servidor con `pedirBinario` (lee los bytes crudos; `pedir` usa `text()` y corrompe el PDF) y se devuelve en base64 al navegador.
+- **Constancias vigentes:** al abrir el modal, el menú muestra las constancias que el alumno ya tiene y siguen vigentes (por fecha de vencimiento), con botón «📄 PDF» y «➕ Solicitar» para pedir otra del mismo tipo. Las vencidas se avisan aparte.
+- Lógica de vigencia y de mapeo de nombres en `src/lib/constancias-vigentes.ts` (tests en `tests/constancias-vigentes.test.mjs`).
+- El HTML de SIU llega con los escapes del JSON sin developer (`\"`, `\/`, `\u00f3`) y con el layout del campus antes del contenido: `developirHtmlSiu` y `recortarFragmentoSiu` lo dejan parseable.
 - Capa de red: `siu-sync/lib/constancias.mjs` (tipos, copias, filtro de mesa de examen, alta y listado). Server Actions en `src/app/actions/constancias.ts`.
 - La constancia de examen final exige elegir año, turno, materia y mesa (`llamado_mesa`); el campus devuelve la lista de mesas en `llamado_examen`.
 - Tests: `siu-sync/test/constancias.test.mjs`.
