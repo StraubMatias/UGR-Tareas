@@ -1,21 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parcialHabilitado, tareaHabilitada, tareaDentroDelPlazo, validarNota, normalizarUnidad } from '../src/app/validators.ts';
+import {
+  claveHoyArgentina,
+  parcialHabilitado,
+  tareaHabilitada,
+  tareaDentroDelPlazo,
+  validarNota,
+  normalizarUnidad
+} from '../src/app/validators.ts';
 
-const hoy = new Date();
-const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const hoyStr = fmt(hoy);
+// El código compara contra la fecha de Argentina, así que el test usa la misma:
+// en CI la máquina está en UTC y en local puede estar en otra zona.
+const hoyStr = claveHoyArgentina();
 
 function fechaFutura(dias) {
-  const d = new Date(hoy);
-  d.setDate(d.getDate() + dias);
-  return fmt(d);
+  const d = new Date(`${hoyStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
 }
 
 function fechaPasada(dias) {
-  const d = new Date(hoy);
-  d.setDate(d.getDate() - dias);
-  return fmt(d);
+  const d = new Date(`${hoyStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - dias);
+  return d.toISOString().slice(0, 10);
 }
 
 // --- parcialHabilitado ---
