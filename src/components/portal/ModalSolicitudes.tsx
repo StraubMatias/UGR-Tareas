@@ -261,8 +261,8 @@ export default function ModalSolicitudes({ onCerrar, esAdmin = false }: ModalSol
   );
 
   return (
-    <ModalOverlay maxWidth="2xl" variant="compact">
-      <div className="flex h-full flex-col">
+    <ModalOverlay maxWidth="2xl" variant="panel">
+      <div className="flex min-h-0 flex-1 flex-col">
         <ModalOverlayHeader
           title="Solicitudes"
           subtitle="Constancias y certificados de la carrera"
