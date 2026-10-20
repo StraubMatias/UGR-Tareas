@@ -153,15 +153,16 @@ export function interpretarNotaPlanSiu(notaTexto, origenTexto) {
 }
 
 export function extraerHtmlPlanEstudio(respuesta) {
-  let texto = String(respuesta || '');
+  let texto = typeof respuesta === 'string' ? respuesta : String(respuesta || '');
   if (texto.trim().startsWith('{')) {
     try {
       const json = JSON.parse(texto);
-      texto = json.cont || texto;
+      texto = typeof json.cont === 'string' ? json.cont : texto;
     } catch {
       // seguir con el texto original
     }
   }
+  if (typeof texto !== 'string' || texto.length === 0) return '';
   const scriptMatch = texto.match(/kernel\.renderer\.on_arrival\((\{[\s\S]*\})\);\s*<\/script>/);
   if (scriptMatch) {
     try {
