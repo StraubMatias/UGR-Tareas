@@ -2,7 +2,7 @@
 
 import { db } from '../turso';
 import { differenceInDays } from 'date-fns';
-import type { User } from './types';
+type User = { id: string; lastSynced?: string | null };
 import type { OpcionesSincronizarUgr, RespuestaAction, RespuestaSiuSync } from './types';
 import {
   texto,

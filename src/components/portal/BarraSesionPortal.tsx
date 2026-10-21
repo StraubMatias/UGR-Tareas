@@ -3,9 +3,7 @@
 import type { ReactNode } from 'react';
 import { precargarAlInteractuarNav, precargarSyncPortal } from './portal-vista-prefetch';
 
-const usuarioSesion = await obtenerUsuarioSesion();
-  const daysRemaining = usuarioSesion?.daysRemaining ?? 7;
-  const btnBase =
+const btnBase =
   'shrink-0 rounded-lg border text-xs font-semibold transition-all cursor-pointer px-2.5 py-1.5 sm:px-3 sm:py-2';
 
 interface BarraSesionPortalProps {
@@ -40,7 +38,7 @@ export default function BarraSesionPortal({
           title="Sincronizar con UGR Virtual o SIU Guaraní"
           className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
         >
-          🔄 Sincronizar ({daysRemaining} días)
+          🔄 Sincronizar
         </button>
         <button
           type="button"
