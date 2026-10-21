@@ -3,7 +3,9 @@
 import type { ReactNode } from 'react';
 import { precargarAlInteractuarNav, precargarSyncPortal } from './portal-vista-prefetch';
 
-const btnBase =
+const usuarioSesion = await obtenerUsuarioSesion();
+  const daysRemaining = usuarioSesion?.daysRemaining ?? 7;
+  const btnBase =
   'shrink-0 rounded-lg border text-xs font-semibold transition-all cursor-pointer px-2.5 py-1.5 sm:px-3 sm:py-2';
 
 interface BarraSesionPortalProps {

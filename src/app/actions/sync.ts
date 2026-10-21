@@ -2,6 +2,10 @@
 
 import { db } from '../turso';
 import { differenceInDays } from 'date-fns';
+import type { User } from './types';
+import { differenceInDays } from 'date-fns';
+import type { User } from './types'; // Asegúrate de que este tipo exista
+import { differenceInDays } from 'date-fns';
 import type { OpcionesSincronizarUgr, RespuestaAction, RespuestaSiuSync } from './types';
 import {
   texto,
