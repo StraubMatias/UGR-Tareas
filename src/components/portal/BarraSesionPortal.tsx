@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { precargarAlInteractuarNav, precargarSyncPortal } from './portal-vista-prefetch';
 
 const btnBase =
@@ -27,10 +27,18 @@ export default function BarraSesionPortal({
   onAbrirAdmin,
   onSalir
 }: BarraSesionPortalProps) {
+  const [ahora, setAhora] = useState(() => Date.now());
+  useEffect(() => {
+    const intervalo = window.setInterval(() => setAhora(Date.now()), 60_000);
+    return () => window.clearInterval(intervalo);
+  }, []);
   const diasDesdeSync = sincronizadoEn
-    ? Math.max(0, Math.floor((Date.now() - new Date(sincronizadoEn).getTime()) / 86400000))
+    ? Math.max(0, Math.floor((ahora - new Date(sincronizadoEn).getTime()) / 86400000))
     : null;
-  const etiquetaSync = diasDesdeSync === null ? 'Sin sincronización registrada' : `Hace ${diasDesdeSync} día${diasDesdeSync === 1 ? '' : 's'}`;
+  const diasRestantes = diasDesdeSync === null ? null : Math.max(0, 7 - diasDesdeSync);
+  const etiquetaSync = diasRestantes === null
+    ? 'Sin sincronización registrada'
+    : `${diasRestantes} día${diasRestantes === 1 ? '' : 's'} restantes`;
 
   return (
     <div className="portal-header-actions flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 w-full min-w-0">
@@ -43,7 +51,7 @@ export default function BarraSesionPortal({
           onFocus={precargarSyncPortal}
           onTouchStart={precargarSyncPortal}
           title={`${etiquetaSync}. Sincronizar con UGR Virtual o SIU Guaraní`}
-          className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
+          className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40 ${diasRestantes !== null && diasRestantes <= 1 && !esAdmin ? 'animate-pulse border-amber-400 text-amber-200' : ''}`}
         >
           🔄 Sincronizar <span className="ml-1 text-[10px] opacity-80">({etiquetaSync})</span>
         </button>
