@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { PortalPestana } from './types';
 import { precargarAlInteractuarNav } from './portal-vista-prefetch';
 
@@ -19,45 +20,88 @@ const PESTANAS: { id: PortalPestana; icon: string; label: string; labelSm?: stri
   { id: 'ranking', icon: '🏆', label: 'Ranking', activeClass: 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40' }
 ];
 
+const OPCIONES_DRIVE = [
+  {
+    titulo: 'Drive general',
+    detalle: 'Material general de la cursada.',
+    url: 'https://drive.google.com/drive/folders/1DdVDpLcRHGLk19XnbICzCtVxw8xbo9Vg?usp=sharing'
+  },
+  {
+    titulo: 'Sistemas de Gestión de Seguridad de la Información (Marcos Normativos)',
+    detalle: 'Material de la materia.',
+    url: 'https://drive.google.com/drive/u/1/folders/16gls-6QTNGugkYJeAouvi68fA23OrU5d'
+  }
+];
+
 export default function PortalNav({ pestana, onNavegar }: PortalNavProps) {
+  const [driveAbierto, setDriveAbierto] = useState(false);
+
   return (
-    <div className="portal-nav sticky top-0 z-40 -mx-3 px-3 py-3 sm:-mx-6 sm:px-6 md:-mx-10 md:px-10 mb-6 sm:mb-8 border-b shadow-lg backdrop-blur-sm flex flex-nowrap gap-2 sm:gap-3 overflow-x-auto">
-      {PESTANAS.map((item) => {
-        const activa = pestana === item.id;
-        return (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onNavegar(item.id)}
-            onPointerEnter={() => precargarAlInteractuarNav(item.id, activa)}
-            onFocus={() => precargarAlInteractuarNav(item.id, activa)}
-            onTouchStart={() => precargarAlInteractuarNav(item.id, activa)}
-            className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
-              activa
-                ? `${item.activeClass} shadow-sm`
-                : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
-            }`}
-          >
-            <span>{item.icon}</span>
-            {item.labelSm ? (
-              <>
-                <span className="sm:hidden">{item.labelSm}</span>
-                <span className="hidden sm:inline">{item.label}</span>
-              </>
-            ) : (
-              item.label
-            )}
-          </button>
-        );
-      })}
-      <a
-        href="https://drive.google.com/drive/folders/1DdVDpLcRHGLk19XnbICzCtVxw8xbo9Vg?usp=sharing"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border border-slate-800 bg-[#161c26] text-slate-400 hover:bg-slate-800/60 hover:text-white"
-      >
-        <span>📁</span> Drive
-      </a>
+    <div
+      className="portal-nav sticky top-0 z-40 -mx-3 px-3 py-3 sm:-mx-6 sm:px-6 md:-mx-10 md:px-10 mb-6 sm:mb-8 border-b shadow-lg backdrop-blur-sm"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') setDriveAbierto(false);
+      }}
+    >
+      <div className="flex flex-nowrap gap-2 sm:gap-3 overflow-x-auto">
+        {PESTANAS.map((item) => {
+          const activa = pestana === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onNavegar(item.id)}
+              onPointerEnter={() => precargarAlInteractuarNav(item.id, activa)}
+              onFocus={() => precargarAlInteractuarNav(item.id, activa)}
+              onTouchStart={() => precargarAlInteractuarNav(item.id, activa)}
+              className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border cursor-pointer ${
+                activa
+                  ? `${item.activeClass} shadow-sm`
+                  : 'bg-[#161c26] text-slate-400 border-slate-800 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>{item.icon}</span>
+              {item.labelSm ? (
+                <>
+                  <span className="sm:hidden">{item.labelSm}</span>
+                  <span className="hidden sm:inline">{item.label}</span>
+                </>
+              ) : (
+                item.label
+              )}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          aria-expanded={driveAbierto}
+          aria-controls="opciones-drive"
+          onClick={() => setDriveAbierto((abierto) => !abierto)}
+          className="shrink-0 px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border border-slate-800 bg-[#161c26] text-slate-400 hover:bg-slate-800/60 hover:text-white"
+        >
+          <span>📁</span> Drive <span aria-hidden="true">⌄</span>
+        </button>
+      </div>
+      {driveAbierto && (
+        <div
+          id="opciones-drive"
+          className="absolute right-3 top-full z-50 mt-2 w-[min(24rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-slate-700 bg-[#161c26] shadow-xl"
+        >
+          {OPCIONES_DRIVE.map((opcion) => (
+            <a
+              key={opcion.url}
+              href={opcion.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setDriveAbierto(false)}
+              className="block border-b border-slate-800 px-4 py-3 last:border-b-0 hover:bg-slate-800/70 focus:bg-slate-800/70 focus:outline-none"
+            >
+              <span className="block text-sm font-semibold text-slate-100">{opcion.titulo}</span>
+              <span className="mt-1 block text-xs text-slate-400">{opcion.detalle}</span>
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
