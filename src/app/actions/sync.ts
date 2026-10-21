@@ -1,6 +1,7 @@
 'use server';
 
 import { db } from '../turso';
+import { differenceInDays } from 'date-fns';
 import type { OpcionesSincronizarUgr, RespuestaAction, RespuestaSiuSync } from './types';
 import {
   texto,

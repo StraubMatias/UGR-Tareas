@@ -38,7 +38,7 @@ export default function BarraSesionPortal({
           title="Sincronizar con UGR Virtual o SIU Guaraní"
           className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
         >
-          🔄 Sincronizar
+          🔄 Sincronizar ({daysRemaining} días)
         </button>
         <button
           type="button"
