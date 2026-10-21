@@ -111,6 +111,7 @@ export function useTableroPortal() {
     setRolUsuario: acceso.setRolUsuario,
     setOrigenCuenta: acceso.setOrigenCuenta,
     setUgrUsuarioCuenta: acceso.setUgrUsuarioCuenta,
+    setSincronizadoEn: acceso.setSincronizadoEn,
     setPeriodos: datos.setPeriodos,
     setMaterias: datos.setMaterias,
     setAlumnos: datos.setAlumnos,

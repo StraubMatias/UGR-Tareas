@@ -327,6 +327,7 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       rol,
       origen: texto(cuenta?.origen) || 'comision',
       ugrUsuario: textoONull(cuenta?.ugr_usuario),
+      sincronizadoEn: textoONull(cuenta?.sincronizado_en),
       periodos: resPeriodos.rows.map((fila) => ({
         id: texto(fila.id),
         anio: Number(fila.anio),

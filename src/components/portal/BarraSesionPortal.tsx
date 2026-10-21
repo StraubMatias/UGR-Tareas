@@ -9,6 +9,7 @@ const btnBase =
 interface BarraSesionPortalProps {
   campana: ReactNode;
   esAdmin: boolean;
+  sincronizadoEn: string | null;
   onAbrirSync: () => void;
   onAbrirSolicitudes: () => void;
   onAbrirPassword: () => void;
@@ -19,12 +20,18 @@ interface BarraSesionPortalProps {
 export default function BarraSesionPortal({
   campana,
   esAdmin,
+  sincronizadoEn,
   onAbrirSync,
   onAbrirSolicitudes,
   onAbrirPassword,
   onAbrirAdmin,
   onSalir
 }: BarraSesionPortalProps) {
+  const diasDesdeSync = sincronizadoEn
+    ? Math.max(0, Math.floor((Date.now() - new Date(sincronizadoEn).getTime()) / 86400000))
+    : null;
+  const etiquetaSync = diasDesdeSync === null ? 'Sin sincronización registrada' : `Hace ${diasDesdeSync} día${diasDesdeSync === 1 ? '' : 's'}`;
+
   return (
     <div className="portal-header-actions flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 w-full min-w-0">
       <div className="flex flex-wrap items-center gap-1.5 min-w-0">
@@ -35,10 +42,10 @@ export default function BarraSesionPortal({
           onPointerEnter={precargarSyncPortal}
           onFocus={precargarSyncPortal}
           onTouchStart={precargarSyncPortal}
-          title="Sincronizar con UGR Virtual o SIU Guaraní"
+          title={`${etiquetaSync}. Sincronizar con UGR Virtual o SIU Guaraní`}
           className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
         >
-          🔄 Sincronizar
+          🔄 Sincronizar <span className="ml-1 text-[10px] opacity-80">({etiquetaSync})</span>
         </button>
         <button
           type="button"
