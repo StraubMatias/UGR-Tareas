@@ -110,33 +110,23 @@ textarea {
   scrollbar-width: thin;
 }
 
-.portal-nav > button,
-.portal-nav > a {
+/*
+ * Las pestañas de navegación viven dentro de un div con overflow-x, así que
+ * `.portal-nav > button` nunca las alcanzaba. Se usa la clase explícita
+ * `.portal-nav-item` para aplicar el estilo sin depender del nivel del DOM.
+ * Ojo: `button { font: inherit; }` está fuera de @layer y le gana a las
+ * utilidades de Tailwind, por eso el peso se fija acá y no con `font-bold`.
+ * El color lo sigue aplicando Tailwind (text-slate-400 / text-blue-300...),
+ * así que acá solo se ajusta la tipografía.
+ */
+.portal-nav .portal-nav-item {
   flex-shrink: 0;
-  color: #d9e4ec;
   font-weight: 800;
   letter-spacing: 0.01em;
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.32);
 }
 
-.portal-nav > button[class~="bg-blue-600/20"] {
-  color: #b9ddff;
-}
-
-.portal-nav > button[class~="bg-emerald-600/20"] {
-  color: #baf5d2;
-}
-
-.portal-nav > button[class~="bg-cyan-600/20"] {
-  color: #b8f3f0;
-}
-
-.portal-nav > button[class~="bg-purple-600/20"] {
-  color: #e2c7ff;
-}
-
-.portal-nav > button:hover,
-.portal-nav > a:hover {
+.portal-nav .portal-nav-item:hover {
   color: #ffffff;
 }
 
@@ -907,7 +897,7 @@ textarea {
   }
 
   .portal-header-actions > button,
-  .portal-nav > button {
+  .portal-nav .portal-nav-item {
     min-height: 2.75rem;
   }
 
@@ -921,7 +911,7 @@ textarea {
     padding-bottom: 0.75rem;
   }
 
-  .portal-nav > button {
+  .portal-nav .portal-nav-item {
     scroll-snap-align: start;
     padding-left: 0.85rem;
     padding-right: 0.85rem;

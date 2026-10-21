@@ -77,7 +77,7 @@ export default function TableroCuerpo({ vm }: { vm: TableroPortalViewModel }) {
 
   return (
     <div className="max-w-9xl mx-auto">
-      <PortalNav pestana={ui.pestana} onNavegar={navegarA} />
+      <PortalNav pestana={ui.pestana} onNavegar={navegarA} onAbrirDrive={() => ui.setDriveAbierto(true)} />
       <PortalVistasCursada {...buildPortalVistasCursadaProps(vm)} />
     </div>
   );

@@ -5,6 +5,7 @@ import type { TableroPortalViewModel } from '../../hooks/useTableroPortal';
 import BarraSesionPortal from './BarraSesionPortal';
 import CampanaNotificaciones from './CampanaNotificaciones';
 import ModalCuentaSync from './ModalCuentaSync';
+import ModalElegirDrive from './ModalElegirDrive';
 import ModalElegirSyncFuente from './ModalElegirSyncFuente';
 import ModalSolicitudes from './ModalSolicitudes';
 
@@ -64,6 +65,9 @@ export default function TableroPortalSesion({ vm }: { vm: TableroPortalViewModel
           onCompletado={() => { void cargarBD(false); }}
           onInterrumpida={() => { void cargarBD(false); }}
         />
+      )}
+      {ui.driveAbierto && (
+        <ModalElegirDrive onCerrar={() => ui.setDriveAbierto(false)} />
       )}
       {ui.constanciasSiuAbierto && (
         <ModalSolicitudes

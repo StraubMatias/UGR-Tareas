@@ -141,13 +141,15 @@ export function useTableroPortal() {
       || admin.hayModalAbierto
       || ui.syncPickerAbierto
       || ui.syncCuentaFuente !== null
+      || ui.driveAbierto
     );
   }, [
     pausarRefrescoRef,
     acceso.modalPasswordOpen,
     admin.hayModalAbierto,
     ui.syncPickerAbierto,
-    ui.syncCuentaFuente
+    ui.syncCuentaFuente,
+    ui.driveAbierto
   ]);
 
   const portalAcceso = usePortalAcceso({
