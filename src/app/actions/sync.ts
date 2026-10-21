@@ -1,6 +1,8 @@
 'use server';
 
 import { db } from '../turso';
+import { differenceInDays } from 'date-fns';
+type User = { id: string; lastSynced?: string | null };
 import type { OpcionesSincronizarUgr, RespuestaAction, RespuestaSiuSync } from './types';
 import {
   texto,

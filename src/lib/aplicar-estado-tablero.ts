@@ -7,6 +7,7 @@ export interface EstadoCompletoTablero {
   rol?: string;
   origen?: string;
   ugrUsuario?: string | null;
+  sincronizadoEn?: string | null;
   periodos?: Periodo[];
   periodoActivo?: string | null;
   materias?: Materia[];
@@ -48,6 +49,7 @@ export interface AplicarEstadoTableroCallbacks {
   setRolUsuario: Dispatch<SetStateAction<string | null>>;
   setOrigenCuenta: Dispatch<SetStateAction<string | null>>;
   setUgrUsuarioCuenta: Dispatch<SetStateAction<string | null>>;
+  setSincronizadoEn: Dispatch<SetStateAction<string | null>>;
   setNotasInputs: Dispatch<SetStateAction<Record<string, string>>>;
   setNotasTareasInputs: Dispatch<SetStateAction<Record<string, string>>>;
   setMateriaSel: Dispatch<SetStateAction<string>>;
@@ -80,6 +82,7 @@ export function aplicarEstadoTablero(
   if (estado.rol) cb.setRolUsuario(estado.rol);
   if (estado.origen) cb.setOrigenCuenta(estado.origen);
   if ('ugrUsuario' in estado) cb.setUgrUsuarioCuenta(estado.ugrUsuario || null);
+  if ('sincronizadoEn' in estado) cb.setSincronizadoEn(estado.sincronizadoEn || null);
 
   const mapaNotas: Record<string, string> = {};
   (estado.notas || []).forEach((n) => {

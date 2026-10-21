@@ -19,6 +19,8 @@
     "audit": "npm audit --audit-level=high"
   },
   "dependencies": {
+    "date-fns": "^3.6.0",
+
     "@libsql/client": "^0.17.4",
     "cheerio": "^1.2.0",
     "next": "16.3.8",

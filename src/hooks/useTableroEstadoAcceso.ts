@@ -5,6 +5,7 @@ export function useTableroEstadoAcceso() {
   const [rolUsuario, setRolUsuario] = useState<string | null>(null);
   const [origenCuenta, setOrigenCuenta] = useState<string | null>(null);
   const [ugrUsuarioCuenta, setUgrUsuarioCuenta] = useState<string | null>(null);
+  const [sincronizadoEn, setSincronizadoEn] = useState<string | null>(null);
   const [modoAcceso, setModoAcceso] = useState<'login' | 'registro'>('login');
   const [registroPass, setRegistroPass] = useState('');
   const [registroConfirmacion, setRegistroConfirmacion] = useState('');
@@ -28,6 +29,8 @@ export function useTableroEstadoAcceso() {
     setOrigenCuenta,
     ugrUsuarioCuenta,
     setUgrUsuarioCuenta,
+    sincronizadoEn,
+    setSincronizadoEn,
     modoAcceso,
     setModoAcceso,
     registroPass,
