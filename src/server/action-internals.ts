@@ -180,7 +180,7 @@ export async function registrarAccionEscritura(usuario: string): Promise<void> {
 
 export async function leerCuenta(usuario: string) {
   const resultado = await db.execute({
-    sql: `SELECT id, nombre, rol, COALESCE(origen, 'comision') AS origen, ugr_usuario
+    sql: `SELECT id, nombre, rol, COALESCE(origen, 'comision') AS origen, ugr_usuario, sincronizado_en
           FROM alumnos WHERE LOWER(nombre) = LOWER(?)`,
     args: [usuario]
   });
