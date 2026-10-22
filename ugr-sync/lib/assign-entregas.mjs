@@ -269,10 +269,18 @@ export function extraerEntregasAssign(html, baseUrl = '') {
     ).first();
   const textoEnvio = limpiarTexto(regionEnvio.text() || '');
   const planoEnvio = limpiarTexto(tablasEnvio.text() || textoEnvio);
+  const textoPagina = limpiarTexto($('body').text());
+  const intentosEnTitulos = $('h2, h3, h4').map((_, titulo) => {
+    const numero = limpiarTexto($(titulo).text()).match(/^Intento\s+(\d+)\s*:/i)?.[1];
+    return numero ? Number(numero) : null;
+  }).get().filter((numero) => numero != null);
   const intentoActual = Number(
     planoEnvio.match(/este\s+es\s+el\s+intento\s+(\d+)/i)?.[1]
     || textoEnvio.match(/este\s+es\s+el\s+intento\s+(\d+)/i)?.[1]
+    || textoEnvio.match(/(?:^|\s)intento\s+(\d+)\s*:/i)?.[1]
     || textoEnvio.match(/attempt\s+(\d+)/i)?.[1]
+    || (intentosEnTitulos.length ? Math.max(...intentosEnTitulos) : null)
+    || textoPagina.match(/(?:^|\s)intento\s+(\d+)\s*:/i)?.[1]
   ) || null;
 
   const estadoActual = acortarEstadoCampus(

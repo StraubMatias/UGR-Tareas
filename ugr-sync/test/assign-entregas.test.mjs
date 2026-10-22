@@ -54,7 +54,7 @@ test('extraerEntregasAssign importa la nota final publicada en el resumen del bu
         <tr><th>Calificación</th><td>10,00 / 10,00</td></tr>
         <tr><th>Comentarios de retroalimentación</th><td>Calificación general 10, resta sólo el cierre del proyecto mediante una exposición con presentación en clase de 10 minutos.</td></tr>
       </table>
-      <p>Este es el intento 3</p>
+      <p>Intento 3: jueves, 15 de octubre de 2026, 17:00</p>
     </div>`;
   const { entregas: crudas, intentoActual } = extraerEntregasAssign(html);
   const entregas = await enriquecerNotasDesdeDevoluciones(null, crudas);
@@ -69,6 +69,7 @@ test('extraerEntregasAssign importa la nota final publicada en el resumen del bu
 
 test('una devolución final con 10 y defensa pendiente consolida las entregas anteriores', () => {
   const html = `
+    <h2>Intento 3: jueves, 15 de octubre de 2026, 17:00</h2>
     <div class="submissionstatustable">
       <table>
         <tr><th>Estado de la entrega</th><td>Enviado para calificar</td></tr>
@@ -76,7 +77,6 @@ test('una devolución final con 10 y defensa pendiente consolida las entregas an
         <tr><th>Comentarios de retroalimentación</th>
           <td>Calificación general 10, resta sólo el cierre del proyecto mediante una exposición con presentación en clase de 10 minutos.</td></tr>
       </table>
-      <p>Este es el intento 3</p>
     </div>
     <div class="attempthistory">
       <h4>Intento 2: anterior</h4>
