@@ -41,7 +41,28 @@ function crearDocxMinimo(textoPlano) {
 
 test('extraerNotaDeTextoDevolucion lee nota en comentarios o Word', () => {
   assert.equal(extraerNotaDeTextoDevolucion('La nota final es 8 de 10. Muy bien.'), 8);
+  assert.equal(extraerNotaDeTextoDevolucion('Calificación general 10, resta sólo la exposición.'), 10);
   assert.equal(extraerNotaDeTextoDevolucion('Sin calificación numérica'), null);
+});
+
+test('extraerEntregasAssign importa la nota final publicada en el resumen del buzón', async () => {
+  const html = `
+    <div class="submissionstatustable">
+      <table>
+        <tr><th>Estado de la entrega</th><td>Enviado para calificar</td></tr>
+        <tr><th>Estado de la calificación</th><td>Calificado</td></tr>
+        <tr><th>Calificación</th><td>10,00 / 10,00</td></tr>
+      </table>
+      <p>Este es el intento 3</p>
+    </div>`;
+  const { entregas: crudas, intentoActual } = extraerEntregasAssign(html);
+  const entregas = await enriquecerNotasDesdeDevoluciones(null, crudas);
+  const notaFinal = entregas.find((e) => e.numero === intentoActual);
+  assert.equal(notaFinal?.notaCampus, 10);
+  assert.equal(notaFinal?.esActiva, false);
+  assert.equal(notaFinal?.pendiente, false);
+  assert.equal(resumirEntregasParaTablero(entregas).notaParaTablero, 10);
+  assert.equal(resumirEntregasParaTablero(entregas).entregada, true);
 });
 
 test('textoDesdeDocx extrae texto y nota', () => {
