@@ -55,6 +55,16 @@ export function extraerNotaDeTextoDevolucion(texto) {
   return null;
 }
 
+function devolucionIndicaDefensaPendiente(texto) {
+  const normalizado = limpiarTexto(texto)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const mencionaInstanciaOral = /\b(defensa|exposicion|presentacion(?: oral)?(?: en clase)?)\b/.test(normalizado);
+  const indicaQueResta = /\b(resta|faltan?|queda(?:n)? por|pendiente|debe(?:n)? realizar)\b/.test(normalizado);
+  return mencionaInstanciaOral && indicaQueResta;
+}
+
 function filaDeTabla($, tabla, rotulos) {
   const salida = {};
   $(tabla).find('tr').each((_, tr) => {
@@ -347,6 +357,32 @@ export function extraerEntregasAssign(html, baseUrl = '') {
         filaActual.tieneDevolucion || datosActuales?.tieneDevolucion
       );
     }
+  }
+
+  const filaFinalActual = intentoActual ? porNumero.get(intentoActual) : null;
+  const comentarioFinal = filaFinalActual?.comentarioProf || '';
+  const notaFinal = filaFinalActual?.notaCampus
+    ?? extraerNotaDeTextoDevolucion(comentarioFinal);
+  if (
+    filaFinalActual
+    && notaFinal != null
+    && devolucionIndicaDefensaPendiente(comentarioFinal)
+  ) {
+    const entregaFinal = {
+      ...filaFinalActual,
+      numero: intentoActual,
+      estado: 'Trabajo calificado; defensa pendiente',
+      notaCampus: notaFinal,
+      esActiva: false,
+      indiceEntrega: 1,
+      pendiente: false
+    };
+    return {
+      entregas: [entregaFinal],
+      intentoActual,
+      requiereNuevaEntrega: false,
+      estadoActual
+    };
   }
 
   repararMapaIntentos(porNumero);

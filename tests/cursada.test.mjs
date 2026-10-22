@@ -10,6 +10,7 @@ import {
   formatearFechaDDMMAAAA,
   calcularEstadoSemaforo,
   tareaCompletadaPor,
+  tareaFaltaNota,
   defensaOralPendienteDesdeHitos,
   faseEntregaDesdeHitos,
   textoBadgeFaseEntrega,
@@ -25,7 +26,7 @@ import {
 test('defensa oral pendiente queda separada de una entrega final calificada', () => {
   const entregaFinal = [{
     numero: 3,
-    indiceEntrega: 3,
+    indiceEntrega: 1,
     esActiva: false,
     estado: 'Enviado para calificar',
     nota: '10',
@@ -33,6 +34,18 @@ test('defensa oral pendiente queda separada de una entrega final calificada', ()
     pendiente: false
   }];
   assert.equal(defensaOralPendienteDesdeHitos(entregaFinal), true);
+  const tareaFinal = {
+    id: 't-final',
+    nombre: 'Entregas del trabajo práctico- caso',
+    conNota: true,
+    completadoPor: ['Ana'],
+    notas: { Ana: '10' },
+    entregas: { Ana: entregaFinal }
+  };
+  assert.equal(tareaCompletadaPor(tareaFinal, 'Ana'), true);
+  assert.equal(notaTableroVisibleParaAlumno(tareaFinal, 'Ana'), true);
+  assert.equal(tareaFaltaNota(tareaFinal, 'Ana'), false);
+  assert.deepEqual(notasCerradasEntregaCampus(tareaFinal, 'Ana'), [{ indice: 1, nota: '10' }]);
   assert.equal(defensaOralPendienteDesdeHitos([
     ...entregaFinal,
     { numero: 4, indiceEntrega: 4, esActiva: true, estado: 'Reabierto', nota: null, pendiente: true }

@@ -67,6 +67,43 @@ test('extraerEntregasAssign importa la nota final publicada en el resumen del bu
   assert.equal(resumirEntregasParaTablero(entregas).entregada, true);
 });
 
+test('una devolución final con 10 y defensa pendiente consolida las entregas anteriores', () => {
+  const html = `
+    <div class="submissionstatustable">
+      <table>
+        <tr><th>Estado de la entrega</th><td>Enviado para calificar</td></tr>
+        <tr><th>Calificación</th><td>10,00 / 10,00</td></tr>
+        <tr><th>Comentarios de retroalimentación</th>
+          <td>Calificación general 10, resta sólo el cierre del proyecto mediante una exposición con presentación en clase de 10 minutos.</td></tr>
+      </table>
+      <p>Este es el intento 3</p>
+    </div>
+    <div class="attempthistory">
+      <h4>Intento 2: anterior</h4>
+      <table>
+        <tr><th>Estado de la entrega</th><td>Calificado</td></tr>
+        <tr><th>Calificación</th><td>8,00 / 10,00</td></tr>
+        <tr><th>Comentarios de retroalimentación</th><td>Entrega parcial aprobada</td></tr>
+      </table>
+      <h4>Intento 1: anterior</h4>
+      <table>
+        <tr><th>Estado de la entrega</th><td>Calificado</td></tr>
+        <tr><th>Calificación</th><td>7,00 / 10,00</td></tr>
+        <tr><th>Comentarios de retroalimentación</th><td>Primera entrega aprobada</td></tr>
+      </table>
+    </div>`;
+  const { entregas, intentoActual, requiereNuevaEntrega } = extraerEntregasAssign(html);
+  assert.equal(intentoActual, 3);
+  assert.equal(requiereNuevaEntrega, false);
+  assert.equal(entregas.length, 1);
+  assert.equal(entregas[0].numero, 3);
+  assert.equal(entregas[0].indiceEntrega, 1);
+  assert.equal(entregas[0].notaCampus, 10);
+  assert.equal(entregas[0].esActiva, false);
+  assert.equal(entregas[0].pendiente, false);
+  assert.match(entregas[0].comentarioProf, /resta sólo.*exposición/i);
+});
+
 test('textoDesdeDocx extrae texto y nota', () => {
   const docx = crearDocxMinimo('Devolución entrega 1. Calificación: 8/10');
   const texto = textoDesdeDocx(docx);

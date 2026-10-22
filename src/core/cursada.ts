@@ -176,9 +176,10 @@ export function defensaOralPendienteDesdeHitos(hitos: EntregaHitoTarea[] | undef
     .filter((hito) => !hito.esActiva && hito.nota != null && hito.nota !== '')
     .sort((a, b) => (b.indiceEntrega ?? b.numero) - (a.indiceEntrega ?? a.numero))[0];
   const comentario = String(ultimaCalificada?.comentarioProf || '');
-  const indicaPendiente = /\b(?:resta(?:n)?|falta(?:n)?|queda(?:n)? por|pendiente(?:s)?|debe(?:n)? realizar)\b[\s\S]{0,180}\b(?:defensa|exposici[oó]n|presentaci[oó]n(?:\s+oral)?(?:\s+en clase)?)\b/i.test(comentario)
-    || /\b(?:defensa|exposici[oó]n|presentaci[oó]n(?:\s+oral)?(?:\s+en clase)?)\b[\s\S]{0,60}\bpendiente\b/i.test(comentario);
-  return Boolean(ultimaCalificada && indicaPendiente);
+  const normalizado = comentario.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const indicaInstanciaOral = /\b(defensa|exposicion|presentacion(?: oral)?(?: en clase)?)\b/i.test(normalizado);
+  const indicaPendiente = /\b(resta|faltan?|queda(?:n)? por|pendiente|debe(?:n)? realizar)\b/i.test(normalizado);
+  return Boolean(ultimaCalificada && indicaInstanciaOral && indicaPendiente);
 }
 
 export const faseEntregaCampus = (

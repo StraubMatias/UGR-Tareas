@@ -57,7 +57,9 @@ export default function EntregasHitosTarea({ entregas, usuarioActual, fechaVence
       )}
       <ul className="space-y-2">
         {ordenadas.map((entrega) => {
-          const etiqueta = `Entrega ${entrega.indiceEntrega}`;
+          const etiqueta = defensaPendiente
+            ? 'Trabajo final'
+            : `Entrega ${entrega.indiceEntrega}`;
           const nota = entrega.nota != null && entrega.nota !== '' ? String(entrega.nota) : null;
           return (
             <li
@@ -70,7 +72,11 @@ export default function EntregasHitosTarea({ entregas, usuarioActual, fechaVence
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-semibold text-slate-100">{etiqueta}</span>
-                {nota && !entrega.esActiva ? (
+                {defensaPendiente && nota ? (
+                  <span className="text-emerald-300 font-semibold text-xs">
+                    Calificado · Nota {nota}
+                  </span>
+                ) : nota && !entrega.esActiva ? (
                   <span className="text-emerald-300 font-semibold text-xs">
                     Entregada · Nota {nota}
                     {entrega.notaOrigen === 'devolucion_docx' && (
