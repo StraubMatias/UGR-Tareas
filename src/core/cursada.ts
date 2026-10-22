@@ -164,6 +164,23 @@ export const faseEntregaDesdeHitos = (
   };
 };
 
+export function defensaOralPendienteDesdeHitos(hitos: EntregaHitoTarea[] | undefined): boolean {
+  if (!hitos?.length) return false;
+  const hayEntregaPendiente = hitos.some((hito) => (
+    hito.esActiva
+    && (hito.pendiente || /reabiert|reopened|sin calificar/i.test(hito.estado || ''))
+  ));
+  if (hayEntregaPendiente) return false;
+
+  const ultimaCalificada = [...hitos]
+    .filter((hito) => !hito.esActiva && hito.nota != null && hito.nota !== '')
+    .sort((a, b) => (b.indiceEntrega ?? b.numero) - (a.indiceEntrega ?? a.numero))[0];
+  const comentario = String(ultimaCalificada?.comentarioProf || '');
+  const indicaPendiente = /\b(?:resta(?:n)?|falta(?:n)?|queda(?:n)? por|pendiente(?:s)?|debe(?:n)? realizar)\b[\s\S]{0,180}\b(?:defensa|exposici[oó]n|presentaci[oó]n(?:\s+oral)?(?:\s+en clase)?)\b/i.test(comentario)
+    || /\b(?:defensa|exposici[oó]n|presentaci[oó]n(?:\s+oral)?(?:\s+en clase)?)\b[\s\S]{0,60}\bpendiente\b/i.test(comentario);
+  return Boolean(ultimaCalificada && indicaPendiente);
+}
+
 export const faseEntregaCampus = (
   tarea: Tarea,
   alumno: string | null | undefined

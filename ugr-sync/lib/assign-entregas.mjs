@@ -271,6 +271,9 @@ export function extraerEntregasAssign(html, baseUrl = '') {
     || ''
   );
   const notaActual = notaCalificacionEnAlcance($, regionEnvio);
+  const datosActuales = intentoActual
+    ? parsearBloqueIntento($, regionEnvio, intentoActual, baseUrl)
+    : null;
 
   const porNumero = new Map();
   const regionAnteriores = $('#region-previous-attempts, [data-region="previous-attempts"]').first();
@@ -324,15 +327,26 @@ export function extraerEntregasAssign(html, baseUrl = '') {
   if (intentoActual && !porNumero.has(intentoActual)) {
     porNumero.set(intentoActual, {
       numero: intentoActual,
-      estado: estadoActual,
+      estado: estadoActual || datosActuales?.estado || '',
       notaCampus: notaActual ?? parsearNotaPublicada(textoEnvio),
-      comentarioProf: '',
-      archivos: [],
-      tieneDevolucion: false
+      comentarioProf: datosActuales?.comentarioProf || '',
+      archivos: datosActuales?.archivos || [],
+      tieneDevolucion: datosActuales?.tieneDevolucion || false
     });
-  } else if (intentoActual && notaActual != null) {
+  } else if (intentoActual) {
     const filaActual = porNumero.get(intentoActual);
-    if (filaActual?.notaCampus == null) filaActual.notaCampus = notaActual;
+    if (filaActual) {
+      if (filaActual.notaCampus == null) filaActual.notaCampus = notaActual;
+      if (!filaActual.comentarioProf && datosActuales?.comentarioProf) {
+        filaActual.comentarioProf = datosActuales.comentarioProf;
+      }
+      if (!filaActual.archivos?.length && datosActuales?.archivos?.length) {
+        filaActual.archivos = datosActuales.archivos;
+      }
+      filaActual.tieneDevolucion = Boolean(
+        filaActual.tieneDevolucion || datosActuales?.tieneDevolucion
+      );
+    }
   }
 
   repararMapaIntentos(porNumero);

@@ -10,6 +10,7 @@ import {
   formatearFechaDDMMAAAA,
   calcularEstadoSemaforo,
   tareaCompletadaPor,
+  defensaOralPendienteDesdeHitos,
   faseEntregaDesdeHitos,
   textoBadgeFaseEntrega,
   tareaUsaEntregasMultiplesCampus,
@@ -20,6 +21,26 @@ import {
   obtenerTextoApertura,
   tituloVisibleMateria
 } from '../src/core/cursada.ts';
+
+test('defensa oral pendiente queda separada de una entrega final calificada', () => {
+  const entregaFinal = [{
+    numero: 3,
+    indiceEntrega: 3,
+    esActiva: false,
+    estado: 'Enviado para calificar',
+    nota: '10',
+    comentarioProf: 'Calificación general 10, resta sólo el cierre del proyecto mediante una exposición con presentación en clase de 10 minutos.',
+    pendiente: false
+  }];
+  assert.equal(defensaOralPendienteDesdeHitos(entregaFinal), true);
+  assert.equal(defensaOralPendienteDesdeHitos([
+    ...entregaFinal,
+    { numero: 4, indiceEntrega: 4, esActiva: true, estado: 'Reabierto', nota: null, pendiente: true }
+  ]), false);
+  assert.equal(defensaOralPendienteDesdeHitos([
+    { ...entregaFinal[0], comentarioProf: 'Trabajo aprobado, gracias.' }
+  ]), false);
+});
 
 test('obtenerGrupoDeAlumno: encuentra el grupo correspondiente o retorna null', () => {
   const tareaGrupal = {

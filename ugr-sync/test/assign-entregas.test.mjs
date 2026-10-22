@@ -52,6 +52,7 @@ test('extraerEntregasAssign importa la nota final publicada en el resumen del bu
         <tr><th>Estado de la entrega</th><td>Enviado para calificar</td></tr>
         <tr><th>Estado de la calificación</th><td>Calificado</td></tr>
         <tr><th>Calificación</th><td>10,00 / 10,00</td></tr>
+        <tr><th>Comentarios de retroalimentación</th><td>Calificación general 10, resta sólo el cierre del proyecto mediante una exposición con presentación en clase de 10 minutos.</td></tr>
       </table>
       <p>Este es el intento 3</p>
     </div>`;
@@ -59,6 +60,7 @@ test('extraerEntregasAssign importa la nota final publicada en el resumen del bu
   const entregas = await enriquecerNotasDesdeDevoluciones(null, crudas);
   const notaFinal = entregas.find((e) => e.numero === intentoActual);
   assert.equal(notaFinal?.notaCampus, 10);
+  assert.match(notaFinal?.comentarioProf || '', /resta sólo.*exposición/i);
   assert.equal(notaFinal?.esActiva, false);
   assert.equal(notaFinal?.pendiente, false);
   assert.equal(resumirEntregasParaTablero(entregas).notaParaTablero, 10);
