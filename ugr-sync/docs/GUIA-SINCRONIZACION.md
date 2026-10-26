@@ -68,7 +68,7 @@ Flags: `--yes`, `--dry`, `--cronogramas`.
 | `avisos.mjs` | Foros, hilos, posts, NLP liviano → tipo de evento |
 | `docentes.mjs` | Equipo docente del curso, perfil del autor |
 | `metodologia.mjs` | PDF/DOCX de metodología → condiciones de promoción |
-| `assign-entregas.mjs` | Buzones assign con varias entregas (SGSI, etc.) |
+| `assign-entregas.mjs` | Buzones assign con varias entregas; interpreta el puntaje final de la rúbrica para cerrar el trabajo aunque Moodle conserve el estado «Reabierto» |
 | `docx-texto.mjs` | Texto desde DOCX sin dependencias pesadas |
 | `cronograma-oficial.mjs` | Recurso «Cronograma», PDF/Word → `cronograma_eventos` + Zoom en `horarios.url_clase` |
 | `foros-notas.mjs` | Nota de cada publicación en un foro calificado (`span.ratingaggregate`) |

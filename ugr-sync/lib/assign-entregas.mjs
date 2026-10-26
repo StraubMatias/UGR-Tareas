@@ -140,10 +140,51 @@ function notaCalificacionEnAlcance($, alcance) {
   return nota;
 }
 
+function notaFinalDeRubrica($, alcance) {
+  let notaFinal = null;
+  $(alcance).find('table').each((_, tabla) => {
+    const filas = [];
+    $(tabla).children('thead, tbody, tfoot').children('tr').each((_, tr) => filas.push(tr));
+    $(tabla).children('tr').each((_, tr) => filas.push(tr));
+    const filaEncabezado = filas.find((tr) => $(tr).children('th, td')
+      .toArray()
+      .some((celda) => limpiarTexto($(celda).text())
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .includes('puntaje del trabajo final')));
+    if (!filaEncabezado) return;
+
+    const celdasEncabezado = $(filaEncabezado).children('th, td').toArray();
+    const indicePuntaje = celdasEncabezado.findIndex((celda) => limpiarTexto($(celda).text())
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .includes('puntaje del trabajo final'));
+    let notaFilaFinal = null;
+    for (const fila of filas) {
+      if (fila === filaEncabezado) continue;
+      const celdas = $(fila).children('th, td');
+      const textoPuntaje = limpiarTexto(celdas.eq(indicePuntaje).text());
+      const notaFila = parsearNotaPublicada(textoPuntaje);
+      if (notaFila == null) continue;
+      notaFinal = notaFila;
+      const rotulo = limpiarTexto(celdas.first().text())
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+      if (/calificacion\s+final/.test(rotulo)) notaFilaFinal = notaFila;
+    }
+    if (notaFilaFinal != null) notaFinal = notaFilaFinal;
+  });
+  return notaFinal;
+}
+
 function parsearBloqueIntento($, alcance, numero, baseUrl) {
   const tablas = alcance.find('table');
   let estadoEntrega = '';
   let notaHtml = null;
+  const notaRubrica = notaFinalDeRubrica($, alcance);
   let comentario = '';
   let archivos = [];
   tablas.each((_, tabla) => {
@@ -183,6 +224,7 @@ function parsearBloqueIntento($, alcance, numero, baseUrl) {
     numero,
     estado: estadoEntrega,
     notaCampus: notaHtml,
+    notaFinalRubrica: notaRubrica,
     comentarioProf: comentario,
     archivos,
     tieneDevolucion
@@ -347,6 +389,7 @@ export function extraerEntregasAssign(html, baseUrl = '') {
       numero: intentoActual,
       estado: estadoActual || datosActuales?.estado || '',
       notaCampus: notaActual ?? parsearNotaPublicada(textoEnvio),
+      notaFinalRubrica: datosActuales?.notaFinalRubrica ?? null,
       comentarioProf: datosActuales?.comentarioProf || '',
       archivos: datosActuales?.archivos || [],
       tieneDevolucion: datosActuales?.tieneDevolucion || false
@@ -355,6 +398,9 @@ export function extraerEntregasAssign(html, baseUrl = '') {
     const filaActual = porNumero.get(intentoActual);
     if (filaActual) {
       if (filaActual.notaCampus == null) filaActual.notaCampus = notaActual;
+      if (filaActual.notaFinalRubrica == null) {
+        filaActual.notaFinalRubrica = datosActuales?.notaFinalRubrica ?? null;
+      }
       if (!filaActual.comentarioProf && datosActuales?.comentarioProf) {
         filaActual.comentarioProf = datosActuales.comentarioProf;
       }
@@ -369,17 +415,23 @@ export function extraerEntregasAssign(html, baseUrl = '') {
 
   const filaFinalActual = intentoActual ? porNumero.get(intentoActual) : null;
   const comentarioFinal = filaFinalActual?.comentarioProf || '';
-  const notaFinal = filaFinalActual?.notaCampus
+  const notaFinal = filaFinalActual?.notaFinalRubrica
+    ?? filaFinalActual?.notaCampus
     ?? extraerNotaDeTextoDevolucion(comentarioFinal);
   if (
     filaFinalActual
     && notaFinal != null
-    && devolucionIndicaDefensaPendiente(comentarioFinal)
+    && (
+      filaFinalActual.notaFinalRubrica != null
+      || devolucionIndicaDefensaPendiente(comentarioFinal)
+    )
   ) {
     const entregaFinal = {
       ...filaFinalActual,
       numero: intentoActual,
-      estado: 'Trabajo calificado; defensa pendiente',
+      estado: filaFinalActual.notaFinalRubrica != null
+        ? 'Trabajo final calificado'
+        : 'Trabajo calificado; defensa pendiente',
       notaCampus: notaFinal,
       esActiva: false,
       indiceEntrega: 1,

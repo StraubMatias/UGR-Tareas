@@ -67,6 +67,76 @@ test('extraerEntregasAssign importa la nota final publicada en el resumen del bu
   assert.equal(resumirEntregasParaTablero(entregas).entregada, true);
 });
 
+test('una rúbrica con puntaje del trabajo final cierra el buzón aunque Moodle lo muestre reabierto', async () => {
+  const html = `
+    <div class="submissionstatustable">
+      <table>
+        <tr><th>Estado de la entrega</th><td>Reabierto</td></tr>
+        <tr><th>Calificación</th><td>10,00 / 10,00</td></tr>
+        <tr><th>Comentarios de retroalimentación</th><td>
+          <table>
+            <thead><tr>
+              <th>Criterio de Evaluación</th><th>Justificación y Observaciones</th>
+              <th>Fecha de entrega</th><th>Hito</th><th>Puntaje del Hito</th>
+              <th>Calificación</th><th>Puntaje del Trabajo Final</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>0. Kick-off del proyecto y presentación</td><td>Correcto</td>
+                <td>24/9/2026</td><td>1</td><td>10%</td><td>10 (Diez)</td><td>1</td></tr>
+              <tr><td>4. Cuarta entrega según cronograma</td><td>Correcto</td>
+                <td>21/10/2026</td><td>4</td><td>25%</td><td>10 (Diez)</td><td>2,5</td></tr>
+              <tr><td>Exposición, cierre del proyecto y defensa del mismo</td><td></td>
+                <td></td><td></td><td>IND</td><td>10 (Diez)</td><td>10 (Diez)</td></tr>
+              <tr><td>CALIFICACIÓN FINAL:</td><td></td><td></td><td></td>
+                <td></td><td></td><td></td></tr>
+            </tbody>
+          </table>
+        </td></tr>
+      </table>
+      <p>Este es el intento 4</p>
+    </div>`;
+  const { entregas: crudas, intentoActual, requiereNuevaEntrega } = extraerEntregasAssign(html);
+  const entregas = await enriquecerNotasDesdeDevoluciones(null, crudas);
+  const resumen = resumirEntregasParaTablero(entregas);
+  assert.equal(intentoActual, 4);
+  assert.equal(requiereNuevaEntrega, false);
+  assert.equal(entregas.length, 1);
+  assert.equal(entregas[0].notaCampus, 10);
+  assert.equal(entregas[0].nota, 10);
+  assert.equal(entregas[0].estado, 'Trabajo final calificado');
+  assert.equal(entregas[0].esActiva, false);
+  assert.equal(entregas[0].pendiente, false);
+  assert.equal(resumen.notaParaTablero, 10);
+  assert.equal(resumen.entregada, true);
+
+  const db = createClient({ url: 'file::memory:' });
+  try {
+    await db.batch([
+      `CREATE TABLE tareas_entregas (
+        id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, numero INTEGER,
+        indice_entrega INTEGER, es_activa INTEGER, estado TEXT, nota TEXT, nota_origen TEXT,
+        comentario_prof TEXT, feedback_url TEXT, feedback_nombre TEXT, devolucion_texto TEXT,
+        sincronizado_en TEXT, UNIQUE(tarea_id, alumno_id, numero)
+      )`,
+      'CREATE TABLE completadas (tarea_id TEXT, alumno_id TEXT, alumno TEXT, completada_en TEXT, UNIQUE(tarea_id, alumno))'
+    ], 'write');
+    await aplicarEntregasAssignEnDb({
+      db,
+      tareaId: 'sgsi',
+      alumnoId: 'alumno',
+      alumnoNombre: 'Grupo 8',
+      entregas
+    });
+    const filaCompletada = (await db.execute(
+      'SELECT tarea_id FROM completadas WHERE tarea_id = ? AND alumno_id = ?',
+      ['sgsi', 'alumno']
+    )).rows[0];
+    assert.equal(filaCompletada?.tarea_id, 'sgsi');
+  } finally {
+    db.close();
+  }
+});
+
 test('una devolución final con 10 y defensa pendiente consolida las entregas anteriores', () => {
   const html = `
     <h2>Intento 3: jueves, 15 de octubre de 2026, 17:00</h2>
