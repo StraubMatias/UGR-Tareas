@@ -14,6 +14,7 @@ import {
   esTareaBuzonEntregasMultiples,
   resumirEntregasParaTablero
 } from '../lib/assign-entregas.mjs';
+import { sincronizarHitosAssignEnMaterias } from '../lib/sync-core.mjs';
 import { textoDesdeDocx } from '../lib/docx-texto.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
@@ -72,9 +73,17 @@ test('una rúbrica con puntaje del trabajo final cierra el buzón aunque Moodle 
     <div class="submissionstatustable">
       <table>
         <tr><th>Estado de la entrega</th><td>Reabierto</td></tr>
-        <tr><th>Calificación</th><td>10,00 / 10,00</td></tr>
-        <tr><th>Comentarios de retroalimentación</th><td>
-          <table>
+      </table>
+    </div>`;
+  const historia = `
+    <h3>Intentos previos</h3>
+    <div id="region-previous-attempts">
+      <div class="attempthistory">
+        <h4>Intento 4: jueves, 22 de octubre de 2026, 11:59</h4>
+        <div class="table-responsive"><table><tbody>
+          <tr><th>Estado de la entrega</th><td>Reabierto</td></tr>
+          <tr><th>Calificación</th><td>10,00 / 10,00</td></tr>
+          <tr><th>Comentarios de retroalimentación</th><td><table>
             <thead><tr>
               <th>Criterio de Evaluación</th><th>Justificación y Observaciones</th>
               <th>Fecha de entrega</th><th>Hito</th><th>Puntaje del Hito</th>
@@ -90,12 +99,12 @@ test('una rúbrica con puntaje del trabajo final cierra el buzón aunque Moodle 
               <tr><td>CALIFICACIÓN FINAL:</td><td></td><td></td><td></td>
                 <td></td><td></td><td></td></tr>
             </tbody>
-          </table>
-        </td></tr>
-      </table>
-      <p>Este es el intento 4</p>
+          </table></td></tr>
+        </tbody></table></div>
+      </div>
     </div>`;
-  const { entregas: crudas, intentoActual, requiereNuevaEntrega } = extraerEntregasAssign(html);
+  const pagina = html.replace('</div>', `</div>${historia}`);
+  const { entregas: crudas, intentoActual, requiereNuevaEntrega } = extraerEntregasAssign(pagina);
   const entregas = await enriquecerNotasDesdeDevoluciones(null, crudas);
   const resumen = resumirEntregasParaTablero(entregas);
   assert.equal(intentoActual, 4);
@@ -135,6 +144,66 @@ test('una rúbrica con puntaje del trabajo final cierra el buzón aunque Moodle 
   } finally {
     db.close();
   }
+
+  const dbSync = createClient({ url: 'file::memory:' });
+  try {
+    await dbSync.batch([
+      'CREATE TABLE materias (id TEXT PRIMARY KEY, nombre TEXT)',
+      'CREATE TABLE tareas (id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, url TEXT)',
+      `CREATE TABLE tareas_entregas (
+        id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, numero INTEGER,
+        indice_entrega INTEGER, es_activa INTEGER, estado TEXT, nota TEXT, nota_origen TEXT,
+        comentario_prof TEXT, feedback_url TEXT, feedback_nombre TEXT, devolucion_texto TEXT,
+        sincronizado_en TEXT, UNIQUE(tarea_id, alumno_id, numero)
+      )`,
+      'CREATE TABLE completadas (tarea_id TEXT, alumno_id TEXT, alumno TEXT, completada_en TEXT, UNIQUE(tarea_id, alumno))',
+      'CREATE TABLE notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT, cargada_en TEXT, cerrada INTEGER, UNIQUE(tarea_id, alumno))',
+      "INSERT INTO materias VALUES ('m1', 'SGSI')",
+      "INSERT INTO tareas VALUES ('sgsi', 'm1', 'Entregas del trabajo práctico- Análisis de un caso', 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=309681')"
+    ], 'write');
+    const resultado = await sincronizarHitosAssignEnMaterias({
+      cliente: { async pedir() { return { html: pagina }; } },
+      db: dbSync,
+      materiaIds: ['m1'],
+      alumnoId: 'alumno',
+      alumnoNombre: 'Grupo 8'
+    });
+    const notaGuardada = (await dbSync.execute(
+      'SELECT nota FROM notas_tareas WHERE tarea_id = ? AND alumno_id = ?',
+      ['sgsi', 'alumno']
+    )).rows[0];
+    const completadaGuardada = (await dbSync.execute(
+      'SELECT tarea_id FROM completadas WHERE tarea_id = ? AND alumno_id = ?',
+      ['sgsi', 'alumno']
+    )).rows[0];
+    assert.equal(notaGuardada?.nota, '10');
+    assert.equal(completadaGuardada?.tarea_id, 'sgsi');
+    assert.equal(resultado.notasCargadas[0]?.nota, '10');
+  } finally {
+    dbSync.close();
+  }
+});
+
+test('cierra el buzón si Moodle entrega la rúbrica final como texto enriquecido sin tabla HTML', () => {
+  const html = `
+    <div class="submissionstatustable"><table>
+      <tr><th>Estado de la entrega</th><td>Reabierto</td></tr>
+      <tr><th>Calificación</th><td>10,00 / 10,00</td></tr>
+    </table></div>
+    <div class="attempthistory">
+      <h4>Intento 4: jueves, 22 de octubre de 2026, 11:59</h4>
+      <table><tr><th>Comentarios de retroalimentación</th><td>
+        <p><strong>Criterio de Evaluación</strong></p>
+        <p><strong>Puntaje del Trabajo Final</strong></p>
+        <p>Exposición, cierre del proyecto y defensa del mismo — 10 (Diez)</p>
+        <p><strong>CALIFICACIÓN FINAL:</strong></p>
+      </td></tr></table>
+    </div>`;
+  const { entregas, requiereNuevaEntrega } = extraerEntregasAssign(html);
+  assert.equal(requiereNuevaEntrega, false);
+  assert.equal(entregas.length, 1);
+  assert.equal(entregas[0].notaCampus, 10);
+  assert.equal(entregas[0].esActiva, false);
 });
 
 test('una devolución final con 10 y defensa pendiente consolida las entregas anteriores', () => {

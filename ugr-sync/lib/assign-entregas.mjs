@@ -180,11 +180,21 @@ function notaFinalDeRubrica($, alcance) {
   return notaFinal;
 }
 
+function rubricaIndicaTrabajoFinalCalificado($, alcance) {
+  const texto = limpiarTexto($(alcance).text())
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return texto.includes('puntaje del trabajo final')
+    && /\bcalificacion final\b/.test(texto)
+    && /\b(exposicion|defensa)\b/.test(texto);
+}
+
 function parsearBloqueIntento($, alcance, numero, baseUrl) {
   const tablas = alcance.find('table');
   let estadoEntrega = '';
   let notaHtml = null;
-  const notaRubrica = notaFinalDeRubrica($, alcance);
+  let notaRubrica = notaFinalDeRubrica($, alcance);
   let comentario = '';
   let archivos = [];
   tablas.each((_, tabla) => {
@@ -205,6 +215,12 @@ function parsearBloqueIntento($, alcance, numero, baseUrl) {
       archivos = enlacesDevolucion($, $(tabla).find('td').last(), baseUrl);
     }
   });
+  if (
+    notaRubrica == null
+    && rubricaIndicaTrabajoFinalCalificado($, alcance)
+  ) {
+    notaRubrica = notaHtml;
+  }
   if (archivos.length === 0) archivos = enlacesDevolucion($, alcance, baseUrl);
   if (!estadoEntrega) {
     const textoBloque = limpiarTexto(alcance.text());
@@ -410,6 +426,18 @@ export function extraerEntregasAssign(html, baseUrl = '') {
       filaActual.tieneDevolucion = Boolean(
         filaActual.tieneDevolucion || datosActuales?.tieneDevolucion
       );
+    }
+  }
+
+  if (intentoActual) {
+    const filaActual = porNumero.get(intentoActual);
+    if (
+      filaActual
+      && filaActual.notaFinalRubrica == null
+      && rubricaIndicaTrabajoFinalCalificado($, $('body'))
+    ) {
+      filaActual.notaFinalRubrica = notaCalificacionEnAlcance($, regionEnvio)
+        ?? parsearNotaPublicada(textoEnvio);
     }
   }
 
