@@ -11,6 +11,7 @@ import {
   textoPlazoHastaCierreTarea
 } from '../core/cursada';
 import { parcialYaRendido } from './promocion-materia';
+import { personalizarParcialRecuperatorio } from './recuperatorios-calendario';
 
 export function pesoNotificacionTablero(item: NovedadTablero): number {
   switch (item.tipo) {
@@ -146,6 +147,13 @@ export function armarNotificacionesTablero({
         };
       })),
     ...parcialesDeLaCursada
+      .map((parcial) => personalizarParcialRecuperatorio(
+        parcial,
+        parcialesDeLaCursada,
+        usuarioActual,
+        notas
+      ))
+      .filter((parcial): parcial is Parcial => Boolean(parcial))
       .filter((parcial) => parcialRecordatorioVigente(parcial, usuarioActual, notas))
       .map((parcial) => ({
         id: `parcial-${parcial.id}`,

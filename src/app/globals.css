@@ -776,6 +776,13 @@ textarea {
   white-space: normal;
 }
 
+.calendar-recovery {
+  border-color: #94a3b8;
+  background: rgba(148, 163, 184, 0.12);
+  color: #e2e8f0;
+  white-space: normal;
+}
+
 .calendar-task {
   border-color: #f4b860;
   background: rgba(244, 184, 96, 0.13);

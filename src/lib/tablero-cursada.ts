@@ -13,6 +13,7 @@ import {
 import type { AvisoCampusMoodle, InvitacionGrupoTablero, NovedadTablero } from '../components/portal/types';
 import type { EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
 import { obtenerFechaParcialEnMs, ordenarParciales } from '../core/cursada';
+import { personalizarParcialRecuperatorio } from './recuperatorios-calendario';
 const FECHA_CREACION_PORTAL = new Date(2026, 7, 24);
 
 export function diasDesdeCreacionPortal(ref = Date.now()) {
@@ -91,7 +92,14 @@ export function armarDerivadosTablero({
   const parcialesDeLaCursada = parciales.filter((parcial) => idsCursada.has(parcial.materia_id));
   const cronogramaDeLaCursada = cronograma.filter((evento) => idsCursada.has(evento.materia_id));
   const horariosDeLaCursada = horarios.filter((horario) => idsCursada.has(horario.materia_id));
-  const parcialesOrdenados = ordenarParciales(parcialesDeLaCursada);
+  const parcialesOrdenados = ordenarParciales(parcialesDeLaCursada
+    .map((parcial) => personalizarParcialRecuperatorio(
+      parcial,
+      parcialesDeLaCursada,
+      usuarioActual,
+      notas
+    ))
+    .filter((parcial): parcial is Parcial => Boolean(parcial)));
   const proximoParcial = parcialesOrdenados.find((parcial) => {
     const ms = obtenerFechaParcialEnMs(parcial.fecha);
     return ms !== null && ms >= new Date().setHours(0, 0, 0, 0);
