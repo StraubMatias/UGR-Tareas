@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from '../lib/materias.mjs';
-import { consignasDesdeCourseContents, esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeHtml, extraerConsignasDePaginaCurso, extraerFechasActividad, extraerForos, extraerNotaQuizDesdeRevision, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, parsearNotaPublicada, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
+import { consignasDesdeCourseContents, esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeCurso, extraerConsignasDeHtml, extraerConsignasDePaginaCurso, extraerFechasActividad, extraerForos, extraerNotaQuizDesdeRevision, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, parsearNotaPublicada, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -340,6 +340,26 @@ test('extraerConsignasDePaginaCurso lista asignaciones del índice del curso', (
   assert.equal(consignas.length, 1);
   assert.equal(consignas[0].id, '555001');
   assert.equal(consignas[0].nombre, 'TP 2 - Conceptos');
+});
+
+test('extraerConsignasDeCurso recorre todas las secciones del curso', async () => {
+  const secciones = Array.from({ length: 14 }, (_, i) => `<section data-section="${i + 1}"></section>`).join('');
+  const cliente = {
+    async pedir(ruta) {
+      if (ruta === '/course/view.php?id=99') return { html: secciones };
+      if (ruta === '/course/view.php?id=99&section=14') {
+        return {
+          html: '<a class="aalink" href="/mod/assign/view.php?id=1400"><span class="instancename">Trabajo Práctico N° 3</span></a>'
+        };
+      }
+      return { html: '' };
+    }
+  };
+
+  const actividades = await extraerConsignasDeCurso(cliente, '99', {
+    baseUrl: 'https://virtual.ugr.edu.ar'
+  });
+  assert.ok(actividades.some((actividad) => actividad.id === '1400' && actividad.nombre === 'Trabajo Práctico N° 3'));
 });
 
 test('extraerConsignasDeHtml combina overview unificado e índice de tareas sin duplicar', async () => {
