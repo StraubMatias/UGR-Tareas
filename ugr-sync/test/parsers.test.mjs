@@ -283,6 +283,23 @@ test('extraerActividadesOverview no captura nada sin overview o sin filas', asyn
   );
 });
 
+test('el overview importa los trabajos prácticos publicados como actividades SCORM', () => {
+  const html = `
+    <div id="scorm_overview">
+      <table><tbody><tr data-mdl-overview-cmid="352796">
+        <td data-mdl-overview-item="name" data-mdl-overview-value="Trabajo Práctico N° 3">
+          <a class="activityname" href="/mod/scorm/view.php?id=352796">Trabajo Práctico N° 3</a>
+        </td>
+      </tr></tbody></table>
+    </div>`;
+  const actividades = extraerActividadesOverview(html, 'https://virtual.ugr.edu.ar');
+  assert.equal(actividades.length, 1);
+  assert.equal(actividades[0].id, '352796');
+  assert.equal(actividades[0].nombre, 'Trabajo Práctico N° 3');
+  assert.equal(actividades[0].tipo, 'trabajo_practico');
+  assert.equal(actividades[0].url, 'https://virtual.ugr.edu.ar/mod/scorm/view.php?id=352796');
+});
+
 test('extraerConsignasDeHtml detecta asignaciones del índice sin contenedor *_overview', async () => {
   const html = await readFile(path.join(DIR, 'tareas-overview.html'), 'utf8');
   assert.equal(extraerActividadesOverview(html).length, 0);

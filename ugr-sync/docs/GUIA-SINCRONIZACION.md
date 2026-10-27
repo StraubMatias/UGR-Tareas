@@ -108,7 +108,7 @@ Pasos internos:
 1. Materias locales (`periodo_id` si aplica).
 2. Cursos campus + `coincidirMateria` por nombre (ignora prefijo `V.TUCS…`).
 3. `moverTareasQueSonParciales` — evaluaciones mal clasificadas.
-4. Por cada curso (paralelo): `overview` → actividades assign/forum/quiz y todas las secciones del curso (consultadas con concurrencia acotada).
+4. Por cada curso (paralelo): `overview` → actividades assign/forum/quiz/SCORM y todas las secciones del curso (consultadas con concurrencia acotada).
 5. Comparar con `tareas` / `parciales` existentes; armar `detectadas`, `urlsActualizar`, `urlsParcialesActualizar`.
 6. Detalle de fechas solo si hace falta (`actividadNecesitaDetalleFechas`) — apertura con hora.
 7. `completarDesdeCalendario` — solo si la materia **no** tiene plan `manual`/`oficial`.

@@ -32,14 +32,16 @@ export const UGR_RUTAS = {
 };
 
 // Tipos de módulo de Moodle que son «consignas» para el tablero (se importan
-// como tareas). Los demás (resource, url, page, folder, zoom, …) son material
-// de lectura / reuniones y no aparecen como tareas.
+// como tareas), incluidos los paquetes SCORM usados para entregar trabajos
+// prácticos. Los demás (resource, url, page, folder, zoom, …) son material de
+// lectura / reuniones y no aparecen como tareas.
 export const MODULOS_CONSIGNA = [
   'assign',
   'forum',
   'quiz',
   'feedback',
   'h5pactivity',
+  'scorm',
   'lesson',
   'workshop',
   'choice',
