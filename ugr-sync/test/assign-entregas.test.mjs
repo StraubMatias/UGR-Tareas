@@ -169,7 +169,7 @@ test('una rúbrica con puntaje del trabajo final cierra el buzón aunque Moodle 
       alumnoNombre: 'Grupo 8'
     });
     const notaGuardada = (await dbSync.execute(
-      'SELECT nota FROM notas_tareas WHERE tarea_id = ? AND alumno_id = ?',
+      'SELECT nota, cerrada FROM notas_tareas WHERE tarea_id = ? AND alumno_id = ?',
       ['sgsi', 'alumno']
     )).rows[0];
     const completadaGuardada = (await dbSync.execute(
@@ -177,8 +177,31 @@ test('una rúbrica con puntaje del trabajo final cierra el buzón aunque Moodle 
       ['sgsi', 'alumno']
     )).rows[0];
     assert.equal(notaGuardada?.nota, '10');
+    assert.equal(notaGuardada?.cerrada, 1);
     assert.equal(completadaGuardada?.tarea_id, 'sgsi');
     assert.equal(resultado.notasCargadas[0]?.nota, '10');
+    assert.equal(resultado.notasCargadas[0]?.yaEstaba, false);
+
+    const repetida = await sincronizarHitosAssignEnMaterias({
+      cliente: { async pedir() { return { html: pagina }; } },
+      db: dbSync,
+      materiaIds: ['m1'],
+      alumnoId: 'alumno',
+      alumnoNombre: 'Grupo 8'
+    });
+    const notaFinal = (await dbSync.execute(
+      'SELECT nota, cerrada FROM notas_tareas WHERE tarea_id = ? AND alumno_id = ?',
+      ['sgsi', 'alumno']
+    )).rows[0];
+    const entregaFinal = (await dbSync.execute(
+      'SELECT tarea_id FROM completadas WHERE tarea_id = ? AND alumno_id = ?',
+      ['sgsi', 'alumno']
+    )).rows[0];
+    assert.equal(notaFinal?.nota, '10');
+    assert.equal(notaFinal?.cerrada, 1);
+    assert.equal(entregaFinal?.tarea_id, 'sgsi');
+    assert.equal(repetida.notasCargadas[0]?.yaEstaba, true);
+    assert.deepEqual(repetida.lineasInforme, []);
   } finally {
     dbSync.close();
   }
