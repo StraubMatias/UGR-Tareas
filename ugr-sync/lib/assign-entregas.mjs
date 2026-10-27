@@ -39,6 +39,7 @@ export function extraerNotaDeTextoDevolucion(texto) {
     /entrega\s*\d+[\s\S]{0,80}?(\d+(?:[.,]\d+)?)\s*(?:\/|\s*de\s*)\s*10\b/i,
     /nota\s*(?:final|obtenida|del\s+trabajo)?\s*(?:es|:)?\s*(\d+(?:[.,]\d+)?)\s*(?:\/|\s*de\s*)\s*10\b/i,
     /calificaci[oó]n\s*(?:final)?\s*:?\s*(\d+(?:[.,]\d+)?)\s*(?:\/|\s*de\s*)\s*10\b/i,
+    /calificaci[oó]n\s+general\s*:?\s*(\d+(?:[.,]\d+)?)(?=\s*(?:[,.;]|$))/i,
     /puntuaci[oó]n\s*:?\s*(\d+(?:[.,]\d+)?)\s*(?:\/|\s*de\s*)\s*10\b/i,
     /(\d+(?:[.,]\d+)?)\s*\/\s*10\b/,
     /(\d+(?:[.,]\d+)?)\s*\(\s*(?:diez|nueve|ocho|siete|seis|cinco|cuatro|tres|dos|uno)\s*\)/i,
@@ -52,6 +53,16 @@ export function extraerNotaDeTextoDevolucion(texto) {
     if (nota != null) return nota;
   }
   return null;
+}
+
+function devolucionIndicaDefensaPendiente(texto) {
+  const normalizado = limpiarTexto(texto)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const mencionaInstanciaOral = /\b(defensa|exposicion|presentacion(?: oral)?(?: en clase)?)\b/.test(normalizado);
+  const indicaQueResta = /\b(resta|faltan?|queda(?:n)? por|pendiente|debe(?:n)? realizar)\b/.test(normalizado);
+  return mencionaInstanciaOral && indicaQueResta;
 }
 
 function filaDeTabla($, tabla, rotulos) {
@@ -118,10 +129,72 @@ export function acortarEstadoCampus(texto) {
   return `${t.slice(0, 77)}…`;
 }
 
+function notaCalificacionEnAlcance($, alcance) {
+  let nota = null;
+  $(alcance).find('tr').each((_, tr) => {
+    const rotulo = limpiarTexto($(tr).find('th').first().text());
+    if (!/^calificaci[oó]n(?:\s+(?:general|final))?$/i.test(rotulo)) return;
+    const celda = $(tr).find('td').first();
+    nota = parsearNotaPublicada(celda.html() || celda.text());
+  });
+  return nota;
+}
+
+function notaFinalDeRubrica($, alcance) {
+  let notaFinal = null;
+  $(alcance).find('table').each((_, tabla) => {
+    const filas = [];
+    $(tabla).children('thead, tbody, tfoot').children('tr').each((_, tr) => filas.push(tr));
+    $(tabla).children('tr').each((_, tr) => filas.push(tr));
+    const filaEncabezado = filas.find((tr) => $(tr).children('th, td')
+      .toArray()
+      .some((celda) => limpiarTexto($(celda).text())
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .includes('puntaje del trabajo final')));
+    if (!filaEncabezado) return;
+
+    const celdasEncabezado = $(filaEncabezado).children('th, td').toArray();
+    const indicePuntaje = celdasEncabezado.findIndex((celda) => limpiarTexto($(celda).text())
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .includes('puntaje del trabajo final'));
+    let notaFilaFinal = null;
+    for (const fila of filas) {
+      if (fila === filaEncabezado) continue;
+      const celdas = $(fila).children('th, td');
+      const textoPuntaje = limpiarTexto(celdas.eq(indicePuntaje).text());
+      const notaFila = parsearNotaPublicada(textoPuntaje);
+      if (notaFila == null) continue;
+      notaFinal = notaFila;
+      const rotulo = limpiarTexto(celdas.first().text())
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+      if (/calificacion\s+final/.test(rotulo)) notaFilaFinal = notaFila;
+    }
+    if (notaFilaFinal != null) notaFinal = notaFilaFinal;
+  });
+  return notaFinal;
+}
+
+function rubricaIndicaTrabajoFinalCalificado($, alcance) {
+  const texto = limpiarTexto($(alcance).text())
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return texto.includes('puntaje del trabajo final')
+    && /\bcalificacion final\b/.test(texto)
+    && /\b(exposicion|defensa)\b/.test(texto);
+}
+
 function parsearBloqueIntento($, alcance, numero, baseUrl) {
   const tablas = alcance.find('table');
   let estadoEntrega = '';
   let notaHtml = null;
+  let notaRubrica = notaFinalDeRubrica($, alcance);
   let comentario = '';
   let archivos = [];
   tablas.each((_, tabla) => {
@@ -142,6 +215,12 @@ function parsearBloqueIntento($, alcance, numero, baseUrl) {
       archivos = enlacesDevolucion($, $(tabla).find('td').last(), baseUrl);
     }
   });
+  if (
+    notaRubrica == null
+    && rubricaIndicaTrabajoFinalCalificado($, alcance)
+  ) {
+    notaRubrica = notaHtml;
+  }
   if (archivos.length === 0) archivos = enlacesDevolucion($, alcance, baseUrl);
   if (!estadoEntrega) {
     const textoBloque = limpiarTexto(alcance.text());
@@ -161,6 +240,7 @@ function parsearBloqueIntento($, alcance, numero, baseUrl) {
     numero,
     estado: estadoEntrega,
     notaCampus: notaHtml,
+    notaFinalRubrica: notaRubrica,
     comentarioProf: comentario,
     archivos,
     tieneDevolucion
@@ -247,10 +327,18 @@ export function extraerEntregasAssign(html, baseUrl = '') {
     ).first();
   const textoEnvio = limpiarTexto(regionEnvio.text() || '');
   const planoEnvio = limpiarTexto(tablasEnvio.text() || textoEnvio);
+  const textoPagina = limpiarTexto($('body').text());
+  const intentosEnTitulos = $('h2, h3, h4').map((_, titulo) => {
+    const numero = limpiarTexto($(titulo).text()).match(/^Intento\s+(\d+)\s*:/i)?.[1];
+    return numero ? Number(numero) : null;
+  }).get().filter((numero) => numero != null);
   const intentoActual = Number(
     planoEnvio.match(/este\s+es\s+el\s+intento\s+(\d+)/i)?.[1]
     || textoEnvio.match(/este\s+es\s+el\s+intento\s+(\d+)/i)?.[1]
+    || textoEnvio.match(/(?:^|\s)intento\s+(\d+)\s*:/i)?.[1]
     || textoEnvio.match(/attempt\s+(\d+)/i)?.[1]
+    || (intentosEnTitulos.length ? Math.max(...intentosEnTitulos) : null)
+    || textoPagina.match(/(?:^|\s)intento\s+(\d+)\s*:/i)?.[1]
   ) || null;
 
   const estadoActual = acortarEstadoCampus(
@@ -258,6 +346,10 @@ export function extraerEntregasAssign(html, baseUrl = '') {
     || textoEnvio.match(/estado de la calificación\s+([^\n]+)/i)?.[1]
     || ''
   );
+  const notaActual = notaCalificacionEnAlcance($, regionEnvio);
+  const datosActuales = intentoActual
+    ? parsearBloqueIntento($, regionEnvio, intentoActual, baseUrl)
+    : null;
 
   const porNumero = new Map();
   const regionAnteriores = $('#region-previous-attempts, [data-region="previous-attempts"]').first();
@@ -311,12 +403,74 @@ export function extraerEntregasAssign(html, baseUrl = '') {
   if (intentoActual && !porNumero.has(intentoActual)) {
     porNumero.set(intentoActual, {
       numero: intentoActual,
-      estado: estadoActual,
-      notaCampus: parsearNotaPublicada(textoEnvio),
-      comentarioProf: '',
-      archivos: [],
-      tieneDevolucion: false
+      estado: estadoActual || datosActuales?.estado || '',
+      notaCampus: notaActual ?? parsearNotaPublicada(textoEnvio),
+      notaFinalRubrica: datosActuales?.notaFinalRubrica ?? null,
+      comentarioProf: datosActuales?.comentarioProf || '',
+      archivos: datosActuales?.archivos || [],
+      tieneDevolucion: datosActuales?.tieneDevolucion || false
     });
+  } else if (intentoActual) {
+    const filaActual = porNumero.get(intentoActual);
+    if (filaActual) {
+      if (filaActual.notaCampus == null) filaActual.notaCampus = notaActual;
+      if (filaActual.notaFinalRubrica == null) {
+        filaActual.notaFinalRubrica = datosActuales?.notaFinalRubrica ?? null;
+      }
+      if (!filaActual.comentarioProf && datosActuales?.comentarioProf) {
+        filaActual.comentarioProf = datosActuales.comentarioProf;
+      }
+      if (!filaActual.archivos?.length && datosActuales?.archivos?.length) {
+        filaActual.archivos = datosActuales.archivos;
+      }
+      filaActual.tieneDevolucion = Boolean(
+        filaActual.tieneDevolucion || datosActuales?.tieneDevolucion
+      );
+    }
+  }
+
+  if (intentoActual) {
+    const filaActual = porNumero.get(intentoActual);
+    if (
+      filaActual
+      && filaActual.notaFinalRubrica == null
+      && rubricaIndicaTrabajoFinalCalificado($, $('body'))
+    ) {
+      filaActual.notaFinalRubrica = notaCalificacionEnAlcance($, regionEnvio)
+        ?? parsearNotaPublicada(textoEnvio);
+    }
+  }
+
+  const filaFinalActual = intentoActual ? porNumero.get(intentoActual) : null;
+  const comentarioFinal = filaFinalActual?.comentarioProf || '';
+  const notaFinal = filaFinalActual?.notaFinalRubrica
+    ?? filaFinalActual?.notaCampus
+    ?? extraerNotaDeTextoDevolucion(comentarioFinal);
+  if (
+    filaFinalActual
+    && notaFinal != null
+    && (
+      filaFinalActual.notaFinalRubrica != null
+      || devolucionIndicaDefensaPendiente(comentarioFinal)
+    )
+  ) {
+    const entregaFinal = {
+      ...filaFinalActual,
+      numero: intentoActual,
+      estado: filaFinalActual.notaFinalRubrica != null
+        ? 'Trabajo final calificado'
+        : 'Trabajo calificado; defensa pendiente',
+      notaCampus: notaFinal,
+      esActiva: false,
+      indiceEntrega: 1,
+      pendiente: false
+    };
+    return {
+      entregas: [entregaFinal],
+      intentoActual,
+      requiereNuevaEntrega: false,
+      estadoActual
+    };
   }
 
   repararMapaIntentos(porNumero);
@@ -347,13 +501,16 @@ export function extraerEntregasAssign(html, baseUrl = '') {
   };
   const filaIntentoActual = intentoActual != null ? porNumero.get(intentoActual) : null;
   /** Moodle a veces deja el intento calificado como «actual» (p. ej. intento 2 con Word de entrega 1). */
+  const notaFinalPublicada = filaIntentoActual?.notaCampus != null
+    && !/reabiert|reopened/i.test(`${estadoActual} ${filaIntentoActual.estado || ''}`);
   const intentoActualCierraEntrega = Boolean(
-    intentoActual != null && filaIntentoActual && feedbackProfesorEnFila(filaIntentoActual)
+    intentoActual != null && filaIntentoActual
+    && (feedbackProfesorEnFila(filaIntentoActual) || notaFinalPublicada)
   );
   const intentoAbierto = intentoActualCierraEntrega ? null : intentoActual;
 
   let cerradasConDev = intentosCerradosConFeedback();
-  if (intentoActualCierraEntrega && feedbackProfesorEnFila(filaIntentoActual) && !cerradasConDev.includes(intentoActual)) {
+  if (intentoActualCierraEntrega && !cerradasConDev.includes(intentoActual)) {
     cerradasConDev = [...cerradasConDev, intentoActual].sort((a, b) => a - b);
   }
   let indiceEntrega = 0;
@@ -378,7 +535,7 @@ export function extraerEntregasAssign(html, baseUrl = '') {
       pendiente,
       esActiva: true
     });
-  } else if (intentoActualCierraEntrega) {
+  } else if (intentoActualCierraEntrega && !notaFinalPublicada) {
     indiceEntrega += 1;
     const numeroFase = Math.max(...numeros, intentoActual) + 1;
     if (!porNumero.has(numeroFase)) {

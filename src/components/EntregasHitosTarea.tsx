@@ -1,4 +1,5 @@
 import {
+  defensaOralPendienteDesdeHitos,
   faseEntregaDesdeHitos,
   formatearFechaDDMMAAAA,
   etiquetaDiasRestantes,
@@ -19,6 +20,7 @@ export default function EntregasHitosTarea({ entregas, usuarioActual, fechaVence
     .filter((e) => e.indiceEntrega != null)
     .sort((a, b) => (a.indiceEntrega ?? 0) - (b.indiceEntrega ?? 0));
   const fase = faseEntregaDesdeHitos(entregas);
+  const defensaPendiente = defensaOralPendienteDesdeHitos(entregas);
   const plazo = fechaVence ? textoPlazoHastaCierreTarea(fechaVence) : null;
   const diasRestantes = plazo?.dias ?? null;
 
@@ -27,6 +29,12 @@ export default function EntregasHitosTarea({ entregas, usuarioActual, fechaVence
       <p className="text-xs font-bold uppercase tracking-wider text-cyan-300">
         Entregas del trabajo (sincronizado desde UGR)
       </p>
+      {defensaPendiente && (
+        <p className="text-sm text-cyan-100 rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-3 py-2">
+          <span className="font-semibold">Trabajo presentado y calificado.</span>
+          {' '}Según la devolución, solo resta la defensa o exposición oral; no queda otra entrega escrita pendiente.
+        </p>
+      )}
       {fase?.requiereEntrega && fase.indice != null && (
         <p className="text-sm text-amber-100/95 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2">
           <span className="font-semibold">Fase actual en UGR Virtual: {fase.etiqueta}.</span>
@@ -49,7 +57,9 @@ export default function EntregasHitosTarea({ entregas, usuarioActual, fechaVence
       )}
       <ul className="space-y-2">
         {ordenadas.map((entrega) => {
-          const etiqueta = `Entrega ${entrega.indiceEntrega}`;
+          const etiqueta = defensaPendiente
+            ? 'Trabajo final'
+            : `Entrega ${entrega.indiceEntrega}`;
           const nota = entrega.nota != null && entrega.nota !== '' ? String(entrega.nota) : null;
           return (
             <li
@@ -62,7 +72,11 @@ export default function EntregasHitosTarea({ entregas, usuarioActual, fechaVence
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-semibold text-slate-100">{etiqueta}</span>
-                {nota && !entrega.esActiva ? (
+                {defensaPendiente && nota ? (
+                  <span className="text-emerald-300 font-semibold text-xs">
+                    Calificado · Nota {nota}
+                  </span>
+                ) : nota && !entrega.esActiva ? (
                   <span className="text-emerald-300 font-semibold text-xs">
                     Entregada · Nota {nota}
                     {entrega.notaOrigen === 'devolucion_docx' && (

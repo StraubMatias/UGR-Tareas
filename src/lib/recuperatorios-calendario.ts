@@ -71,6 +71,27 @@ export function etiquetaParcialesRecuperatorio(indices: number[]) {
   return `Recuperatorio: ${partes.join(', ')}`;
 }
 
+/** Oculta el recuperatorio si el alumno aprobó los parciales previos. */
+export function personalizarParcialRecuperatorio(
+  parcial: Parcial,
+  parcialesCursada: Parcial[],
+  alumno: string | null | undefined,
+  notas: Nota[],
+  claveHoy = claveHoyCalendario()
+): Parcial | null {
+  if (!esParcialRecuperatorio(parcial) || !alumno) return parcial;
+  const indices = indicesParcialesARecuperar(alumno, parcial.materia_id, parcialesCursada, notas, claveHoy);
+  if (indices.length === 0) return null;
+  const etiqueta = etiquetaParcialesRecuperatorio(indices);
+  return {
+    ...parcial,
+    nombre: etiqueta,
+    detalles: parcial.detalles
+      ? `${etiqueta}. ${parcial.detalles}`
+      : `Rendís el recuperatorio de la materia (${etiqueta.replace(/^Recuperatorio del? /, '')}).`
+  };
+}
+
 /**
  * En el día del recuperatorio, reemplaza la fila genérica por un aviso según las notas del alumno.
  * Si no debe recuperar nada, no muestra el evento.
@@ -89,22 +110,10 @@ export function personalizarParcialesDelDia(
   if (recuperatorios.length === 0) return parcialesDelDia;
 
   const otros = parcialesDelDia.filter((p) => !esParcialRecuperatorio(p));
-  const claveHoy = claveHoyCalendario();
-  const agregados: Parcial[] = [];
-
-  for (const recup of recuperatorios) {
-    const indices = indicesParcialesARecuperar(alumno, recup.materia_id, parcialesCursada, notas, claveHoy);
-    if (indices.length === 0) continue;
-    const etiqueta = etiquetaParcialesRecuperatorio(indices);
-    agregados.push({
-      ...recup,
-      id: `recup_${recup.id}_${alumno}`,
-      nombre: etiqueta,
-      detalles: recup.detalles
-        ? `${etiqueta}. ${recup.detalles}`
-        : `Rendís el recuperatorio de la materia (${etiqueta.replace(/^Recuperatorio del? /, '')}).`
-    });
-  }
+  const agregados = recuperatorios
+    .map((recup) => personalizarParcialRecuperatorio(recup, parcialesCursada, alumno, notas))
+    .filter((parcial): parcial is Parcial => Boolean(parcial))
+    .map((parcial) => ({ ...parcial, id: `recup_${parcial.id}_${alumno}` }));
 
   return [...otros, ...agregados];
 }

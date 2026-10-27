@@ -10,6 +10,7 @@
 import { load } from 'cheerio';
 import { MODULOS_CONSIGNA, ROTULOS_VENCIMIENTO, ROTULOS_DISPONIBLE, UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { extraerSesskey } from './materias.mjs';
+import { conPool } from './sync/pool.mjs';
 import { esNombreConsignaValido, fechaCampusParaAlmacenar, inferirTipoTarea, limpiarTextoParaBusqueda, notaEnEscalaDiez, parsearFechaHoraCampus, parsearFechaMoodle, parsearTimestampMoodle, parsearUnidadMoodle, unidadDesdeNombreSeccion, coincidirNombreTarea } from './normalizar.mjs';
 
 function indiceColumna(encabezados, rotulos) {
@@ -561,10 +562,12 @@ export async function extraerConsignasDeCurso(cliente, cursoId, { baseUrl = UGR_
 
   if (htmlCurso) {
     actividades = fusionarActividadesConsigna([actividades, extraerConsignasDePaginaCurso(htmlCurso, baseUrl)]);
-    const secciones = idsSeccionesDeCurso(htmlCurso).slice(0, 12);
+    const secciones = idsSeccionesDeCurso(htmlCurso);
     if (secciones.length > 0) {
-      const htmlsSeccion = await Promise.all(
-        secciones.map((seccion) => pedirHtmlCurso(cliente, `${rutas.curso(cursoId)}&section=${seccion}`))
+      const htmlsSeccion = await conPool(
+        secciones,
+        4,
+        (seccion) => pedirHtmlCurso(cliente, `${rutas.curso(cursoId)}&section=${seccion}`)
       );
       for (const html of htmlsSeccion) {
         actividades = fusionarActividadesConsigna([actividades, extraerConsignasDePaginaCurso(html, baseUrl)]);

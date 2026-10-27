@@ -4,6 +4,7 @@ import {
   indicesParcialesARecuperar,
   etiquetaParcialesRecuperatorio,
   personalizarParcialesDelDia,
+  personalizarParcialRecuperatorio,
   esParcialRecuperatorio
 } from '../src/lib/recuperatorios-calendario.ts';
 
@@ -68,4 +69,26 @@ test('personalizarParcialesDelDia muestra qué parciales recupera', () => {
   );
   assert.equal(dia.length, 1);
   assert.match(dia[0].nombre, /1\.er parcial/);
+});
+
+test('personalizarParcialRecuperatorio oculta el recuperatorio si aprobó el parcial', () => {
+  const recuperatorio = personalizarParcialRecuperatorio(
+    parciales[2],
+    parciales,
+    'Ana',
+    [{ parcial_id: 'p1', alumno: 'Ana', nota: 9 }],
+    HOY_REF
+  );
+  assert.equal(recuperatorio, null);
+});
+
+test('personalizarParcialRecuperatorio identifica el parcial desaprobado', () => {
+  const recuperatorio = personalizarParcialRecuperatorio(
+    parciales[2],
+    parciales,
+    'Ana',
+    [{ parcial_id: 'p1', alumno: 'Ana', nota: 5 }],
+    HOY_REF
+  );
+  assert.equal(recuperatorio?.nombre, 'Recuperatorio del 1.er parcial');
 });

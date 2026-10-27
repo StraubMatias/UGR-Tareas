@@ -14,6 +14,7 @@ import {
   esTareaBuzonEntregasMultiples,
   resumirEntregasParaTablero
 } from '../lib/assign-entregas.mjs';
+import { sincronizarHitosAssignEnMaterias } from '../lib/sync-core.mjs';
 import { textoDesdeDocx } from '../lib/docx-texto.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
@@ -41,7 +42,228 @@ function crearDocxMinimo(textoPlano) {
 
 test('extraerNotaDeTextoDevolucion lee nota en comentarios o Word', () => {
   assert.equal(extraerNotaDeTextoDevolucion('La nota final es 8 de 10. Muy bien.'), 8);
+  assert.equal(extraerNotaDeTextoDevolucion('Calificación general 10, resta sólo la exposición.'), 10);
   assert.equal(extraerNotaDeTextoDevolucion('Sin calificación numérica'), null);
+});
+
+test('extraerEntregasAssign importa la nota final publicada en el resumen del buzón', async () => {
+  const html = `
+    <div class="submissionstatustable">
+      <table>
+        <tr><th>Estado de la entrega</th><td>Enviado para calificar</td></tr>
+        <tr><th>Estado de la calificación</th><td>Calificado</td></tr>
+        <tr><th>Calificación</th><td>10,00 / 10,00</td></tr>
+        <tr><th>Comentarios de retroalimentación</th><td>Calificación general 10, resta sólo el cierre del proyecto mediante una exposición con presentación en clase de 10 minutos.</td></tr>
+      </table>
+      <p>Intento 3: jueves, 15 de octubre de 2026, 17:00</p>
+    </div>`;
+  const { entregas: crudas, intentoActual } = extraerEntregasAssign(html);
+  const entregas = await enriquecerNotasDesdeDevoluciones(null, crudas);
+  const notaFinal = entregas.find((e) => e.numero === intentoActual);
+  assert.equal(notaFinal?.notaCampus, 10);
+  assert.match(notaFinal?.comentarioProf || '', /resta sólo.*exposición/i);
+  assert.equal(notaFinal?.esActiva, false);
+  assert.equal(notaFinal?.pendiente, false);
+  assert.equal(resumirEntregasParaTablero(entregas).notaParaTablero, 10);
+  assert.equal(resumirEntregasParaTablero(entregas).entregada, true);
+});
+
+test('una rúbrica con puntaje del trabajo final cierra el buzón aunque Moodle lo muestre reabierto', async () => {
+  const html = `
+    <div class="submissionstatustable">
+      <table>
+        <tr><th>Estado de la entrega</th><td>Reabierto</td></tr>
+      </table>
+    </div>`;
+  const historia = `
+    <h3>Intentos previos</h3>
+    <div id="region-previous-attempts">
+      <div class="attempthistory">
+        <h4>Intento 4: jueves, 22 de octubre de 2026, 11:59</h4>
+        <div class="table-responsive"><table><tbody>
+          <tr><th>Estado de la entrega</th><td>Reabierto</td></tr>
+          <tr><th>Calificación</th><td>10,00 / 10,00</td></tr>
+          <tr><th>Comentarios de retroalimentación</th><td><table>
+            <thead><tr>
+              <th>Criterio de Evaluación</th><th>Justificación y Observaciones</th>
+              <th>Fecha de entrega</th><th>Hito</th><th>Puntaje del Hito</th>
+              <th>Calificación</th><th>Puntaje del Trabajo Final</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>0. Kick-off del proyecto y presentación</td><td>Correcto</td>
+                <td>24/9/2026</td><td>1</td><td>10%</td><td>10 (Diez)</td><td>1</td></tr>
+              <tr><td>4. Cuarta entrega según cronograma</td><td>Correcto</td>
+                <td>21/10/2026</td><td>4</td><td>25%</td><td>10 (Diez)</td><td>2,5</td></tr>
+              <tr><td>Exposición, cierre del proyecto y defensa del mismo</td><td></td>
+                <td></td><td></td><td>IND</td><td>10 (Diez)</td><td>10 (Diez)</td></tr>
+              <tr><td>CALIFICACIÓN FINAL:</td><td></td><td></td><td></td>
+                <td></td><td></td><td></td></tr>
+            </tbody>
+          </table></td></tr>
+        </tbody></table></div>
+      </div>
+    </div>`;
+  const pagina = html.replace('</div>', `</div>${historia}`);
+  const { entregas: crudas, intentoActual, requiereNuevaEntrega } = extraerEntregasAssign(pagina);
+  const entregas = await enriquecerNotasDesdeDevoluciones(null, crudas);
+  const resumen = resumirEntregasParaTablero(entregas);
+  assert.equal(intentoActual, 4);
+  assert.equal(requiereNuevaEntrega, false);
+  assert.equal(entregas.length, 1);
+  assert.equal(entregas[0].notaCampus, 10);
+  assert.equal(entregas[0].nota, 10);
+  assert.equal(entregas[0].estado, 'Trabajo final calificado');
+  assert.equal(entregas[0].esActiva, false);
+  assert.equal(entregas[0].pendiente, false);
+  assert.equal(resumen.notaParaTablero, 10);
+  assert.equal(resumen.entregada, true);
+
+  const db = createClient({ url: 'file::memory:' });
+  try {
+    await db.batch([
+      `CREATE TABLE tareas_entregas (
+        id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, numero INTEGER,
+        indice_entrega INTEGER, es_activa INTEGER, estado TEXT, nota TEXT, nota_origen TEXT,
+        comentario_prof TEXT, feedback_url TEXT, feedback_nombre TEXT, devolucion_texto TEXT,
+        sincronizado_en TEXT, UNIQUE(tarea_id, alumno_id, numero)
+      )`,
+      'CREATE TABLE completadas (tarea_id TEXT, alumno_id TEXT, alumno TEXT, completada_en TEXT, UNIQUE(tarea_id, alumno))'
+    ], 'write');
+    await aplicarEntregasAssignEnDb({
+      db,
+      tareaId: 'sgsi',
+      alumnoId: 'alumno',
+      alumnoNombre: 'Grupo 8',
+      entregas
+    });
+    const filaCompletada = (await db.execute(
+      'SELECT tarea_id FROM completadas WHERE tarea_id = ? AND alumno_id = ?',
+      ['sgsi', 'alumno']
+    )).rows[0];
+    assert.equal(filaCompletada?.tarea_id, 'sgsi');
+  } finally {
+    db.close();
+  }
+
+  const dbSync = createClient({ url: 'file::memory:' });
+  try {
+    await dbSync.batch([
+      'CREATE TABLE materias (id TEXT PRIMARY KEY, nombre TEXT)',
+      'CREATE TABLE tareas (id TEXT PRIMARY KEY, materia_id TEXT, nombre TEXT, url TEXT)',
+      `CREATE TABLE tareas_entregas (
+        id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, numero INTEGER,
+        indice_entrega INTEGER, es_activa INTEGER, estado TEXT, nota TEXT, nota_origen TEXT,
+        comentario_prof TEXT, feedback_url TEXT, feedback_nombre TEXT, devolucion_texto TEXT,
+        sincronizado_en TEXT, UNIQUE(tarea_id, alumno_id, numero)
+      )`,
+      'CREATE TABLE completadas (tarea_id TEXT, alumno_id TEXT, alumno TEXT, completada_en TEXT, UNIQUE(tarea_id, alumno))',
+      'CREATE TABLE notas_tareas (id TEXT PRIMARY KEY, tarea_id TEXT, alumno_id TEXT, alumno TEXT, nota TEXT, cargada_en TEXT, cerrada INTEGER, UNIQUE(tarea_id, alumno))',
+      "INSERT INTO materias VALUES ('m1', 'SGSI')",
+      "INSERT INTO tareas VALUES ('sgsi', 'm1', 'Entregas del trabajo práctico- Análisis de un caso', 'https://virtual.ugr.edu.ar/mod/assign/view.php?id=309681')"
+    ], 'write');
+    const resultado = await sincronizarHitosAssignEnMaterias({
+      cliente: { async pedir() { return { html: pagina }; } },
+      db: dbSync,
+      materiaIds: ['m1'],
+      alumnoId: 'alumno',
+      alumnoNombre: 'Grupo 8'
+    });
+    const notaGuardada = (await dbSync.execute(
+      'SELECT nota, cerrada FROM notas_tareas WHERE tarea_id = ? AND alumno_id = ?',
+      ['sgsi', 'alumno']
+    )).rows[0];
+    const completadaGuardada = (await dbSync.execute(
+      'SELECT tarea_id FROM completadas WHERE tarea_id = ? AND alumno_id = ?',
+      ['sgsi', 'alumno']
+    )).rows[0];
+    assert.equal(notaGuardada?.nota, '10');
+    assert.equal(notaGuardada?.cerrada, 1);
+    assert.equal(completadaGuardada?.tarea_id, 'sgsi');
+    assert.equal(resultado.notasCargadas[0]?.nota, '10');
+    assert.equal(resultado.notasCargadas[0]?.yaEstaba, false);
+
+    const repetida = await sincronizarHitosAssignEnMaterias({
+      cliente: { async pedir() { return { html: pagina }; } },
+      db: dbSync,
+      materiaIds: ['m1'],
+      alumnoId: 'alumno',
+      alumnoNombre: 'Grupo 8'
+    });
+    const notaFinal = (await dbSync.execute(
+      'SELECT nota, cerrada FROM notas_tareas WHERE tarea_id = ? AND alumno_id = ?',
+      ['sgsi', 'alumno']
+    )).rows[0];
+    const entregaFinal = (await dbSync.execute(
+      'SELECT tarea_id FROM completadas WHERE tarea_id = ? AND alumno_id = ?',
+      ['sgsi', 'alumno']
+    )).rows[0];
+    assert.equal(notaFinal?.nota, '10');
+    assert.equal(notaFinal?.cerrada, 1);
+    assert.equal(entregaFinal?.tarea_id, 'sgsi');
+    assert.equal(repetida.notasCargadas[0]?.yaEstaba, true);
+    assert.deepEqual(repetida.lineasInforme, []);
+  } finally {
+    dbSync.close();
+  }
+});
+
+test('cierra el buzón si Moodle entrega la rúbrica final como texto enriquecido sin tabla HTML', () => {
+  const html = `
+    <div class="submissionstatustable"><table>
+      <tr><th>Estado de la entrega</th><td>Reabierto</td></tr>
+      <tr><th>Calificación</th><td>10,00 / 10,00</td></tr>
+    </table></div>
+    <div class="attempthistory">
+      <h4>Intento 4: jueves, 22 de octubre de 2026, 11:59</h4>
+      <table><tr><th>Comentarios de retroalimentación</th><td>
+        <p><strong>Criterio de Evaluación</strong></p>
+        <p><strong>Puntaje del Trabajo Final</strong></p>
+        <p>Exposición, cierre del proyecto y defensa del mismo — 10 (Diez)</p>
+        <p><strong>CALIFICACIÓN FINAL:</strong></p>
+      </td></tr></table>
+    </div>`;
+  const { entregas, requiereNuevaEntrega } = extraerEntregasAssign(html);
+  assert.equal(requiereNuevaEntrega, false);
+  assert.equal(entregas.length, 1);
+  assert.equal(entregas[0].notaCampus, 10);
+  assert.equal(entregas[0].esActiva, false);
+});
+
+test('una devolución final con 10 y defensa pendiente consolida las entregas anteriores', () => {
+  const html = `
+    <h2>Intento 3: jueves, 15 de octubre de 2026, 17:00</h2>
+    <div class="submissionstatustable">
+      <table>
+        <tr><th>Estado de la entrega</th><td>Enviado para calificar</td></tr>
+        <tr><th>Calificación</th><td>10,00 / 10,00</td></tr>
+        <tr><th>Comentarios de retroalimentación</th>
+          <td>Calificación general 10, resta sólo el cierre del proyecto mediante una exposición con presentación en clase de 10 minutos.</td></tr>
+      </table>
+    </div>
+    <div class="attempthistory">
+      <h4>Intento 2: anterior</h4>
+      <table>
+        <tr><th>Estado de la entrega</th><td>Calificado</td></tr>
+        <tr><th>Calificación</th><td>8,00 / 10,00</td></tr>
+        <tr><th>Comentarios de retroalimentación</th><td>Entrega parcial aprobada</td></tr>
+      </table>
+      <h4>Intento 1: anterior</h4>
+      <table>
+        <tr><th>Estado de la entrega</th><td>Calificado</td></tr>
+        <tr><th>Calificación</th><td>7,00 / 10,00</td></tr>
+        <tr><th>Comentarios de retroalimentación</th><td>Primera entrega aprobada</td></tr>
+      </table>
+    </div>`;
+  const { entregas, intentoActual, requiereNuevaEntrega } = extraerEntregasAssign(html);
+  assert.equal(intentoActual, 3);
+  assert.equal(requiereNuevaEntrega, false);
+  assert.equal(entregas.length, 1);
+  assert.equal(entregas[0].numero, 3);
+  assert.equal(entregas[0].indiceEntrega, 1);
+  assert.equal(entregas[0].notaCampus, 10);
+  assert.equal(entregas[0].esActiva, false);
+  assert.equal(entregas[0].pendiente, false);
+  assert.match(entregas[0].comentarioProf, /resta sólo.*exposición/i);
 });
 
 test('textoDesdeDocx extrae texto y nota', () => {

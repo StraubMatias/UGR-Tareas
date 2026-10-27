@@ -9,6 +9,7 @@ import {
   notaTableroVisibleParaAlumno,
   notasCerradasEntregaCampus,
   tareaUsaEntregasMultiplesCampus,
+  defensaOralPendienteDesdeHitos,
   type Materia,
   type Tarea
 } from '../core/cursada';
@@ -48,6 +49,8 @@ export default function EstadoTareaAlumno({
   const semaforo = calcularEstadoSemaforo(tarea.fin, tarea.inicio);
   const badgeFase = propia && tareaUsaEntregasMultiplesCampus(tarea) ? textoBadgeFaseEntrega(tarea, alumno) : null;
   const fasePendiente = propia ? faseEntregaCampus(tarea, alumno) : null;
+  const defensaPendiente = propia
+    && defensaOralPendienteDesdeHitos(tarea.entregas?.[alumno]);
   const mostrarNotaTablero = notaTableroVisibleParaAlumno(tarea, alumno);
   const notasParcialesCampus = notasCerradasEntregaCampus(tarea, alumno);
   const puedeGestionar = tareaPuedeGestionarse(tarea);
@@ -82,7 +85,12 @@ export default function EstadoTareaAlumno({
               {tarea.nombre}
             </button>
           </h4>
-          {fasePendiente?.requiereEntrega && fasePendiente.indice != null && (
+          {defensaPendiente && (
+            <p className="text-xs text-cyan-200 mt-1 font-medium">
+              Trabajo completo y calificado; solo resta la defensa oral.
+            </p>
+          )}
+          {fasePendiente?.requiereEntrega && fasePendiente.indice != null && !defensaPendiente && (
             <p className="text-xs text-amber-200/95 mt-1 font-medium">
               Falta {fasePendiente.etiqueta} en UGR Virtual
               {tarea.fin ? ` · vence ${formatearFechaDDMMAAAA(tarea.fin)}` : ''}
@@ -141,7 +149,7 @@ export default function EstadoTareaAlumno({
                   onBlur={() => handleGuardarNotaTareaOnBlur(tarea.id, alumno)}
                   className="w-20 rounded-lg border border-purple-500/40 bg-slate-950 p-2 text-center text-white disabled:opacity-40" />
               </label>
-              {!mostrarNotaTablero && notasParcialesCampus.length > 0 && (
+              {!defensaPendiente && !mostrarNotaTablero && notasParcialesCampus.length > 0 && (
                 <p className="text-xs text-slate-400">
                   En UGR Virtual:{' '}
                   {notasParcialesCampus.map((p) => `Entrega ${p.indice} · ${p.nota}`).join(' · ')}

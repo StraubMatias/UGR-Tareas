@@ -68,7 +68,7 @@ Flags: `--yes`, `--dry`, `--cronogramas`.
 | `avisos.mjs` | Foros, hilos, posts, NLP liviano → tipo de evento |
 | `docentes.mjs` | Equipo docente del curso, perfil del autor |
 | `metodologia.mjs` | PDF/DOCX de metodología → condiciones de promoción |
-| `assign-entregas.mjs` | Buzones assign con varias entregas (SGSI, etc.) |
+| `assign-entregas.mjs` | Buzones assign con varias entregas; interpreta el puntaje final de la rúbrica para cerrar el trabajo aunque Moodle conserve el estado «Reabierto» |
 | `docx-texto.mjs` | Texto desde DOCX sin dependencias pesadas |
 | `cronograma-oficial.mjs` | Recurso «Cronograma», PDF/Word → `cronograma_eventos` + Zoom en `horarios.url_clase` |
 | `foros-notas.mjs` | Nota de cada publicación en un foro calificado (`span.ratingaggregate`) |
@@ -108,7 +108,7 @@ Pasos internos:
 1. Materias locales (`periodo_id` si aplica).
 2. Cursos campus + `coincidirMateria` por nombre (ignora prefijo `V.TUCS…`).
 3. `moverTareasQueSonParciales` — evaluaciones mal clasificadas.
-4. Por cada curso (paralelo): `overview` → actividades assign/forum/quiz.
+4. Por cada curso (paralelo): `overview` → actividades assign/forum/quiz/SCORM y todas las secciones del curso (consultadas con concurrencia acotada).
 5. Comparar con `tareas` / `parciales` existentes; armar `detectadas`, `urlsActualizar`, `urlsParcialesActualizar`.
 6. Detalle de fechas solo si hace falta (`actividadNecesitaDetalleFechas`) — apertura con hora.
 7. `completarDesdeCalendario` — solo si la materia **no** tiene plan `manual`/`oficial`.

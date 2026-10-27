@@ -398,8 +398,10 @@ export async function sincronizarHitosAssignEnMaterias({
             alumnoNombre
           });
           const cargada = escrito.cargadas?.[0];
-          if (cargada) item.yaEstaba = Boolean(cargada.yaEstaba);
-          notasCargadas.push(item);
+          if (cargada) {
+            item.yaEstaba = Boolean(cargada.yaEstaba);
+            notasCargadas.push(item);
+          }
         } catch (errorNota) {
           const detalle = String(errorNota?.message || 'nota').slice(0, 80);
           lineasInforme.push(`«${fila.nombre}»: entregas guardadas; no pudimos escribir la nota en el tablero (${detalle}).`);
@@ -1340,11 +1342,27 @@ async function aplicarProgresoCampus({ db, progreso, alumnoId, alumnoNombre }) {
       if (item.nota != null && (entregadaAca || item.forzar)) {
         const notaGuardar = textoNota(item.nota);
         const previa = await db.execute({
-          sql: 'SELECT nota FROM notas_tareas WHERE tarea_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))',
+          sql: 'SELECT id, nota, cerrada FROM notas_tareas WHERE tarea_id = ? AND (alumno_id = ? OR LOWER(alumno) = LOWER(?))',
           args: [id, alumnoId, alumnoNombre || '']
         });
-        const notaPrevia = previa.rows[0]?.nota;
+        const filaNotaPrevia = previa.rows[0];
+        const notaPrevia = filaNotaPrevia?.nota;
         if (item.forzar && !debeAplicarNotaCampus(notaPrevia, notaGuardar)) {
+          if (mismaNota(notaPrevia, notaGuardar)) {
+            cargadas.push({
+              tareaId: id,
+              materia: item.materiaNombre || '',
+              nombre: item.nombre,
+              nota: notaGuardar,
+              yaEstaba: true
+            });
+            if (Number(filaNotaPrevia?.cerrada) !== 1) {
+              escrituras.push({
+                sql: 'UPDATE notas_tareas SET cerrada = 1 WHERE id = ?',
+                args: [filaNotaPrevia.id]
+              });
+            }
+          }
           continue;
         }
         cargadas.push({
@@ -1540,6 +1558,4 @@ export async function actualizarUrlsParciales({ db, urlsParcialesActualizar }) {
   await db.batch(updates, 'write');
   return updates.length;
 }
-
-
 

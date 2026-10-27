@@ -15,6 +15,7 @@ import {
   semanasCalendarioDelMes
 } from '../lib/calendario-celda';
 import { mostrarEtiquetaTipoCronograma, tituloDestacadoCronograma } from '../lib/cronograma-vista';
+import { esParcialRecuperatorio } from '../lib/recuperatorios-calendario';
 
 interface EventosDia {
   parciales: Parcial[];
@@ -267,10 +268,10 @@ export default function VistaHorarios({
                       })}
                       {eventos.parciales.map((parcial) => {
                         const materia = materias.find((item) => item.id === parcial.materia_id);
-                        const esRecup = /\brecuperatorio\b/i.test(parcial.nombre);
+                        const esRecup = esParcialRecuperatorio(parcial);
                         const etiqueta = esRecup ? 'Recup.' : 'Parcial';
                         return (
-                          <div key={parcial.id} className="calendar-event calendar-exam" title={`${parcial.nombre} · ${materia?.nombre || 'Materia'}`}>
+                          <div key={parcial.id} className={`calendar-event ${esRecup ? 'calendar-recovery' : 'calendar-exam'}`} title={`${parcial.nombre} · ${materia?.nombre || 'Materia'}`}>
                             <span className="font-bold">{etiqueta}</span>{' '}
                             <span className="block text-center">{esRecup ? parcial.nombre : nombreMateriaEnCalendario(materia?.nombre || 'Materia')}</span>
                             {!esRecup && parcial.detalles && <span className="block text-center opacity-75">{parcial.detalles}</span>}
@@ -287,7 +288,8 @@ export default function VistaHorarios({
                         const esAsincronico = evento.modalidad === 'asincrónico';
                         const esSinClases = esEventoDeSinClases(evento);
                         const esFinal = evento.tipo === 'examen_final';
-                        const esParcial = evento.tipo === 'examen';
+                        const esRecuperatorio = evento.tipo === 'examen' && /\brecuperatorio\b/i.test(evento.titulo);
+                        const esParcial = evento.tipo === 'examen' && !esRecuperatorio;
                         const esEntrega = evento.tipo === 'entrega';
                         const esExposicion = evento.tipo === 'exposición';
                         const esConsulta = evento.tipo === 'consulta';
@@ -303,7 +305,9 @@ export default function VistaHorarios({
                                   : 'Asincrónica'
                             : esFinal
                               ? 'Mesa / final'
-                              : esParcial
+                              : esRecuperatorio
+                                ? 'Recuperatorio'
+                                : esParcial
                                 ? 'Parcial'
                               : esEntrega
                                 ? 'Entrega'
@@ -317,7 +321,7 @@ export default function VistaHorarios({
                         return (
                           <div
                             key={evento.id}
-                            className={`calendar-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : (esParcial || esFinal) ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}
+                            className={`calendar-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : (esParcial || esFinal) ? 'calendar-exam' : esRecuperatorio ? 'calendar-recovery' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}
                             title={`${tituloChip} · ${materia?.nombre || 'Materia'}`}
                           >
                             {mostrarEtiquetaChip && <span className="font-bold">{etiqueta}</span>}
@@ -444,9 +448,9 @@ export default function VistaHorarios({
                       );
                     }
                     for (const parcial of eventos.parciales) {
-                      const esRecupModal = /\brecuperatorio\b/i.test(parcial.nombre);
+                      const esRecupModal = esParcialRecuperatorio(parcial);
                       grupoDe(parcial.materia_id, '80').bloques.push(
-                        <div key={`modal-${parcial.id}`} className="calendar-modal-event calendar-exam">
+                        <div key={`modal-${parcial.id}`} className={`calendar-modal-event ${esRecupModal ? 'calendar-recovery' : 'calendar-exam'}`}>
                           <p className="text-sm font-extrabold">{esRecupModal ? parcial.nombre : `Parcial · ${parcial.nombre}`}</p>
                           {parcial.detalles && <p className="mt-2 text-sm opacity-85">{parcial.detalles}</p>}
                         </div>
@@ -464,7 +468,8 @@ export default function VistaHorarios({
                       const esAsincronico = evento.modalidad === 'asincrónico';
                       const esSinClases = esEventoDeSinClases(evento);
                       const esFinal = evento.tipo === 'examen_final';
-                      const esParcial = evento.tipo === 'examen';
+                      const esRecuperatorio = evento.tipo === 'examen' && /\brecuperatorio\b/i.test(evento.titulo);
+                      const esParcial = evento.tipo === 'examen' && !esRecuperatorio;
                       const esEntrega = evento.tipo === 'entrega';
                       const esExposicion = evento.tipo === 'exposición';
                       const esConsulta = evento.tipo === 'consulta';
@@ -480,7 +485,9 @@ export default function VistaHorarios({
                                 : 'Clase asincrónica'
                           : esFinal
                             ? 'Mesa / final'
-                            : esParcial
+                            : esRecuperatorio
+                              ? 'Recuperatorio'
+                              : esParcial
                               ? 'Parcial'
                             : esEntrega
                               ? 'Entrega'
@@ -492,7 +499,7 @@ export default function VistaHorarios({
                       const tituloVisible = tituloDestacadoCronograma(evento);
                       const mostrarEtiqueta = mostrarEtiquetaTipoCronograma(evento);
                       grupoDe(evento.materia_id, esSinClases ? '00' : '70').bloques.push(
-                        <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : (esParcial || esFinal) ? 'calendar-exam' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}>
+                        <div key={`modal-${evento.id}`} className={`calendar-modal-event ${esSinClases ? 'calendar-off' : esAsincronico ? 'calendar-async' : (esParcial || esFinal) ? 'calendar-exam' : esRecuperatorio ? 'calendar-recovery' : esEntrega ? 'calendar-task' : 'calendar-academic'}`}>
                           {mostrarEtiqueta && <p className="text-sm font-extrabold">{etiqueta}</p>}
                           {!esSinClases && tituloVisible && (
                             <p className={`text-sm ${mostrarEtiqueta ? 'mt-1 opacity-85' : 'font-extrabold'}`}>{tituloVisible}</p>

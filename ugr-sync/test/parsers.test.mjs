@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extraerCursos, extraerCursosDeAjax, extraerNombreCursoDesdePagina, extraerSesskey, extraerUserid, esCursoOrganizativo } from '../lib/materias.mjs';
-import { consignasDesdeCourseContents, esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeHtml, extraerConsignasDePaginaCurso, extraerFechasActividad, extraerForos, extraerNotaQuizDesdeRevision, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, parsearNotaPublicada, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
+import { consignasDesdeCourseContents, esActividadInformativa, esForoInformativo, extraerActividadesOverview, extraerConsignasDeCurso, extraerConsignasDeHtml, extraerConsignasDePaginaCurso, extraerFechasActividad, extraerForos, extraerNotaQuizDesdeRevision, extraerNotaUltimoIntento, extraerNotasDeLibreta, extraerProgresoDeActividad, extraerTareas, fusionarActividadesConsigna, parsearNotaCampus, parsearNotaPublicada, priorizarNotaDeUltimoIntento, urlDeUltimaRevision } from '../lib/tareas.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -283,6 +283,23 @@ test('extraerActividadesOverview no captura nada sin overview o sin filas', asyn
   );
 });
 
+test('el overview importa los trabajos prácticos publicados como actividades SCORM', () => {
+  const html = `
+    <div id="scorm_overview">
+      <table><tbody><tr data-mdl-overview-cmid="352796">
+        <td data-mdl-overview-item="name" data-mdl-overview-value="Trabajo Práctico N° 3">
+          <a class="activityname" href="/mod/scorm/view.php?id=352796">Trabajo Práctico N° 3</a>
+        </td>
+      </tr></tbody></table>
+    </div>`;
+  const actividades = extraerActividadesOverview(html, 'https://virtual.ugr.edu.ar');
+  assert.equal(actividades.length, 1);
+  assert.equal(actividades[0].id, '352796');
+  assert.equal(actividades[0].nombre, 'Trabajo Práctico N° 3');
+  assert.equal(actividades[0].tipo, 'trabajo_practico');
+  assert.equal(actividades[0].url, 'https://virtual.ugr.edu.ar/mod/scorm/view.php?id=352796');
+});
+
 test('extraerConsignasDeHtml detecta asignaciones del índice sin contenedor *_overview', async () => {
   const html = await readFile(path.join(DIR, 'tareas-overview.html'), 'utf8');
   assert.equal(extraerActividadesOverview(html).length, 0);
@@ -340,6 +357,26 @@ test('extraerConsignasDePaginaCurso lista asignaciones del índice del curso', (
   assert.equal(consignas.length, 1);
   assert.equal(consignas[0].id, '555001');
   assert.equal(consignas[0].nombre, 'TP 2 - Conceptos');
+});
+
+test('extraerConsignasDeCurso recorre todas las secciones del curso', async () => {
+  const secciones = Array.from({ length: 14 }, (_, i) => `<section data-section="${i + 1}"></section>`).join('');
+  const cliente = {
+    async pedir(ruta) {
+      if (ruta === '/course/view.php?id=99') return { html: secciones };
+      if (ruta === '/course/view.php?id=99&section=14') {
+        return {
+          html: '<a class="aalink" href="/mod/assign/view.php?id=1400"><span class="instancename">Trabajo Práctico N° 3</span></a>'
+        };
+      }
+      return { html: '' };
+    }
+  };
+
+  const actividades = await extraerConsignasDeCurso(cliente, '99', {
+    baseUrl: 'https://virtual.ugr.edu.ar'
+  });
+  assert.ok(actividades.some((actividad) => actividad.id === '1400' && actividad.nombre === 'Trabajo Práctico N° 3'));
 });
 
 test('extraerConsignasDeHtml combina overview unificado e índice de tareas sin duplicar', async () => {

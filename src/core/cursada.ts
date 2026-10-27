@@ -164,6 +164,24 @@ export const faseEntregaDesdeHitos = (
   };
 };
 
+export function defensaOralPendienteDesdeHitos(hitos: EntregaHitoTarea[] | undefined): boolean {
+  if (!hitos?.length) return false;
+  const hayEntregaPendiente = hitos.some((hito) => (
+    hito.esActiva
+    && (hito.pendiente || /reabiert|reopened|sin calificar/i.test(hito.estado || ''))
+  ));
+  if (hayEntregaPendiente) return false;
+
+  const ultimaCalificada = [...hitos]
+    .filter((hito) => !hito.esActiva && hito.nota != null && hito.nota !== '')
+    .sort((a, b) => (b.indiceEntrega ?? b.numero) - (a.indiceEntrega ?? a.numero))[0];
+  const comentario = String(ultimaCalificada?.comentarioProf || '');
+  const normalizado = comentario.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const indicaInstanciaOral = /\b(defensa|exposicion|presentacion(?: oral)?(?: en clase)?)\b/i.test(normalizado);
+  const indicaPendiente = /\b(resta|faltan?|queda(?:n)? por|pendiente|debe(?:n)? realizar)\b/i.test(normalizado);
+  return Boolean(ultimaCalificada && indicaInstanciaOral && indicaPendiente);
+}
+
 export const faseEntregaCampus = (
   tarea: Tarea,
   alumno: string | null | undefined
