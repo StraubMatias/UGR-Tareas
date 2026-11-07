@@ -16,7 +16,7 @@ import {
 import { NOMBRES_MESES as nombresMeses } from '../../lib/calendario-tablero';
 import { obtenerDiaSemanaHorario } from '../../lib/calendario-tablero';
 import type { EntradaRankingTablero } from '../../lib/ranking-tablero';
-import type { Materia, Nota, Parcial } from '../../core/cursada';
+import type { EventoCalendarioAcademico, Materia, Nota, Parcial } from '../../core/cursada';
 import { etiquetaMateria } from '../../core/cursada';
 import type { Dispatch, SetStateAction } from 'react';
 import type { MateriaCondicionesEdicion, ProgresoPlanEdicion, TableroAdminForms } from '../../hooks/tablero-estado/types';
@@ -55,6 +55,7 @@ export interface PortalVistasCursadaProps {
   diasCalendario: (Date | null)[];
   claveHoy: string;
   tareasCalendario: Array<{ tarea: Materia['tareas'][number]; materia: Materia }>;
+  eventosAcademicos: EventoCalendarioAcademico[];
   eventosDelDiaCalendarioFn: (fecha: Date | null) => ReturnType<typeof import('../../lib/calendario-tablero').eventosDelDiaCalendario>;
   horariosDeLaCursada: import('../../core/cursada').Horario[];
   parcialesDeLaCursada: Parcial[];
@@ -124,6 +125,7 @@ export default function PortalVistasCursada({
   diasCalendario,
   claveHoy,
   tareasCalendario,
+  eventosAcademicos,
   eventosDelDiaCalendarioFn,
   horariosDeLaCursada,
   parcialesDeLaCursada,
@@ -335,6 +337,7 @@ export default function PortalVistasCursada({
           parciales={parcialesDeLaCursada}
           tareasCalendario={tareasCalendario}
           cronograma={cronogramaDeLaCursada}
+          eventosAcademicos={eventosAcademicos}
           materias={materiasDeLaCursada}
           diasCalendario={diasCalendario}
           claveHoyCalendario={claveHoy}

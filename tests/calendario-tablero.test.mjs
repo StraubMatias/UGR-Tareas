@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { CALENDARIO_ACADEMICO_2026 } from '../database/calendario-academico-2026.mjs';
+import { esRecesoDeEnero, eventosAcademicosParaFecha } from '../src/lib/calendario-academico.mjs';
 import {
   horariosParaCeldaCalendario,
   nombreMateriaEnCalendario,
@@ -78,4 +80,28 @@ test('ordenarHorariosCalendario y semanas del mes', () => {
   const semanas = semanasCalendarioDelMes([null, null, new Date(2026, 8, 1), new Date(2026, 8, 2)]);
   assert.equal(semanas.length, 1);
   assert.equal(semanas[0].length, 4);
+});
+
+test('el calendario académico incluye todos los días de inscripción y examen', () => {
+  const eventos = eventosAcademicosParaFecha('2026-02-03', CALENDARIO_ACADEMICO_2026);
+  assert.equal(eventos.length, 1);
+  assert.match(eventos[0].titulo, /inscripción al 1\.er llamado/i);
+  assert.equal(eventosAcademicosParaFecha('2026-02-06', CALENDARIO_ACADEMICO_2026).length, 0);
+});
+
+test('la fuente institucional contiene rangos válidos y cubre los dos llamados del Turno 5', () => {
+  const ids = new Set(CALENDARIO_ACADEMICO_2026.map((evento) => evento.id));
+  assert.equal(ids.size, CALENDARIO_ACADEMICO_2026.length);
+  assert.ok(CALENDARIO_ACADEMICO_2026.every((evento) => evento.anio === 2026 && evento.fecha_hasta >= evento.fecha_desde));
+  assert.ok(CALENDARIO_ACADEMICO_2026.some((evento) => evento.titulo === '1.er llamado · Turno 5'
+    && evento.fecha_desde === '2026-11-30' && evento.fecha_hasta === '2026-12-05'));
+  assert.ok(CALENDARIO_ACADEMICO_2026.some((evento) => evento.titulo === '2.º llamado · Turno 5'
+    && evento.fecha_desde === '2026-12-14' && evento.fecha_hasta === '2026-12-19'));
+});
+
+test('enero muestra hitos globales sin replicar la cursada semanal', () => {
+  const fecha = new Date(2026, 0, 19);
+  assert.equal(esRecesoDeEnero(fecha), true);
+  assert.equal(eventosAcademicosParaFecha('2026-01-19', CALENDARIO_ACADEMICO_2026).length, 1);
+  assert.equal(esRecesoDeEnero(new Date(2026, 1, 1)), false);
 });

@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   poweredByHeader: false,
+  serverExternalPackages: ['pdfjs-dist'],
   outputFileTracingExcludes: {
     '*': [
       'node_modules/@libsql/linux-x64-musl/**',

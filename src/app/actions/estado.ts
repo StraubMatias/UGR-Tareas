@@ -50,6 +50,18 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         notas: [],
         horarios: [],
         cronograma: [],
+        eventosAcademicos: (await db.execute(
+          `SELECT id, anio, fecha_desde, fecha_hasta, tipo, titulo, detalles
+           FROM calendario_academico_eventos ORDER BY fecha_desde, titulo`
+        )).rows.map((fila) => ({
+          id: texto(fila.id),
+          anio: Number(fila.anio),
+          fecha_desde: texto(fila.fecha_desde),
+          fecha_hasta: texto(fila.fecha_hasta),
+          tipo: texto(fila.tipo),
+          titulo: texto(fila.titulo),
+          detalles: texto(fila.detalles)
+        })),
         progresoPlan: [],
         avisos: [],
         inscripciones: []
@@ -88,7 +100,8 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
       resInvitacionesGrupo,
       resInvitacionesGrupoEnviadas,
       resNotasManualesCampus,
-      resEntregasTareas
+      resEntregasTareas,
+      resEventosAcademicos
     ] = await db.batch([
       { sql: 'SELECT id, anio, cuatrimestre, nombre, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC', args: [] },
       consultaPeriodo(
@@ -265,7 +278,12 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
                 te.sincronizado_en
          FROM tareas_entregas te
          LEFT JOIN alumnos a ON a.id = te.alumno_id`
-      )
+      ),
+      {
+        sql: `SELECT id, anio, fecha_desde, fecha_hasta, tipo, titulo, detalles
+              FROM calendario_academico_eventos ORDER BY fecha_desde, titulo`,
+        args: []
+      }
     ], 'read');
 
     const materiasArmadas = armarMaterias(
@@ -377,6 +395,15 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
         detalles: texto(fila.detalles),
         url: texto(fila.url),
         origen: texto(fila.origen)
+      })),
+      eventosAcademicos: resEventosAcademicos.rows.map((fila) => ({
+        id: texto(fila.id),
+        anio: Number(fila.anio),
+        fecha_desde: texto(fila.fecha_desde),
+        fecha_hasta: texto(fila.fecha_hasta),
+        tipo: texto(fila.tipo),
+        titulo: texto(fila.titulo),
+        detalles: texto(fila.detalles)
       })),
       progresoPlan: resProgreso.rows
         .filter((fila) => {

@@ -44,9 +44,9 @@ export const PLANES_CRONOGRAMA_COMISION = [
       ['2026-11-06', 'sincrónico', 'exposición', 'Presentación final por grupos', '1er turno.'],
       ['2026-11-13', 'sincrónico', 'exposición', 'Presentación final por grupos', '2do turno.'],
       ['2026-11-27', 'sincrónico', 'consulta', 'Clase de consulta', ''],
-      ['2026-12-04', 'sincrónico', 'examen_final', 'Examen 1er llamado', 'Turno julio/agosto.'],
+      ['2026-12-04', 'sincrónico', 'examen_final', 'Examen 1er llamado', 'Turno 5 · 1.er llamado del Calendario Académico UGR 2026.'],
       ['2026-12-11', 'sincrónico', 'consulta', 'Clase de consulta', ''],
-      ['2026-12-18', 'sincrónico', 'examen_final', 'Examen 2do llamado', 'Turno julio/agosto.']
+      ['2026-12-18', 'sincrónico', 'examen_final', 'Examen 2do llamado', 'Turno 5 · 2.º llamado del Calendario Académico UGR 2026.']
     ]
   },
   {
@@ -106,9 +106,9 @@ export const PLANES_CRONOGRAMA_COMISION = [
       ['2026-11-03', 'sincrónico', 'clase', 'Unidad 4: marcos auditables', 'Identidad del marco. Determinación de grado de cumplimiento. Marcos auditables y de cumplimiento: PCI, Normas del BCRA y otros.'],
       ['2026-11-10', 'sincrónico', 'clase', 'Unidad 4: planificación de auditoría', 'Consideraciones del proceso de auditoría de marcos no certificables. Auditorías de marcos: Ciberseguridad del NIST e ISO 27002.'],
       ['2026-11-24', 'sincrónico', 'consulta', 'Clase de consulta', ''],
-      ['2026-12-01', 'sincrónico', 'examen_final', 'Examen 1er llamado turno Diciembre', ''],
+      ['2026-12-04', 'sincrónico', 'examen_final', 'Examen 1er llamado Turno 5', 'Turno 5 · 1.er llamado del Calendario Académico UGR 2026.'],
       ['2026-12-08', 'sincrónico', 'consulta', 'Clase de consulta', ''],
-      ['2026-12-15', 'sincrónico', 'examen_final', 'Examen 2do llamado turno Diciembre', '']
+      ['2026-12-18', 'sincrónico', 'examen_final', 'Examen 2do llamado Turno 5', 'Turno 5 · 2.º llamado del Calendario Académico UGR 2026.']
     ]
   },
   {
