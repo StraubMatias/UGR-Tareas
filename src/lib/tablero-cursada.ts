@@ -11,7 +11,7 @@ import {
   eventosDelDiaCalendario
 } from './calendario-tablero';
 import type { AvisoCampusMoodle, InvitacionGrupoTablero, NovedadTablero } from '../components/portal/types';
-import type { EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
+import type { EventoCalendarioAcademico, EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
 import { obtenerFechaParcialEnMs, ordenarParciales } from '../core/cursada';
 import { personalizarParcialRecuperatorio } from './recuperatorios-calendario';
 const FECHA_CREACION_PORTAL = new Date(2026, 7, 24);
@@ -58,6 +58,7 @@ export function armarDerivadosTablero({
   parciales,
   horarios,
   cronograma,
+  eventosAcademicos,
   inscripciones,
   notas,
   alumnos,
@@ -75,6 +76,7 @@ export function armarDerivadosTablero({
   parciales: Parcial[];
   horarios: Horario[];
   cronograma: EventoCronograma[];
+  eventosAcademicos: EventoCalendarioAcademico[];
   inscripciones: { alumno: string; materiaId: string }[];
   notas: Nota[];
   alumnos: string[];
@@ -132,6 +134,7 @@ export function armarDerivadosTablero({
     tareasCalendario,
     horariosDeLaCursada,
     cronogramaDeLaCursada,
+    eventosAcademicos,
     alumnoCalendario: usuarioActual,
     notasCalendario: notas,
     materiasCalendario: materiasDeLaCursada
@@ -171,6 +174,7 @@ export function armarDerivadosTablero({
     claveHoy,
     tareasCalendario,
     eventosDelDiaCalendarioFn,
+    eventosAcademicos,
     ranking,
     rankingPodio,
     restoRanking,

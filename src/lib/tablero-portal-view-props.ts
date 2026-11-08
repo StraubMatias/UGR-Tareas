@@ -44,6 +44,7 @@ export function buildPortalVistasCursadaProps(vm: TableroPortalViewModel): Porta
     diasCalendario: derivados.diasCalendario,
     claveHoy: derivados.claveHoy,
     tareasCalendario: derivados.tareasCalendario,
+    eventosAcademicos: derivados.eventosAcademicos,
     eventosDelDiaCalendarioFn: derivados.eventosDelDiaCalendarioFn,
     horariosDeLaCursada: derivados.horariosDeLaCursada,
     parcialesDeLaCursada: derivados.parcialesDeLaCursada,

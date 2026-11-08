@@ -22,12 +22,12 @@ La presentación para la comisión está en [`UGRTareas.md`](UGRTareas.md). Este
 
 | Capa | Versión / elección |
 | --- | --- |
-| Runtime | Node 20+ (CI en Node 22) |
+| Runtime | Node 20.16+ (CI en Node 22) |
 | App | Next.js 16.3.8 (App Router, Turbopack en `next dev`), React 19.2.8 |
 | Lenguaje de la app | TypeScript. El compilador de chequeo es TypeScript 7 (`@typescript/native` → `npm:typescript@^7.0.2`). El paquete `typescript` es el API 6 (`npm:@typescript/typescript6@^6.0.2`) porque ESLint / typescript-eslint no hablan la API de TS 7 |
 | Estilos | Tailwind CSS 4 (`@tailwindcss/postcss`) |
 | Datos | Turso (libSQL) vía `@libsql/client/http`. No se usa el cliente nativo: los binarios glibc/musl se excluyen del trace de Vercel en `next.config.mjs` |
-| Campus | `ugr-sync/` en ESM puro (`.mjs`) + Cheerio 1.2. No se migra a TypeScript |
+| Campus | `ugr-sync/` en ESM puro (`.mjs`) + Cheerio 1.2 y PDF.js para cronogramas PDF. No se migra a TypeScript |
 | Tests | `node:test` (`node --test`). No hay Jest ni runner de componentes |
 | Lint | ESLint 9 + `eslint-config-next` 16.3.8 |
 
@@ -83,6 +83,7 @@ ugr-sync/scripts/         CLI login y sync
 siu-sync/lib/             plan de estudio, constancias y certificados de Guaraní
 database/migrate.mjs      migraciones numeradas, idempotentes (el nº más alto está en el archivo)
 database/planes-cronograma-comision.mjs  planes oficiales (manual) por materia de la comisión
+database/calendario-academico-2026.mjs  calendario institucional 2026 compartido por todas las materias
 database/enlaces-clase-comision.json   catálogo Zoom/URL de clase (calendario + sync)
 database/cronograma-higiene.mjs        limpieza de cronograma importado
 database/grupos-schema.mjs
@@ -100,7 +101,7 @@ siu-sync/test/            tests de SIU Guaraní
 
 ## Modelo de datos
 
-SQLite en Turso. Las migraciones viven en `database/migrate.mjs` y se registran en `migraciones(numero, nombre, aplicada_en)`. Correr dos veces no reejecuta un número ya insertado. El **número más alto** está en `database/migrate.mjs` (hoy, 39); el orden en el archivo no importa porque el registro de aplicadas es lo que evita el reejecución.
+SQLite en Turso. Las migraciones viven en `database/migrate.mjs` y se registran en `migraciones(numero, nombre, aplicada_en)`. Correr dos veces no reejecuta un número ya insertado. El **número más alto** está en `database/migrate.mjs` (hoy, 40); el orden en el archivo no importa porque el registro de aplicadas es lo que evita el reejecución.
 
 Identidad y cursada:
 
@@ -115,6 +116,7 @@ Actividades (compartidas, una fila por materia, no por alumno):
 - `tareas`: nombre, inicio, fin, unidad, `con_nota`, `tipo` (`actividad` | `foro` | `trabajo_practico`), `url`, `grupal`, `cupo_maximo`.
 - `parciales`: nombre, fecha (un día), `url`.
 - `cronograma_eventos`: fecha, modalidad, tipo, título, detalles, `url`, `origen`.
+- `calendario_academico_eventos`: hitos institucionales globales con períodos inclusivos; no se duplican por materia.
 - `avisos_moodle`: hilo del campus, estado (`aceptado` entra a la campana).
 - `grupos_tareas` / `integrantes_tareas`: grupo por tarea. FK con `ON DELETE CASCADE` hacia la tarea y hacia el alumno.
 
@@ -255,11 +257,11 @@ Copiar [`.env.example`](.env.example) a `.env.local`. `.env*` está en `.gitigno
 
 ```bash
 npm install --legacy-peer-deps
-node --env-file=.env.local database/migrate.mjs   # o: npm run migrate, con las vars ya exportadas
+npm run migrate                                   # carga .env.local automáticamente
 npm run dev                                       # http://localhost:3000
 ```
 
-`npm run migrate` es `node database/migrate.mjs` y **no** carga `.env.local` solo. Hace falta `node --env-file=.env.local` o exportar `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` y, si se quiere promover admin, `ADMIN_USUARIO`.
+`database/migrate.mjs` carga `.env.local` con `process.loadEnvFile`; en CI o despliegues donde las variables ya están exportadas no hace falta ese archivo.
 
 CLI de la comisión (usa la cookie compartida, no la del alumno):
 
@@ -295,7 +297,7 @@ Orden:
    TURSO_DATABASE_URL=… TURSO_AUTH_TOKEN=… ADMIN_USUARIO=… npm run migrate
    ```
 
-   O el equivalente con `--env-file`. La 11 promueve `ADMIN_USUARIO`. La 24 agrega `creado_ip`; sin ella el `INSERT` del alta pública falla. La **25** crea tablas de grupos/invitaciones; la **26**, `ultimo_acceso`.
+   O el equivalente con `--env-file`. La 11 promueve `ADMIN_USUARIO`. La 24 agrega `creado_ip`; sin ella el `INSERT` del alta pública falla. La **25** crea tablas de grupos/invitaciones; la **26**, `ultimo_acceso`; la **40** carga el calendario académico institucional de 2026.
 4. Deploy. `layout.tsx` ya declara `maxDuration = 60` **por invocación** de server action. El sync UGR desde la UI hace varias invocaciones seguidas (preparar + lotes de materias + avisos); cada una tiene su propio tope de 60 s. SIU y el atajo servidor `fase: 'nucleo'` siguen siendo una sola pasada y son los que más se acercan al límite si la cursada es grande.
 5. `npm run admin:reset-password` contra la misma base si la contraseña del admin hay que rotarla. Imprime la clave nueva una vez; no queda en el repo.
 

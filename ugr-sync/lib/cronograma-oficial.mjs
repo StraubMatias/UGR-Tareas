@@ -1,9 +1,5 @@
 // Descubre el recurso «Cronograma» en cada curso, descarga PDF/DOCX y convierte
 // el plan en filas de `cronograma_eventos` (origen `oficial`).
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { load } from 'cheerio';
 import { UGR_BASE_URL, UGR_RUTAS } from './constantes.mjs';
 import { cabeceraCookies } from './autenticar.mjs';
@@ -16,6 +12,8 @@ import {
   inferirHorarioDesdeTituloZoom
 } from './zoom-cursada.mjs';
 import { enlacesZoomConocidosParaMateria } from './zoom-enlaces-comision.mjs';
+
+const MARCADOR_PDF_COLUMNAS_AISLADAS = '__UGR_PDF_COLUMNAS_AISLADAS__';
 
 function limpiarTexto(texto) {
   return String(texto || '').replace(/\s+/g, ' ').trim();
@@ -43,15 +41,14 @@ function inferirAnioReferencia(texto) {
   return actual;
 }
 
-const RE_FECHA_COMPLETA = /\b(\d{1,2})\/(0[1-9]|1[0-2])\/(\d{4})\b/g;
-const RE_FECHA_CORTA = /\b(\d{1,2})\/(0[1-9]|1[0-2])\b(?!\s*\/\s*\d)/g;
+const RE_FECHA_COMPLETA = /\b(\d{1,2})\s*[/-]\s*(0?[1-9]|1[0-2])\s*[/-]\s*(\d{4})\b/g;
+const RE_FECHA_CORTA = /\b(\d{1,2})\s*[/-]\s*(0?[1-9]|1[0-2])\b(?!\s*[/-]\s*\d)/g;
 
-function diaMesValido(d, m) {
+function diaMesValido(d, m, anio = new Date().getFullYear()) {
   const dia = Number(d);
   const mes = Number(m);
   if (!Number.isFinite(dia) || !Number.isFinite(mes) || mes < 1 || mes > 12) return false;
-  if (dia < 1 || dia > 31) return false;
-  return true;
+  return dia >= 1 && dia <= new Date(Number(anio), mes, 0).getDate();
 }
 
 /** Texto de PDF con varias columnas pegadas en una celda (varias unidades / semanas). */
@@ -66,13 +63,14 @@ export function textoPareceColumnasFusionadas(texto) {
 }
 
 function listarFechasCronogramaEnTexto(normalizado, anioRef) {
-  const fechasCompletas = [...normalizado.matchAll(RE_FECHA_COMPLETA)].filter((m) => diaMesValido(m[1], m[2]));
+  const fechasCompletas = [...normalizado.matchAll(RE_FECHA_COMPLETA)]
+    .filter((m) => diaMesValido(m[1], m[2], m[3]));
   if (fechasCompletas.length > 0) return fechasCompletas;
   return [...normalizado.matchAll(RE_FECHA_CORTA)]
-    .filter((m) => diaMesValido(m[1], m[2]))
+    .filter((m) => diaMesValido(m[1], m[2], anioRef))
     .map((m) => {
       const d = String(m[1]).padStart(2, '0');
-      const mes = m[2];
+      const mes = String(m[2]).padStart(2, '0');
       const y = String(anioRef);
       const textoFecha = m[0];
       return Object.assign([textoFecha, d, mes, y], { index: m.index });
@@ -81,7 +79,9 @@ function listarFechasCronogramaEnTexto(normalizado, anioRef) {
 
 /** @param {string} texto */
 export function parsearTextoCronogramaOficial(texto) {
+  const columnasPdfAisladas = String(texto || '').includes(MARCADOR_PDF_COLUMNAS_AISLADAS);
   const normalizado = String(texto || '')
+    .replace(MARCADOR_PDF_COLUMNAS_AISLADAS, '')
     .replace(/\r/g, '')
     .replace(/\f/g, '\n');
   const anioRef = inferirAnioReferencia(normalizado);
@@ -90,7 +90,7 @@ export function parsearTextoCronogramaOficial(texto) {
 
   for (let i = 0; i < fechas.length; i += 1) {
     const [, d, m, y] = fechas[i];
-    const iso = `${y}-${m}-${d}`;
+    const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const fin = fechas[i + 1]?.index ?? normalizado.length;
     const post = normalizado.slice(fechas[i].index, fin);
     const fragmento = fragmentoInmediatoTrasFecha(post);
@@ -107,20 +107,22 @@ export function parsearTextoCronogramaOficial(texto) {
     if (/sin\s*clases|no\s+hay\s+clases/i.test(norm) && /turno|septiembre|mesas|examen/i.test(norm)) {
       tipo = 'sin_clases';
       modalidad = 'sin_clases';
+    } else if (/\bconsulta\b/i.test(norm)) {
+      tipo = 'consulta';
     } else if (/2\s*do\s+llamado|1\s*er\s+llamado|llamado\s+turno/i.test(norm)) {
       tipo = 'examen_final';
     } else if (
-      /\bparcial\b/.test(norm)
+      /\bparcial(?:es)?\b/.test(norm)
       && !/opcional/.test(norm)
-      && !/unidades?\s+\d/.test(norm)
       && !/prueba(s)?\s+de\s+software/i.test(norm)
       && !textoPareceColumnasFusionadas(fragmento)
-      && !/\bunidad\s+[ivx\d]/i.test(norm)
-      && /\b(1|2|primer|segund|er|do)\b.*\b(parcial|examen)\b|\bexamen\s+parcial\b/i.test(fragmento)
+      && (
+        /\b(?:1|2)\s*(?:er|do|ro)?[°º.]?\s*(?:parcial|examen)\b|\b(?:primer|segundo)\s+(?:parcial|examen)\b|\bexamen\s+parcial\b/i.test(fragmento)
+        || /\bparcial(?:es)?\s+(?:i{1,3}|iv|v|\d+)\b/i.test(fragmento)
+        || /\brecuperatorio(?:s)?\b.*\bparcial(?:es)?\b/i.test(fragmento)
+      )
     ) {
       tipo = 'examen';
-    } else if (/\bconsulta\b/.test(norm)) {
-      tipo = 'consulta';
     } else if (/\bentrega\b/.test(norm)) {
       tipo = 'entrega';
     } else if (/asincr|a\s+distancia/.test(norm)) {
@@ -145,16 +147,29 @@ export function parsearTextoCronogramaOficial(texto) {
       tituloSemilla = lineaPrevia.replace(/^\d+\s+\w+\s+/i, '').trim() || lineaPrevia;
     }
 
-    const titulo = tituloSemilla || extraerTituloBloque(fragmento, tipo);
-    const detalles = extraerDetallesBloque(fragmento, titulo);
+    const corregirTurnoDiciembre = (
+      tipo === 'examen_final'
+      && (iso === '2026-12-04' || iso === '2026-12-18')
+      && /turno\s+(?:de\s+)?j[uú]lio\s*\/\s*agosto/i.test(fragmento)
+    );
+    const normalizarTurno = (texto) => corregirTurnoDiciembre
+      ? texto.replace(/turno\s+(?:de\s+)?j[uú]lio\s*\/\s*agosto/gi, 'Turno 5')
+      : texto;
+    const titulo = normalizarTurno(tituloSemilla || extraerTituloBloque(fragmento, tipo));
+    const detalles = normalizarTurno(extraerDetallesBloque(fragmento, titulo));
     filas.push({ fecha: iso, modalidad, tipo, titulo, detalles });
   }
 
   const vistos = new Set();
   return filas.filter((fila) => {
     const blob = `${fila.titulo} ${fila.detalles}`;
-    if (textoPareceColumnasFusionadas(blob) && fila.tipo !== 'clase') return false;
-    if (textoPareceColumnasFusionadas(blob) && fila.tipo === 'clase' && !/\b(unidad|m[oó]dulo|modulo)\s*[ivx\d]/i.test(fila.titulo)) {
+    if (!columnasPdfAisladas && textoPareceColumnasFusionadas(blob) && fila.tipo !== 'clase') return false;
+    if (
+      !columnasPdfAisladas
+      && textoPareceColumnasFusionadas(blob)
+      && fila.tipo === 'clase'
+      && !/\b(unidad|m[oó]dulo|modulo)\s*[ivx\d]/i.test(fila.titulo)
+    ) {
       return false;
     }
     if (fila.tipo === 'examen' && /^parcial$/i.test(String(fila.titulo || '').trim())) return false;
@@ -168,7 +183,7 @@ export function parsearTextoCronogramaOficial(texto) {
 function recortarCeldaHorizontal(celda) {
   let t = String(celda || '').trim();
   if (!t) return '';
-  const otraFecha = t.search(/\b\d{1,2}\/(0[1-9]|1[0-2])(?:\/\d{4})?\b/);
+  const otraFecha = t.search(/\b\d{1,2}\s*[/-]\s*(0?[1-9]|1[0-2])(?:\s*[/-]\s*\d{4})?\b/);
   if (otraFecha > 8) t = t.slice(0, otraFecha).trim();
   const trozosUnidad = t.split(/\s+\d{1,2}\s+(?=(?:UNIDAD|MÓDULO|MODULO)\s)/i);
   if (trozosUnidad.length > 1) {
@@ -190,7 +205,7 @@ function recortarCeldaHorizontal(celda) {
 /** Solo el contenido de la celda de esa fecha (evita arrastrar columnas del PDF). */
 function fragmentoInmediatoTrasFecha(post) {
   const texto = String(post || '');
-  const match = texto.match(/\b(\d{1,2})\/(0[1-9]|1[0-2])(?:\/(\d{4}))?\b/);
+  const match = texto.match(/\b(\d{1,2})\s*[/-]\s*(0?[1-9]|1[0-2])(?:\s*[/-]\s*(\d{4}))?\b/);
   if (!match || match.index === undefined) return '';
   const despues = texto.slice(match.index + match[0].length).replace(/^\s+/, '');
   const primeraLinea = despues.split('\n')[0] || '';
@@ -205,7 +220,7 @@ function fragmentoInmediatoTrasFecha(post) {
       if (acumulado.length > 0) break;
       continue;
     }
-    if (/\b\d{1,2}\/(0[1-9]|1[0-2])(?:\/\d{4})?\b/.test(t)) break;
+    if (/\b\d{1,2}\s*[/-]\s*(0?[1-9]|1[0-2])(?:\s*[/-]\s*\d{4})?\b/.test(t)) break;
     acumulado.push(t);
     const unido = acumulado.join(' ');
     if (unido.length > 200 || acumulado.length >= 3) break;
@@ -216,7 +231,7 @@ function fragmentoInmediatoTrasFecha(post) {
 
 function lineasUtilesTrasFecha(bloque) {
   const sinFecha = bloque
-    .replace(/^\s*\d{1,2}\/\d{2}(?:\/\d{4})?\s*/, '')
+    .replace(/^\s*\d{1,2}\s*[/-]\s*\d{1,2}(?:\s*[/-]\s*\d{4})?\s*/, '')
     .split('\n')
     .map((parte) => limpiarTexto(parte))
     .filter((parte) => parte && !/^\d+$/.test(parte));
@@ -244,7 +259,7 @@ function extraerTituloBloque(bloque, tipo) {
 
   const lineas = lineasUtilesTrasFecha(bloque);
   if (lineas.length > 0) {
-    const primera = lineas[0];
+    const primera = lineas[0].replace(/^(?:[A-Z]\.\s*)+/i, '').trim();
     if (primera.length >= 3 && primera.length <= 120) return primera;
     if (primera.length > 120) {
       const corta = primera.split(/(?<=[.!?])\s+/)[0] || primera;
@@ -322,24 +337,95 @@ export async function descargarBufferRecursoCampus(cliente, resourceViewUrl) {
   return { buffer, nombre, url };
 }
 
-export function textoDesdeBufferPlan(buffer, nombreArchivo = '') {
+/**
+ * @param {Array<Array<{ str: string, transform: number[] }>>} paginas
+ */
+export function extraerFilasCronogramaDeItemsPdf(paginas) {
+  const cabeceraActividad = paginas.flat().find((item) => /^actividad$/i.test(String(item.str || '').trim()));
+  if (!cabeceraActividad) return '';
+
+  const xActividad = Number(cabeceraActividad.transform?.[4]);
+  if (!Number.isFinite(xActividad)) return '';
+  const xMinimoActividad = xActividad - 70;
+  const filas = [];
+
+  for (const items of paginas) {
+    const lineas = [];
+    for (const item of items
+      .filter((entrada) => String(entrada.str || '').trim() && Number.isFinite(Number(entrada.transform?.[4])) && Number.isFinite(Number(entrada.transform?.[5])))
+      .map((entrada) => ({
+        x: Number(entrada.transform[4]),
+        y: Number(entrada.transform[5]),
+        width: Number(entrada.width) || 0,
+        str: String(entrada.str).trim()
+      }))
+      .sort((a, b) => b.y - a.y || a.x - b.x)) {
+      let linea = lineas[lineas.length - 1];
+      if (!linea || Math.abs(linea.y - item.y) > 2) {
+        linea = { y: item.y, items: [] };
+        lineas.push(linea);
+      }
+      linea.items.push(item);
+    }
+
+    const marcasFecha = lineas.flatMap((linea) => {
+      const textoFecha = `${linea.items
+        .filter((item) => item.x < 100)
+        .map((item) => item.str)
+        .join('')} `
+        .match(/\b\d{1,2}\s*[/-]\s*\d{1,2}(?:\s*[/-]\s*20\d{2})?\b/)?.[0];
+      return textoFecha ? [{ y: linea.y, fecha: textoFecha }] : [];
+    });
+
+    for (let indice = 0; indice < marcasFecha.length; indice += 1) {
+      const actual = marcasFecha[indice];
+      const siguienteY = marcasFecha[indice + 1]?.y ?? Number.NEGATIVE_INFINITY;
+      const actividad = lineas
+        .filter((linea) => linea.y <= actual.y + 2 && linea.y > siguienteY + 2)
+        .map((linea) => linea.items
+          .filter((item) => item.x >= xMinimoActividad)
+          .sort((a, b) => a.x - b.x)
+          .reduce((texto, item, indice, itemsLinea) => {
+            if (indice === 0) return item.str;
+            const anterior = itemsLinea[indice - 1];
+            const espacio = item.x - (anterior.x + anterior.width) > 1 ? ' ' : '';
+            return `${texto}${espacio}${item.str}`;
+          }, ''))
+        .filter(Boolean)
+        .join(' ')
+        .slice(0, 220);
+      if (actividad) filas.push(`${actual.fecha} ${actividad}`);
+    }
+  }
+
+  return filas.length > 0
+    ? `${MARCADOR_PDF_COLUMNAS_AISLADAS}\n${filas.join('\n')}`
+    : '';
+}
+
+export async function textoDesdeBufferPlan(buffer, nombreArchivo = '') {
   const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
   if (buf.subarray(0, 5).toString('utf8') === '%PDF-') {
-    const dir = mkdtempSync(join(tmpdir(), 'ugr-cronograma-'));
-    const pdf = join(dir, 'plan.pdf');
-    const txt = join(dir, 'plan.txt');
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const documento = await getDocument({ data: new Uint8Array(buf), useSystemFonts: true }).promise;
     try {
-      writeFileSync(pdf, buf);
-      const resultado = spawnSync('pdftotext', ['-layout', pdf, txt], { encoding: 'utf8' });
-      if (resultado.status !== 0) return '';
-      return readFileSync(txt, 'utf8');
+      const paginas = [];
+      const paginasItems = [];
+      for (let numero = 1; numero <= documento.numPages; numero += 1) {
+        const contenido = await (await documento.getPage(numero)).getTextContent();
+        const lineas = [];
+        const itemsPagina = [];
+        for (const item of contenido.items) {
+          if (!item || typeof item !== 'object' || !('str' in item) || !item.str) continue;
+          lineas.push(item.str, item.hasEOL ? '\n' : ' ');
+          itemsPagina.push(item);
+        }
+        paginas.push(lineas.join('').trim());
+        paginasItems.push(itemsPagina);
+      }
+      return extraerFilasCronogramaDeItemsPdf(paginasItems) || paginas.join('\n\f\n');
     } finally {
-      try {
-        unlinkSync(pdf);
-      } catch { /* ignore */ }
-      try {
-        unlinkSync(txt);
-      } catch { /* ignore */ }
+      await documento.destroy();
     }
   }
   const nombre = String(nombreArchivo || '').toLowerCase();
@@ -638,8 +724,8 @@ export async function sincronizarCronogramasOficialesDesdeCampus({ db, cliente, 
     if (recurso?.url) {
       const descarga = await descargarBufferRecursoCampus(cliente, recurso.url);
       if (descarga?.buffer?.length) {
-        const texto = textoDesdeBufferPlan(descarga.buffer, descarga.nombre);
-        filas = parsearTextoCronogramaOficial(texto);
+        const texto = await textoDesdeBufferPlan(descarga.buffer, descarga.nombre);
+        filas = parsearTextoCronogramaOficial(`${recurso.titulo} ${descarga.nombre}\n${texto}`);
         fuente = recurso.titulo;
       }
     }

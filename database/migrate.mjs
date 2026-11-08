@@ -758,6 +758,109 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     );
   });
 
+  await ejecutarMigracion(40, 'calendario académico institucional UGR 2026', async () => {
+    const { CALENDARIO_ACADEMICO_2026 } = await import('./calendario-academico-2026.mjs');
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS calendario_academico_eventos (
+        id TEXT PRIMARY KEY,
+        anio INTEGER NOT NULL,
+        fecha_desde TEXT NOT NULL,
+        fecha_hasta TEXT NOT NULL,
+        tipo TEXT NOT NULL,
+        titulo TEXT NOT NULL,
+        detalles TEXT NOT NULL DEFAULT '',
+        CHECK (fecha_hasta >= fecha_desde)
+      )
+    `);
+    await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_calendario_academico_fechas
+      ON calendario_academico_eventos (anio, fecha_desde, fecha_hasta)
+    `);
+    await db.batch(CALENDARIO_ACADEMICO_2026.map((evento) => ({
+      sql: `INSERT INTO calendario_academico_eventos
+            (id, anio, fecha_desde, fecha_hasta, tipo, titulo, detalles)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              anio = excluded.anio,
+              fecha_desde = excluded.fecha_desde,
+              fecha_hasta = excluded.fecha_hasta,
+              tipo = excluded.tipo,
+              titulo = excluded.titulo,
+              detalles = excluded.detalles`,
+      args: [
+        evento.id,
+        evento.anio,
+        evento.fecha_desde,
+        evento.fecha_hasta,
+        evento.tipo,
+        evento.titulo,
+        evento.detalles
+      ]
+    })), 'write');
+    const corregidos = await db.execute(`
+      UPDATE cronograma_eventos
+      SET detalles = CASE fecha
+        WHEN '2026-12-04' THEN 'Turno 5 · 1.er llamado del Calendario Académico UGR 2026.'
+        WHEN '2026-12-18' THEN 'Turno 5 · 2.º llamado del Calendario Académico UGR 2026.'
+      END
+      WHERE fecha IN ('2026-12-04', '2026-12-18')
+        AND detalles LIKE '%Turno julio/agosto%'
+        AND materia_id IN (
+          SELECT id FROM materias
+          WHERE nombre LIKE '%EVALUACIÓN Y GESTIÓN DE RIESGOS%'
+             OR nombre LIKE '%EVALUACION Y GESTION DE RIESGOS%'
+        )
+    `);
+    console.log(`   Calendario institucional: ${CALENDARIO_ACADEMICO_2026.length} evento(s); ${corregidos.rowsAffected ?? 0} final(es) corregidos.`);
+  });
+
+  await ejecutarMigracion(41, 'finales de Auditorías alineados al Turno 5', async () => {
+    const resultado = await db.execute(
+      "SELECT id FROM materias WHERE nombre LIKE '%AUDITORÍAS DE SEGURIDAD%'"
+    );
+    const materia = resultado.rows[0];
+    if (!materia) throw new Error('No se encontró la materia Auditorías de Seguridad para corregir sus finales.');
+
+    const finales = [
+      {
+        fechaAnterior: '2026-12-01',
+        fecha: '2026-12-04',
+        tituloAnterior: 'Examen 1er llamado turno Diciembre',
+        titulo: 'Examen 1er llamado Turno 5',
+        detalles: 'Turno 5 · 1.er llamado del Calendario Académico UGR 2026.'
+      },
+      {
+        fechaAnterior: '2026-12-15',
+        fecha: '2026-12-18',
+        tituloAnterior: 'Examen 2do llamado turno Diciembre',
+        titulo: 'Examen 2do llamado Turno 5',
+        detalles: 'Turno 5 · 2.º llamado del Calendario Académico UGR 2026.'
+      }
+    ];
+
+    for (const final of finales) {
+      const resultado = await db.execute({
+        sql: `UPDATE cronograma_eventos
+              SET id = ?, fecha = ?, titulo = ?, detalles = ?
+              WHERE materia_id = ? AND fecha = ? AND tipo = 'examen_final'
+                AND origen = 'manual' AND titulo = ?`,
+        args: [
+          `cronograma_${materia.id}_${final.fecha}_${final.titulo}`,
+          final.fecha,
+          final.titulo,
+          final.detalles,
+          materia.id,
+          final.fechaAnterior,
+          final.tituloAnterior
+        ]
+      });
+      if (Number(resultado.rowsAffected ?? 0) !== 1) {
+        throw new Error(`No se pudo actualizar el ${final.tituloAnterior} de Auditorías de Seguridad.`);
+      }
+    }
+    console.log('   Auditorías de Seguridad: finales actualizados al 04/12 y 18/12 (Turno 5).');
+  });
+
   await db.close?.();
 }
 

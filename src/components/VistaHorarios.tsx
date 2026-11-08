@@ -1,6 +1,7 @@
 import {
   etiquetaMateria,
   obtenerIconoMateria,
+  type EventoCalendarioAcademico,
   type EventoCronograma,
   type Horario,
   type Materia,
@@ -22,6 +23,7 @@ interface EventosDia {
   tareas: { tarea: Tarea; materia: Materia }[];
   horarios: Horario[];
   cronograma: EventoCronograma[];
+  eventosAcademicos: EventoCalendarioAcademico[];
   enlacesClasePorMateria?: Map<string, string>;
   tituloClaseEnCursadaPorMateria?: Map<string, string>;
   detallesClaseEnCursadaPorMateria?: Map<string, string>;
@@ -35,6 +37,7 @@ interface Props {
   parciales: Parcial[];
   tareasCalendario: { tarea: Tarea; materia: Materia }[];
   cronograma: EventoCronograma[];
+  eventosAcademicos: EventoCalendarioAcademico[];
   materias: Materia[];
   diasCalendario: (Date | null)[];
   claveHoyCalendario: string;
@@ -85,6 +88,13 @@ function BotonLinkSincronico({ url, compact = false }: { url: string; compact?: 
   );
 }
 
+function formatearFechaAcademica(fecha: string) {
+  return new Date(`${fecha}T00:00:00`).toLocaleDateString('es-AR', {
+    day: 'numeric',
+    month: 'long'
+  });
+}
+
 function ChipCursadaCalendario({
   nombreCompleto,
   rango,
@@ -121,6 +131,7 @@ export default function VistaHorarios({
   parciales,
   tareasCalendario,
   cronograma,
+  eventosAcademicos,
   materias,
   diasCalendario,
   claveHoyCalendario,
@@ -169,7 +180,7 @@ export default function VistaHorarios({
             </button>
           </div>
         </div>
-        {horarios.length === 0 && parciales.length === 0 && tareasCalendario.length === 0 && cronograma.length === 0 ? (
+        {horarios.length === 0 && parciales.length === 0 && tareasCalendario.length === 0 && cronograma.length === 0 && eventosAcademicos.length === 0 ? (
           <div className="bg-[#161c26] border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm">
             Todavía no hay eventos ni horarios cargados.
           </div>
@@ -202,7 +213,7 @@ export default function VistaHorarios({
                 const nombreMateriaId = (materiaId: string) => materias.find((m) => m.id === materiaId)?.nombre || 'Materia';
                 const horariosCelda = horariosParaCeldaCalendario(eventos.horarios, nombreMateriaId);
                 const cronogramaCelda = eventos.cronograma.filter((evento) => cronogramaVisibleEnCelda(evento, horariosCelda));
-                const cantidadEventos = horariosCelda.length + eventos.parciales.length + eventos.tareas.length + cronogramaCelda.length;
+                const cantidadEventos = horariosCelda.length + eventos.parciales.length + eventos.tareas.length + cronogramaCelda.length + eventos.eventosAcademicos.length;
                 const esFinde = esFinDeSemanaCalendario(fecha);
 
                 return (
@@ -281,6 +292,15 @@ export default function VistaHorarios({
                       {eventos.tareas.map(({ tarea, materia }) => (
                         <div key={tarea.id} className="calendar-event calendar-task" title={`Entrega: ${tarea.nombre} · ${materia.nombre}`}>
                           <span className="font-bold">Entrega</span> {tarea.nombre}
+                        </div>
+                      ))}
+                      {eventos.eventosAcademicos.map((evento) => (
+                        <div
+                          key={evento.id}
+                          className="calendar-event calendar-academic"
+                          title={`${evento.titulo} · ${formatearFechaAcademica(evento.fecha_desde)} al ${formatearFechaAcademica(evento.fecha_hasta)}`}
+                        >
+                          <span className="font-bold">UGR</span> {evento.titulo}
                         </div>
                       ))}
                       {cronogramaCelda.map((evento) => {
@@ -388,10 +408,21 @@ export default function VistaHorarios({
                 </button>
               </div>
 
-              {eventos.horarios.length === 0 && eventos.parciales.length === 0 && eventos.tareas.length === 0 && eventos.cronograma.length === 0 ? (
+              {eventos.horarios.length === 0 && eventos.parciales.length === 0 && eventos.tareas.length === 0 && eventos.cronograma.length === 0 && eventos.eventosAcademicos.length === 0 ? (
                 <p className="py-8 text-center text-sm font-semibold text-slate-400">No hay clases este día.</p>
               ) : (
                 <div className="mt-5 space-y-3">
+                  {eventos.eventosAcademicos.map((evento) => (
+                    <div key={evento.id} className="calendar-modal-event calendar-academic">
+                      <p className="text-sm font-extrabold">{evento.titulo}</p>
+                      <p className="mt-1 text-sm opacity-85">
+                        {evento.fecha_desde === evento.fecha_hasta
+                          ? `Fecha: ${formatearFechaAcademica(evento.fecha_desde)}`
+                          : `Período: ${formatearFechaAcademica(evento.fecha_desde)} al ${formatearFechaAcademica(evento.fecha_hasta)}`}
+                      </p>
+                      {evento.detalles && <p className="mt-2 text-sm opacity-85">{evento.detalles}</p>}
+                    </div>
+                  ))}
                   {(() => {
                     const eventosSinClases = eventos.cronograma.filter(esEventoDeSinClases);
                     const hayActividades = eventos.horarios.length > 0

@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { AvisoCampusMoodle, InvitacionGrupoEnviadaTablero, InvitacionGrupoTablero, Periodo } from '../components/portal/types';
-import type { EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
+import type { EventoCalendarioAcademico, EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
 
 export interface EstadoCompletoTablero {
   usuario?: string;
@@ -18,6 +18,7 @@ export interface EstadoCompletoTablero {
   notas?: Nota[];
   horarios?: Horario[];
   cronograma?: EventoCronograma[];
+  eventosAcademicos?: EventoCalendarioAcademico[];
   progresoPlan?: {
     alumno: string | null;
     materia_codigo: string;
@@ -41,6 +42,7 @@ export interface AplicarEstadoTableroCallbacks {
   setNotas: Dispatch<SetStateAction<Nota[]>>;
   setHorarios: Dispatch<SetStateAction<Horario[]>>;
   setCronograma: Dispatch<SetStateAction<EventoCronograma[]>>;
+  setEventosAcademicos: Dispatch<SetStateAction<EventoCalendarioAcademico[]>>;
   setProgresoPlan: Dispatch<SetStateAction<NonNullable<EstadoCompletoTablero['progresoPlan']>>>;
   setAvisos: Dispatch<SetStateAction<AvisoCampusMoodle[]>>;
   setInvitacionesGrupo: Dispatch<SetStateAction<InvitacionGrupoTablero[]>>;
@@ -74,6 +76,7 @@ export function aplicarEstadoTablero(
   cb.setNotas(estado.notas || []);
   cb.setHorarios(estado.horarios || []);
   cb.setCronograma(estado.cronograma || []);
+  cb.setEventosAcademicos(estado.eventosAcademicos || []);
   cb.setProgresoPlan(estado.progresoPlan || []);
   cb.setAvisos(estado.avisos || []);
   cb.setInvitacionesGrupo(estado.invitacionesGrupo || []);

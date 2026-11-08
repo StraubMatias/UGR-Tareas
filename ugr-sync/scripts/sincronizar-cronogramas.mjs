@@ -42,6 +42,7 @@ async function main() {
     console.log(
       `• ${fila.nombre}: ${fila.eventosPdf} fecha(s) desde «${fila.recurso}»`
         + ` → ${fila.insertados} fila(s) oficial(es), -${fila.eliminadosUgr} UGR, -${fila.eliminadosManual} manual`
+        + `${fila.omitido ? '; se conservaron las filas manuales existentes' : ''}`
         + `; Zoom en ${fila.horariosZoom} horario(s)`
     );
   }

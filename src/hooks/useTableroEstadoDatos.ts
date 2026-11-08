@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { AvisoCampusMoodle, InvitacionGrupoEnviadaTablero, InvitacionGrupoTablero, Periodo } from '../components/portal/types';
-import type { EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
+import type { EventoCalendarioAcademico, EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
 
 export function useTableroEstadoDatos() {
   const [materias, setMaterias] = useState<Materia[]>([]);
@@ -15,6 +15,7 @@ export function useTableroEstadoDatos() {
   const [notasTareasInputs, setNotasTareasInputs] = useState<Record<string, string>>({});
   const [horarios, setHorarios] = useState<Horario[]>([]);
   const [cronograma, setCronograma] = useState<EventoCronograma[]>([]);
+  const [eventosAcademicos, setEventosAcademicos] = useState<EventoCalendarioAcademico[]>([]);
   const [progresoPlan, setProgresoPlan] = useState<
     { alumno: string | null; materia_codigo: string; estado: string; nota: number | null; actualizado_en: string }[]
   >([]);
@@ -48,6 +49,8 @@ export function useTableroEstadoDatos() {
     setHorarios,
     cronograma,
     setCronograma,
+    eventosAcademicos,
+    setEventosAcademicos,
     progresoPlan,
     setProgresoPlan,
     avisos,

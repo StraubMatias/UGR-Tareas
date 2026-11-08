@@ -1,4 +1,5 @@
-import type { EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
+import type { EventoCalendarioAcademico, EventoCronograma, Horario, Materia, Nota, Parcial } from '../core/cursada';
+import { esRecesoDeEnero, eventosAcademicosParaFecha } from './calendario-academico.mjs';
 import { ocultarExamenesCronogramaDuplicados, presentarCronogramaDelDia } from './cronograma-vista';
 import { resolverEnlaceClaseComision } from './enlaces-clase-comision';
 import { personalizarParcialesDelDia } from './recuperatorios-calendario';
@@ -52,7 +53,7 @@ export const NOMBRES_MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
-export const INICIO_CURSADA = new Date(2026, 7, 18);
+export const INICIO_CURSADA = new Date(2026, 0, 1);
 export const FIN_CURSADA = new Date(2027, 2, 1);
 
 export function formatearFechaCalendario(fecha: string | null | undefined) {
@@ -78,8 +79,7 @@ export function obtenerDiaSemanaHorario(fecha: Date) {
 
 export function fechaDentroDelCronograma(fecha: Date) {
   const fechaNormalizada = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
-  const esRecesoDeEnero = fechaNormalizada.getMonth() === 0;
-  return fechaNormalizada >= INICIO_CURSADA && fechaNormalizada < FIN_CURSADA && !esRecesoDeEnero;
+  return fechaNormalizada >= INICIO_CURSADA && fechaNormalizada < FIN_CURSADA;
 }
 
 export function diasCalendarioDelMes(mesCalendario: Date) {
@@ -99,6 +99,7 @@ export function eventosDelDiaCalendario(
     tareasCalendario,
     horariosDeLaCursada,
     cronogramaDeLaCursada,
+    eventosAcademicos = [],
     alumnoCalendario = null,
     notasCalendario = [],
     materiasCalendario = []
@@ -107,6 +108,7 @@ export function eventosDelDiaCalendario(
     tareasCalendario: Array<{ tarea: Materia['tareas'][number]; materia: Materia }>;
     horariosDeLaCursada: Horario[];
     cronogramaDeLaCursada: EventoCronograma[];
+    eventosAcademicos?: EventoCalendarioAcademico[];
     alumnoCalendario?: string | null;
     notasCalendario?: Nota[];
     materiasCalendario?: Materia[];
@@ -118,6 +120,7 @@ export function eventosDelDiaCalendario(
       tareas: [],
       horarios: [],
       cronograma: [],
+      eventosAcademicos: [],
       enlacesClasePorMateria: new Map<string, string>(),
       tituloClaseEnCursadaPorMateria: new Map<string, string>(),
       detallesClaseEnCursadaPorMateria: new Map<string, string>()
@@ -126,6 +129,8 @@ export function eventosDelDiaCalendario(
 
   const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
   const diaSemana = obtenerDiaSemanaHorario(fecha);
+  const eventosAcademicosDelDia = eventosAcademicosParaFecha(claveDia, eventosAcademicos);
+  const esEnero = esRecesoDeEnero(fecha);
 
   const eventosCronogramaDia = cronogramaDeLaCursada.filter(
     (evento) => fechaCalendarioDeEvento(evento, horariosDeLaCursada) === claveDia
@@ -138,6 +143,7 @@ export function eventosDelDiaCalendario(
 
   const horariosDelDia = horariosDeLaCursada
     .filter((horario) => Number(horario.dia) === diaSemana)
+    .filter(() => !esEnero)
     .filter((horario) => !materiasSinCursadaDia.has(horario.materia_id));
   const porMateria = new Map<string, Horario[]>();
   for (const horario of horariosDelDia) {
@@ -208,6 +214,7 @@ export function eventosDelDiaCalendario(
     tareas,
     horarios: horariosConEnlace,
     cronograma,
+    eventosAcademicos: eventosAcademicosDelDia,
     enlacesClasePorMateria,
     tituloClaseEnCursadaPorMateria: presentacion.tituloClaseEnCursadaPorMateria,
     detallesClaseEnCursadaPorMateria: presentacion.detallesClaseEnCursadaPorMateria

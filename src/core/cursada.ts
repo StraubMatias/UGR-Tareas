@@ -110,6 +110,16 @@ export interface EventoCronograma {
   origen: string;
 }
 
+export interface EventoCalendarioAcademico {
+  id: string;
+  anio: number;
+  fecha_desde: string;
+  fecha_hasta: string;
+  tipo: string;
+  titulo: string;
+  detalles: string;
+}
+
 export interface HistorialRegistro {
   id: string;
   materia: string;
