@@ -70,6 +70,11 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
       tareas: ordenarTareas((materia.tareas || []).filter((tarea) => ids.has(tarea.id)))
     }))
     .filter((bloque) => bloque.tareas.length > 0);
+
+  // Desglosar en tarjetas individuales por cada tarea (para que cada tarea sea una tarjeta independiente en la cuadrícula de 2 columnas)
+  const tarjetasIndividuales = bloquesPorMateria.flatMap(({ materia, tareas }) =>
+    tareas.map((tarea) => ({ materia, tarea }))
+  );
   return (
     <section className={`rounded-2xl border overflow-hidden ${propia ? 'border-cyan-500/40 bg-[#131e29]' : 'border-slate-800 bg-[#131b25]'}`}>
       <h3>
@@ -105,11 +110,11 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
               </p>
             ) : (
               <div className="estado-tareas-por-materia">
-                {bloquesPorMateria.map(({ materia, tareas }) => {
+                {tarjetasIndividuales.map(({ materia, tarea }) => {
                   const acento = acentoVisualMateria(materia.id);
                   return (
                     <section
-                      key={materia.id}
+                      key={tarea.id}
                       className="estado-materia-bloque rounded-xl border overflow-hidden flex flex-col"
                       style={{
                         borderColor: acento.borde,
@@ -127,34 +132,29 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                           {tituloVisibleMateria(materia.nombre)}
                         </h4>
                         <span className="ml-auto text-xs text-slate-500 shrink-0">
-                          {tareas.length} {tareas.length === 1 ? 'tarea' : 'tareas'}
+                          1 tarea
                         </span>
                       </header>
-                      <div
-                        className="estado-tareas-contenedor p-3 sm:p-3.5"
-                        data-cantidad-tareas={tareas.length}
-                      >
-                        {tareas.map((tarea) => (
-                          <div key={tarea.id} className="estado-tarea-slot">
-                            <EstadoTareaAlumno
-                              tarea={tarea}
-                              alumno={alumno}
-                              materia={materia}
-                              unidad={tarea.unidad}
-                              ocultarContextoMateria
-                              alumnos={alumnosDeLaMateria(inscripciones, materia.id)}
-                              usuarioActual={acciones.usuarioActual}
-                              irATareaEnMaterias={acciones.irATareaEnMaterias}
-                              toggleTareaDesdeCliente={acciones.toggleTareaDesdeCliente}
-                              notasTareasInputs={acciones.notasTareasInputs}
-                              handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
-                              handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
-                              recargarTablero={acciones.recargarTablero}
-                              invitacionesGrupoEnviadas={acciones.invitacionesGrupoEnviadas}
-                              esAdmin={esAdmin}
-                            />
-                          </div>
-                        ))}
+                      <div className="estado-tareas-contenedor p-3 sm:p-3.5">
+                        <div className="estado-tarea-slot">
+                          <EstadoTareaAlumno
+                            tarea={tarea}
+                            alumno={alumno}
+                            materia={materia}
+                            unidad={tarea.unidad}
+                            ocultarContextoMateria
+                            alumnos={alumnosDeLaMateria(inscripciones, materia.id)}
+                            usuarioActual={acciones.usuarioActual}
+                            irATareaEnMaterias={acciones.irATareaEnMaterias}
+                            toggleTareaDesdeCliente={acciones.toggleTareaDesdeCliente}
+                            notasTareasInputs={acciones.notasTareasInputs}
+                            handleNotaTareaChangeLocal={acciones.handleNotaTareaChangeLocal}
+                            handleGuardarNotaTareaOnBlur={acciones.handleGuardarNotaTareaOnBlur}
+                            recargarTablero={acciones.recargarTablero}
+                            invitacionesGrupoEnviadas={acciones.invitacionesGrupoEnviadas}
+                            esAdmin={esAdmin}
+                          />
+                        </div>
                       </div>
                     </section>
                   );
