@@ -109,10 +109,11 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
               <div className="estado-tareas-por-materia">
                 {bloquesPorMateria.map(({ materia, tareas }) => {
                   const acento = acentoVisualMateria(materia.id);
+                  const bloqueOcupaFilaCompleta = tareas.length > 1;
                   return (
                     <section
                       key={materia.id}
-                      className="estado-materia-bloque rounded-xl border overflow-hidden flex flex-col"
+                      className={`estado-materia-bloque rounded-xl border overflow-hidden flex flex-col${bloqueOcupaFilaCompleta ? ' estado-materia-bloque-ocupa-fila-completa' : ''}`}
                       style={{
                         borderColor: acento.borde,
                         background: acento.fondo
@@ -132,7 +133,7 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                           {tareas.length} {tareas.length === 1 ? 'tarea' : 'tareas'}
                         </span>
                       </header>
-                      <div className="estado-tareas-contenedor p-3 sm:p-3.5">
+                      <div className="estado-tareas-contenedor estado-tareas-columnas p-3 sm:p-3.5">
                         {tareas.map((tarea) => (
                           <div key={tarea.id} className="estado-tarea-slot">
                             <EstadoTareaAlumno

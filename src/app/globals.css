@@ -302,6 +302,14 @@ textarea {
     gap: 1rem;
     align-items: start;
   }
+
+  .estado-alumnos .estado-materia-bloque-ocupa-fila-completa {
+    grid-column: 1 / -1;
+  }
+
+  .estado-materia-bloque-ocupa-fila-completa .estado-tareas-columnas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .estado-materia-bloque .estado-tareas-columnas {
