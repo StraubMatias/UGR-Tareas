@@ -308,12 +308,14 @@ textarea {
   }
 
   .estado-materia-bloque-ocupa-fila-completa .estado-tareas-columnas {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
 .estado-materia-bloque .estado-tareas-columnas {
-  grid-template-columns: minmax(0, 1fr);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.875rem;
 }
 
 .estado-materia-bloque-titulo {
