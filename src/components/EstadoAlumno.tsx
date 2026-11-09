@@ -104,14 +104,13 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                 {resumen.total === 0 ? 'Todavía no hay tareas cargadas.' : filtro === 'pendientes' ? 'No hay entregas abiertas pendientes. Podés consultar las notas, tareas futuras y grupos en los otros filtros.' : filtro === 'grupales' ? 'No hay trabajos grupales activos. Los que ya tienen nota cargada están en Completadas.' : 'No hay tareas en esta categoría.'}
               </p>
             ) : (
-              <div className="estado-tareas-por-materia" data-cantidad-bloques={bloquesPorMateria.length}>
+              <div className="estado-tareas-por-materia">
                 {bloquesPorMateria.map(({ materia, tareas }) => {
                   const acento = acentoVisualMateria(materia.id);
-                  const bloqueAnchoCompleto = tareas.length > 1;
                   return (
                     <section
                       key={materia.id}
-                      className={`estado-materia-bloque rounded-xl border overflow-hidden${bloqueAnchoCompleto ? ' estado-materia-bloque-ancho-completo' : ''}`}
+                      className="estado-materia-bloque rounded-xl border overflow-hidden flex flex-col"
                       style={{
                         borderColor: acento.borde,
                         background: acento.fondo
@@ -132,7 +131,7 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                         </span>
                       </header>
                       <div
-                        className="estado-tareas-contenedor estado-tareas-columnas p-3 sm:p-3.5"
+                        className="estado-tareas-contenedor p-3 sm:p-3.5"
                         data-cantidad-tareas={tareas.length}
                       >
                         {tareas.map((tarea) => (
