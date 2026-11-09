@@ -298,27 +298,24 @@ textarea {
   .estado-alumnos .estado-tareas-por-materia {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-flow: dense;
     gap: 1rem;
-    align-items: stretch;
+    align-items: start;
   }
 
-  .estado-alumnos .estado-tareas-por-materia[data-cantidad-bloques='1'] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .estado-alumnos .estado-materia-bloque-ancho-completo {
+  .estado-alumnos .estado-materia-bloque-ocupa-fila-completa {
     grid-column: 1 / -1;
+  }
+
+  .estado-materia-bloque-ocupa-fila-completa .estado-tareas-columnas {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
 .estado-materia-bloque .estado-tareas-columnas {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-@media (min-width: 40rem) {
-  .estado-materia-bloque-ancho-completo .estado-tareas-columnas {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.875rem;
 }
 
 .estado-materia-bloque-titulo {

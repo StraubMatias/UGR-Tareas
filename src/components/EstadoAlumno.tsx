@@ -70,6 +70,8 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
       tareas: ordenarTareas((materia.tareas || []).filter((tarea) => ids.has(tarea.id)))
     }))
     .filter((bloque) => bloque.tareas.length > 0);
+
+
   return (
     <section className={`rounded-2xl border overflow-hidden ${propia ? 'border-cyan-500/40 bg-[#131e29]' : 'border-slate-800 bg-[#131b25]'}`}>
       <h3>
@@ -104,14 +106,14 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                 {resumen.total === 0 ? 'Todavía no hay tareas cargadas.' : filtro === 'pendientes' ? 'No hay entregas abiertas pendientes. Podés consultar las notas, tareas futuras y grupos en los otros filtros.' : filtro === 'grupales' ? 'No hay trabajos grupales activos. Los que ya tienen nota cargada están en Completadas.' : 'No hay tareas en esta categoría.'}
               </p>
             ) : (
-              <div className="estado-tareas-por-materia" data-cantidad-bloques={bloquesPorMateria.length}>
+              <div className="estado-tareas-por-materia">
                 {bloquesPorMateria.map(({ materia, tareas }) => {
                   const acento = acentoVisualMateria(materia.id);
-                  const bloqueAnchoCompleto = tareas.length > 1;
+                  const bloqueOcupaFilaCompleta = tareas.length > 1;
                   return (
                     <section
                       key={materia.id}
-                      className={`estado-materia-bloque rounded-xl border overflow-hidden${bloqueAnchoCompleto ? ' estado-materia-bloque-ancho-completo' : ''}`}
+                      className={`estado-materia-bloque rounded-xl border overflow-hidden flex flex-col${bloqueOcupaFilaCompleta ? ' estado-materia-bloque-ocupa-fila-completa' : ''}`}
                       style={{
                         borderColor: acento.borde,
                         background: acento.fondo
@@ -131,10 +133,7 @@ export default function EstadoAlumno({ alumno, materias, inscripciones = [], abi
                           {tareas.length} {tareas.length === 1 ? 'tarea' : 'tareas'}
                         </span>
                       </header>
-                      <div
-                        className="estado-tareas-contenedor estado-tareas-columnas p-3 sm:p-3.5"
-                        data-cantidad-tareas={tareas.length}
-                      >
+                      <div className="estado-tareas-contenedor estado-tareas-columnas p-3 sm:p-3.5">
                         {tareas.map((tarea) => (
                           <div key={tarea.id} className="estado-tarea-slot">
                             <EstadoTareaAlumno
