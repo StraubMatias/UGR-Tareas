@@ -1,103 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  cuentaAlumnoDebeBorrarse,
-  cuentaSinLoginReciente,
-  cuentaSinSyncReciente,
+  cuentaDebeBorrarsePorInactividad,
+  DIAS_INACTIVIDAD_CUENTA,
   ipPermiteOtraCuenta,
   nombreDeUsuarioValido,
   sentenciasBorrarAlumno,
   sentenciasRenombrarAlumno
 } from '../src/lib/cuentas.ts';
 
-const ahora = Date.parse('2026-09-22T15:00:00.000Z');
-const haceOchoDias = '2026-09-14T15:00:00.000Z';
-const haceDosDias = '2026-09-20T15:00:00.000Z';
+const ahora = Date.parse('2026-11-24T12:00:00.000Z');
+const haceTreintaDias = '2026-10-25T12:00:00.000Z';
 
-const cuentaBase = {
-  origen: 'comision',
-  rol: 'alumno',
-  creadoEn: haceOchoDias
-};
-
-const sinPolitica = 0;
-
-test('sin login en 7 días (comisión o propio)', () => {
-  assert.equal(cuentaSinLoginReciente({
-    ...cuentaBase,
-    ultimoAcceso: haceOchoDias
-  }, ahora, sinPolitica), true);
-  assert.equal(cuentaSinLoginReciente({
-    ...cuentaBase,
-    ultimoAcceso: haceDosDias
-  }, ahora, sinPolitica), false);
-});
-
-test('sin sync UGR en 7 días', () => {
-  assert.equal(cuentaSinSyncReciente({
-    ...cuentaBase,
-    sincronizadoEn: haceOchoDias
-  }, ahora, sinPolitica), true);
-  assert.equal(cuentaSinSyncReciente({
-    ...cuentaBase,
-    sincronizadoEn: haceDosDias
-  }, ahora, sinPolitica), false);
-});
-
-test('nunca sincronizó: cuenta desde el alta', () => {
-  assert.equal(cuentaSinSyncReciente({
-    ...cuentaBase,
-    creadoEn: haceDosDias
-  }, ahora, sinPolitica), false);
-  assert.equal(cuentaSinSyncReciente({
-    ...cuentaBase,
-    creadoEn: haceOchoDias
-  }, ahora, sinPolitica), true);
-});
-
-test('cuentaAlumnoDebeBorrarse: login reciente pero sync vieja', () => {
-  assert.equal(cuentaAlumnoDebeBorrarse({
-    origen: 'propio',
-    rol: 'alumno',
-    creadoEn: haceOchoDias,
-    ultimoAcceso: haceDosDias,
-    sincronizadoEn: haceOchoDias
-  }, ahora, sinPolitica), true);
-});
-
-test('cuenta activa: sync UGR dentro de la semana (login no alcanza)', () => {
-  assert.equal(cuentaAlumnoDebeBorrarse({
-    origen: 'propio',
-    rol: 'alumno',
-    creadoEn: haceOchoDias,
-    ultimoAcceso: haceDosDias,
-    sincronizadoEn: haceDosDias
-  }, ahora, sinPolitica), false);
-  assert.equal(cuentaAlumnoDebeBorrarse({
-    origen: 'propio',
-    rol: 'alumno',
-    creadoEn: haceOchoDias,
-    ultimoAcceso: haceDosDias,
-    sincronizadoEn: null
-  }, ahora, sinPolitica), true);
-});
-
-test('comisión sin sync reciente se borra igual que propio', () => {
-  assert.equal(cuentaAlumnoDebeBorrarse({
-    ...cuentaBase,
-    ultimoAcceso: haceDosDias,
-    sincronizadoEn: haceOchoDias
-  }, ahora, sinPolitica), true);
-});
-
-test('admin no se borra aunque esté inactivo', () => {
-  assert.equal(cuentaAlumnoDebeBorrarse({
-    origen: 'propio',
-    rol: 'admin',
-    ultimoAcceso: haceOchoDias,
-    sincronizadoEn: haceOchoDias,
-    creadoEn: haceOchoDias
+test('elimina por inactividad a los 30 días y conserva accesos recientes', () => {
+  assert.equal(DIAS_INACTIVIDAD_CUENTA, 30);
+  assert.equal(cuentaDebeBorrarsePorInactividad({ ultimoAcceso: haceTreintaDias }, ahora), true);
+  assert.equal(cuentaDebeBorrarsePorInactividad({
+    ultimoAcceso: '2026-11-23T12:00:00.000Z',
+    creadoEn: haceTreintaDias
   }, ahora), false);
+});
+
+test('el admin no se elimina y cuentas sin fecha válida no se consideran vencidas', () => {
+  assert.equal(cuentaDebeBorrarsePorInactividad({
+    rol: 'admin',
+    ultimoAcceso: haceTreintaDias
+  }, ahora), false);
+  assert.equal(cuentaDebeBorrarsePorInactividad({}), false);
 });
 
 test('desde la misma conexión entran dos cuentas y la tercera no', () => {

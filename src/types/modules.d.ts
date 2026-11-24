@@ -40,6 +40,8 @@ declare module '../../ugr-sync/lib/sync-core.mjs' {
     mapeos?: MapeoCurso[];
     hoy?: string;
     diasAtras?: number;
+    alumnoId?: string;
+    gruposPorMateria?: Map<string, string[]>;
   }): Promise<ResultadoAvisosMoodle>;
   export function asegurarMateriasDeLaCursada(opciones: {
     db: unknown;

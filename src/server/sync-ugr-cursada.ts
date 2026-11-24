@@ -239,7 +239,27 @@ export async function sincronizarAvisosCampusDelAlumno({
     };
   }
 
-  const avisos = await detectarAvisosMoodle({ db, cliente, mapeos: mapeosLote });
+  // Prefetch groups for each materia for this alumno to filter avisos by group
+  const gruposPorMateria = new Map();
+  for (const { coincidencia } of mapeosLote) {
+    const materiaId = String(coincidencia?.materia?.id || '');
+    if (!materiaId) continue;
+    const filas = await db.execute({
+      sql: `
+        SELECT DISTINCT g.nombre
+        FROM grupos_tareas g
+        JOIN integrantes_tareas i ON i.grupo_id = g.id
+        JOIN tareas t ON t.id = g.tarea_id
+        WHERE t.materia_id = ?
+          AND i.alumno_id = ?
+      `,
+      args: [materiaId, alumnoId]
+    });
+    const grupos = filas.rows.map(r => String(r.nombre || '').trim()).filter(Boolean);
+    if (grupos.length) gruposPorMateria.set(materiaId, grupos);
+  }
+
+  const avisos = await (detectarAvisosMoodle as any)({ db, cliente, mapeos: mapeosLote, alumnoId, gruposPorMateria });
   type ItemEventoCampus = { materiaId?: string; materiaNombre?: string; titulo?: string; fecha?: string };
   const eventosAvisos = ((avisos.eventosSugeridos || []) as ItemEventoCampus[]).filter((evento) => {
     return !!evento.materiaId && materiaIds.includes(evento.materiaId);

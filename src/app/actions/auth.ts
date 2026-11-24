@@ -16,7 +16,7 @@ import {
   verificarAdmin,
   obtenerAlumno,
   leerCuenta,
-  borrarCuentasSinSincronizar,
+  borrarCuentasInactivas,
   generarClaveTemporal,
   hashearPassword,
   verificarPassword,
@@ -43,7 +43,7 @@ import {
 // Valida credenciales consultando directamente a la tabla alumnos en Turso
 export async function validarLoginAction(usuarioInput: string, passwordInput: string): Promise<RespuestaAction> {
   try {
-    await borrarCuentasSinSincronizar();
+    await borrarCuentasInactivas();
     const userClean = String(usuarioInput || '').trim();
     const passClean = String(passwordInput || '');
 
@@ -127,7 +127,6 @@ export async function registrarCuentaAction(
   const password = String(passwordInput || '');
   const confirmacion = String(confirmacionInput || '');
   try {
-    await borrarCuentasSinSincronizar();
     if (!usuario || !password || !confirmacion) {
       return { exito: false, mensaje: 'Completá usuario y contraseña.' };
     }
@@ -143,6 +142,7 @@ export async function registrarCuentaAction(
       return { exito: false, mensaje: 'Las contraseñas no coinciden.' };
     }
 
+    await borrarCuentasInactivas();
     const ip = await obtenerIPReal();
     const claves = [{ clave: `alta-ip:${ip}`, limite: LIMITE_LOGIN_IP }];
     if (await loginEstaBloqueado(claves)) {
@@ -185,7 +185,7 @@ export async function registrarCuentaAction(
       rol: 'alumno',
       origen: 'propio',
       ugrUsuario: null,
-      mensaje: 'La cuenta está lista. Tenés que sincronizar con UGR al menos una vez por semana; si no, la cuenta se borra.'
+      mensaje: 'La cuenta está lista. Si pasan 30 días sin iniciar sesión, se borrarán la cuenta y su progreso.'
     };
   } catch (error) {
     console.error('Error en registrarCuentaAction:', error);
@@ -373,13 +373,16 @@ export async function crearAlumnoAction(nombre: string): Promise<RespuestaAction
     const claveInicial = generarClaveTemporal();
     const id = crearId('a_');
     await db.batch([
-      { sql: 'INSERT INTO alumnos (id, nombre, password) VALUES (?, ?, ?)', args: [id, nombreFormateado, await hashearPassword(claveInicial)] },
+      {
+        sql: 'INSERT INTO alumnos (id, nombre, password, creado_en, ultimo_acceso) VALUES (?, ?, ?, ?, ?)',
+        args: [id, nombreFormateado, await hashearPassword(claveInicial), new Date().toISOString(), new Date().toISOString()]
+      },
       { sql: 'INSERT OR IGNORE INTO inscripciones (alumno_id, materia_id) SELECT ?, id FROM materias', args: [id] }
     ], 'write');
     await registrarAuditoria({ accion: 'crear_alumno', usuario: usuarioSesion, detalle: `Creó al alumno ${nombreFormateado}`, ip: await obtenerIPReal() });
     return {
       exito: true,
-      mensaje: `Alumno creado. Contraseña inicial (mostrala una sola vez): ${claveInicial}`
+      mensaje: `Alumno creado. Iniciá sesión antes de que pasen 30 días para conservar la cuenta y su progreso. Contraseña inicial (mostrala una sola vez): ${claveInicial}`
     };
   } catch (error) {
     console.error('Error en crearAlumnoAction:', error);

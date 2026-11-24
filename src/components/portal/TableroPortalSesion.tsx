@@ -34,7 +34,6 @@ export default function TableroPortalSesion({ vm }: { vm: TableroPortalViewModel
           />
         }
         esAdmin={esAdmin}
-        sincronizadoEn={acceso.sincronizadoEn}
         onAbrirSync={() => ui.setSyncPickerAbierto(true)}
         onAbrirSolicitudes={() => ui.setConstanciasSiuAbierto(true)}
         onAbrirPassword={abrirModalPassword}
