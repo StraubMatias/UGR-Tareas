@@ -74,7 +74,7 @@ Si UGR acepta, la sync dice a qué materias del plan estás inscripto, guarda es
 
 A partir de ahí, cada sincronización vuelve a mirar el campus: fechas nuevas, parciales y notas que la cátedra haya publicado.
 
-**Actividad mínima:** cada semana tenés que sincronizar con UGR Virtual al menos una vez; si no, la cuenta se borra sola (junto con tus notas y progreso en el tablero). Solo mirar el tablero no alcanza. El admin no entra en esa regla. Así el tablero refleja campus al día.
+Iniciá sesión al menos una vez cada 30 días para conservar tu cuenta y progreso. La sincronización con UGR Virtual es independiente; usá **Sincronizar** cuando quieras actualizar los datos del campus.
 
 ## Constancias, sin entrar a Guaraní
 

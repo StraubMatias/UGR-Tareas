@@ -45,7 +45,7 @@ export default function TableroCuerpo({ vm }: { vm: TableroPortalViewModel }) {
           <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Tablero vacío</p>
           <h2 className="mt-2 text-2xl font-black text-white">Todavía no hay cursada</h2>
           <p className="mt-3 text-sm leading-relaxed text-slate-400">
-            La cuenta ya está creada. Materias, tareas, grupos y cronograma aparecen cuando sincronizás con UGR Virtual. Tenés que sincronizar al menos una vez por semana; si no, la cuenta se borra. Te avisaremos cuando queden 24 horas para que sincronices.
+            La cuenta ya está creada. Si pasan 30 días sin iniciar sesión, se borrarán la cuenta y todo su progreso. Volvé a entrar al sitio para mantenerla activa.
           </p>
         </section>
         <CuentaPropia

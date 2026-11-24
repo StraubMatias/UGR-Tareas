@@ -1,10 +1,6 @@
-/** Plazo sin sync UGR semanal: se borra la cuenta de alumno (salvo admin). */
-export const DIAS_SIN_LOGIN = 7;
-export const DIAS_SIN_SYNC_UGR = 7;
-/** @deprecated usar DIAS_SIN_LOGIN / DIAS_SIN_SYNC_UGR */
-export const DIAS_PARA_SINCRONIZAR = DIAS_SIN_SYNC_UGR;
-export const DIAS_INACTIVIDAD_CUENTA = DIAS_SIN_LOGIN;
 export const MAX_CUENTAS_POR_IP = 2;
+export const DIAS_INACTIVIDAD_CUENTA = 30;
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
 export function ipPermiteOtraCuenta(cuentasExistentes: number, maximo = MAX_CUENTAS_POR_IP): boolean {
   return cuentasExistentes < maximo;
@@ -70,8 +66,6 @@ export function sentenciaLimpiarGruposVacios(): Sentencia {
     args: []
   };
 }
-const MS_POR_DIA = 24 * 60 * 60 * 1000;
-
 export function instanteActividad(valor: string | null | undefined): number {
   const texto = String(valor || '').trim();
   if (!texto) return Number.NaN;
@@ -81,88 +75,20 @@ export function instanteActividad(valor: string | null | undefined): number {
   return Date.parse(normalizado);
 }
 
-export interface CuentaAlumnoLimpieza {
-  origen?: string | null;
+export interface CuentaInactividad {
   rol?: string | null;
   creadoEn?: string | null;
-  sincronizadoEn?: string | null;
   ultimoAcceso?: string | null;
 }
 
-function plazoVencido(desde: number, dias: number, ahora: number): boolean {
-  return ahora - desde >= dias * MS_POR_DIA;
-}
-
-/** Desde cuándo corre el plazo de 7 días (no se mira inactividad anterior). Override: `POLITICA_CUENTAS_DESDE`. */
-export const POLITICA_CUENTAS_VIGENTE_DESDE = '2026-10-14T03:00:00.000Z';
-
-export function instantePoliticaCuentas(): number {
-  const desdeEntorno =
-    typeof process !== 'undefined' ? String(process.env.POLITICA_CUENTAS_DESDE || '').trim() : '';
-  const parseado = instanteActividad(desdeEntorno || POLITICA_CUENTAS_VIGENTE_DESDE);
-  return Number.isFinite(parseado) ? parseado : Date.parse(POLITICA_CUENTAS_VIGENTE_DESDE);
-}
-
-function referenciaTrasPolitica(
-  valor: string | null | undefined,
-  creadoEn: string | null | undefined,
-  politicaDesde: number
-): number {
-  const candidatos = [instanteActividad(valor), instanteActividad(creadoEn)].filter(Number.isFinite);
-  const ultima = candidatos.length ? Math.max(...candidatos) : politicaDesde;
-  return Math.max(ultima, politicaDesde);
-}
-
-/** Sin entrar al tablero en 7 días (desde último acceso o desde el alta). */
-export function cuentaSinLoginReciente(
-  cuenta: CuentaAlumnoLimpieza,
-  ahora = Date.now(),
-  politicaDesde?: number
-): boolean {
-  const politica = Number.isFinite(politicaDesde) ? politicaDesde! : instantePoliticaCuentas();
-  if (ahora < politica) return false;
-  const referencia = referenciaTrasPolitica(cuenta.ultimoAcceso, cuenta.creadoEn, politica);
-  return plazoVencido(referencia, DIAS_SIN_LOGIN, ahora);
-}
-
-/** Sin sync UGR en 7 días (desde última sync o desde el alta si nunca sincronizó). */
-export function cuentaSinSyncReciente(
-  cuenta: CuentaAlumnoLimpieza,
-  ahora = Date.now(),
-  politicaDesde?: number
-): boolean {
-  const politica = Number.isFinite(politicaDesde) ? politicaDesde! : instantePoliticaCuentas();
-  if (ahora < politica) return false;
-  const referencia = referenciaTrasPolitica(cuenta.sincronizadoEn, cuenta.creadoEn, politica);
-  return plazoVencido(referencia, DIAS_SIN_SYNC_UGR, ahora);
-}
-
-/** Cualquier alumno (comisión o propio) sin sync UGR en 7 días. Admin exento. */
-export function cuentaAlumnoDebeBorrarse(
-  cuenta: CuentaAlumnoLimpieza,
-  ahora = Date.now(),
-  politicaDesde?: number
-): boolean {
-  if (String(cuenta.rol || 'alumno') === 'admin') return false;
-  const politica = Number.isFinite(politicaDesde) ? politicaDesde! : instantePoliticaCuentas();
-  if (ahora < politica) return false;
-  return cuentaSinSyncReciente(cuenta, ahora, politica);
-}
-
-/** @deprecated usar cuentaAlumnoDebeBorrarse */
-export function cuentaPropiaVencida(
-  cuenta: CuentaAlumnoLimpieza & { inscripciones?: number },
+export function cuentaDebeBorrarsePorInactividad(
+  cuenta: CuentaInactividad,
   ahora = Date.now()
 ): boolean {
-  return cuentaSinSyncReciente(cuenta, ahora) && !String(cuenta.sincronizadoEn || '').trim();
-}
-
-/** @deprecated usar cuentaSinLoginReciente */
-export function cuentaPropiaInactiva(cuenta: CuentaAlumnoLimpieza, ahora = Date.now()): boolean {
-  return cuentaSinLoginReciente(cuenta, ahora);
-}
-
-/** @deprecated usar cuentaAlumnoDebeBorrarse */
-export function cuentaPropiaDebeBorrarse(cuenta: CuentaAlumnoLimpieza, ahora = Date.now()): boolean {
-  return cuentaAlumnoDebeBorrarse(cuenta, ahora);
+  if (String(cuenta.rol || 'alumno').toLowerCase() === 'admin') return false;
+  const ultimoAcceso = instanteActividad(cuenta.ultimoAcceso);
+  const referencia = Number.isFinite(ultimoAcceso)
+    ? ultimoAcceso
+    : instanteActividad(cuenta.creadoEn);
+  return Number.isFinite(referencia) && ahora - referencia >= DIAS_INACTIVIDAD_CUENTA * MS_POR_DIA;
 }

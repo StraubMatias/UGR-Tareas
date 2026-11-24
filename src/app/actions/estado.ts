@@ -14,7 +14,7 @@ import {
   verificarAdmin,
   obtenerAlumno,
   leerCuenta,
-  borrarCuentasSinSincronizar,
+  borrarCuentasInactivas,
   registrarUltimoAcceso,
   CODIGOS_PLAN
 } from '../../server/action-internals';
@@ -27,10 +27,11 @@ import { validarNota } from '../validators';
 // repetía la sesión y abría un pedido por tabla (~15 roundtrips).
 export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null | undefined = null) {
   try {
+    await borrarCuentasInactivas();
     const usuarioSesion = await obtenerUsuarioSesion();
     if (!usuarioSesion) return null;
 
-    await borrarCuentasSinSincronizar();
+    await registrarUltimoAcceso(usuarioSesion);
     const cuenta = await leerCuenta(usuarioSesion);
     const yaInscripto = texto(cuenta?.id)
       ? await db.execute({ sql: 'SELECT 1 FROM inscripciones WHERE alumno_id = ? LIMIT 1', args: [texto(cuenta?.id)] })
@@ -70,8 +71,6 @@ export async function obtenerEstadoCompleto(periodoIdSolicitado: string | null |
 
     await asegurarEsquemaGruposEnServidor(db);
     await asegurarEsquemaEntregasEnServidor(db);
-    await registrarUltimoAcceso(usuarioSesion);
-
     let periodoParaCargar = periodoIdSolicitado || null;
     if (!periodoParaCargar) {
       const previa = await db.execute('SELECT id, activo FROM periodos ORDER BY anio DESC, cuatrimestre DESC');

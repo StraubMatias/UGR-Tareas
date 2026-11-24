@@ -35,10 +35,9 @@ export default function BarraSesionPortal({
   const diasDesdeSync = sincronizadoEn
     ? Math.max(0, Math.floor((ahora - new Date(sincronizadoEn).getTime()) / 86400000))
     : null;
-  const diasRestantes = diasDesdeSync === null ? null : Math.max(0, 7 - diasDesdeSync);
-  const etiquetaSync = diasRestantes === null
+  const etiquetaSync = diasDesdeSync === null
     ? 'Sin sincronización registrada'
-    : `${diasRestantes} día${diasRestantes === 1 ? '' : 's'} restantes`;
+    : `Última sync: hace ${diasDesdeSync} día${diasDesdeSync === 1 ? '' : 's'}`;
 
   return (
     <div className="portal-header-actions flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 w-full min-w-0">
@@ -51,7 +50,7 @@ export default function BarraSesionPortal({
           onFocus={precargarSyncPortal}
           onTouchStart={precargarSyncPortal}
           title={`${etiquetaSync}. Sincronizar con UGR Virtual o SIU Guaraní`}
-          className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40 ${diasRestantes !== null && diasRestantes <= 1 && !esAdmin ? 'animate-pulse border-amber-400 text-amber-200' : ''}`}
+          className={`${btnBase} bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border-cyan-500/40`}
         >
           🔄 Sincronizar <span className="ml-1 text-[10px] opacity-80">({etiquetaSync})</span>
         </button>

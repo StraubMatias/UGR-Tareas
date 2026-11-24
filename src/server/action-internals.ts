@@ -5,7 +5,7 @@ import type { Value } from '@libsql/client';
 import { db } from '../app/turso';
 import { PLAN_DE_ESTUDIO } from '../app/plan-utils';
 import {
-  cuentaAlumnoDebeBorrarse,
+  cuentaDebeBorrarsePorInactividad,
   instanteActividad,
   ipPermiteOtraCuenta,
   nombreDeUsuarioValido,
@@ -216,22 +216,19 @@ export async function registrarUltimoAcceso(usuario: string, intervaloMinimoMs =
   }
 }
 
-export async function borrarCuentasSinSincronizar(): Promise<void> {
+export async function borrarCuentasInactivas(): Promise<void> {
   try {
     await asegurarEsquemaCuentasEnServidor();
     const candidatas = await db.execute(`
-      SELECT a.id, a.nombre, COALESCE(a.origen, 'comision') AS origen,
-             COALESCE(a.rol, 'alumno') AS rol,
-             a.creado_en, a.sincronizado_en, a.ultimo_acceso
+      SELECT a.id, a.nombre, COALESCE(a.rol, 'alumno') AS rol,
+             a.creado_en, a.ultimo_acceso
       FROM alumnos a
       WHERE COALESCE(a.rol, 'alumno') != 'admin'
     `);
     const cuentas = candidatas.rows
-      .filter((fila) => cuentaAlumnoDebeBorrarse({
-        origen: texto(fila.origen),
+      .filter((fila) => cuentaDebeBorrarsePorInactividad({
         rol: texto(fila.rol),
         creadoEn: texto(fila.creado_en),
-        sincronizadoEn: texto(fila.sincronizado_en),
         ultimoAcceso: texto(fila.ultimo_acceso)
       }))
       .map((fila) => ({ id: texto(fila.id), nombre: texto(fila.nombre) }))
@@ -242,7 +239,7 @@ export async function borrarCuentasSinSincronizar(): Promise<void> {
       sentenciaLimpiarGruposVacios()
     ], 'write');
   } catch (error) {
-    console.error('No se pudieron borrar las cuentas propias vencidas:', error instanceof Error ? error.message : 'falló');
+    console.error('No se pudieron borrar las cuentas inactivas:', error instanceof Error ? error.message : 'falló');
   }
 }
 

@@ -861,6 +861,14 @@ await ejecutarMigracion(12, 'avisos de Moodle y enlaces en cronograma', async ()
     console.log('   Auditorías de Seguridad: finales actualizados al 04/12 y 18/12 (Turno 5).');
   });
 
+  await ejecutarMigracion(42, 'inicio del plazo de inactividad de cuentas', async () => {
+    await agregarColumnaSiFalta('alumnos', 'ultimo_acceso', 'TEXT');
+    await db.execute({
+      sql: 'UPDATE alumnos SET ultimo_acceso = ?',
+      args: [new Date().toISOString()]
+    });
+  });
+
   await db.close?.();
 }
 

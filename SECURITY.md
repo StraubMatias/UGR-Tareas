@@ -22,7 +22,7 @@ El **admin** puede, en ambos casos, usar las credenciales del servidor (`UGRVIRT
 - Cookie de sesión: `httpOnly`, `sameSite=lax`, `secure` en producción, con HMAC-SHA256 y expiración de 30 minutos. Cada request compara la `sesion_version` del alumno: cambiar la contraseña invalida las cookies anteriores.
 - Contraseñas de cuenta: scrypt con salt por usuario y comparación en tiempo constante. **No** son las claves del campus.
 - Rate limit por usuario y por IP en login, altas y acciones de escritura.
-- Topes de cuentas propias por IP y **borrado automático a los 7 días sin sincronizar con UGR Virtual**. Entrar al tablero no alcanza: tiene que haber un sync. El admin queda fuera de esa regla.
+- Tope de cuentas propias por IP. Las cuentas no administrativas y su progreso se borran después de 30 días sin iniciar sesión.
 - El password del admin no va hardcodeado: se promueve por migración con `ADMIN_USUARIO` y se rota con `npm run admin:reset-password`.
 
 ## Lo que el servicio no hace
