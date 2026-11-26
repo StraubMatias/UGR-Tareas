@@ -644,7 +644,10 @@ export async function detectarTareasNuevas({ db, cliente, cursos: cursosDados, p
       });
       if (parcial || (pareceEvaluacion(nombreFinal) && fechaToma)) {
         if (parcial) {
-          if (!parcial.url && tarea.url) {
+          // Si la actividad del campus (quiz, p. ej.) tiene una URL distinta a la
+          // guardada, actualizamos el enlace: el parcial pudo haberse recreado con
+          // otro id de módulo y la URL vieja queda 404 (no se puede leer la nota).
+          if (tarea.url && tarea.url !== parcial.url) {
             urlsParcialesActualizar.push({ id: parcial.id, url: tarea.url });
           }
           if (fechaToma && parcial.fecha !== fechaToma) {
@@ -1551,8 +1554,8 @@ export async function actualizarUrlsParciales({ db, urlsParcialesActualizar }) {
   const updates = urlsParcialesActualizar
     .filter(({ id, url }) => id && url)
     .map(({ id, url }) => ({
-      sql: 'UPDATE parciales SET url = ? WHERE id = ? AND url = ?',
-      args: [url, id, '']
+      sql: 'UPDATE parciales SET url = ? WHERE id = ?',
+      args: [url, id]
     }));
   if (updates.length === 0) return 0;
   await db.batch(updates, 'write');
